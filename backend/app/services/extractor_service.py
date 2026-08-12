@@ -480,14 +480,14 @@ class ExtractorService:
         for idx, linea in enumerate(lineas):
             linea_up = linea.upper().strip()
 
-            if re.match(r"^(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE)$", linea_up):
+            if re.search(r"\b(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE|GIVEN\s+NAMES?)\b", linea_up):
                 candidato = self._siguiente_linea_valida(lineas, idx)
-                if candidato:
+                if candidato and not nombres:
                     nombres = candidato
 
-            if re.match(r"^(APELLIDOS?|PRIMER\s+APELLIDO|SEGUNDO\s+APELLIDO)$", linea_up):
+            if re.search(r"\b(APELLIDOS?|PRIMER\s+APELLIDO|SEGUNDO\s+APELLIDO|SURNAMES?)\b", linea_up):
                 candidato = self._siguiente_linea_valida(lineas, idx)
-                if candidato:
+                if candidato and not apellidos:
                     apellidos = candidato
 
         return nombres, apellidos
@@ -497,17 +497,20 @@ class ExtractorService:
     ) -> Optional[str]:
         """
         Devuelve la primera línea posterior a `desde` que parezca
-        un nombre/apellido (solo letras, 3-60 chars, máx 5 palabras).
+        un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas como FIRMA).
         """
-        for linea in lineas[desde + 1 : desde + 4]:
+        for linea in lineas[desde + 1 : desde + 5]:
             linea = linea.strip()
             if not linea:
                 continue
-            # Solo letras y espacios, entre 3 y 60 chars
-            if re.match(r"^[A-ZÁÉÍÓÚÜÑ\s\-]{3,60}$", linea):
-                palabras = linea.split()
-                if 1 <= len(palabras) <= 5:
-                    return validador.normalizar_nombre(linea)
+            # Ignorar si es solo dígitos o números
+            if re.search(r"\d", linea):
+                continue
+            # Solo letras, espacios y guiones, entre 3 y 60 chars
+            if re.match(r"^[A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]{3,60}$", linea):
+                nombre_norm = validador.normalizar_nombre(linea)
+                if nombre_norm and len(nombre_norm.split()) <= 5:
+                    return nombre_norm
         return None
 
     # ──────────────────────────────────────────

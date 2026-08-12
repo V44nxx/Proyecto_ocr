@@ -19,10 +19,19 @@ from app.utils.logger import app_logger as logger
 class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
-    # Palabras que no son nombres de lugar válidos (aparecen en encabezados)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula)
+    _PALABRAS_NO_NOMBRE = re.compile(
+        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|REPUBLICA|"
+        r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|"
+        r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|"
+        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADURIA|GERENTE)\b",
+        re.IGNORECASE,
+    )
+
+    # Palabras que no son nombres de lugar válidos (aparecen en encabezados y labels)
     _PALABRAS_NO_LUGAR = re.compile(
-        r"\b(REPUBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|IDENTIFICACION|"
-        r"TARJETA|CEDULA|CEDULA|NUIP|PERSONAL|NACIONAL)\b",
+        r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|"
+        r"TARJETA|CEDULA|CÉDULA|NUIP|PERSONAL|NACIONAL|FECHA|EXPEDICION|EXPEDICIÓN|LUGAR|DE|Y)\b",
         re.IGNORECASE,
     )
 
@@ -72,8 +81,8 @@ class ValidadorColombia:
     # ──────────────────────────────────────────
     # NOMBRES Y APELLIDOS
     # ──────────────────────────────────────────
-    @staticmethod
-    def normalizar_nombre(texto: str) -> Optional[str]:
+    @classmethod
+    def normalizar_nombre(cls, texto: str) -> Optional[str]:
         """
         Normaliza nombres y apellidos:
           - Solo letras, espacios, tildes y ñ
@@ -96,9 +105,17 @@ class ValidadorColombia:
         if not texto:
             return None
 
+        # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR)
+        palabras_filtradas = [
+            p for p in texto.split()
+            if not cls._PALABRAS_NO_NOMBRE.match(p)
+        ]
+
+        if not palabras_filtradas:
+            return None
+
         # Limitar a máximo 5 palabras
-        palabras = texto.split()[:5]
-        resultado = " ".join(palabras)
+        resultado = " ".join(palabras_filtradas[:5])
 
         # Mínimo 2 caracteres
         return resultado if len(resultado) >= 2 else None

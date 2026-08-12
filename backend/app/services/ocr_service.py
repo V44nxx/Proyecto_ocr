@@ -1,16 +1,23 @@
 """
 Servicio OCR Principal — Documentos de Identidad Colombianos
-Estrategia: PyMuPDF → OpenCV → Tesseract → ExtractorService → PostgreSQL
+Estrategia v3: PyMuPDF → (texto nativo) → si escaneado →
+               Google Document AI (principal) → ExtractorService → PostgreSQL
+               Si Google Document AI falla → Tesseract (fallback)
 
 CAMBIOS v2 (optimización precisión):
   - FIX: doble sesión de BD eliminado — se usa db_externa si se provee.
   - FIX: confianza hardcodeada 95.0 → confianza real de ExtractorService.
-  - FIX: ExtractorService.extraer() integrado en el flujo principal
-         (antes self.parser se asignaba pero nunca se llamaba).
+  - FIX: ExtractorService.extraer() integrado en el flujo principal.
   - NUEVO: Tesseract con oem=3, psm=6 + fallback psm=4 si confianza baja.
   - NUEVO: texto_ocr_crudo guardado en Persona para auditoría.
   - NUEVO: umbral de PDF escaneado mejorado (palabras útiles, no solo chars).
   - NUEVO: marca requiere_revision con confianza real (< settings.threshold).
+
+CAMBIOS v3 (Google Document AI):
+  - NUEVO: _ocr_imagen() orquesta Google Document AI → fallback Tesseract.
+  - NUEVO: log del motor OCR utilizado en cada página.
+  - NUEVO: campo ocr_engine en resultado (opcional, no rompe frontend).
+  - NUEVO: compatibilidad con imagen en bytes para Google Document AI.
 """
 import os
 import time
@@ -23,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.utils.logger import logger
 from app.utils.image_processor import image_processor
 from app.services.extractor_service import extractor_service
+from app.services.google_document_ai_service import google_document_ai_service
 from app.config import settings
 
 
@@ -92,13 +100,18 @@ class OCRService:
                     )
                     pix = pagina.get_pixmap(dpi=300)
                     img_np = self.image_processor._pixmap_to_numpy(pix)
-                    img_procesada = self.image_processor.preprocess(img_np)
-                    texto_pagina = self._ocr_con_tesseract(img_procesada, pagina_num=i + 1)
+                    # v3: _ocr_imagen() intenta Google Document AI primero,
+                    # luego Tesseract como fallback si falla
+                    texto_pagina, motor_usado = self._ocr_imagen(
+                        img_np=img_np, pagina_num=i + 1
+                    )
                 else:
                     texto_pagina = texto_nativo
+                    motor_usado = "texto_nativo_pdf"
 
                 logger.info(
-                    f"Página {i+1}: {len(texto_pagina)} chars extraídos"
+                    f"Página {i+1}: {len(texto_pagina)} chars extraídos "
+                    f"[motor: {motor_usado}]"
                 )
 
                 # ── Extracción estructurada de campos ─────────────────────
@@ -111,7 +124,8 @@ class OCRService:
 
                 # Guardar persona en BD con confianza real
                 persona = self._guardar_persona(
-                    datos_extraidos, texto_pagina, documento_id, db
+                    datos_extraidos, texto_pagina, documento_id, db,
+                    ocr_engine=motor_usado
                 )
                 if persona:
                     personas_guardadas.append(persona)
@@ -185,7 +199,74 @@ class OCRService:
         return len(palabras_validas) < 5 or len(texto_limpio) < 50
 
     # ──────────────────────────────────────────
+    # OCR DE IMAGEN — GOOGLE DOCUMENT AI + FALLBACK TESSERACT
+    # ──────────────────────────────────────────
+    def _ocr_imagen(
+        self, img_np, pagina_num: int = 0
+    ) -> tuple:
+        """
+        Motor OCR de imagen con dos niveles:
+
+        Nivel 1 — Google Document AI (principal):
+          - Convierte la imagen numpy a bytes PNG
+          - Envía a la API de Google Document AI
+          - Devuelve texto + nombre del motor 'google_document_ai'
+
+        Nivel 2 — Tesseract (fallback):
+          - Se activa si Google Document AI falla, devuelve texto vacío
+            o si GOOGLE_DOCUMENT_AI_ENABLED=False
+          - Aplica preprocesamiento OpenCV antes de Tesseract
+          - Devuelve texto + nombre del motor 'tesseract_fallback'
+
+        Returns:
+            Tupla (texto: str, motor: str)
+        """
+        # ── Nivel 1: Google Document AI ──────────────────────────────────
+        if google_document_ai_service.disponible:
+            try:
+                import cv2
+                # Convertir imagen numpy (BGR/gris) a bytes PNG para la API
+                success, img_encoded = cv2.imencode(".png", img_np)
+                if not success:
+                    raise ValueError("No se pudo codificar la imagen a PNG")
+                img_bytes = img_encoded.tobytes()
+
+                texto, tiempo_ms = google_document_ai_service.procesar_imagen(
+                    img_bytes, mime_type="image/png"
+                )
+
+                if texto and texto.strip():
+                    palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
+                    logger.info(
+                        f"[DocAI] Página {pagina_num}: Google Document AI exitoso "
+                        f"({len(texto)} chars, {len(palabras)} palabras, {tiempo_ms}ms)"
+                    )
+                    return texto, "google_document_ai"
+                else:
+                    logger.warning(
+                        f"[DocAI] Página {pagina_num}: Google Document AI devolvió "
+                        f"texto vacío — usando Tesseract como fallback"
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"[DocAI] Página {pagina_num}: Error en Google Document AI "
+                    f"({type(e).__name__}: {e}) — usando Tesseract como fallback"
+                )
+        else:
+            logger.info(
+                f"[DocAI] Página {pagina_num}: Google Document AI no disponible "
+                f"— usando Tesseract directamente"
+            )
+
+        # ── Nivel 2: Tesseract (fallback) ────────────────────────────────
+        img_procesada = self.image_processor.preprocess(img_np)
+        texto = self._ocr_con_tesseract(img_procesada, pagina_num=pagina_num)
+        return texto, "tesseract_fallback"
+
+    # ──────────────────────────────────────────
     # OCR CON TESSERACT — CONFIGURACIÓN ÓPTIMA
+    # (se mantiene como fallback y para uso directo)
     # ──────────────────────────────────────────
     def _ocr_con_tesseract(
         self, img_procesada, pagina_num: int = 0
@@ -199,10 +280,7 @@ class OCRService:
           -l spa   → Modelo de idioma español
 
         Fallback:
-          --psm 4  → Columna de texto variable (si psm 6 da texto pobre)
-
-        La whitelist evita que Tesseract confunda caracteres fuera del
-        dominio (ej: ¡¿@# que nunca aparecen en cédulas colombianas).
+          --psm 11 → Texto disperso (si psm 6 da texto pobre)
         """
         try:
             import pytesseract
@@ -211,18 +289,18 @@ class OCRService:
             if os.path.exists(tess_path):
                 pytesseract.pytesseract.tesseract_cmd = tess_path
 
-            # Configuración para documentos de identidad colombianos (sin whitelist destructiva)
+            # Configuración para documentos de identidad colombianos
             config_psm6 = "--oem 3 --psm 6"
 
             texto = pytesseract.image_to_string(
                 img_procesada, lang="spa", config=config_psm6
             )
 
-            # Fallback a psm 11 o psm 3 si el resultado es pobre
+            # Fallback a psm 11 si el resultado es pobre
             palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
             if len(palabras) < 4:
                 logger.warning(
-                    f"Página {pagina_num}: PSM 6 produjo texto reducido "
+                    f"Tesseract página {pagina_num}: PSM 6 produjo texto reducido "
                     f"({len(palabras)} palabras), intentando PSM 11 (texto disperso)"
                 )
                 texto_fallback = pytesseract.image_to_string(
@@ -248,6 +326,7 @@ class OCRService:
         texto_ocr: str,
         documento_id: str,
         db: Session,
+        ocr_engine: str = "desconocido",
     ) -> Optional[Dict[str, Any]]:
         """
         Guarda o actualiza la persona en la BD.
@@ -353,6 +432,8 @@ class OCRService:
                 "apellidos": persona.apellidos,
                 "confianza_extraccion": float(persona.confianza_extraccion or 0),
                 "requiere_revision": persona.requiere_revision,
+                # Campo adicional informativo (no rompe el frontend)
+                "ocr_engine": ocr_engine,
             }
 
         except Exception as e:

@@ -1,5 +1,6 @@
 # ──────────────────────────────────────────
 # Backend Dockerfile - Python 3.12
+# v2: agrega Tesseract + directorio credentials (Google DocAI)
 # ──────────────────────────────────────────
 FROM python:3.12-slim
 
@@ -11,7 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencias del sistema para OpenCV y PaddleOCR
+# Dependencias del sistema para OpenCV, PaddleOCR y Tesseract (fallback)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
@@ -23,6 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     wget \
     curl \
+    # Tesseract OCR (fallback cuando Google Document AI no está disponible)
+    tesseract-ocr \
+    tesseract-ocr-spa \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements e instalar dependencias Python
@@ -34,7 +38,9 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # Crear directorios necesarios
-RUN mkdir -p /app/uploads /app/exports /app/logs
+# /app/credentials se monta como volumen read-only desde docker-compose.yml
+# El JSON de Google Cloud NUNCA se copia dentro de la imagen
+RUN mkdir -p /app/uploads /app/exports /app/logs /app/credentials
 
 # Puerto de exposición
 EXPOSE 8000

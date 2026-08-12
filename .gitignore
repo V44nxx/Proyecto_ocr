@@ -4,6 +4,9 @@
 .env.*.local
 *.env
 
+# Google Cloud Credentials (NUNCA subir al repositorio)
+/credentials/
+
 # Python / Virtual Environment
 .venv/
 venv/

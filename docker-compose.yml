@@ -43,10 +43,24 @@ services:
       EXPORT_DIR: /app/exports
       MAX_FILE_SIZE_MB: 50
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      # ─────────────────────────────────────────────
+      # Google Cloud Document AI
+      # Configura estas variables en tu archivo .env
+      # ─────────────────────────────────────────────
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-ocr-sena}
+      GOOGLE_DOCUMENT_AI_LOCATION: ${GOOGLE_DOCUMENT_AI_LOCATION:-us}
+      GOOGLE_DOCUMENT_AI_PROCESSOR_ID: ${GOOGLE_DOCUMENT_AI_PROCESSOR_ID:-}
+      GOOGLE_DOCUMENT_AI_ENABLED: ${GOOGLE_DOCUMENT_AI_ENABLED:-true}
+      # Ruta DENTRO del contenedor (el archivo se monta vía volumen)
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/google-document-ai.json
     volumes:
       - ./backend:/app
       - uploads_data:/app/uploads
       - exports_data:/app/exports
+      # Credenciales Google Cloud — montadas como solo lectura
+      # El archivo JSON NUNCA se copia dentro de la imagen Docker
+      # Coloca tu google-document-ai.json en la carpeta credentials/ del proyecto
+      - ./credentials:/app/credentials:ro
     ports:
       - "8000:8000"
     depends_on:

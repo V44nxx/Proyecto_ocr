@@ -1,5 +1,6 @@
 """
 Configuración global del sistema OCR
+v2: agrega soporte para Google Cloud Document AI
 """
 from pydantic_settings import BaseSettings
 from pydantic import AnyUrl
@@ -46,6 +47,24 @@ class Settings(BaseSettings):
     OCR_CONFIDENCE_THRESHOLD: float = 0.70   # Umbral para revisión manual
     IMAGE_DPI: int = 300                      # DPI para conversión PDF→imagen
     IMAGE_MIN_WIDTH: int = 1000              # Ancho mínimo para OCR óptimo
+
+    # ─────────────────────────────────────
+    # Google Cloud Document AI
+    # ─────────────────────────────────────
+    # ID del proyecto en Google Cloud
+    GOOGLE_CLOUD_PROJECT: str = "ocr-sena"
+    # Región del procesador (us, eu, etc.)
+    GOOGLE_DOCUMENT_AI_LOCATION: str = "us"
+    # ID del procesador — OBLIGATORIO, configurar en .env
+    # Ejemplo: "abc123def456789a"
+    GOOGLE_DOCUMENT_AI_PROCESSOR_ID: str = ""
+    # Ruta al JSON de credenciales (Service Account)
+    # En Docker: /app/credentials/google-document-ai.json
+    # En local:  ./credentials/google-document-ai.json
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    # Switch para habilitar/deshabilitar Google Document AI
+    # Si es False, usa Tesseract directamente
+    GOOGLE_DOCUMENT_AI_ENABLED: bool = True
 
     # ─────────────────────────────────────
     # CORS

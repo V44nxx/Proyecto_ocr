@@ -27,7 +27,7 @@ export default function LoginPage() {
       const { data } = await apiAuth.login(email, password);
       auth.guardarSesion(data as TokenResponse);
       toast.success(`Bienvenido, ${(data as TokenResponse).usuario.nombre}`);
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
       const mensaje = error.response?.data?.detail || "Credenciales incorrectas";

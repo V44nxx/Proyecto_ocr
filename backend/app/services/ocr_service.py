@@ -346,8 +346,17 @@ class OCRService:
             import uuid
 
             # ── Mapear campos desde ExtractorService ──────────────────────
-            num_doc = datos.get("identificacion") or f"SIN_ID_{str(uuid.uuid4())[:8]}"
+            raw_id = datos.get("identificacion")
+            nombres_val = datos.get("nombres")
+            apellidos_val = datos.get("apellidos")
             confianza = float(datos.get("confianza_extraccion") or 0.0)
+
+            # Omitir paginas vacías o de reverso sin identificación ni nombres
+            if not raw_id and not nombres_val and not apellidos_val and confianza < 25.0:
+                logger.info("Página sin datos de identificación ni nombres — omitiendo registro vacío")
+                return None
+
+            num_doc = raw_id or f"SIN_ID_{str(uuid.uuid4())[:8]}"
 
             # ── Validar documento padre ───────────────────────────────────
             doc_exists = (

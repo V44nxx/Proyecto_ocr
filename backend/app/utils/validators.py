@@ -19,19 +19,22 @@ from app.utils.logger import app_logger as logger
 class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
-    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
     _PALABRAS_NO_NOMBRE = re.compile(
-        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|REPUBLICA|"
-        r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|"
-        r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|"
-        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADURIA|GERENTE)\b",
+        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|"
+        r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
+        r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
+        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADURIA|GERENTE|MINISTERIO|"
+        r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL)\b",
         re.IGNORECASE,
     )
 
     # Palabras que no son nombres de lugar válidos (aparecen en encabezados y labels)
     _PALABRAS_NO_LUGAR = re.compile(
         r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|"
-        r"TARJETA|CEDULA|CÉDULA|NUIP|PERSONAL|NACIONAL|FECHA|EXPEDICION|EXPEDICIÓN|LUGAR|DE|Y)\b",
+        r"TARJETA|CEDULA|CÉDULA|NUIP|PERSONAL|NACIONAL|FECHA|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
+        r"LUGAR|DE|Y|INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|FIRMA|REGISTRADOR|REGISTRADURIA|PANENZ|BAILS|DANCING|"
+        r"DEPARTAMENTO|MUNICIPIO|OFICINA|REGISTRADURIA|PROVINCIA)\b",
         re.IGNORECASE,
     )
 
@@ -108,7 +111,7 @@ class ValidadorColombia:
         # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR)
         palabras_filtradas = [
             p for p in texto.split()
-            if not cls._PALABRAS_NO_NOMBRE.match(p)
+            if not cls._PALABRAS_NO_NOMBRE.match(p) and len(p) > 1
         ]
 
         if not palabras_filtradas:
@@ -117,8 +120,11 @@ class ValidadorColombia:
         # Limitar a máximo 5 palabras
         resultado = " ".join(palabras_filtradas[:5])
 
-        # Mínimo 2 caracteres
-        return resultado if len(resultado) >= 2 else None
+        # Mínimo 3 caracteres y no ser solo palabras genéricas de enlace
+        if len(resultado) < 3 or resultado in ("DE", "DEL", "CA DE", "LA", "EL", "LOS", "LAS"):
+            return None
+
+        return resultado
 
     # ──────────────────────────────────────────
     # FECHAS
@@ -238,7 +244,10 @@ class ValidadorColombia:
         texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]", "", texto)
         texto = " ".join(texto.split()).upper()
 
-        return texto if len(texto) >= 3 else None
+        if len(texto) < 3 or texto in ("DE", "Y DE", "NACIONAL", "PERSONAL", "DE EXPIRACION", "DE EXPIRACIÓN", "INDICE DERECHO"):
+            return None
+
+        return texto
 
 
 validador = ValidadorColombia()

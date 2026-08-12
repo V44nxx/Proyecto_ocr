@@ -1,0 +1,48 @@
+# ──────────────────────────────────────────
+# OCR Sistema - Backend Dependencies
+# Python 3.12
+# ──────────────────────────────────────────
+
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.12
+
+# Base de Datos
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.13.3
+psycopg2-binary==2.9.10
+
+# Autenticación
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Validación y Serialización
+pydantic==2.9.2
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# OCR - Motor Principal
+paddleocr==2.9.1
+paddlepaddle==2.6.2
+
+# Procesamiento de Imágenes
+opencv-python-headless==4.10.0.84
+Pillow==10.4.0
+numpy==1.26.4
+
+# Conversión PDF a Imagen
+PyMuPDF==1.24.11
+
+# Exportación Excel
+pandas==2.2.3
+openpyxl==3.1.5
+xlrd==2.0.1
+
+# Utilidades
+python-dotenv==1.0.1
+aiofiles==24.1.0
+httpx==0.27.2
+loguru==0.7.2
+pytz==2024.2

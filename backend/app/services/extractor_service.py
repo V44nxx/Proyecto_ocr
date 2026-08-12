@@ -104,7 +104,7 @@ class ExtractorService:
         r"LUGAR\s+EXPEDICI[OÓ]N",
         r"EXPEDIDA\s+EN",
         r"MUNICIPIO",
-        r"CIUDAD",
+        r"\bCIUDAD\b",                              # word boundary para no emparejar CIUDADANÍA
     ]
 
     KEYWORDS_LUGAR_NAC = [
@@ -228,8 +228,10 @@ class ExtractorService:
 
         # ── Estrategia 0: MRZ (más preciso cuando existe) ─────────────────
         datos_mrz = self._extraer_mrz(texto, lineas)
-        if datos_mrz.get("identificacion"):
-            resultado.update({k: v for k, v in datos_mrz.items() if v})
+        if datos_mrz:
+            for k, v in datos_mrz.items():
+                if v and not resultado.get(k):
+                    resultado[k] = v
 
         # ── Estrategia 1: Por keywords ────────────────────────────────────
         if not resultado["identificacion"]:
@@ -340,7 +342,6 @@ class ExtractorService:
             año_n = int("20" + yy_n) if int(yy_n) <= 25 else int("19" + yy_n)
             año_e = int("20" + yy_e) if int(yy_e) <= 50 else int("19" + yy_e)
             datos["fecha_nacimiento"] = f"{año_n:04d}-{mm_n}-{dd_n}"
-            datos["fecha_expedicion"] = f"{año_e:04d}-{mm_e}-{dd_e}"
             datos["sexo"] = "M" if sexo == "M" else "F"
 
         # ── Bloque MRZ nombres: apellidos<<nombres ────────────────────────
@@ -658,7 +659,7 @@ class ExtractorService:
                 lugar = match.group(1).strip()
                 # Filtrar encabezados de país que no son lugares de expedición
                 lugar_filtrado = re.sub(
-                    r"\b(REPUBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|IDENTIFICACION|TARJETA)\b",
+                    r"\b(REPUBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|IDENTIFICACION|TARJETA|CEDULA|C[EÉ]DULA)\b",
                     "",
                     lugar,
                     flags=re.IGNORECASE,
@@ -695,10 +696,18 @@ class ExtractorService:
             if match:
                 return validador.normalizar_sexo(match.group(1).strip())
 
-        # Fallback: M o F solos después de "SEXO"
+        # Fallback 1: M o F solos después de "SEXO" en la misma línea
         match = re.search(r"\bSEXO[\s:]*([MF])\b", texto, re.IGNORECASE)
         if match:
             return validador.normalizar_sexo(match.group(1))
+
+        # Fallback 2: "SEXO" en una línea y M/F en líneas siguientes (formato vertical de Google DocAI)
+        for idx, linea in enumerate(lineas):
+            if re.search(r"\bSEXO\b", linea, re.IGNORECASE):
+                for sublinea in lineas[idx + 1 : idx + 5]:
+                    sub_clean = sublinea.strip().upper()
+                    if sub_clean in ("M", "F", "MASCULINO", "FEMENINO", "MASC", "FEM"):
+                        return validador.normalizar_sexo(sub_clean)
 
         return None
 

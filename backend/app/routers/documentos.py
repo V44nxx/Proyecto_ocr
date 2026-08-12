@@ -62,6 +62,7 @@ def _procesar_ocr_background(pdf_path: str, documento_id: str):
     status_code=202
 )
 async def upload_pdf(
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(..., description="Uno o múltiples archivos PDF"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
@@ -92,48 +93,29 @@ async def upload_pdf(
             nombre_original=file.filename,
             ruta_archivo=str(ruta_archivo),
             tamano_bytes=len(content),
-            estado="pendiente",
+            estado="procesando",
         )
         db.add(documento)
         db.commit()
         db.refresh(documento)
 
-        # ── Ejecutar OCR con sesión PROPIA (no compartida con el router) ─────
-        # FIX: antes se pasaba `db` del router al OCR. Si el OCR fallaba,
-        # db.rollback() deshacía el Documento Y todas las Persona ya guardadas.
-        # Ahora el OCR maneja su propia sesión interna (db_externa=None).
-        # La sesión del router solo gestiona el Documento.
-        personas_extraidas_list = []
-        try:
-            logger.info(f"Iniciando OCR para: {file.filename} (ID: {documento.id})")
-            resultado_ocr = ocr_service.procesar_pdf(
-                str(ruta_archivo),
-                str(documento.id),
-                db_externa=None,  # OCR usa su propia sesión interna
-            )
-            personas_extraidas_list = resultado_ocr.get("personas_extraidas", [])
-            # Log con IDs extraídos para facilitar debugging
-            ids_extraidos = [
-                p.get("numero_identificacion", "SIN_ID")
-                for p in personas_extraidas_list
-            ]
-            logger.info(
-                f"OCR finalizado para: {file.filename}. "
-                f"Personas: {len(personas_extraidas_list)}. "
-                f"IDs extraídos: {ids_extraidos}"
-            )
-        except Exception as err_ocr:
-            import traceback
-            logger.error(f"Error procesando OCR: {err_ocr}\n{traceback.format_exc()}")
-            # NO hacer db.rollback() aquí — el Documento ya fue commiteado
-            # y las Personas las gestiona la sesión interna del OCR
+        # ── Encolar OCR en segundo plano ──────────────────────────────────
+        # Evita timeout de HTTP cuando el PDF tiene decenas de páginas (ej. 42 págs)
+        background_tasks.add_task(
+            _procesar_ocr_background,
+            str(ruta_archivo),
+            str(documento.id),
+        )
+
+        logger.info(
+            f"PDF encolado en segundo plano: {file.filename} (ID: {documento.id})"
+        )
 
         resultados.append({
             "id": str(documento.id),
             "nombre_original": documento.nombre_original,
-            "estado": documento.estado,
-            "personas_extraidas": personas_extraidas_list,
-            "mensaje": f"Archivo procesado. {len(personas_extraidas_list)} persona(s) extraída(s).",
+            "estado": "procesando",
+            "mensaje": "Archivo recibido. Procesando páginas en segundo plano con Google Document AI.",
         })
 
     return {

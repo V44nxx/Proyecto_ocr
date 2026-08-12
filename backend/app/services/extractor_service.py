@@ -342,7 +342,12 @@ class ExtractorService:
             año_n = int("20" + yy_n) if int(yy_n) <= 25 else int("19" + yy_n)
             año_e = int("20" + yy_e) if int(yy_e) <= 50 else int("19" + yy_e)
             datos["fecha_nacimiento"] = f"{año_n:04d}-{mm_n}-{dd_n}"
-            datos["sexo"] = "M" if sexo == "M" else "F"
+        # ── Cédula en MRZ: COL1117811948<6 ──────────────────────────────
+        match_id_mrz = re.search(r"COL([1-9]\d{5,9})[<0-9]", texto)
+        if match_id_mrz:
+            valido, num = validador.validar_cedula(match_id_mrz.group(1))
+            if valido:
+                datos["identificacion"] = num
 
         # ── Bloque MRZ nombres: apellidos<<nombres ────────────────────────
         # La cédula colombiana usa << como separador entre apellidos y nombres
@@ -355,12 +360,12 @@ class ExtractorService:
             raw_aps = match_nombres.group(1).replace("<", " ").strip()
             raw_noms = match_nombres.group(2).replace("<", " ").strip()
 
-            aps = re.sub(r"\s+", " ", re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", raw_aps)).strip()
-            noms = re.sub(r"\s+", " ", re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", raw_noms)).strip()
+            aps = validador.normalizar_nombre(raw_aps)
+            noms = validador.normalizar_nombre(raw_noms)
 
-            if len(aps) >= 3:
+            if aps:
                 datos["apellidos"] = aps
-            if len(noms) >= 2:
+            if noms:
                 datos["nombres"] = noms
 
         return datos
@@ -651,6 +656,16 @@ class ExtractorService:
           2. Nombre de municipio colombiano en la lista
           3. Keyword + línea adyacente
         """
+        # Estrategia 0: Buscar municipio conocido en la misma línea o adyacente a 'LUGAR' / 'EXPEDICION'
+        for idx, linea in enumerate(lineas):
+            if re.search(r"\b(LUGAR|EXPEDICI[OÓ]N|EXPEDIDA)\b", linea, re.IGNORECASE):
+                subtexto = "\n".join(lineas[max(0, idx - 1) : min(len(lineas), idx + 4)])
+                match_mun = self._PATRON_MUNICIPIOS.search(subtexto)
+                if match_mun:
+                    lug = validador.normalizar_lugar(match_mun.group(1))
+                    if lug:
+                        return lug
+
         # Estrategia 1: Por keyword
         for keyword in self.KEYWORDS_LUGAR_EXP:
             patron = re.compile(
@@ -671,7 +686,7 @@ class ExtractorService:
                 if lugar_normalizado and len(lugar_normalizado) >= 3:
                     return lugar_normalizado
 
-        # Estrategia 2: Buscar municipio en lista conocida
+        # Estrategia 2: Buscar cualquier municipio en lista conocida
         match_mun = self._PATRON_MUNICIPIOS.search(texto)
         if match_mun:
             return validador.normalizar_lugar(match_mun.group(1))

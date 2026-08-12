@@ -272,13 +272,38 @@ class ExtractorService:
         if not resultado["apellidos"]:
             resultado["apellidos"] = self._extraer_apellido_antes_nombres(lineas)
 
-        # ── Estrategia 2: Por línea adyacente al label ────────────────────
+        # ── Estrategia 3: Clasificación inteligente por diccionario ────────
         if not resultado["nombres"] or not resultado["apellidos"]:
-            nom_ady, ape_ady = self._extraer_nombres_por_posicion(lineas)
-            if not resultado["nombres"] and nom_ady:
-                resultado["nombres"] = nom_ady
-            if not resultado["apellidos"] and ape_ady:
-                resultado["apellidos"] = ape_ady
+            nom_clas, ape_clas = self._extraer_nombres_por_clasificacion(lineas)
+            if not resultado["nombres"] and nom_clas:
+                resultado["nombres"] = nom_clas
+            if not resultado["apellidos"] and ape_clas:
+                resultado["apellidos"] = ape_clas
+
+        # ── Corrección de nombres / apellidos invertidos por layout ───────
+        self._corregir_nombres_apellidos_invertidos(resultado)
+
+        # ── Fallback de fechas cronológico si faltan nac/exp ───────────────
+        if not resultado["fecha_nacimiento"] or not resultado["fecha_expedicion"]:
+            fechas_encontradas = []
+            for match in re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", texto, re.IGNORECASE):
+                f_obj = validador.parsear_fecha(match.group(1))
+                if f_obj and f_obj not in fechas_encontradas:
+                    fechas_encontradas.append(f_obj)
+
+            fechas_encontradas.sort()
+
+            if len(fechas_encontradas) >= 2:
+                if not resultado["fecha_nacimiento"]:
+                    resultado["fecha_nacimiento"] = fechas_encontradas[0].isoformat()
+                if not resultado["fecha_expedicion"]:
+                    resultado["fecha_expedicion"] = fechas_encontradas[-1].isoformat()
+            elif len(fechas_encontradas) == 1:
+                f_unica = fechas_encontradas[0]
+                if f_unica.year <= 2010 and not resultado["fecha_nacimiento"]:
+                    resultado["fecha_nacimiento"] = f_unica.isoformat()
+                elif f_unica.year > 2010 and not resultado["fecha_expedicion"]:
+                    resultado["fecha_expedicion"] = f_unica.isoformat()
 
         # ── Calcular confianza ────────────────────────────────────────────
         resultado["confianza_extraccion"] = self._calcular_confianza(
@@ -308,11 +333,16 @@ class ExtractorService:
             return ""
 
         texto = texto.upper()
+        # Desegmentar etiquetas pegadas a valores por errores de OCR (ej: APELLIDORAJONAL -> APELLIDO RAJONAL)
+        texto = re.sub(
+            r"\b(APELLIDOS?|NOMBRES?|IDENTIFICACION|IDENTIFICACIÓN|NUMERO|NÚMERO|EXPEDICION|EXPEDICIÓN)([A-ZÁÉÍÓÚÜÑ]{3,})\b",
+            r"\1 \2",
+            texto,
+            flags=re.IGNORECASE,
+        )
         texto = re.sub(r" +", " ", texto)
         texto = re.sub(r"\n+", "\n", texto)
 
-        # Normalizar separadores de números con puntos → sin puntos
-        # Ej: "1.117.811.948" → se mantiene para captura específica
         return texto.strip()
 
     # ──────────────────────────────────────────
@@ -518,6 +548,84 @@ class ExtractorService:
                     return nombre_norm
         return None
 
+    # Nombres de pila comunes en Colombia para corregir inversiones de layout (2 columnas OCR)
+    NOMBRES_COMUNES_COL = {
+        "DIEGO", "ARMANDO", "JUAN", "CARLOS", "ANDRES", "ANDRÉS", "MARIA", "MARÍA",
+        "JOSE", "JOSÉ", "LUIS", "PEDRO", "NATALI", "NATALIA", "VANESSA", "ALEXANDRA",
+        "ERIKA", "JULIANA", "JHON", "FREDDY", "RUBEN", "RUBÉN", "PAOLA", "DIANA",
+        "PATRICIA", "LIDA", "YASMIN", "YASMÍN", "OSCAR", "LEONARDO", "EINER", "SAMUEL",
+        "FERNANDO", "JONATHAN", "PAULA", "ANDREA", "MONICA", "MÓNICA", "SANDRA",
+        "CLAUDIA", "MARCELA", "LINA", "JAIME", "WILSON", "JORGE", "HENRY", "DANIEL",
+        "DAVID", "CHRIS", "STEVEN", "KEVIN", "JASON", "PABLO", "EMILIO", "RODRIGO",
+        "GUSTAVO", "ADOLFO", "GUILLERMO", "GABRIEL", "RICARDO", "MAURICIO", "FRANCISCO",
+        "JESUS", "JESÚS", "ALVARO", "ÁLVARO", "IVAN", "IVÁN", "HECTOR", "HÉCTOR",
+        "MARIO", "ALBERTO", "ALEXANDER", "EDGAR", "EDGARD", "EDWIN", "ALEXIS",
+        "YAMILE", "YULIETH", "YULY", "ANGIE", "KATHERINE", "CATALINA", "SOFIA",
+        "SOFÍA", "ISABEL", "CAMILA", "VALENTINA", "DANIELA", "ADRIANA", "VERONICA",
+        "VERÓNICA", "VIVIANA", "LILIANA", "CLARA", "LUCIA", "LUCÍA", "GLORIA",
+        "ROSA", "ESPERANZA", "BLANCA", "CECILIA", "CAROLINA", "TATIANA", "LORENA",
+    }
+
+    def _corregir_nombres_apellidos_invertidos(self, resultado: Dict[str, Any]):
+        """
+        Corrige la inversión o mezcla de nombres y apellidos causada por la lectura en 2 columnas
+        que hace OCR en cédulas amarillas colombianas.
+        """
+        nombres = resultado.get("nombres") or ""
+        apellidos = resultado.get("apellidos") or ""
+
+        if not nombres and not apellidos:
+            return
+
+        palabras_totales = [
+            p for p in (nombres + " " + apellidos).upper().split()
+            if not validador._PALABRAS_NO_NOMBRE.match(p) and len(p) >= 2
+        ]
+
+        if not palabras_totales:
+            return
+
+        nom_words = [p for p in palabras_totales if p in self.NOMBRES_COMUNES_COL]
+        ape_words = [p for p in palabras_totales if p not in self.NOMBRES_COMUNES_COL]
+
+        if nom_words:
+            resultado["nombres"] = " ".join(dict.fromkeys(nom_words))
+        if ape_words:
+            resultado["apellidos"] = " ".join(dict.fromkeys(ape_words))
+
+    def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Clasifica palabras sueltas encontradas en el documento separando
+        nombres de pila conocidos colombianos de los apellidos.
+        """
+        palabras_candidatas = []
+
+        for linea in lineas:
+            linea_up = linea.upper().strip()
+            # Omitir líneas de encabezado o metadata que no contienen nombres
+            if re.search(r"\b(REPUBLICA|COLOMBIA|IDENTIFICACION|ESTATURA|FIRMA|HUELLA|REGISTRADOR|EXPEDICION|EXPIRACION)\b", linea_up):
+                continue
+
+            for palabra in linea_up.split():
+                # Omitir palabras con números o solo dígitos
+                if re.search(r"\d", palabra):
+                    continue
+                palabra_limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", palabra)
+                if len(palabra_limpia) >= 2 and not validador._PALABRAS_NO_NOMBRE.match(palabra_limpia):
+                    if palabra_limpia not in palabras_candidatas:
+                        palabras_candidatas.append(palabra_limpia)
+
+        if not palabras_candidatas:
+            return None, None
+
+        nombres_clasificados = [p for p in palabras_candidatas if p in self.NOMBRES_COMUNES_COL]
+        apellidos_clasificados = [p for p in palabras_candidatas if p not in self.NOMBRES_COMUNES_COL]
+
+        nom_str = " ".join(dict.fromkeys(nombres_clasificados)) if nombres_clasificados else None
+        ape_str = " ".join(dict.fromkeys(apellidos_clasificados)) if apellidos_clasificados else None
+
+        return nom_str, ape_str
+
     # ──────────────────────────────────────────
     # EXTRACCIÓN DE FECHAS
     # Meses en español/abreviado para cédula nueva
@@ -559,9 +667,10 @@ class ExtractorService:
         """
         for keyword in keywords:
             patron = re.compile(
-                keyword + r"[\s:]*"
+                keyword + r"[\s:\n]*"
                 r"(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4}"
                 r"|\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}"
+                r"|\d{1,2}[\s/\-\.][A-Za-z]{3,4}[\s/\-\.]\d{4}"
                 r"|\d{1,2}\s+DE\s+\w+\s+DE\s+\d{4})",
                 re.IGNORECASE,
             )
@@ -571,6 +680,19 @@ class ExtractorService:
                 fecha = validador.parsear_fecha(fecha_texto)
                 if fecha:
                     return fecha.isoformat()
+
+            # Búsqueda secundaria: si la fecha está en la línea siguiente a la palabra clave
+            for idx, linea in enumerate(lineas):
+                if re.search(keyword, linea, re.IGNORECASE):
+                    subtexto = " ".join(lineas[idx: min(len(lineas), idx + 3)])
+                    m_fecha = re.search(
+                        r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.]\d{4})\b",
+                        subtexto,
+                    )
+                    if m_fecha:
+                        f = validador.parsear_fecha(m_fecha.group(1))
+                        if f:
+                            return f.isoformat()
 
         return None
 

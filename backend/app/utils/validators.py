@@ -163,8 +163,7 @@ class ValidadorColombia:
             except ValueError:
                 pass
 
-        # ── Formato textual: "15 de enero de 2020" ───────────────────────
-        # Con variantes OCR: ENER0 en lugar de ENERO, etc.
+        # ── Formato DD-MMM-YYYY (ej. 05-MAY-1987, 26-JUN-2007, 05/MAY/1987) ──
         MESES = {
             "ENERO": 1, "FEBRERO": 2, "MARZO": 3, "ABRIL": 4,
             "MAYO": 5, "JUNIO": 6, "JULIO": 7, "AGOSTO": 8,
@@ -172,12 +171,27 @@ class ValidadorColombia:
             # Abreviaturas
             "ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6,
             "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12,
+            "JAN": 1, "APR": 4, "AUG": 8, "DEC": 12,
             # Variantes OCR frecuentes
             "ENER0": 1, "FEBRER0": 2, "MARZ0": 3, "ABR1L": 4,
             "AGOST0": 8, "SEPTIEMBRE": 9, "0CTUBRE": 10, "NOVIEMBRE": 11,
             "DICIEMBRE": 12,
         }
 
+        match_dmy_abrev = re.search(
+            r"\b(\d{1,2})[\s/\-\.]([A-Z]{3,4})[\s/\-\.](\d{4})\b",
+            texto.upper(),
+        )
+        if match_dmy_abrev:
+            dia_t, mes_t, anio_t = match_dmy_abrev.groups()
+            mes_num = MESES.get(mes_t.upper())
+            if mes_num:
+                try:
+                    return date(int(anio_t), mes_num, int(dia_t))
+                except ValueError:
+                    pass
+
+        # ── Formato textual: "15 de enero de 2020" ───────────────────────
         match_texto = re.search(
             r"(\d{1,2})\s+DE\s+([A-Z0-9ÁÉÍÓÚ]+)\s+DE\s+(\d{4})",
             texto.upper(),

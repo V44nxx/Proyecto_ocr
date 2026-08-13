@@ -3,6 +3,7 @@ Servicio de comparación entre BD y archivos Excel externos.
 Usa Pandas para el análisis de diferencias.
 """
 import pandas as pd
+import re
 import time
 from pathlib import Path
 from datetime import datetime

@@ -22,7 +22,10 @@ class Persona(Base):
     lugar_expedicion = Column(String(200), nullable=True)
     sexo = Column(String(10), nullable=True)
 
-    # Control de calidad y metadatos espaciales
+    # Control de calidad y metadatos de agrupación espacial
+    grupo_documento_id = Column(String(100), nullable=True)
+    pagina_frente = Column(Integer, nullable=True)
+    pagina_reverso = Column(Integer, nullable=True)
     pagina_numero = Column(Integer, nullable=True)
     tipo_documento = Column(String(50), nullable=True, default="CEDULA_CIUDADANIA")
     estado_registro = Column(String(30), nullable=True, default="VALID")

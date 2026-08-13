@@ -85,19 +85,15 @@ class OCRService:
 
             personas_guardadas = []
             confianzas = []
+            paginas_clasificadas = []
 
+            # ── Paso 1: Procesar cada página con Document AI y clasificar su cara ──
             for i in range(total_paginas):
                 pagina = doc[i]
-
-                # ── Extraer texto nativo ──────────────────────────────────
                 texto_nativo = pagina.get_text("text")
 
-                # ── Decidir si necesitamos OCR de imagen ──────────────────
                 if self._necesita_ocr_imagen(texto_nativo):
-                    logger.info(
-                        f"Página {i+1}/{total_paginas}: "
-                        f"PDF escaneado — aplicando OCR de imagen (300 DPI)"
-                    )
+                    logger.info(f"Página {i+1}/{total_paginas}: Aplicando OCR de imagen (300 DPI)")
                     pix = pagina.get_pixmap(dpi=300)
                     img_np = self.image_processor._pixmap_to_numpy(pix)
                     texto_pagina, motor_usado, layout_estructurado = self._ocr_imagen(
@@ -108,26 +104,44 @@ class OCRService:
                     motor_usado = "texto_nativo_pdf"
                     layout_estructurado = None
 
-                logger.info(
-                    f"Página {i+1}: {len(texto_pagina)} chars extraídos "
-                    f"[motor: {motor_usado}]"
-                )
-
-                # ── Extracción estructurada de campos con layout ──────────
-                datos_extraidos = self.parser.extraer(
+                # Clasificar cara (Frente / Reverso)
+                from app.services.document_side_classifier import document_side_classifier
+                clasif_cara = document_side_classifier.clasificar_cara(
                     texto_pagina,
-                    layout_data=layout_estructurado,
-                    pagina_num=i + 1,
-                    ocr_engine=motor_usado
+                    lines=layout_estructurado.pages[0].lines if (layout_estructurado and layout_estructurado.pages) else []
                 )
 
-                confianza = datos_extraidos.get("confianza_extraccion", 0.0)
+                # Pre-extraer ID si está presente para ayudar a la agrupación
+                id_pre = self.parser._extraer_identificacion(texto_pagina, texto_pagina.split("\n"))
+
+                paginas_clasificadas.append({
+                    "pagina_numero": i + 1,
+                    "texto": texto_pagina,
+                    "layout": layout_estructurado,
+                    "motor": motor_usado,
+                    "cara": clasif_cara["cara"],
+                    "tipo_documento": clasif_cara["tipo_documento"],
+                    "confianza": clasif_cara["confianza"],
+                    "numero_identificacion": id_pre
+                })
+
+            # ── Paso 2: Agrupar páginas en documentos físicos (Frente + Reverso) ──
+            from app.services.document_pairing_service import document_pairing_service
+            grupos = document_pairing_service.agrupar_paginas(paginas_clasificadas)
+
+            # ── Paso 3: Extraer y guardar 1 Persona por DocumentGroup ──
+            for grp in grupos:
+                datos_grupo = self.parser.extraer_grupo(grp, ocr_engine="google_document_ai")
+                confianza = datos_grupo.get("confianza_extraccion", 0.0)
                 confianzas.append(confianza)
 
-                # Guardar persona en BD con metadatos completos y trazabilidad de página
                 persona = self._guardar_persona(
-                    datos_extraidos, texto_pagina, documento_id, db,
-                    ocr_engine=motor_usado, pagina_num=i + 1
+                    datos_grupo,
+                    texto_ocr=f"Frente Pág {grp.pagina_frente} | Reverso Pág {grp.pagina_reverso}",
+                    documento_id=documento_id,
+                    db=db,
+                    ocr_engine="google_document_ai",
+                    pagina_num=grp.pagina_frente or grp.pagina_reverso or 1
                 )
                 if persona:
                     personas_guardadas.append(persona)
@@ -394,6 +408,9 @@ class OCRService:
             if not persona:
                 persona = Persona(
                     documento_id=doc_id_val,
+                    grupo_documento_id=datos.get("grupo_documento_id", "DOC-001"),
+                    pagina_frente=datos.get("pagina_frente"),
+                    pagina_reverso=datos.get("pagina_reverso"),
                     numero_identificacion=str(num_doc),
                     nombres=datos.get("nombres") or "POR REVISAR",
                     apellidos=datos.get("apellidos") or "POR REVISAR",
@@ -414,6 +431,9 @@ class OCRService:
             else:
                 if doc_id_val:
                     persona.documento_id = doc_id_val
+                persona.grupo_documento_id = datos.get("grupo_documento_id", persona.grupo_documento_id)
+                persona.pagina_frente = datos.get("pagina_frente", persona.pagina_frente)
+                persona.pagina_reverso = datos.get("pagina_reverso", persona.pagina_reverso)
                 if datos.get("nombres") and datos["nombres"] != "POR REVISAR":
                     persona.nombres = datos["nombres"]
                 if datos.get("apellidos") and datos["apellidos"] != "POR REVISAR":

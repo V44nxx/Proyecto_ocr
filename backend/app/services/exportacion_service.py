@@ -217,8 +217,8 @@ class ExportacionService:
         ws["B4"] = datetime.now().strftime("%d/%m/%Y %H:%M")
     def exportar_reporte_diferencias(self, db: Session, comparacion_id: str) -> str:
         """
-        Exporta el reporte estructurado de diferencias a Excel XLSX.
-        11 Columnas: Número Documento | Página | Tipo Documento | Campo | Valor OCR | Valor Excel | Diferencia | Confianza OCR | Estado | Motor OCR | Motivo
+        Exporta el reporte estructurado de diferencias a Excel XLSX por Persona / DocumentGroup.
+        12 Columnas: Número Documento | Grupo Documento | Página Frente | Página Reverso | Campo | Valor OCR | Valor Excel | Diferencia | Confianza OCR | Estado | Motor OCR | Motivo
         """
         from app.models.diferencia import Diferencia
         from app.models.persona import Persona
@@ -227,8 +227,9 @@ class ExportacionService:
         datos = []
         for d in difs:
             p = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion).first()
-            pag = p.pagina_numero if p and p.pagina_numero else 1
-            tipo_doc = p.tipo_documento if p and p.tipo_documento else "CEDULA_CIUDADANIA"
+            grupo_id = p.grupo_documento_id if p and p.grupo_documento_id else "DOC-001"
+            pag_f = p.pagina_frente if p and p.pagina_frente else (p.pagina_numero if p else 1)
+            pag_r = p.pagina_reverso if p and p.pagina_reverso else "-"
             motor = p.motor_ocr if p and p.motor_ocr else "google_document_ai"
             conf = float(p.confianza_extraccion or 0) if p else 0.0
             est = p.estado_registro if p and p.estado_registro else "REVIEW_REQUIRED"
@@ -241,8 +242,9 @@ class ExportacionService:
 
             datos.append({
                 "Número Documento": d.numero_identificacion,
-                "Página": pag,
-                "Tipo Documento": tipo_doc,
+                "Grupo Documento": grupo_id,
+                "Página Frente": pag_f,
+                "Página Reverso": pag_r,
                 "Campo": d.campo,
                 "Valor OCR": d.valor_bd or "",
                 "Valor Excel": d.valor_excel or "",
@@ -255,8 +257,8 @@ class ExportacionService:
 
         if not datos:
             datos.append({
-                "Número Documento": "N/A", "Página": "-", "Tipo Documento": "-", "Campo": "-",
-                "Valor OCR": "-", "Valor Excel": "-", "Diferencia": "SIN DIFERENCIAS",
+                "Número Documento": "N/A", "Grupo Documento": "-", "Página Frente": "-", "Página Reverso": "-",
+                "Campo": "-", "Valor OCR": "-", "Valor Excel": "-", "Diferencia": "SIN DIFERENCIAS",
                 "Confianza OCR": 100.0, "Estado": "VALID", "Motor OCR": "-", "Motivo": "Todas las coincidencia son perfectas"
             })
 

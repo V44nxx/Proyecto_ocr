@@ -427,16 +427,34 @@ export default function PersonasPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-3 gap-3 text-xs">
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1">Página PDF</span>
-                  <span className="font-mono text-white font-bold">Pág. {personaSeleccionada.pagina_numero || 1}</span>
+                  <span className="text-slate-400 block mb-1">Grupo Documento</span>
+                  <span className="font-mono text-primary-400 font-bold">{personaSeleccionada.grupo_documento_id || "DOC-001"}</span>
+                </div>
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block mb-1">Páginas (F / R)</span>
+                  <span className="font-mono text-white font-bold">
+                    Frente: {personaSeleccionada.pagina_frente || personaSeleccionada.pagina_numero || 1} | Rev: {personaSeleccionada.pagina_reverso || "-"}
+                  </span>
                 </div>
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                   <span className="text-slate-400 block mb-1">Motor OCR</span>
-                  <span className="font-mono text-primary-400 font-bold">{personaSeleccionada.motor_ocr || "google_document_ai"}</span>
+                  <span className="font-mono text-emerald-400 font-bold">{personaSeleccionada.motor_ocr || "google_document_ai"}</span>
                 </div>
               </div>
+
+              {/* Evidencias de Agrupación del Documento */}
+              {personaSeleccionada.detalles_campos?.grouping?.reasons && (
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-primary-500/30 text-xs space-y-1">
+                  <span className="text-primary-400 font-bold uppercase text-[10px]">✓ Evidencias de Agrupación de Documento:</span>
+                  <ul className="list-disc list-inside text-slate-300 space-y-0.5 text-[11px]">
+                    {personaSeleccionada.detalles_campos.grouping.reasons.map((r: string, idx: number) => (
+                      <li key={idx}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Desglose por campo */}
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">

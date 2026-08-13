@@ -487,6 +487,116 @@ class ExtractorService:
 
         return resultado
 
+    def extraer_grupo(self, group: Any, ocr_engine: str = "google_document_ai") -> Dict[str, Any]:
+        """
+        Extrae y combina la información complementaria de un grupo de documento físico (Frente + Reverso).
+        Aplica validación cruzada entre caras y la regla Cero Invención.
+        """
+        front_data = {}
+        back_data = {}
+
+        if getattr(group, "front_page", None):
+            fp = group.front_page
+            front_data = self.extraer(
+                fp.get("texto", ""),
+                layout_data=fp.get("layout"),
+                pagina_num=fp.get("pagina_numero", 1),
+                ocr_engine=ocr_engine
+            )
+
+        if getattr(group, "back_page", None):
+            bp = group.back_page
+            back_data = self.extraer(
+                bp.get("texto", ""),
+                layout_data=bp.get("layout"),
+                pagina_num=bp.get("pagina_numero", 2),
+                ocr_engine=ocr_engine
+            )
+
+        # Si solo hay una cara disponible
+        if front_data and not back_data:
+            res = dict(front_data)
+            res["grupo_documento_id"] = getattr(group, "group_id", "DOC-001")
+            res["pagina_frente"] = getattr(group, "pagina_frente", 1)
+            res["pagina_reverso"] = None
+            res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
+            return res
+
+        if back_data and not front_data:
+            res = dict(back_data)
+            res["grupo_documento_id"] = getattr(group, "group_id", "DOC-001")
+            res["pagina_frente"] = None
+            res["pagina_reverso"] = getattr(group, "pagina_reverso", 1)
+            res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
+            return res
+
+        # ── Frente + Reverso disponibles: Combinación e Integración Complementaria ──
+        res = {
+            "grupo_documento_id": getattr(group, "group_id", "DOC-001"),
+            "pagina_frente": getattr(group, "pagina_frente", 1),
+            "pagina_reverso": getattr(group, "pagina_reverso", 2),
+            "tipo_documento": front_data.get("tipo_documento", back_data.get("tipo_documento", "CEDULA_CIUDADANIA")),
+            "identificacion": front_data.get("identificacion") or back_data.get("identificacion"),
+            "nombres": front_data.get("nombres"),
+            "apellidos": front_data.get("apellidos"),
+            "fecha_nacimiento": front_data.get("fecha_nacimiento") or back_data.get("fecha_nacimiento"),
+            "fecha_expedicion": back_data.get("fecha_expedicion") or front_data.get("fecha_expedicion"),
+            "lugar_expedicion": back_data.get("lugar_expedicion") or front_data.get("lugar_expedicion"),
+            "sexo": front_data.get("sexo") or back_data.get("sexo"),
+            "confianza_extraccion": round((front_data.get("confianza_extraccion", 70) + back_data.get("confianza_extraccion", 70)) / 2.0, 1),
+            "requiere_revision": front_data.get("requiere_revision", False) or back_data.get("requiere_revision", False) or (getattr(group, "status", "") != "VALID"),
+            "estado_registro": getattr(group, "status", "VALID"),
+            "detalles_campos": {}
+        }
+
+        # Combinar detalles_campos con validación cruzada entre caras
+        f_det = front_data.get("detalles_campos", {})
+        b_det = back_data.get("detalles_campos", {})
+
+        for campo in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
+            f_val = f_det.get(campo, {}).get("valor")
+            b_val = b_det.get(campo, {}).get("valor")
+
+            if f_val and b_val and f_val != b_val:
+                # Conflicto entre caras: Marcar REVIEW_REQUIRED sin elegir en silencio
+                res["detalles_campos"][campo] = {
+                    "valor": f_val,
+                    "value": f_val,
+                    "valor_original": f"Frente: {f_val} | Reverso: {b_val}",
+                    "confidence": 0.50,
+                    "status": "REVIEW_REQUIRED",
+                    "page": res["pagina_frente"],
+                    "source": ocr_engine,
+                    "reason": f"Conflicto entre cara Frente ('{f_val}') y Reverso ('{b_val}')",
+                    "evidence": [f"Valores en Frente ({f_val}) y Reverso ({b_val}) difieren"]
+                }
+                res["requiere_revision"] = True
+            elif f_val:
+                c_dict = dict(f_det[campo])
+                if b_val and f_val == b_val:
+                    c_dict["confidence"] = min(0.99, float(c_dict.get("confidence", 0.9)) + 0.05)
+                    c_dict["evidence"].append(f"Verificado adicionalmente en cara Reverso (pág. {res['pagina_reverso']})")
+                res["detalles_campos"][campo] = c_dict
+            elif b_val:
+                res["detalles_campos"][campo] = dict(b_det[campo])
+            else:
+                res["detalles_campos"][campo] = {
+                    "valor": None,
+                    "value": None,
+                    "valor_original": None,
+                    "confidence": 0.0,
+                    "status": "MISSING_DATA" if campo in ["identificacion", "nombres", "apellidos"] else "REVIEW_REQUIRED",
+                    "page": res["pagina_frente"] or res["pagina_reverso"],
+                    "source": ocr_engine,
+                    "reason": f"Sin evidencia suficiente en Frente ni Reverso",
+                    "evidence": ["Evidencia insuficiente"]
+                }
+
+        res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
+        res["campos_encontrados"] = [k for k, v in res.items() if k in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"] and v is not None]
+
+        return res
+
     # ──────────────────────────────────────────
     # NORMALIZACIÓN
     # ──────────────────────────────────────────

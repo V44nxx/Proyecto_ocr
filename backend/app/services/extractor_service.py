@@ -201,10 +201,10 @@ class ExtractorService:
         if not texto:
             return "UNKNOWN"
         texto_up = texto.upper()
-        if re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP)\b", texto_up):
-            return "CEDULA_CIUDADANIA"
-        elif re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD)\b", texto_up):
+        if re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|T\.I)\b", texto_up):
             return "TARJETA_IDENTIDAD"
+        elif re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP)\b", texto_up):
+            return "CEDULA_CIUDADANIA"
         else:
             return "UNKNOWN"
 

@@ -417,7 +417,7 @@ class OCRService:
                     fecha_nacimiento=fecha_nac,
                     fecha_expedicion=fecha_exp,
                     lugar_expedicion=datos.get("lugar_expedicion"),
-                    sexo=datos.get("sexo"),
+                    sexo=(datos.get("sexo") or "")[:10] if datos.get("sexo") else None,
                     pagina_numero=pagina_num,
                     tipo_documento=datos.get("tipo_documento", "CEDULA_CIUDADANIA"),
                     estado_registro=estado_reg,
@@ -445,7 +445,7 @@ class OCRService:
                 if datos.get("lugar_expedicion"):
                     persona.lugar_expedicion = datos["lugar_expedicion"]
                 if datos.get("sexo"):
-                    persona.sexo = datos["sexo"]
+                    persona.sexo = str(datos["sexo"])[:10]
                 persona.pagina_numero = pagina_num
                 persona.tipo_documento = datos.get("tipo_documento", persona.tipo_documento)
                 persona.detalles_campos = datos.get("detalles_campos", persona.detalles_campos)

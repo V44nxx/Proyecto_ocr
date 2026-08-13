@@ -7,6 +7,7 @@ Garantiza PRECISIÓN > COMPLETITUD: Veto Espacial Irrevocable y 0% Invención.
 import re
 from typing import Dict, Any, List, Optional, Tuple, Set
 from app.utils.logger import app_logger as logger
+from app.utils.validators import validador
 from app.services.document_layout_classifier import document_layout_classifier
 from app.utils.spatial_visual_debugger import spatial_visual_debugger
 
@@ -389,6 +390,17 @@ class SpatialFieldExtractor:
                 elif campo in ["fecha_expedicion", "lugar_expedicion"]:
                     if not re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", sub_txt, re.IGNORECASE):
                         continue
+                elif campo == "sexo":
+                    sex_norm = validador.normalizar_sexo(sub_txt)
+                    if not sex_norm:
+                        continue
+                    sub_txt = sex_norm
+                elif campo == "identificacion":
+                    digits = re.sub(r"[^\d]", "", sub_txt)
+                    valido, num_limpio = validador.validar_cedula(digits)
+                    if not valido:
+                        continue
+                    sub_txt = num_limpio
                 if sub_txt:
                     bbox_inline = SpatialBoundingBox(etiqueta.bbox.x + (etiqueta.bbox.w * 0.3), etiqueta.bbox.y, etiqueta.bbox.w, etiqueta.bbox.h, page_num)
                     candidates.append(SpatialCandidate(sub_txt, bbox_inline, doc_ai_confidence, idx))
@@ -408,6 +420,19 @@ class SpatialFieldExtractor:
                 tiene_fecha = bool(re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE))
                 if not tiene_fecha:
                     continue
+
+            if campo == "sexo":
+                sex_norm = validador.normalizar_sexo(txt)
+                if not sex_norm:
+                    continue
+                txt = sex_norm
+
+            if campo == "identificacion":
+                digits = re.sub(r"[^\d]", "", txt)
+                valido, num_limpio = validador.validar_cedula(digits)
+                if not valido:
+                    continue
+                txt = num_limpio
 
             x = getattr(line, "x", 0.0)
             y = getattr(line, "y", 0.0)

@@ -387,8 +387,15 @@ class SpatialFieldExtractor:
                     sub_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", sub_txt.upper()).strip()
                     toks = [t for t in sub_clean.split() if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
                     sub_txt = " ".join(toks).strip()
-                elif campo in ["fecha_expedicion", "lugar_expedicion"]:
-                    if not re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", sub_txt, re.IGNORECASE):
+                elif campo in ["fecha_nacimiento", "fecha_expedicion"]:
+                    dt_val = validador.parsear_fecha(sub_txt)
+                    if not dt_val:
+                        m_f = re.search(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", sub_txt, re.IGNORECASE)
+                        if not m_f:
+                            continue
+                        sub_txt = m_f.group(0)
+                elif campo == "lugar_expedicion":
+                    if re.search(r"\b\d{4}\b", sub_txt) or self.NO_NOMBRE_HEADER.search(sub_txt):
                         continue
                 elif campo == "sexo":
                     sex_norm = validador.normalizar_sexo(sub_txt)
@@ -416,10 +423,22 @@ class SpatialFieldExtractor:
                     continue
                 txt = " ".join(tokens_validos)
 
-            if campo in ["fecha_expedicion", "lugar_expedicion"]:
-                tiene_fecha = bool(re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE))
-                if not tiene_fecha:
+            if campo in ["fecha_nacimiento", "fecha_expedicion"]:
+                dt_val = validador.parsear_fecha(txt)
+                if not dt_val:
+                    m_f = re.search(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE)
+                    if not m_f:
+                        continue
+                    txt = m_f.group(0)
+
+            if campo == "lugar_expedicion":
+                if re.search(r"\b\d{4}\b", txt) or self.NO_NOMBRE_HEADER.search(txt):
                     continue
+                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s-]", "", txt.upper()).strip()
+                toks = [t for t in txt_clean.split() if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
+                if not toks:
+                    continue
+                txt = " ".join(toks)
 
             if campo == "sexo":
                 sex_norm = validador.normalizar_sexo(txt)

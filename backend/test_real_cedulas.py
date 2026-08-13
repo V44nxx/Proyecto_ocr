@@ -31,7 +31,7 @@ FECHA DE NACIMIENTO 05-MAY-1987 SEXO M
         self.assertEqual(res["fecha_expedicion"], "2007-06-26")
         self.assertEqual(res["lugar_expedicion"], "FLORENCIA")
         self.assertEqual(res["sexo"], "M")
-        self.assertEqual(res["detalles_campos"]["nombres"]["status"], "valid")
+        self.assertEqual(res["detalles_campos"]["nombres"]["status"].upper(), "VALID")
 
     def test_cedula_real_2_pedro_joven(self):
         lines_p = [

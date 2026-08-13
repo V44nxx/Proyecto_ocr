@@ -445,6 +445,7 @@ class ExtractorService:
 
                 detalles_campos[campo] = {
                     "valor": val,
+                    "value": val,
                     "valor_original": val,
                     "confidence": conf_campo,
                     "status": status_campo,
@@ -462,6 +463,7 @@ class ExtractorService:
             else:
                 detalles_campos[campo] = {
                     "valor": None,
+                    "value": None,
                     "valor_original": None,
                     "confidence": 0.0,
                     "status": "MISSING_DATA" if campo in campos_criticos else "REVIEW_REQUIRED",

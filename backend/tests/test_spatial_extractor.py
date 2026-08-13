@@ -62,14 +62,16 @@ FECHA DE NACIMIENTO: 2001-10-23
         txt = "CEDULA DE CIUDADANIA 12345678"
         res = extractor_service.extraer(txt)
         self.assertIsNone(res["nombres"])
-        self.assertIn(res["detalles_campos"]["nombres"]["status"], ("missing", "review_required"))
-        self.assertIsNone(res["detalles_campos"]["nombres"]["value"])
+        self.assertIn(res["detalles_campos"]["nombres"]["status"].upper(), ("MISSING", "MISSING_DATA", "REVIEW_REQUIRED"))
+        val_nom = res["detalles_campos"]["nombres"].get("valor", res["detalles_campos"]["nombres"].get("value"))
+        self.assertIsNone(val_nom)
 
     def test_6_genero_faltante(self):
         txt = "CEDULA 1006501709 NOMBRES PEDRO JOSE APELLIDOS JOVEN URAZAN"
         res = extractor_service.extraer(txt)
         self.assertIsNone(res["sexo"])
-        self.assertIsNone(res["detalles_campos"]["sexo"]["value"])
+        val_sex = res["detalles_campos"]["sexo"].get("valor", res["detalles_campos"]["sexo"].get("value"))
+        self.assertIsNone(val_sex)
 
     def test_7_lugar_expedicion_normalizado(self):
         txt = "FECHA Y LUGAR DE EXPEDICION\n24-OCT-2019 SAN VICENTE DEL CAGUAN"

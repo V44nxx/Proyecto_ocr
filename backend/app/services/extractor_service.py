@@ -821,93 +821,21 @@ class ExtractorService:
                     return nombre_norm
         return None
 
-    # Nombres de pila comunes en Colombia para corregir inversiones de layout (2 columnas OCR)
-    NOMBRES_COMUNES_COL = {
-        "DIEGO", "ARMANDO", "JUAN", "CARLOS", "ANDRES", "ANDRÉS", "MARIA", "MARÍA",
-        "JOSE", "JOSÉ", "LUIS", "PEDRO", "NATALI", "NATALIA", "VANESSA", "ALEXANDRA",
-        "ERIKA", "JULIANA", "JHON", "FREDDY", "RUBEN", "RUBÉN", "PAOLA", "DIANA",
-        "PATRICIA", "LIDA", "YASMIN", "YASMÍN", "OSCAR", "LEONARDO", "EINER", "SAMUEL",
-        "FERNANDO", "JONATHAN", "PAULA", "ANDREA", "MONICA", "MÓNICA", "SANDRA",
-        "CLAUDIA", "MARCELA", "LINA", "JAIME", "WILSON", "JORGE", "HENRY", "DANIEL",
-        "DAVID", "CHRIS", "STEVEN", "KEVIN", "JASON", "PABLO", "EMILIO", "RODRIGO",
-        "GUSTAVO", "ADOLFO", "GUILLERMO", "GABRIEL", "RICARDO", "MAURICIO", "FRANCISCO",
-        "JESUS", "JESÚS", "ALVARO", "ÁLVARO", "IVAN", "IVÁN", "HECTOR", "HÉCTOR",
-        "MARIO", "ALBERTO", "ALEXANDER", "EDGAR", "EDGARD", "EDWIN", "ALEXIS",
-        "YAMILE", "YULIETH", "YULY", "ANGIE", "KATHERINE", "CATALINA", "SOFIA",
-        "SOFÍA", "ISABEL", "CAMILA", "VALENTINA", "DANIELA", "ADRIANA", "VERONICA",
-        "VERÓNICA", "VIVIANA", "LILIANA", "CLARA", "LUCIA", "LUCÍA", "GLORIA",
-        "ROSA", "ESPERANZA", "BLANCA", "CECILIA", "CAROLINA", "TATIANA", "LORENA",
-    }
+    def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
+        """
+        REGLA DE PRECISIÓN Y CERO INVENCIÓN:
+        No se utiliza clasificación por diccionarios de nombres/apellidos.
+        La detección se realiza 100% por coordenadas y estructura de Document AI.
+        """
+        return None, None
 
     def _corregir_nombres_apellidos_invertidos(self, resultado: Dict[str, Any]):
         """
-        Corrige la inversión o mezcla de nombres y apellidos causada por la lectura en 2 columnas
-        que hace OCR en cédulas amarillas colombianas.
+        REGLA DE PRECISIÓN Y CERO INVENCIÓN:
+        Los diccionarios NO deben reordenar ni intercambiar silenciosamente las palabras
+        extraídas por Document AI. Se respeta 100% la posición del OCR en sus coordenadas.
         """
-        nombres = resultado.get("nombres") or ""
-        apellidos = resultado.get("apellidos") or ""
-
-        if not nombres and not apellidos:
-            return
-
-        palabras_totales = []
-        for p in (nombres + " " + apellidos).upper().split():
-            p_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", p)
-            if (
-                len(p_clean) >= 2
-                and not validador._PALABRAS_NO_NOMBRE.match(p_clean)
-                and not validador._PALABRAS_NO_LUGAR.match(p_clean)
-                and p_clean not in palabras_totales
-            ):
-                palabras_totales.append(p_clean)
-
-        if not palabras_totales:
-            return
-
-        nom_words = [p for p in palabras_totales if p in self.NOMBRES_COMUNES_COL][:3]
-        ape_words = [p for p in palabras_totales if p not in self.NOMBRES_COMUNES_COL and p not in nom_words][:3]
-
-        if nom_words:
-            resultado["nombres"] = " ".join(nom_words)
-        if ape_words:
-            resultado["apellidos"] = " ".join(ape_words)
-
-    def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Clasifica palabras sueltas encontradas en el documento separando
-        nombres de pila conocidos colombianos de los apellidos (máximo 3 palabras cada uno).
-        """
-        palabras_candidatas = []
-
-        for linea in lineas:
-            linea_up = linea.upper().strip()
-            # Omitir líneas de encabezado o metadata que no contienen nombres
-            if re.search(r"\b(REPUBLICA|COLOMBIA|IDENTIFICACION|ESTATURA|FIRMA|HUELLA|REGISTRADOR|EXPEDICION|EXPIRACION|LUGAR)\b", linea_up):
-                continue
-
-            for palabra in linea_up.split():
-                # Omitir palabras con números o solo dígitos
-                if re.search(r"\d", palabra):
-                    continue
-                palabra_limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", palabra)
-                if (
-                    len(palabra_limpia) >= 2
-                    and not validador._PALABRAS_NO_NOMBRE.match(palabra_limpia)
-                    and not validador._PALABRAS_NO_LUGAR.match(palabra_limpia)
-                ):
-                    if palabra_limpia not in palabras_candidatas:
-                        palabras_candidatas.append(palabra_limpia)
-
-        if not palabras_candidatas:
-            return None, None
-
-        nom_words = [p for p in palabras_candidatas if p in self.NOMBRES_COMUNES_COL][:3]
-        ape_words = [p for p in palabras_candidatas if p not in self.NOMBRES_COMUNES_COL and p not in nom_words][:3]
-
-        nom_str = " ".join(nom_words) if nom_words else None
-        ape_str = " ".join(ape_words) if ape_words else None
-
-        return nom_str, ape_str
+        return
 
     # ──────────────────────────────────────────
     # EXTRACCIÓN DE FECHAS

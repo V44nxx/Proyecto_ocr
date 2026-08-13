@@ -782,23 +782,40 @@ class ExtractorService:
         Solo acepta la línea siguiente si parece texto de nombre
         (solo letras, ≥ 3 chars, ≤ 5 palabras).
         """
-        nombres = None
-        apellidos = None
-
         for idx, linea in enumerate(lineas):
             linea_up = linea.upper().strip()
 
-            if re.search(r"\b(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE|GIVEN\s+NAMES?)\b", linea_up):
-                candidato = self._siguiente_linea_valida(lineas, idx)
-                if candidato and not nombres:
-                    nombres = candidato
-
             if re.search(r"\b(APELLIDOS?|PRIMER\s+APELLIDO|SEGUNDO\s+APELLIDO|SURNAMES?)\b", linea_up):
-                candidato = self._siguiente_linea_valida(lineas, idx)
-                if candidato and not apellidos:
-                    apellidos = candidato
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
+                cand_siguiente = self._siguiente_linea_valida(lineas, idx)
+                if cand_anterior and not apellidos:
+                    apellidos = cand_anterior
+                elif cand_siguiente and not apellidos:
+                    apellidos = cand_siguiente
+
+            if re.search(r"\b(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE|GIVEN\s+NAMES?)\b", linea_up):
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
+                cand_siguiente = self._siguiente_linea_valida(lineas, idx)
+                if cand_anterior and cand_anterior != apellidos and not nombres:
+                    nombres = cand_anterior
+                elif cand_siguiente and cand_siguiente != apellidos and not nombres:
+                    nombres = cand_siguiente
 
         return nombres, apellidos
+
+    def _linea_valida_texto(self, linea: str) -> Optional[str]:
+        if not linea:
+            return None
+        txt = linea.strip()
+        if re.search(r"\d", txt):
+            return None
+        txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
+        from app.services.spatial_field_extractor import spatial_field_extractor
+        tokens = [t for t in txt_clean.split() if len(t) >= 2 and not spatial_field_extractor.NO_NOMBRE_HEADER.search(t)]
+        if not tokens or len(tokens) > 5:
+            return None
+        res = " ".join(tokens)
+        return res if len(res) >= 3 else None
 
     def _siguiente_linea_valida(
         self, lineas: List[str], desde: int

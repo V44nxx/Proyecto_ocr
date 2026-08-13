@@ -131,7 +131,8 @@ class SpatialFieldExtractor:
         self,
         label_bbox: Any,
         candidate_bbox: Any,
-        region_y_max: Optional[float] = None
+        region_y_max: Optional[float] = None,
+        region_y_min: Optional[float] = None
     ) -> Tuple[str, float, str]:
         """
         Calcula la relación espacial exacta entre la etiqueta y el candidato.
@@ -152,7 +153,13 @@ class SpatialFieldExtractor:
         else:
             cb = candidate_bbox
 
-        # 1. Regla de Veto Espacial Hard Override: Candidato ubicado arriba de la etiqueta
+        # 1. Reglas de Veto Espacial Hard Override por límites de región (y_min e y_max)
+        if region_y_min and cb.y < region_y_min - 0.005:
+            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) por encima de la franja del campo (y_min={round(region_y_min, 3)})"
+
+        if region_y_max and cb.y >= region_y_max:
+            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) por debajo de la franja del campo (y_max={round(region_y_max, 3)})"
+
         dist_v_below = cb.y - eb.y
         dist_v_above = eb.y - cb.y
 
@@ -163,10 +170,6 @@ class SpatialFieldExtractor:
 
         if cb.y < eb.y - 0.12:
             return "ABOVE", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) ubicado muy por encima de la etiqueta (y={round(eb.y, 3)})"
-
-        # 2. Regla de Veto Espacial: Candidato por debajo del límite máximo de la región
-        if region_y_max and cb.y >= region_y_max:
-            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) fuera de la región del campo (y_max={round(region_y_max, 3)})"
 
         dist_v = cb.y - eb.y
         dist_h = abs(cb.x - eb.x)
@@ -249,16 +252,29 @@ class SpatialFieldExtractor:
                 "evidence": ["Etiqueta no detectada espacialmente"]
             }
 
-        # Determinar límite inferior Y para acotamiento geométrico estricto de regiones
+        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo
+        region_y_min = None
         region_y_max = None
-        if campo == "apellidos" and "nombres" in etiquetas:
-            region_y_max = etiquetas["nombres"].bbox.y + 0.05
+
+        if campo == "apellidos":
+            # Apellidos está entre identificacion (arriba) y la etiqueta de nombres (abajo)
+            if "identificacion" in etiquetas:
+                region_y_min = etiquetas["identificacion"].bbox.y
+            if "nombres" in etiquetas:
+                region_y_max = etiquetas["nombres"].bbox.y
+            else:
+                region_y_max = etiqueta.bbox.y + 0.18
+
         elif campo == "nombres":
-            for nxt in ["fecha_nacimiento", "identificacion", "sexo"]:
+            # Nombres está entre la etiqueta de apellidos (arriba) y fecha de nacimiento/sexo (abajo)
+            if "apellidos" in etiquetas:
+                region_y_min = etiquetas["apellidos"].bbox.y
+            for nxt in ["fecha_nacimiento", "sexo"]:
                 if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
                     region_y_max = etiquetas[nxt].bbox.y
                     break
-        if not region_y_max:
+            if not region_y_max:
+                region_y_max = etiqueta.bbox.y + 0.18
             region_y_max = etiqueta.bbox.y + 0.18
 
         candidates: List[SpatialCandidate] = []
@@ -306,7 +322,7 @@ class SpatialFieldExtractor:
         # Evaluar relación espacial de candidatos contra la etiqueta
         evaluaciones = []
         for cand in candidates:
-            rel, s_score, desc = self.calculate_spatial_relation(etiqueta.bbox, cand.bbox, region_y_max)
+            rel, s_score, desc = self.calculate_spatial_relation(etiqueta.bbox, cand.bbox, region_y_max, region_y_min)
             evaluaciones.append({
                 "candidate": cand,
                 "relation": rel,

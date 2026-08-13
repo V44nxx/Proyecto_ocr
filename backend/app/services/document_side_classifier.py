@@ -79,6 +79,15 @@ class DocumentSideClassifier:
                 score_back_t += 4
 
         # Decisión final
+        # Si la página contiene puntuación alta tanto en FRENTE como en REVERSO, es una página de 2 caras (Frente + Reverso en 1 página)
+        if score_front_c >= 2 and score_back_c >= 2:
+            return {
+                "cara": "CEDULA_AMBOS_LADOS",
+                "tipo_documento": "CEDULA_CIUDADANIA",
+                "confianza": 0.99,
+                "reasons": reazons + ["Página contiene Frente y Reverso simultáneamente (2 caras en 1 página)"]
+            }
+
         max_score = max(score_front_c, score_back_c, score_front_t, score_back_t)
 
         if max_score < 3:

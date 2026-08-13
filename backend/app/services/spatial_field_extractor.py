@@ -252,29 +252,25 @@ class SpatialFieldExtractor:
                 "evidence": ["Etiqueta no detectada espacialmente"]
             }
 
-        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo
+        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo en Cédula Amarilla
         region_y_min = None
         region_y_max = None
 
         if campo == "apellidos":
-            # Apellidos está entre identificacion (arriba) y la etiqueta de nombres (abajo)
+            # Apellidos se ubica entre identificacion (arriba) y la etiqueta APELLIDOS (abajo)
             if "identificacion" in etiquetas:
                 region_y_min = etiquetas["identificacion"].bbox.y
-            if "nombres" in etiquetas:
-                region_y_max = etiquetas["nombres"].bbox.y
-            else:
-                region_y_max = etiqueta.bbox.y + 0.18
+            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de la etiqueta APELLIDOS
 
         elif campo == "nombres":
-            # Nombres está entre la etiqueta de apellidos (arriba) y fecha de nacimiento/sexo (abajo)
+            # Nombres se ubica entre la etiqueta APELLIDOS (arriba) y la etiqueta NOMBRES (abajo)
             if "apellidos" in etiquetas:
                 region_y_min = etiquetas["apellidos"].bbox.y
-            for nxt in ["fecha_nacimiento", "sexo"]:
-                if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
-                    region_y_max = etiquetas[nxt].bbox.y
-                    break
-            if not region_y_max:
-                region_y_max = etiqueta.bbox.y + 0.18
+            else:
+                region_y_min = max(0.0, etiqueta.bbox.y - 0.15)
+            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de la etiqueta NOMBRES
+
+        if not region_y_max:
             region_y_max = etiqueta.bbox.y + 0.18
 
         candidates: List[SpatialCandidate] = []
@@ -294,6 +290,12 @@ class SpatialFieldExtractor:
                 if not tokens_validos:
                     continue
                 txt = " ".join(tokens_validos)
+
+            # Filtrar candidatos de fecha/lugar de expedición que no contengan patrón de fecha (ej: firmas de registrador)
+            if campo in ["fecha_expedicion", "lugar_expedicion"]:
+                tiene_fecha = bool(re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE))
+                if not tiene_fecha:
+                    continue
 
             x = getattr(line, "x", 0.0)
             y = getattr(line, "y", 0.0)

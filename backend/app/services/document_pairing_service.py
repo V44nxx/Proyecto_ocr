@@ -68,15 +68,29 @@ class DocumentPairingService:
         paginas_pendientes = list(paginas_clasificadas)
         counter = 1
 
-        # 1. Separar por páginas FRONT, BACK y UNKNOWN
-        fronts = [p for p in paginas_pendientes if "FRONT" in p.get("cara", "")]
-        backs = [p for p in paginas_pendientes if "BACK" in p.get("cara", "")]
-        unknowns = [p for p in paginas_pendientes if p.get("cara") == "UNKNOWN"]
+        # 1. Separar páginas CEDULA_AMBOS_LADOS (2 caras en 1 sola página), FRONT, BACK y UNKNOWN
+        both_sides = [p for p in paginas_pendientes if p.get("cara") == "CEDULA_AMBOS_LADOS"]
+        fronts = [p for p in paginas_pendientes if "FRONT" in p.get("cara", "") and p not in both_sides]
+        backs = [p for p in paginas_pendientes if "BACK" in p.get("cara", "") and p not in both_sides]
+        unknowns = [p for p in paginas_pendientes if p.get("cara") == "UNKNOWN" and p not in both_sides]
 
         # Control de IDs asignados para detectar duplicados
         ids_vistos: Dict[str, str] = {}
 
-        # 2. Iterar sobre cada FRONT y buscar su mejor BACK compatible
+        # 2. Procesar páginas de 2 caras simultáneas (CEDULA_AMBOS_LADOS)
+        for b_side in both_sides:
+            grp = DocumentGroup(f"DOC-{counter:03d}")
+            grp.front_page = b_side
+            grp.back_page = b_side
+            grp.tipo_documento = b_side.get("tipo_documento", "CEDULA_CIUDADANIA")
+            grp.numero_identificacion = b_side.get("numero_identificacion")
+            grp.grouping_confidence = 0.99
+            grp.reasons = ["Documento de 2 caras escaneado en una misma página (Frente + Reverso)"]
+            grp.status = "VALID" if grp.numero_identificacion else "REVIEW_REQUIRED"
+            grupos.append(grp)
+            counter += 1
+
+        # 3. Iterar sobre cada FRONT y buscar su mejor BACK compatible
         for f_page in list(fronts):
             grp = DocumentGroup(f"DOC-{counter:03d}")
             grp.front_page = f_page

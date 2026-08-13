@@ -252,26 +252,29 @@ class SpatialFieldExtractor:
                 "evidence": ["Etiqueta no detectada espacialmente"]
             }
 
-        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo en Cédula Amarilla
+        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo
         region_y_min = None
         region_y_max = None
 
         if campo == "apellidos":
-            # Apellidos se ubica entre identificacion (arriba) y la etiqueta APELLIDOS (abajo)
+            # Apellidos está entre identificacion (arriba) y la etiqueta NOMBRES (abajo)
             if "identificacion" in etiquetas:
                 region_y_min = etiquetas["identificacion"].bbox.y
-            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de la etiqueta APELLIDOS
+            if "nombres" in etiquetas:
+                region_y_max = etiquetas["nombres"].bbox.y
+            else:
+                region_y_max = etiqueta.bbox.y + 0.18
 
         elif campo == "nombres":
-            # Nombres se ubica entre la etiqueta APELLIDOS (arriba) y la etiqueta NOMBRES (abajo)
+            # Nombres está entre la etiqueta APELLIDOS (arriba) y la etiqueta FECHA DE NACIMIENTO (abajo)
             if "apellidos" in etiquetas:
                 region_y_min = etiquetas["apellidos"].bbox.y
-            else:
-                region_y_min = max(0.0, etiqueta.bbox.y - 0.15)
-            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de la etiqueta NOMBRES
-
-        if not region_y_max:
-            region_y_max = etiqueta.bbox.y + 0.18
+            for nxt in ["fecha_nacimiento", "identificacion", "sexo"]:
+                if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
+                    region_y_max = etiquetas[nxt].bbox.y
+                    break
+            if not region_y_max:
+                region_y_max = etiqueta.bbox.y + 0.18
 
         candidates: List[SpatialCandidate] = []
         for idx, line in enumerate(lines):

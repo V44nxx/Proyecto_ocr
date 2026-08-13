@@ -757,9 +757,13 @@ class ExtractorService:
             match = patron.search(texto)
             if match:
                 valor = match.group(1).strip()
-                # Limitar a máximo 5 palabras (nombres de personas)
+                # Limitar a máximo 5 palabras y filtrar ruidos de encabezado
                 palabras = valor.split()[:5]
-                valor_normalizado = validador.normalizar_nombre(" ".join(palabras))
+                from app.services.spatial_field_extractor import spatial_field_extractor
+                palabras_validas = [p for p in palabras if len(p) >= 2 and not spatial_field_extractor.NO_NOMBRE_HEADER.search(p)]
+                if not palabras_validas:
+                    continue
+                valor_normalizado = validador.normalizar_nombre(" ".join(palabras_validas))
                 if valor_normalizado and len(valor_normalizado) >= 3:
                     logger.debug(f"Campo '{campo}': {valor_normalizado}")
                     return valor_normalizado
@@ -983,12 +987,15 @@ class ExtractorService:
         self, lineas: List[str]
     ) -> Optional[str]:
         """
-        En la cédula nueva colombiana los APELLIDOS aparecen en la línea
+        En la cédula colombiana los APELLIDOS aparecen en la línea
         inmediatamente anterior al label 'Nombres' / 'NOMBRES'.
         """
+        from app.services.spatial_field_extractor import spatial_field_extractor
         for idx, linea in enumerate(lineas):
             if re.match(r"^NOMBRES?$", linea.strip().upper()) and idx > 0:
                 candidato = lineas[idx - 1].strip()
+                if spatial_field_extractor.NO_NOMBRE_HEADER.search(candidato):
+                    continue
                 # Debe ser texto (no número, no keyword)
                 if re.match(r"^[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s\-]{2,}$", candidato.upper()):
                     norm = validador.normalizar_nombre(candidato)

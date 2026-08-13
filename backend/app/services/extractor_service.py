@@ -692,16 +692,16 @@ class ExtractorService:
         # Estrategia 3: Línea que sea solo números
         for linea in lineas:
             linea_limpia = linea.strip().replace(" ", "").replace(".", "")
-            if re.match(r"^[1-9]\d{5,9}$", linea_limpia):
+            if re.match(r"^[1-9]\d{6,9}$", linea_limpia):
                 valido, numero = validador.validar_cedula(linea_limpia)
                 if valido:
                     logger.debug(f"Cédula por línea numérica: {numero}")
                     return numero
 
-        # Estrategia 4: Corrección OCR en candidatos largos
+        # Estrategia 4: Corrección OCR en candidatos largos (7-10 dígitos)
         candidatos = self._patron_cedula.findall(texto)
         for candidato in candidatos:
-            if len(candidato) >= 6:
+            if len(candidato) >= 7:
                 candidato_corregido = self._corregir_numero_ocr(candidato)
                 valido, numero = validador.validar_cedula(candidato_corregido)
                 if valido:

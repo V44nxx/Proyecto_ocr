@@ -75,8 +75,8 @@ class ValidadorColombia:
             return False, "Comienza con cero"
 
         longitud = len(numero_limpio)
-        if longitud < 6:
-            return False, f"Muy corto ({longitud} dígitos)"
+        if longitud < 7:
+            return False, f"Muy corto ({longitud} dígitos) — ignora seriales sueltos de 6 dígitos"
         if longitud > 10:
             return False, f"Muy largo ({longitud} dígitos) — probable concatenación"
 

@@ -388,7 +388,10 @@ class OCRService:
             requiere_revision = (
                 confianza < umbral_confianza
                 or not datos.get("nombres")
+                or not datos.get("apellidos")
                 or not datos.get("identificacion")
+                or not datos.get("fecha_expedicion")
+                or not datos.get("lugar_expedicion")
                 or "SIN_ID" in str(num_doc)
             )
 

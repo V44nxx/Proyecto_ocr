@@ -307,13 +307,31 @@ class ExtractorService:
             resultado["detalles_campos"] = detalles_campos
             return resultado
 
-        # ── Estrategia 0: Extracción por Layout Espacial (si se provee) ────
+        # ── Estrategia 0: Extracción Inteligente con NameDictionaryService (Layout + Diccionario) ────
+        from app.services.name_dictionary_service import name_dictionary_service
+
+        eval_nombres = None
+        eval_apellidos = None
+
         if layout_data and hasattr(layout_data, "pages"):
             cand_espaciales = self._extraer_por_layout_espacial(layout_data.pages)
-            if cand_espaciales.get("nombres") and not resultado["nombres"]:
-                resultado["nombres"] = cand_espaciales["nombres"][0]
-            if cand_espaciales.get("apellidos") and not resultado["apellidos"]:
-                resultado["apellidos"] = cand_espaciales["apellidos"][0]
+            if cand_espaciales.get("nombres"):
+                cand_line_text, cand_conf = cand_espaciales["nombres"]
+                words = [w for w in cand_line_text.split() if len(w) >= 2]
+                eval_nombres = name_dictionary_service.analizar_candidatos_campo(
+                    words, "nombres", etiqueta_presente=True, distancia_espacial_px=18.0, doc_ai_confidence=cand_conf
+                )
+                if eval_nombres and eval_nombres.get("value"):
+                    resultado["nombres"] = eval_nombres["value"]
+
+            if cand_espaciales.get("apellidos"):
+                cand_line_text, cand_conf = cand_espaciales["apellidos"]
+                words = [w for w in cand_line_text.split() if len(w) >= 2]
+                eval_apellidos = name_dictionary_service.analizar_candidatos_campo(
+                    words, "apellidos", etiqueta_presente=True, distancia_espacial_px=18.0, doc_ai_confidence=cand_conf
+                )
+                if eval_apellidos and eval_apellidos.get("value"):
+                    resultado["apellidos"] = eval_apellidos["value"]
 
         # ── Estrategia 1: MRZ ─────────────────────────────────────────────
         datos_mrz = self._extraer_mrz(texto, lineas)
@@ -322,25 +340,34 @@ class ExtractorService:
                 if v and not resultado.get(k):
                     resultado[k] = v
 
-        # ── Estrategia 2: Por keywords y reglas de negocio ────────────────
+        # ── Estrategia 2: Por keywords y NameDictionaryService fallback ─────
         if not resultado["identificacion"]:
             resultado["identificacion"] = self._extraer_identificacion(texto, lineas)
+        
         if not resultado["nombres"]:
-            resultado["nombres"] = self._extraer_por_contexto(
-                texto, lineas, self.KEYWORDS_NOMBRES, "nombres"
-            )
+            nom_raw = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_NOMBRES, "nombres")
+            if nom_raw:
+                words = nom_raw.split()
+                eval_nombres = name_dictionary_service.analizar_candidatos_campo(
+                    words, "nombres", etiqueta_presente=True, distancia_espacial_px=25.0, doc_ai_confidence=0.85
+                )
+                if eval_nombres and eval_nombres.get("value"):
+                    resultado["nombres"] = eval_nombres["value"]
+
         if not resultado["apellidos"]:
-            resultado["apellidos"] = self._extraer_por_contexto(
-                texto, lineas, self.KEYWORDS_APELLIDOS, "apellidos"
-            )
+            ape_raw = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_APELLIDOS, "apellidos")
+            if ape_raw:
+                words = ape_raw.split()
+                eval_apellidos = name_dictionary_service.analizar_candidatos_campo(
+                    words, "apellidos", etiqueta_presente=True, distancia_espacial_px=25.0, doc_ai_confidence=0.85
+                )
+                if eval_apellidos and eval_apellidos.get("value"):
+                    resultado["apellidos"] = eval_apellidos["value"]
+
         if not resultado["fecha_nacimiento"]:
-            resultado["fecha_nacimiento"] = self._extraer_fecha(
-                texto, lineas, self.KEYWORDS_FECHA_NAC
-            )
+            resultado["fecha_nacimiento"] = self._extraer_fecha(texto, lineas, self.KEYWORDS_FECHA_NAC)
         if not resultado["fecha_expedicion"]:
-            resultado["fecha_expedicion"] = self._extraer_fecha(
-                texto, lineas, self.KEYWORDS_FECHA_EXP
-            )
+            resultado["fecha_expedicion"] = self._extraer_fecha(texto, lineas, self.KEYWORDS_FECHA_EXP)
         if not resultado["lugar_expedicion"]:
             resultado["lugar_expedicion"] = self._extraer_lugar(texto, lineas)
         if not resultado["sexo"]:
@@ -348,9 +375,7 @@ class ExtractorService:
 
         # Cédula nueva
         if not resultado["fecha_nacimiento"]:
-            resultado["fecha_nacimiento"] = self._extraer_fecha_nueva_cedula(
-                texto, lineas, self.KEYWORDS_FECHA_NAC
-            )
+            resultado["fecha_nacimiento"] = self._extraer_fecha_nueva_cedula(texto, lineas, self.KEYWORDS_FECHA_NAC)
         if not resultado["fecha_expedicion"] or not resultado["lugar_expedicion"]:
             fexp, lugar = self._extraer_fecha_y_lugar_nueva_cedula(texto, lineas)
             if not resultado["fecha_expedicion"] and fexp:
@@ -367,8 +392,6 @@ class ExtractorService:
                 resultado["nombres"] = nom_clas
             if not resultado["apellidos"] and ape_clas:
                 resultado["apellidos"] = ape_clas
-
-        self._corregir_nombres_apellidos_invertidos(resultado)
 
         # Chronological dates fallback
         if not resultado["fecha_nacimiento"] or not resultado["fecha_expedicion"]:
@@ -408,14 +431,28 @@ class ExtractorService:
 
         for campo in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
             val = resultado.get(campo)
+            eval_info = eval_nombres if campo == "nombres" else (eval_apellidos if campo == "apellidos" else None)
+
             if val and val != "POR REVISAR" and "SIN_ID" not in str(val):
+                status_campo = eval_info.get("status", "valid") if eval_info else "valid"
+                reason_campo = eval_info.get("reason") if eval_info else None
+                conf_campo = eval_info.get("final_score", round(resultado["confianza_extraccion"] / 100.0, 2)) if eval_info else round(resultado["confianza_extraccion"] / 100.0, 2)
+
                 detalles_campos[campo] = {
                     "value": val,
-                    "confidence": round(resultado["confianza_extraccion"] / 100.0, 2),
+                    "confidence": conf_campo,
                     "page": pagina_num,
-                    "status": "valid",
+                    "status": status_campo,
                     "source": ocr_engine,
-                    "reason": None
+                    "reason": reason_campo,
+                    "spatial_score": eval_info.get("spatial_score") if eval_info else 0.9,
+                    "dictionary_score": eval_info.get("dictionary_score") if eval_info else 0.8,
+                    "fuzzy_score": eval_info.get("fuzzy_score") if eval_info else 0.9,
+                    "nombre_score": eval_info.get("nombre_score") if eval_info else None,
+                    "apellido_score": eval_info.get("apellido_score") if eval_info else None,
+                    "evidence": eval_info.get("evidence", [f"Campo '{campo}' extraído correctamente"]) if eval_info else [f"Campo '{campo}' extraído correctamente"],
+                    "selected_candidate": eval_info.get("selected_candidate") if eval_info else val,
+                    "rejected_candidates": eval_info.get("rejected_candidates", []) if eval_info else []
                 }
             else:
                 detalles_campos[campo] = {
@@ -424,7 +461,8 @@ class ExtractorService:
                     "page": pagina_num,
                     "status": "missing" if campo in campos_criticos else "review_required",
                     "source": ocr_engine,
-                    "reason": f"Evidencia insuficiente para el campo '{campo}'"
+                    "reason": f"Evidencia insuficiente para el campo '{campo}'",
+                    "evidence": ["Evidencia insuficiente"]
                 }
 
         resultado["detalles_campos"] = detalles_campos

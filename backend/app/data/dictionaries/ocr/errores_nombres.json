@@ -1,0 +1,15 @@
+{
+  "descripcion": "Errores frecuentes de OCR en nombres",
+  "errores": {
+    "PEDR0": "PEDRO",
+    "J0SE": "JOSE",
+    "J0HN": "JOHN",
+    "JH0N": "JHON",
+    "C4RLOS": "CARLOS",
+    "M4RIA": "MARIA",
+    "D1EGO": "DIEGO",
+    "4NTONIO": "ANTONIO",
+    "LUI5": "LUIS",
+    "4NGEL": "ANGEL"
+  }
+}

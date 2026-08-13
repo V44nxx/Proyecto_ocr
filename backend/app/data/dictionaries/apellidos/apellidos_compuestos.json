@@ -1,0 +1,8 @@
+{
+  "descripcion": "Apellidos compuestos y prefijos comunes en Colombia",
+  "compuestos": [
+    "DE LA ROSA", "DE LA CRUZ", "DE LA TORRE", "DE LAS CASAS", "DE LA ESPRIELLA",
+    "DEL REAL", "DEL VALLE", "DEL CASTILLO", "DEL RIO", "SAN MARTIN", "SAN JUAN",
+    "DE AVILA", "DE HOYOS", "DE LEON", "DE LA OSSA", "PONCE DE LEON"
+  ]
+}

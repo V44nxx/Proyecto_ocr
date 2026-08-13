@@ -1,0 +1,15 @@
+{
+  "descripcion": "Variantes de apellidos",
+  "variantes": {
+    "GONZALES": ["GONZALEZ"],
+    "GONZALEZ": ["GONZALES"],
+    "RODRIGUES": ["RODRIGUEZ"],
+    "RODRIGUEZ": ["RODRIGUES"],
+    "MARTINES": ["MARTINEZ"],
+    "MARTINEZ": ["MARTINES"],
+    "GOMES": ["GOMEZ"],
+    "GOMEZ": ["GOMES"],
+    "RINCON": ["RINCÓN"],
+    "NUÑEZ": ["NÚÑEZ"]
+  }
+}

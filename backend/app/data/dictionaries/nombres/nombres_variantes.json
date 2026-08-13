@@ -1,0 +1,16 @@
+{
+  "descripcion": "Variantes ortográficas de nombres en Colombia",
+  "variantes": {
+    "JHON": ["JOHN", "JON"],
+    "JOHN": ["JHON", "JON"],
+    "FREDY": ["FREDDY", "FREDI"],
+    "FREDDY": ["FREDY", "FREDI"],
+    "LEIDY": ["LADY", "LEYDI"],
+    "LADY": ["LEIDY", "LEYDI"],
+    "JIMENA": ["XIMENA"],
+    "XIMENA": ["JIMENA"],
+    "STEPHANIE": ["ESTEFANIA", "ESTEFANY"],
+    "YURI": ["YURY"],
+    "YULIETH": ["JULIETH", "YULIET"]
+  }
+}

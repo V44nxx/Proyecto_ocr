@@ -442,27 +442,41 @@ export default function PersonasPage() {
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Desglose de Confianza por Campo</h3>
                 {["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"].map((campoKey) => {
-                  const detalle = personaSeleccionada.detalles_campos?.[campoKey];
+                  const detalle = personaSeleccionada.detalles_campos?.[campoKey] as any;
                   const val = (personaSeleccionada as any)[campoKey] || detalle?.value || null;
                   const confPct = Math.round((detalle?.confidence || (personaSeleccionada.confianza_extraccion ? Number(personaSeleccionada.confianza_extraccion) / 100 : 0.85)) * 100);
                   const status = val ? "valid" : "review_required";
 
                   return (
-                    <div key={campoKey} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800/80">
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">{campoKey.replace("_", " ")}</span>
-                        <div className="text-xs font-semibold text-slate-100 mt-0.5">
-                          {val || <span className="text-amber-400 italic">No detectado</span>}
+                    <div key={campoKey} className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase">{campoKey.replace("_", " ")}</span>
+                          <div className="text-xs font-semibold text-slate-100 mt-0.5">
+                            {val || <span className="text-amber-400 italic">No detectado</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
+                            status === "valid" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          }`}>
+                            {status === "valid" ? `${confPct}% VALID` : "REVISAR"}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
-                          status === "valid" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                        }`}>
-                          {status === "valid" ? `${confPct}% VALID` : "REVISAR"}
-                        </span>
-                      </div>
+                      {/* Sección de Explicabilidad Evidencial para Nombres y Apellidos */}
+                      {(campoKey === "nombres" || campoKey === "apellidos") && detalle?.evidence && Array.isArray(detalle.evidence) && (
+                        <div className="pt-2 border-t border-slate-800/60 text-[11px] space-y-1">
+                          <span className="text-primary-400 font-bold block text-[10px] uppercase">Análisis de Nombres y Apellidos:</span>
+                          <ul className="space-y-0.5 text-slate-400 list-disc list-inside">
+                            {detalle.evidence.map((ev: string, idx: number) => (
+                              <li key={idx} className="truncate">{ev}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

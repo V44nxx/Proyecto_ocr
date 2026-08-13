@@ -1,0 +1,15 @@
+{
+  "descripcion": "Errores frecuentes de OCR en apellidos",
+  "errores": {
+    "PERE2": "PEREZ",
+    "G0MEZ": "GOMEZ",
+    "MURC1A": "MURCIA",
+    "G0NZALEZ": "GONZALEZ",
+    "L0PEZ": "LOPEZ",
+    "R0DRIGUEZ": "RODRIGUEZ",
+    "M4RTINEZ": "MARTINEZ",
+    "VARG4S": "VARGAS",
+    "C4STRO": "CASTRO",
+    "D1AZ": "DIAZ"
+  }
+}

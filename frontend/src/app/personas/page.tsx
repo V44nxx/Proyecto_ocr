@@ -484,15 +484,20 @@ export default function PersonasPage() {
                         </div>
                       </div>
 
-                      {/* Sección de Explicabilidad Evidencial para Nombres y Apellidos */}
-                      {(campoKey === "nombres" || campoKey === "apellidos") && detalle?.evidence && Array.isArray(detalle.evidence) && (
-                        <div className="pt-2 border-t border-slate-800/60 text-[11px] space-y-1">
-                          <span className="text-primary-400 font-bold block text-[10px] uppercase">Análisis de Nombres y Apellidos:</span>
-                          <ul className="space-y-0.5 text-slate-400 list-disc list-inside">
-                            {detalle.evidence.map((ev: string, idx: number) => (
-                              <li key={idx} className="truncate">{ev}</li>
-                            ))}
-                          </ul>
+                      {/* Sección de Explicabilidad Evidencial y Geometría Espacial */}
+                      {detalle?.spatial_relation && (
+                        <div className="pt-2 border-t border-slate-800/60 text-[11px] space-y-1 bg-slate-900/60 p-2 rounded-lg mt-2">
+                          <div className="flex items-center justify-between text-[10px] text-primary-400 font-bold uppercase">
+                            <span>Geometría Espacial ({detalle.spatial_relation})</span>
+                            <span>Score: {Math.round((detalle.spatial_score || 1.0) * 100)}%</span>
+                          </div>
+                          <p className="text-slate-300 text-[11px] font-medium">{detalle.reason || "Validado espacialmente"}</p>
+                          {detalle.label_bbox && (
+                            <div className="text-[10px] text-slate-500 font-mono flex gap-3">
+                              <span>Label BBox: x:{detalle.label_bbox.x}, y:{detalle.label_bbox.y}</span>
+                              {detalle.value_bbox && <span>Valor BBox: x:{detalle.value_bbox.x}, y:{detalle.value_bbox.y}</span>}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -1,8 +1,8 @@
 """
-Extractor Centralizado de Campos basado en Geometría y Layout Espacial.
-Maneja coordenadas normalizadas (0.0 - 1.0) independientes de la resolución/DPI,
-aplica la Regla de Veto Espacial y la Fórmula Centralizada de Scoring.
-Garantiza PRECISIÓN > COMPLETITUD: Jamás asigna líneas de encabezado (REPUBLICA DE) ni inventa datos.
+Motor Centralizado de Extracción por Geometría Espacial para Cédulas y Tarjetas Colombiana.
+Pipeline Estricto: ETIQUETA -> REGIÓN DEL CAMPO -> CANDIDATOS ESPACIALES -> VALIDACIÓN -> RESULTADO.
+0% Dependencia de Diccionarios para Selección de Valores.
+Garantiza PRECISIÓN > COMPLETITUD: Veto Espacial Irrevocable y 0% Invención.
 """
 import re
 from typing import Dict, Any, List, Optional, Tuple
@@ -51,22 +51,50 @@ class SpatialFieldExtractor:
     Independiente de la resolución/DPI.
     """
 
-    # Definición de patrones de etiquetas esperadas
+    # Categorías de relaciones espaciales y sus puntuaciones
+    SPATIAL_SCORES = {
+        "DIRECTLY_BELOW": 1.00,
+        "DIRECTLY_RIGHT": 0.95,
+        "SAME_ROW": 0.90,
+        "NEAR": 0.70,
+        "FAR": 0.20,
+        "ABOVE": 0.00,
+        "WRONG_REGION": 0.00
+    }
+
+    # Definición de patrones de etiquetas esperadas con tolerancia a errores OCR (0 por O, 1 por I)
     ETIQUETAS_MAP = {
-        "identificacion": [r"\bNUIP\b", r"\bNUMERO\b", r"\bNÚMERO\b", r"\bCEDULA\b", r"\bCÉDULA\b", r"\bIDENTIFICACION\b", r"\bIDENTIFICACIÓN\b"],
-        "apellidos": [r"\bAPELLIDOS?\b", r"\bPRIMER\s+APELLIDO\b", r"\bSEGUNDO\s+APELLIDO\b", r"\bSURNAMES?\b"],
-        "nombres": [r"\bNOMBRES?\b", r"\bPRIMER\s+NOMBRE\b", r"\bSEGUNDO\s+NOMBRE\b", r"\bGIVEN\s+NAMES?\b"],
-        "fecha_nacimiento": [r"\bFECHA\s+DE\s+NACIMIENTO\b", r"\bNACIMIENTO\b", r"\bDATE\s+OF\s+BIRTH\b"],
-        "fecha_expedicion": [r"\bFECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICION\b", r"\bFECHA\s+DE\s+EXPEDICION\b", r"\bFECHA\s+EXPEDICION\b", r"\bEXPEDICIÓN\b"],
-        "lugar_expedicion": [r"\bLUGAR\s+DE\s+EXPEDICION\b", r"\bLUGAR\s+EXPEDICION\b", r"\bMUNICIPIO\b"],
-        "sexo": [r"\bSEXO\b", r"\bGENERO\b", r"\bGÉNERO\b", r"\bSEX\b"]
+        "identificacion": [
+            r"\bNUIP\b", r"\bNUMER[O0]?\b", r"\bNÚMER[O0]?\b", r"\bCEDULA\b", r"\bCÉDULA\b",
+            r"\bIDENTIFICA[CI1Ó0]+N\b", r"\bNO\.\b"
+        ],
+        "apellidos": [
+            r"\bAPELL[I10]+D[O0]?S?\b", r"\bPRIMER\s+APELL[I10]+D[O0]?\b", r"\bSEGUNDO\s+APELL[I10]+D[O0]?\b", r"\bSURNAMES?\b"
+        ],
+        "nombres": [
+            r"\bN[O0]?MBRES?\b", r"\bPRIMER\s+N[O0]?MBRE\b", r"\bSEGUNDO\s+N[O0]?MBRE\b", r"\bGIVEN\s+NAMES?\b"
+        ],
+        "fecha_nacimiento": [
+            r"\bFECHA\s+DE\s+NAC[I1]M[I1]ENT[O0]?\b", r"\bNAC[I1]M[I1]ENT[O0]?\b", r"\bDATE\s+OF\s+B[I1]RTH\b"
+        ],
+        "fecha_expedicion": [
+            r"\bFECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?N\b", r"\bFECHA\s+DE\s+EXPED[I1]C[I1][O0]?N\b",
+            r"\bEXPED[I1]C[I1][O0]?N\b"
+        ],
+        "lugar_expedicion": [
+            r"\bLUGAR\s+DE\s+EXPED[I1]C[I1][O0]?N\b", r"\bLUGAR\s+EXPED[I1]C[I1][O0]?N\b", r"\bMUN[I1]C[I1]P[I1][O0]?\b"
+        ],
+        "sexo": [
+            r"\bSEX[O0]?\b", r"\bGENER[O0]?\b", r"\bGÉNER[O0]?\b", r"\bSEX\b"
+        ]
     }
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
     NO_NOMBRE_HEADER = re.compile(
-        r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+        r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|COLOMB|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
         r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|FIRMA|FIRMADO|DIGITAL|REGISTRADOR|"
-        r"REGISTRADURIA|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO)\b",
+        r"REGISTRADURIA|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
+        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)\b",
         re.IGNORECASE
     )
 
@@ -80,6 +108,9 @@ class SpatialFieldExtractor:
             if not txt:
                 continue
 
+            # Normalizar caracteres OCR comunes en etiquetas
+            txt_norm = txt.replace("0", "O").replace("1", "I")
+
             x = getattr(line, "x", 0.0)
             y = getattr(line, "y", 0.0)
             w = getattr(line, "w", 0.0)
@@ -90,50 +121,80 @@ class SpatialFieldExtractor:
             for campo, patrones in self.ETIQUETAS_MAP.items():
                 if campo not in etiquetas_encontradas:
                     for pat in patrones:
-                        if re.search(pat, txt):
+                        if re.search(pat, txt) or re.search(pat, txt_norm):
                             etiquetas_encontradas[campo] = SpatialCandidate(txt, bbox, conf, idx)
                             break
 
         return etiquetas_encontradas
 
-    def evaluar_proximidad_espacial(
+    def calculate_spatial_relation(
         self,
-        etiqueta: SpatialCandidate,
-        candidato: SpatialCandidate,
-        limite_inferior_y: Optional[float] = None
-    ) -> Tuple[float, bool, str]:
+        label_bbox: Any,
+        candidate_bbox: Any,
+        region_y_max: Optional[float] = None
+    ) -> Tuple[str, float, str]:
         """
-        Calcula la puntuación espacial (0.0 - 1.0) y aplica la Regla de Veto Espacial.
-        Retorna: (spatial_score, es_compatible, razon_evidencia)
+        Calcula la relación espacial exacta entre la etiqueta y el candidato.
+        Soporta objetos SpatialBoundingBox, SpatialCandidate o diccionarios.
+        Retorna: (relation_category, spatial_score, description)
         """
-        eb = etiqueta.bbox
-        cb = candidato.bbox
+        if hasattr(label_bbox, "bbox"):
+            eb = label_bbox.bbox
+        elif isinstance(label_bbox, dict):
+            eb = SpatialBoundingBox(label_bbox.get("x", 0), label_bbox.get("y", 0), label_bbox.get("w", 0), label_bbox.get("h", 0))
+        else:
+            eb = label_bbox
 
-        # Regla de Veto Estricta: Candidato ubicado por encima de la etiqueta (dist_v < -0.01)
+        if hasattr(candidate_bbox, "bbox"):
+            cb = candidate_bbox.bbox
+        elif isinstance(candidate_bbox, dict):
+            cb = SpatialBoundingBox(candidate_bbox.get("x", 0), candidate_bbox.get("y", 0), candidate_bbox.get("w", 0), candidate_bbox.get("h", 0))
+        else:
+            cb = candidate_bbox
+
+        # 1. Regla de Veto Espacial Hard Override: Candidato ubicado arriba de la etiqueta
         if cb.y < eb.y - 0.01:
-            return 0.1, False, f"VETO ESPACIAL: Candidato ubicado por encima de la etiqueta {etiqueta.text}"
+            return "ABOVE", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) ubicado por encima de la etiqueta (y={round(eb.y, 3)})"
 
-        # Regla de Veto Estricta: Candidato ubicado por debajo del límite inferior (otra etiqueta)
-        if limite_inferior_y and cb.y >= limite_inferior_y:
-            return 0.1, False, f"VETO ESPACIAL: Candidato ubicado fuera del límite del campo (y >= {round(limite_inferior_y, 3)})"
+        # 2. Regla de Veto Espacial: Candidato por debajo del límite máximo de la región
+        if region_y_max and cb.y >= region_y_max:
+            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) fuera de la región del campo (y_max={round(region_y_max, 3)})"
 
         dist_v = cb.y - eb.y
         dist_h = abs(cb.x - eb.x)
 
-        # Candidato ubicado al lado derecho (Misma línea horizontal)
+        # 3. Candidato ubicado inmediatamente debajo (Misma columna X, Y más abajo)
+        es_debajo = dist_v > 0.0 and dist_v <= 0.15 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
+
+        # 4. Candidato ubicado inmediatamente a la derecha (Misma fila Y, X más a la derecha)
         es_al_lado = abs(cb.y - eb.y) <= (eb.h * 1.8) and cb.x >= eb.x + (eb.w * 0.1)
 
-        # Candidato ubicado inmediatamente debajo
-        es_debajo = dist_v > 0.0 and dist_v <= 0.12 and abs(cb.cx - eb.cx) <= (eb.w * 3.0)
+        # 5. Candidato en la misma fila horizontal
+        misma_fila = abs(cb.cy - eb.cy) <= (eb.h * 1.5)
 
-        if es_al_lado:
-            score = 1.0 if dist_h <= (eb.w * 2.0) else 0.85
-            return score, True, f"Ubicado a la derecha de la etiqueta ({round(dist_h, 3)} rel)"
-        elif es_debajo:
-            score = 1.0 if dist_v <= 0.06 else 0.80
-            return score, True, f"Ubicado inmediatamente debajo de la etiqueta ({round(dist_v, 3)} rel)"
+        if es_debajo:
+            return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
+        elif es_al_lado:
+            return "DIRECTLY_RIGHT", self.SPATIAL_SCORES["DIRECTLY_RIGHT"], f"Ubicado directamente a la derecha de la etiqueta (x_diff={round(dist_h, 3)})"
+        elif misma_fila:
+            return "SAME_ROW", self.SPATIAL_SCORES["SAME_ROW"], f"Ubicado en la misma fila horizontal (cy_diff={round(abs(cb.cy - eb.cy), 3)})"
+        elif dist_v <= 0.25:
+            return "NEAR", self.SPATIAL_SCORES["NEAR"], f"Ubicación cercana a la etiqueta (dist_v={round(dist_v, 3)})"
+        elif dist_v <= 0.40:
+            return "FAR", self.SPATIAL_SCORES["FAR"], f"Ubicación espacial lejana respecto a la etiqueta (dist_v={round(dist_v, 3)})"
         else:
-            return 0.3, False, "Distancia espacial lejana respecto a la etiqueta"
+            return "WRONG_REGION", 0.00, "Candidato fuera de la ventana espacial permitida"
+
+    def evaluar_proximidad_espacial(
+        self,
+        etiqueta: Any,
+        candidato: Any,
+        region_y_max: Optional[float] = None
+    ) -> Tuple[float, bool, str]:
+        """Método de compatibilidad retrospectiva para evaluar proximidad espacial."""
+        rel, score, desc = self.calculate_spatial_relation(etiqueta, candidato, region_y_max)
+        es_comp = rel in ["DIRECTLY_BELOW", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
+        return score, es_comp, desc
 
     def extraer_campo_con_layout(
         self,
@@ -141,39 +202,54 @@ class SpatialFieldExtractor:
         lines: List[Any],
         page_num: int = 1,
         doc_ai_confidence: float = 0.95
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
-        Extrae un candidato espacial para un campo aplicando la regla de Veto Espacial
-        y la Fórmula Centralizada de Scoring (Precisión > Completitud).
+        Extrae un candidato espacial para un campo aplicando Veto Espacial
+        y Fórmula Centralizada de Scoring (Precisión > Completitud, 0% Diccionario).
         """
         if not lines:
-            return None
+            return {
+                "value": None,
+                "confidence": 0.0,
+                "status": "MISSING_DATA",
+                "spatial_relation": "WRONG_REGION",
+                "spatial_score": 0.0,
+                "reason": "Líneas OCR no disponibles",
+                "evidence": ["Sin líneas OCR en página"]
+            }
 
         etiquetas = self.identificar_etiquetas_espaciales(lines, page_num)
         etiqueta = etiquetas.get(campo)
 
-        # REGLA PRECISIÓN > COMPLETITUD: Si no existe la etiqueta explícita del campo, NO tomar la primera línea del PDF
+        # REGLA PRECISIÓN > COMPLETITUD: Si no existe etiqueta explícita, devolver NULL + REVIEW_REQUIRED
         if not etiqueta:
             logger.warning(f"[SpatialFieldExtractor] Sin etiqueta explícita para campo '{campo}' en pág. {page_num}")
             return {
                 "value": None,
                 "confidence": 0.0,
+                "status": "REVIEW_REQUIRED" if campo in ["nombres", "apellidos", "identificacion"] else "MISSING_DATA",
+                "page": page_num,
+                "source": "google_document_ai",
+                "label": None,
+                "label_bbox": None,
+                "value_bbox": None,
+                "spatial_relation": "WRONG_REGION",
                 "spatial_score": 0.0,
-                "label_score": 0.0,
-                "bbox": None,
-                "evidence": ["Sin etiqueta explícita en página"],
-                "spatial_veto": True
+                "reason": f"Sin etiqueta explícita para '{campo}' en la página",
+                "evidence": ["Etiqueta no detectada espacialmente"]
             }
 
-        # Determinar límite inferior Y para acotamiento geométrico (ej. APELLIDOS debe ser anterior a NOMBRES)
-        limite_inferior_y = None
+        # Determinar límite inferior Y para acotamiento geométrico estricto de regiones
+        region_y_max = None
         if campo == "apellidos" and "nombres" in etiquetas:
-            limite_inferior_y = etiquetas["nombres"].bbox.y
+            region_y_max = etiquetas["nombres"].bbox.y
         elif campo == "nombres":
             for nxt in ["fecha_nacimiento", "identificacion", "sexo"]:
                 if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
-                    limite_inferior_y = etiquetas[nxt].bbox.y
+                    region_y_max = etiquetas[nxt].bbox.y
                     break
+        if not region_y_max:
+            region_y_max = etiqueta.bbox.y + 0.18
 
         candidates: List[SpatialCandidate] = []
         for idx, line in enumerate(lines):
@@ -181,15 +257,13 @@ class SpatialFieldExtractor:
             if not txt or idx == etiqueta.line_index:
                 continue
 
-            # Filtrar candidatos que contengan palabras del encabezado o etiquetas
+            # Filtrar ruidos de encabezado y marcas de agua en nombres y apellidos
             if campo in ["nombres", "apellidos"]:
                 txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
                 tokens = txt_clean.split()
-                # Si todos los tokens son ruidos o coinciden con NO_NOMBRE_HEADER, descalificar
                 tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.match(t)]
                 if not tokens_validos:
                     continue
-                # Limpiar texto reteniendo solo tokens válidos de persona
                 txt = " ".join(tokens_validos)
 
             x = getattr(line, "x", 0.0)
@@ -204,50 +278,76 @@ class SpatialFieldExtractor:
             return {
                 "value": None,
                 "confidence": 0.0,
+                "status": "REVIEW_REQUIRED",
+                "page": page_num,
+                "source": "google_document_ai",
+                "label": etiqueta.text,
+                "label_bbox": etiqueta.bbox.to_dict(),
+                "value_bbox": None,
+                "spatial_relation": "WRONG_REGION",
                 "spatial_score": 0.0,
-                "label_score": 1.0,
-                "bbox": etiqueta.bbox.to_dict(),
-                "evidence": ["Sin candidatos de texto válidos cerca de la etiqueta"],
-                "spatial_veto": True
+                "reason": f"Sin candidatos válidos de texto dentro de la región de '{etiqueta.text}'",
+                "evidence": ["Candidatos ausentes o descartados por ruido"]
             }
 
-        # Evaluar candidatos contra la etiqueta
+        # Evaluar relación espacial de candidatos contra la etiqueta
         evaluaciones = []
         for cand in candidates:
-            s_score, es_comp, razon = self.evaluar_proximidad_espacial(etiqueta, cand, limite_inferior_y)
+            rel, s_score, desc = self.calculate_spatial_relation(etiqueta.bbox, cand.bbox, region_y_max)
             evaluaciones.append({
                 "candidate": cand,
+                "relation": rel,
                 "spatial_score": s_score,
-                "is_compatible": es_comp,
-                "reason": razon
+                "description": desc,
+                "is_valid": rel in ["DIRECTLY_BELOW", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
             })
 
-        compatibles = [e for e in evaluaciones if e["is_compatible"]]
+        compatibles = [e for e in evaluaciones if e["is_valid"]]
 
         if not compatibles:
-            logger.warning(f"[SpatialVeto] Campo '{campo}': Ningún candidato respetó la región espacial de '{etiqueta.text}'")
+            logger.warning(f"[SpatialVeto] Campo '{campo}': VETO ESPACIAL aplicado a todos los candidatos")
             return {
                 "value": None,
                 "confidence": 0.0,
-                "spatial_score": 0.1,
-                "label_score": 1.0,
-                "bbox": etiqueta.bbox.to_dict(),
-                "evidence": ["VETO ESPACIAL: Candidatos fuera de la región del campo"],
-                "spatial_veto": True
+                "status": "REVIEW_REQUIRED",
+                "page": page_num,
+                "source": "google_document_ai",
+                "label": etiqueta.text,
+                "label_bbox": etiqueta.bbox.to_dict(),
+                "value_bbox": None,
+                "spatial_relation": "WRONG_REGION",
+                "spatial_score": 0.0,
+                "reason": f"VETO ESPACIAL: Todos los candidatos quedaron fuera de la región permitida de '{etiqueta.text}'",
+                "evidence": ["VETO ESPACIAL activado"]
             }
 
+        # Seleccionar el mejor candidato compatible por score espacial
         compatibles.sort(key=lambda item: item["spatial_score"], reverse=True)
         best = compatibles[0]
         cand_obj = best["candidate"]
 
+        # Agrupación espacial de nombres/apellidos compuestos en la misma línea
+        valor_final = cand_obj.text
+        bbox_final = cand_obj.bbox
+
+        # Fórmula de scoring centralizada: Etiqueta 35% + Geometría 40% + Confianza DocAI 15% + Formato 10%
+        score_final = (0.35 * 1.0) + (0.40 * best["spatial_score"]) + (0.15 * cand_obj.confidence) + (0.10 * 1.0)
+        status_final = "VALID" if score_final >= 0.85 else "REVIEW_REQUIRED"
+
         return {
-            "value": cand_obj.text,
+            "value": valor_final,
             "confidence": round(cand_obj.confidence, 2),
+            "score_final": round(score_final, 2),
+            "status": status_final,
+            "page": page_num,
+            "source": "google_document_ai",
+            "label": etiqueta.text,
+            "label_bbox": etiqueta.bbox.to_dict(),
+            "value_bbox": bbox_final.to_dict(),
+            "spatial_relation": best["relation"],
             "spatial_score": best["spatial_score"],
-            "label_score": 1.0,
-            "bbox": cand_obj.bbox.to_dict(),
-            "evidence": [best["reason"]],
-            "spatial_veto": False
+            "reason": f"Valor '{valor_final}' extraído ({best['description']})",
+            "evidence": [best["description"]]
         }
 
 

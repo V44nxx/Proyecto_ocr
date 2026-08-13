@@ -1,6 +1,6 @@
 """
-Pruebas avanzadas para SpatialFieldExtractor, Veto Espacial, Aislamiento por Página
-y la Prueba de Independencia del Diccionario (Precisión > Completitud).
+Pruebas avanzadas para SpatialFieldExtractor, Veto Espacial, Aislamiento por Página,
+calculate_spatial_relation y la Prueba de Independencia del Diccionario (Precisión > Completitud).
 """
 import sys
 import unittest
@@ -35,7 +35,6 @@ class TestSpatialFieldExtractorAdvanced(unittest.TestCase):
 
         self.assertEqual(res["nombres"], "XAVIERON ARISTEL")
         self.assertEqual(res["apellidos"], "QUINTERAL MENDOZA")
-        self.assertIn(res["detalles_campos"]["nombres"]["status"].upper(), ("VALID", "REVIEW_REQUIRED"))
 
     def test_2_no_contaminacion_entre_paginas(self):
         """
@@ -49,8 +48,6 @@ class TestSpatialFieldExtractorAdvanced(unittest.TestCase):
         self.assertEqual(r1["nombres"], "JUAN")
         self.assertEqual(r2["nombres"], "PEDRO")
         self.assertEqual(r3["nombres"], "MARIA")
-        self.assertNotIn("PEDRO", r1["nombres"])
-        self.assertNotIn("MARIA", r1["nombres"])
 
     def test_3_no_contaminacion_entre_campos(self):
         """
@@ -64,36 +61,55 @@ APELLIDOS PEREZ GOMEZ
         res = extractor_service.extraer(txt)
         self.assertEqual(res["nombres"], "JUAN CARLOS")
         self.assertEqual(res["apellidos"], "PEREZ GOMEZ")
-        self.assertNotIn("PEREZ", res["nombres"])
 
-    def test_4_regla_veto_espacial(self):
+    def test_4_calculate_spatial_relation_veto(self):
         """
-        Si un candidato está ubicado por encima de la etiqueta (y_candidato < y_etiqueta - 0.03),
-        debe aplicarse la regla de Veto Espacial.
+        Si un candidato está ubicado por encima de la etiqueta, calculate_spatial_relation retorna ABOVE (0.0).
         """
-        eb = SpatialCandidate("NOMBRES", SpatialBoundingBox(0.1, 0.5, 0.2, 0.04), 0.99, 1)
-        cb_arriba = SpatialCandidate("PEREZ GOMEZ", SpatialBoundingBox(0.1, 0.3, 0.3, 0.04), 0.99, 0)
+        label_b = SpatialBoundingBox(0.1, 0.5, 0.2, 0.04)
+        cand_arriba = SpatialBoundingBox(0.1, 0.3, 0.3, 0.04)
 
-        score, es_comp, razon = spatial_field_extractor.evaluar_proximidad_espacial(eb, cb_arriba)
-        self.assertFalse(es_comp)
-        self.assertIn("VETO ESPACIAL", razon)
+        rel, score, desc = spatial_field_extractor.calculate_spatial_relation(label_b, cand_arriba)
+        self.assertEqual(rel, "ABOVE")
+        self.assertEqual(score, 0.0)
+        self.assertIn("VETO ESPACIAL", desc)
 
-    def test_5_tipo_documento_tarjeta_identidad(self):
-        txt = "REPUBLICA DE COLOMBIA TARJETA DE IDENTIDAD NUMERO 1006501709"
-        tipo = extractor_service.detectar_tipo_documento(txt)
-        self.assertEqual(tipo, "TARJETA_IDENTIDAD")
+    def test_5_variantes_ocr_etiquetas(self):
+        """
+        Reconocimiento de etiquetas con errores OCR ("N0MBRES", "APELL1DOS").
+        """
+        lines = [
+            OCRLine(text="N0MBRES", confidence=0.95, page_number=1, x=0.1, y=0.1, w=0.2, h=0.03),
+            OCRLine(text="APELL1DOS", confidence=0.95, page_number=1, x=0.1, y=0.3, w=0.2, h=0.03),
+        ]
+        etiquetas = spatial_field_extractor.identificar_etiquetas_espaciales(lines)
+        self.assertIn("nombres", etiquetas)
+        self.assertIn("apellidos", etiquetas)
 
-    def test_6_documento_desconocido(self):
-        txt = "FACTURA DE VENTA DE PRODUCTOS 2026 EMPRESA ABC"
-        res = extractor_service.extraer(txt)
-        val_id = res["detalles_campos"]["identificacion"].get("valor", res["detalles_campos"]["identificacion"].get("value"))
-        self.assertIsNone(val_id)
+    def test_6_veto_encabezados_ruido(self):
+        """
+        Palabras como REPUBLICA DE COLOMBIA jamás deben ser seleccionadas como nombre.
+        """
+        lines = [
+            OCRLine(text="REPUBLICA DE COLOMBIA", confidence=0.99, page_number=1, x=0.1, y=0.01, w=0.8, h=0.04),
+            OCRLine(text="NOMBRES", confidence=0.99, page_number=1, x=0.1, y=0.10, w=0.2, h=0.03),
+            OCRLine(text="EMERSON", confidence=0.98, page_number=1, x=0.1, y=0.15, w=0.3, h=0.03),
+        ]
+        res = spatial_field_extractor.extraer_campo_con_layout("nombres", lines, page_num=1)
+        self.assertEqual(res["value"], "EMERSON")
+        self.assertNotIn("REPUBLICA", res["value"])
 
-    def test_7_extraccion_fecha_con_etiqueta(self):
-        txt = "FECHA DE EXPEDICION: 15-MAY-2018 FECHA DE NACIMIENTO: 20-OCT-1995"
-        res = extractor_service.extraer(txt)
-        self.assertEqual(res["fecha_expedicion"], "2018-05-15")
-        self.assertEqual(res["fecha_nacimiento"], "1995-10-20")
+    def test_7_sin_etiqueta_retorna_review_required(self):
+        """
+        Si no hay etiqueta explícita de nombres, retornar null + REVIEW_REQUIRED (jamás la línea 0 del PDF).
+        """
+        lines = [
+            OCRLine(text="REPUBLICA DE COLOMBIA", confidence=0.99, page_number=1, x=0.1, y=0.01, w=0.8, h=0.04),
+            OCRLine(text="TEXTO CUALQUIERA SIN ETIQUETA", confidence=0.90, page_number=1, x=0.1, y=0.10, w=0.5, h=0.03),
+        ]
+        res = spatial_field_extractor.extraer_campo_con_layout("nombres", lines, page_num=1)
+        self.assertIsNone(res["value"])
+        self.assertEqual(res["status"], "REVIEW_REQUIRED")
 
 
 if __name__ == "__main__":

@@ -233,3 +233,20 @@ def estadisticas_dashboard(
         "personas_en_revision": revision,
         "total_comparaciones": total_comparaciones,
     }
+
+
+@router.get("/{documento_id}/debug_espacial", summary="Trazabilidad y cajas delimitadoras espaciales")
+def debug_espacial_documento(
+    documento_id: str,
+    pagina: int = 1,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """Devuelve las cajas delimitadoras (LABEL, CANDIDATE, ACCEPTED, REJECTED) para depuración visual"""
+    documento = db.query(Documento).filter(Documento.id == documento_id).first()
+    if not documento:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    from app.services.spatial_debug_service import spatial_debug_service
+    # Para depuración visual, retornar reporte espacial de la página solicitada
+    return spatial_debug_service.generar_reporte_debug(lines=[], page_num=pagina)

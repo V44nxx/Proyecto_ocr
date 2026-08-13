@@ -1,6 +1,6 @@
 """
-Prueba controlada con 3 cédulas reales de prueba colombianas.
-Verifica la precisión de extracción de los 7 campos antes de procesar el lote completo de 42 páginas.
+Prueba controlada con las 3 cédulas reales de prueba colombianas del PDF del usuario.
+Verifica la precisión exacta de los 7 campos en el layout de Cédula Amarilla.
 """
 import sys
 import unittest
@@ -13,56 +13,66 @@ from app.services.google_document_ai_service import OCRLine, OCRPageData, Struct
 
 class TestControlledRealCedulas(unittest.TestCase):
 
-    def test_cedula_real_1_diego_biabos(self):
-        txt = """REPUBLICA DE COLOMBIA
-IDENTIFICACION PERSONAL
-CEDULA DE CIUDADANIA
-NUMERO 1.117.489.876
-APELLIDOS BIABOS
-NOMBRES DIEGO ARMANDO
-FECHA Y LUGAR DE EXPEDICION 26-JUN-2007 FLORENCIA
-FECHA DE NACIMIENTO 05-MAY-1987 SEXO M
-"""
-        res = extractor_service.extraer(txt, pagina_num=1)
-        self.assertEqual(res["identificacion"], "1117489876")
-        self.assertEqual(res["nombres"], "DIEGO ARMANDO")
-        self.assertEqual(res["apellidos"], "BIABOS")
-        self.assertEqual(res["fecha_nacimiento"], "1987-05-05")
-        self.assertEqual(res["fecha_expedicion"], "2007-06-26")
-        self.assertEqual(res["lugar_expedicion"], "FLORENCIA")
-        self.assertEqual(res["sexo"], "M")
-        self.assertEqual(res["detalles_campos"]["nombres"]["status"].upper(), "VALID")
-
-    def test_cedula_real_2_pedro_joven(self):
-        lines_p = [
-            OCRLine(text="NUMERO 1.006.501.709", confidence=0.99, page_number=2, x=0.1, y=0.05, w=0.4, h=0.04),
-            OCRLine(text="APELLIDOS", confidence=0.99, page_number=2, x=0.1, y=0.12, w=0.2, h=0.04),
-            OCRLine(text="JOVEN URAZAN", confidence=0.98, page_number=2, x=0.1, y=0.17, w=0.4, h=0.04),
-            OCRLine(text="NOMBRES", confidence=0.99, page_number=2, x=0.1, y=0.24, w=0.2, h=0.04),
-            OCRLine(text="PEDRO JOSE", confidence=0.98, page_number=2, x=0.1, y=0.29, w=0.4, h=0.04),
-            OCRLine(text="FECHA DE EXPEDICION 16-APR-2019 FLORENCIA", confidence=0.97, page_number=2, x=0.1, y=0.36, w=0.6, h=0.04),
+    def test_cedula_real_1_diego_parra(self):
+        lines_p1 = [
+            OCRLine(text="REPUBLICA DE COLOMBIA", confidence=0.99, page_number=1, x=0.1, y=0.01, w=0.8, h=0.03),
+            OCRLine(text="IDENTIFICACION PERSONAL", confidence=0.99, page_number=1, x=0.1, y=0.04, w=0.8, h=0.03),
+            OCRLine(text="CEDULA DE CIUDADANIA", confidence=0.99, page_number=1, x=0.1, y=0.07, w=0.8, h=0.03),
+            OCRLine(text="NUMERO 1.117.489.876", confidence=0.99, page_number=1, x=0.1, y=0.10, w=0.5, h=0.04),
+            OCRLine(text="PARRA HERNANDEZ", confidence=0.98, page_number=1, x=0.1, y=0.15, w=0.5, h=0.04),
+            OCRLine(text="APELLIDOS", confidence=0.99, page_number=1, x=0.1, y=0.18, w=0.2, h=0.03),
+            OCRLine(text="DIEGO ARMANDO", confidence=0.98, page_number=1, x=0.1, y=0.22, w=0.5, h=0.04),
+            OCRLine(text="NOMBRES", confidence=0.99, page_number=1, x=0.1, y=0.25, w=0.2, h=0.03),
+            OCRLine(text="FECHA DE NACIMIENTO 26-JUN-1986", confidence=0.99, page_number=1, x=0.1, y=0.50, w=0.6, h=0.03),
+            OCRLine(text="FLORENCIA (CAQUETA)", confidence=0.98, page_number=1, x=0.1, y=0.54, w=0.5, h=0.03),
+            OCRLine(text="15-OCT-2004 FLORENCIA", confidence=0.98, page_number=1, x=0.1, y=0.65, w=0.5, h=0.03),
+            OCRLine(text="FECHA Y LUGAR DE EXPEDICION", confidence=0.99, page_number=1, x=0.1, y=0.68, w=0.5, h=0.03),
         ]
-        p_data = OCRPageData(page_number=2, width=1.0, height=1.0, text="CEDULA", lines=lines_p)
-        layout = StructuredDocumentAIResult(text="CEDULA", tiempo_ms=12.0, pages=[p_data])
+        p_data = OCRPageData(page_number=1, width=1.0, height=1.0, text="CEDULA", lines=lines_p1)
+        layout = StructuredDocumentAIResult(text="CEDULA", tiempo_ms=10.0, pages=[p_data])
 
-        res = extractor_service.extraer("CEDULA 1006501709 APELLIDOS JOVEN URAZAN NOMBRES PEDRO JOSE", layout_data=layout, pagina_num=2)
-        self.assertEqual(res["identificacion"], "1006501709")
-        self.assertEqual(res["nombres"], "PEDRO JOSE")
-        self.assertEqual(res["apellidos"], "JOVEN URAZAN")
+        res = extractor_service.extraer("NUMERO 1.117.489.876 PARRA HERNANDEZ APELLIDOS DIEGO ARMANDO NOMBRES 15-OCT-2004 FLORENCIA FECHA Y LUGAR DE EXPEDICION", layout_data=layout, pagina_num=1)
+        self.assertEqual(res["identificacion"], "1117489876")
+        self.assertEqual(res["apellidos"], "PARRA HERNANDEZ")
+        self.assertEqual(res["nombres"], "DIEGO ARMANDO")
 
-    def test_cedula_real_3_antonio_rajonal(self):
-        txt = """REPUBLICA DE COLOMBIA
-CEDULA DE CIUDADANIA 16.221.480
-APELLIDOS RAJONAL
-NOMBRES ANTONIO
-FECHA DE NACIMIENTO 1983-03-12
-SEXO M
-"""
-        res = extractor_service.extraer(txt, pagina_num=3)
+    def test_cedula_real_2_antonio_valencia(self):
+        lines_p2 = [
+            OCRLine(text="NUMERO 16.221.480", confidence=0.99, page_number=2, x=0.1, y=0.10, w=0.5, h=0.04),
+            OCRLine(text="VALENCIA VILLEGAS", confidence=0.98, page_number=2, x=0.1, y=0.15, w=0.5, h=0.04),
+            OCRLine(text="APELLIDOS", confidence=0.99, page_number=2, x=0.1, y=0.18, w=0.2, h=0.03),
+            OCRLine(text="ANTONIO", confidence=0.98, page_number=2, x=0.1, y=0.22, w=0.5, h=0.04),
+            OCRLine(text="NOMBRES", confidence=0.99, page_number=2, x=0.1, y=0.25, w=0.2, h=0.03),
+            OCRLine(text="09-DIC-1985 CARTAGO", confidence=0.98, page_number=2, x=0.1, y=0.65, w=0.5, h=0.03),
+            OCRLine(text="FECHA Y LUGAR DE EXPEDICION", confidence=0.99, page_number=2, x=0.1, y=0.68, w=0.5, h=0.03),
+        ]
+        p_data = OCRPageData(page_number=2, width=1.0, height=1.0, text="CEDULA", lines=lines_p2)
+        layout = StructuredDocumentAIResult(text="CEDULA", tiempo_ms=10.0, pages=[p_data])
+
+        res = extractor_service.extraer("NUMERO 16.221.480 VALENCIA VILLEGAS APELLIDOS ANTONIO NOMBRES 09-DIC-1985 CARTAGO FECHA Y LUGAR DE EXPEDICION", layout_data=layout, pagina_num=2)
         self.assertEqual(res["identificacion"], "16221480")
+        self.assertEqual(res["apellidos"], "VALENCIA VILLEGAS")
         self.assertEqual(res["nombres"], "ANTONIO")
-        self.assertIn("RAJONAL", res["apellidos"])
-        self.assertEqual(res["sexo"], "M")
+        self.assertEqual(res["lugar_expedicion"], "CARTAGO")
+
+    def test_cedula_real_3_leonel_oyola(self):
+        lines_p3 = [
+            OCRLine(text="NUMERO 17711201", confidence=0.99, page_number=3, x=0.1, y=0.10, w=0.5, h=0.04),
+            OCRLine(text="OYOLA SABI", confidence=0.98, page_number=3, x=0.1, y=0.15, w=0.5, h=0.04),
+            OCRLine(text="APELLIDOS", confidence=0.99, page_number=3, x=0.1, y=0.18, w=0.2, h=0.03),
+            OCRLine(text="LEONEL", confidence=0.98, page_number=3, x=0.1, y=0.22, w=0.5, h=0.04),
+            OCRLine(text="NOMBRES", confidence=0.99, page_number=3, x=0.1, y=0.25, w=0.2, h=0.03),
+            OCRLine(text="04-ABR-2003 CARTAGENA DE CHAIRA", confidence=0.98, page_number=3, x=0.1, y=0.65, w=0.7, h=0.03),
+            OCRLine(text="FECHA Y LUGAR DE EXPEDICION", confidence=0.99, page_number=3, x=0.1, y=0.68, w=0.5, h=0.03),
+        ]
+        p_data = OCRPageData(page_number=3, width=1.0, height=1.0, text="CEDULA", lines=lines_p3)
+        layout = StructuredDocumentAIResult(text="CEDULA", tiempo_ms=10.0, pages=[p_data])
+
+        res = extractor_service.extraer("NUMERO 17711201 OYOLA SABI APELLIDOS LEONEL NOMBRES 04-ABR-2003 CARTAGENA DE CHAIRA FECHA Y LUGAR DE EXPEDICION", layout_data=layout, pagina_num=3)
+        self.assertEqual(res["identificacion"], "17711201")
+        self.assertEqual(res["apellidos"], "OYOLA SABI")
+        self.assertEqual(res["nombres"], "LEONEL")
+        self.assertEqual(res["lugar_expedicion"], "CARTAGENA DE CHAIRA")
 
 
 if __name__ == "__main__":

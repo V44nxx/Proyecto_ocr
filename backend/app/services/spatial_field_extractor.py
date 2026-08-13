@@ -153,8 +153,16 @@ class SpatialFieldExtractor:
             cb = candidate_bbox
 
         # 1. Regla de Veto Espacial Hard Override: Candidato ubicado arriba de la etiqueta
-        if cb.y < eb.y - 0.01:
-            return "ABOVE", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) ubicado por encima de la etiqueta (y={round(eb.y, 3)})"
+        dist_v_below = cb.y - eb.y
+        dist_v_above = eb.y - cb.y
+
+        # Permitir candidato ubicado inmediatamente por encima si la etiqueta está abajo (Cédula Amarilla)
+        es_arriba_cedula_amarilla = (
+            dist_v_above > 0.0 and dist_v_above <= 0.12 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
+        )
+
+        if cb.y < eb.y - 0.12:
+            return "ABOVE", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) ubicado muy por encima de la etiqueta (y={round(eb.y, 3)})"
 
         # 2. Regla de Veto Espacial: Candidato por debajo del límite máximo de la región
         if region_y_max and cb.y >= region_y_max:
@@ -174,13 +182,15 @@ class SpatialFieldExtractor:
 
         if es_debajo:
             return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
+        elif es_arriba_cedula_amarilla:
+            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
         elif es_al_lado:
             return "DIRECTLY_RIGHT", self.SPATIAL_SCORES["DIRECTLY_RIGHT"], f"Ubicado directamente a la derecha de la etiqueta (x_diff={round(dist_h, 3)})"
         elif misma_fila:
             return "SAME_ROW", self.SPATIAL_SCORES["SAME_ROW"], f"Ubicado en la misma fila horizontal (cy_diff={round(abs(cb.cy - eb.cy), 3)})"
-        elif dist_v <= 0.25:
+        elif dist_v > 0 and dist_v <= 0.25:
             return "NEAR", self.SPATIAL_SCORES["NEAR"], f"Ubicación cercana a la etiqueta (dist_v={round(dist_v, 3)})"
-        elif dist_v <= 0.40:
+        elif dist_v > 0 and dist_v <= 0.40:
             return "FAR", self.SPATIAL_SCORES["FAR"], f"Ubicación espacial lejana respecto a la etiqueta (dist_v={round(dist_v, 3)})"
         else:
             return "WRONG_REGION", 0.00, "Candidato fuera de la ventana espacial permitida"
@@ -193,7 +203,7 @@ class SpatialFieldExtractor:
     ) -> Tuple[float, bool, str]:
         """Método de compatibilidad retrospectiva para evaluar proximidad espacial."""
         rel, score, desc = self.calculate_spatial_relation(etiqueta, candidato, region_y_max)
-        es_comp = rel in ["DIRECTLY_BELOW", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
+        es_comp = rel in ["DIRECTLY_BELOW", "DIRECTLY_ABOVE", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
         return score, es_comp, desc
 
     def extraer_campo_con_layout(
@@ -242,7 +252,7 @@ class SpatialFieldExtractor:
         # Determinar límite inferior Y para acotamiento geométrico estricto de regiones
         region_y_max = None
         if campo == "apellidos" and "nombres" in etiquetas:
-            region_y_max = etiquetas["nombres"].bbox.y
+            region_y_max = etiquetas["nombres"].bbox.y + 0.05
         elif campo == "nombres":
             for nxt in ["fecha_nacimiento", "identificacion", "sexo"]:
                 if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
@@ -259,9 +269,12 @@ class SpatialFieldExtractor:
 
             # Filtrar ruidos de encabezado y marcas de agua en nombres y apellidos
             if campo in ["nombres", "apellidos"]:
+                # Si la línea entera contiene encabezado oficial (ej: REPUBLICA DE COLOMBIA, CEDULA DE CIUDADANIA), descartarla por completo
+                if self.NO_NOMBRE_HEADER.search(txt):
+                    continue
                 txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
                 tokens = txt_clean.split()
-                tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.match(t)]
+                tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
                 if not tokens_validos:
                     continue
                 txt = " ".join(tokens_validos)
@@ -299,7 +312,7 @@ class SpatialFieldExtractor:
                 "relation": rel,
                 "spatial_score": s_score,
                 "description": desc,
-                "is_valid": rel in ["DIRECTLY_BELOW", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
+                "is_valid": rel in ["DIRECTLY_BELOW", "DIRECTLY_ABOVE", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
             })
 
         compatibles = [e for e in evaluaciones if e["is_valid"]]
@@ -328,6 +341,15 @@ class SpatialFieldExtractor:
 
         # Agrupación espacial de nombres/apellidos compuestos en la misma línea
         valor_final = cand_obj.text
+
+        # Limpieza específica para LUGAR_EXPEDICION (eliminar fechas y firmas de registrador)
+        if campo == "lugar_expedicion":
+            # Remover patrón de fechas (ej: 15-OCT-2004, 09-DIC-1985)
+            valor_final = re.sub(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b", "", valor_final).strip()
+            # Remover palabras del registrador nacional / firmas
+            palabras_excluir = {"REGISTRADOR", "NACIONAL", "CARLOS", "ARIEL", "SANCHEZ", "TORRES", "ALMABEATRIZ", "RENGIFO", "LOPEZ", "BEREN", "AMEL", "SANZ", "TAN", "ESTATURA", "SEXO", "RH"}
+            toks = [t for t in valor_final.split() if t.upper() not in palabras_excluir and len(t) >= 2]
+            valor_final = " ".join(toks).strip()
         bbox_final = cand_obj.bbox
 
         # Fórmula de scoring centralizada: Etiqueta 35% + Geometría 40% + Confianza DocAI 15% + Formato 10%

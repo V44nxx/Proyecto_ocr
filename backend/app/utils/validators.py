@@ -86,6 +86,22 @@ class ValidadorColombia:
     # NOMBRES Y APELLIDOS
     # ──────────────────────────────────────────
     @classmethod
+    def corregir_errores_ocr_nombre(cls, texto: str) -> str:
+        """Corrije errores tipográficos típicos de OCR en nombres y apellidos."""
+        if not texto:
+            return ""
+        txt = str(texto).upper()
+        # Trailing ! / 1 / | / ] en palabras (ej. SAB! -> SABI)
+        txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]{2,})[!1|\]]", r"\1I", txt)
+        # 0 o 1 intercalados en palabras (ej. G0MEZ -> GOMEZ, MART1NEZ -> MARTINEZ)
+        txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]+)0([A-ZÁÉÍÓÚÜÑ]+)", r"\1O\2", txt)
+        txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]+)1([A-ZÁÉÍÓÚÜÑ]+)", r"\1I\2", txt)
+        # 0 o 5 al final de palabras (ej. CASTILL0 -> CASTILLO, VARGA5 -> VARGAS)
+        txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]{2,})0\b", r"\1O", txt)
+        txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]{2,})5\b", r"\1S", txt)
+        return txt
+
+    @classmethod
     def normalizar_nombre(cls, texto: str) -> Optional[str]:
         """
         Normaliza nombres y apellidos:
@@ -99,6 +115,9 @@ class ValidadorColombia:
         """
         if not texto:
             return None
+
+        # Corregir sustituciones OCR habituales (ej. SAB! -> SABI)
+        texto = cls.corregir_errores_ocr_nombre(texto)
 
         # Solo letras y espacios (incluyendo caracteres latinos)
         texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]", "", texto)

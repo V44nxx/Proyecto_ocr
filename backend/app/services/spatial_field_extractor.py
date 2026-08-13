@@ -417,7 +417,8 @@ class SpatialFieldExtractor:
             if campo in ["nombres", "apellidos"]:
                 if self.NO_NOMBRE_HEADER.search(txt):
                     continue
-                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
+                txt_corr = validador.corregir_errores_ocr_nombre(txt)
+                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt_corr.upper()).strip()
                 tokens = txt_clean.split()
                 tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
                 if not tokens_validos:

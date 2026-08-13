@@ -18,6 +18,7 @@ import re
 from typing import Optional, Dict, Any, List, Tuple
 from app.utils.validators import validador
 from app.utils.logger import app_logger as logger
+from app.services.spatial_field_extractor import spatial_field_extractor
 
 
 class ExtractorService:
@@ -307,62 +308,42 @@ class ExtractorService:
             resultado["detalles_campos"] = detalles_campos
             return resultado
 
-        # ── Estrategia 0: Extracción Inteligente con NameDictionaryService (Layout + Diccionario) ────
-        from app.services.name_dictionary_service import name_dictionary_service
+        # ── Estrategia 0: Extracción Espacial 2D Centralizada (0% Diccionario, 2D Bounding Boxes) ────
+        lines_to_process = []
+        if layout_data and hasattr(layout_data, "pages") and layout_data.pages:
+            for page in layout_data.pages:
+                if getattr(page, "lines", None):
+                    lines_to_process.extend(page.lines)
 
-        eval_nombres = None
-        eval_apellidos = None
+        if not lines_to_process and lineas:
+            class PseudoOCRLine:
+                def __init__(self, text_val, y_pos):
+                    self.text = text_val
+                    self.x = 0.1
+                    self.y = y_pos
+                    self.w = 0.8
+                    self.h = 0.04
+                    self.confidence = 0.95
+            lines_to_process = [PseudoOCRLine(l, (idx + 1) * 0.05) for idx, l in enumerate(lineas)]
 
-        if layout_data and hasattr(layout_data, "pages"):
-            cand_espaciales = self._extraer_por_layout_espacial(layout_data.pages)
-            if cand_espaciales.get("nombres"):
-                cand_line_text, cand_conf = cand_espaciales["nombres"]
-                words = [w for w in cand_line_text.split() if len(w) >= 2]
-                eval_nombres = name_dictionary_service.analizar_candidatos_campo(
-                    words, "nombres", etiqueta_presente=True, distancia_espacial_px=18.0, doc_ai_confidence=cand_conf
-                )
-                if eval_nombres and eval_nombres.get("value"):
-                    resultado["nombres"] = eval_nombres["value"]
+        if lines_to_process:
+            res_espaciales = spatial_field_extractor.extraer_todos_los_campos(
+                lines_to_process, pagina_num, doc_ai_confidence=0.95
+            )
+            for campo, info in res_espaciales.items():
+                if info and info.get("value") and info.get("status") == "VALID":
+                    resultado[campo] = info["value"]
 
-            if cand_espaciales.get("apellidos"):
-                cand_line_text, cand_conf = cand_espaciales["apellidos"]
-                words = [w for w in cand_line_text.split() if len(w) >= 2]
-                eval_apellidos = name_dictionary_service.analizar_candidatos_campo(
-                    words, "apellidos", etiqueta_presente=True, distancia_espacial_px=18.0, doc_ai_confidence=cand_conf
-                )
-                if eval_apellidos and eval_apellidos.get("value"):
-                    resultado["apellidos"] = eval_apellidos["value"]
-
-        # ── Estrategia 1: MRZ ─────────────────────────────────────────────
+        # ── Estrategia 1: MRZ (Zona Legible por Máquina) ─────────────────
         datos_mrz = self._extraer_mrz(texto, lineas)
         if datos_mrz:
             for k, v in datos_mrz.items():
                 if v and not resultado.get(k):
                     resultado[k] = v
 
-        # ── Estrategia 2: Por keywords y NameDictionaryService fallback ─────
+        # ── Estrategia 2: Fallbacks para identificación y fechas (NO sobreescribir nombres/apellidos) ─────
         if not resultado["identificacion"]:
             resultado["identificacion"] = self._extraer_identificacion(texto, lineas)
-        
-        if not resultado["nombres"]:
-            nom_raw = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_NOMBRES, "nombres")
-            if nom_raw:
-                words = nom_raw.split()
-                eval_nombres = name_dictionary_service.analizar_candidatos_campo(
-                    words, "nombres", etiqueta_presente=True, distancia_espacial_px=25.0, doc_ai_confidence=0.85
-                )
-                if eval_nombres and eval_nombres.get("value"):
-                    resultado["nombres"] = eval_nombres["value"]
-
-        if not resultado["apellidos"]:
-            ape_raw = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_APELLIDOS, "apellidos")
-            if ape_raw:
-                words = ape_raw.split()
-                eval_apellidos = name_dictionary_service.analizar_candidatos_campo(
-                    words, "apellidos", etiqueta_presente=True, distancia_espacial_px=25.0, doc_ai_confidence=0.85
-                )
-                if eval_apellidos and eval_apellidos.get("value"):
-                    resultado["apellidos"] = eval_apellidos["value"]
 
         if not resultado["fecha_nacimiento"]:
             resultado["fecha_nacimiento"] = self._extraer_fecha(texto, lineas, self.KEYWORDS_FECHA_NAC)
@@ -431,7 +412,7 @@ class ExtractorService:
 
         for campo in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
             val = resultado.get(campo)
-            eval_info = eval_nombres if campo == "nombres" else (eval_apellidos if campo == "apellidos" else None)
+            eval_info = None
 
             if val and val != "POR REVISAR" and "SIN_ID" not in str(val):
                 status_campo = "VALID"

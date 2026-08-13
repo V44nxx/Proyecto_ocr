@@ -1,12 +1,14 @@
 """
-Motor Centralizado de Extracción por Geometría Espacial para Cédulas y Tarjetas Colombiana.
-Pipeline Estricto: ETIQUETA -> REGIÓN DEL CAMPO -> CANDIDATOS ESPACIALES -> VALIDACIÓN -> RESULTADO.
+Motor Centralizado de Extracción por Geometría Espacial 2D para Cédulas y Tarjetas Colombianas.
+Pipeline Estricto: ETIQUETA -> CLASIFICACIÓN LAYOUT -> REGIÓN 2D (Xmin, Xmax, Ymin, Ymax) -> CANDIDATOS -> EXCLUSIÓN MUTUA -> SCORE -> RESULTADO.
 0% Dependencia de Diccionarios para Selección de Valores.
 Garantiza PRECISIÓN > COMPLETITUD: Veto Espacial Irrevocable y 0% Invención.
 """
 import re
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from app.utils.logger import app_logger as logger
+from app.services.document_layout_classifier import document_layout_classifier
+from app.utils.spatial_visual_debugger import spatial_visual_debugger
 
 
 class SpatialBoundingBox:
@@ -25,6 +27,24 @@ class SpatialBoundingBox:
     @property
     def cy(self) -> float:
         return self.y + (self.h / 2.0)
+
+    @property
+    def x2(self) -> float:
+        return self.x + self.w
+
+    @property
+    def y2(self) -> float:
+        return self.y + self.h
+
+    def calcular_traslape_horizontal(self, otra: "SpatialBoundingBox") -> float:
+        """Calcula el porcentaje de traslape horizontal entre dos cajas delimitadoras (0.0 a 1.0)"""
+        inter_x1 = max(self.x, otra.x)
+        inter_x2 = min(self.x2, otra.x2)
+        inter_w = max(0.0, inter_x2 - inter_x1)
+        min_w = min(self.w, otra.w)
+        if min_w <= 0:
+            return 0.0
+        return inter_w / min_w
 
     def to_dict(self) -> Dict[str, float]:
         return {
@@ -47,22 +67,21 @@ class SpatialCandidate:
 
 class SpatialFieldExtractor:
     """
-    Motor centralizado de extracción por layout espacial para cédulas colombianas.
+    Motor centralizado de extracción por layout espacial 2D para cédulas colombianas.
     Independiente de la resolución/DPI.
     """
 
-    # Categorías de relaciones espaciales y sus puntuaciones
     SPATIAL_SCORES = {
-        "DIRECTLY_BELOW": 1.00,
-        "DIRECTLY_RIGHT": 0.95,
-        "SAME_ROW": 0.90,
+        "DIRECTLY_ABOVE": 1.00,
+        "DIRECTLY_RIGHT": 1.00,
+        "DIRECTLY_BELOW": 0.90,
+        "SAME_ROW": 0.85,
         "NEAR": 0.70,
         "FAR": 0.20,
         "ABOVE": 0.00,
         "WRONG_REGION": 0.00
     }
 
-    # Definición de patrones de etiquetas esperadas con tolerancia a errores OCR (0 por O, 1 por I)
     ETIQUETAS_MAP = {
         "identificacion": [
             r"\bNUIP\b", r"\bNUMER[O0]?\b", r"\bNÚMER[O0]?\b", r"\bCEDULA\b", r"\bCÉDULA\b",
@@ -108,7 +127,6 @@ class SpatialFieldExtractor:
             if not txt:
                 continue
 
-            # Normalizar caracteres OCR comunes en etiquetas
             txt_norm = txt.replace("0", "O").replace("1", "I")
 
             x = getattr(line, "x", 0.0)
@@ -127,17 +145,78 @@ class SpatialFieldExtractor:
 
         return etiquetas_encontradas
 
+    def calcular_region_2d_campo(
+        self,
+        campo: str,
+        etiqueta: SpatialCandidate,
+        etiquetas: Dict[str, SpatialCandidate],
+        layout_info: Dict[str, Any]
+    ) -> Dict[str, float]:
+        """
+        Calcula las fronteras cartesianas 2D (Xmin, Xmax, Ymin, Ymax) de la región del campo.
+        """
+        eb = etiqueta.bbox
+        layout_type = layout_info.get("layout_type", "CEDULA_AMARILLA_FRENTE")
+
+        # Límites por defecto (ancho holgado si no hay restricciones laterales)
+        x_min = max(0.0, eb.x - 0.15)
+        x_max = min(1.0, eb.x + max(eb.w * 4.5, 0.70))
+
+        has_nombres = "nombres" in etiquetas
+        has_apellidos = "apellidos" in etiquetas
+
+        if has_nombres and has_apellidos:
+            y_nom = etiquetas["nombres"].bbox.y
+            y_ape = etiquetas["apellidos"].bbox.y
+            if y_ape < y_nom:
+                # Cédula Amarilla: APELLIDOS está arriba de NOMBRES (valores impresos por encima de etiquetas)
+                if campo == "apellidos":
+                    y_min = etiquetas["identificacion"].bbox.y if "identificacion" in etiquetas else max(0.0, eb.y - 0.18)
+                    y_max = eb.y + 0.01
+                elif campo == "nombres":
+                    y_min = y_ape
+                    y_max = eb.y + 0.01
+                else:
+                    y_min = max(0.0, eb.y - 0.15)
+                    y_max = eb.y + 0.20
+            else:
+                # Cédula Digital / Tarjeta Identidad: NOMBRES está arriba de APELLIDOS (valores por debajo de etiquetas)
+                if campo == "nombres":
+                    y_min = eb.y
+                    y_max = y_ape
+                elif campo == "apellidos":
+                    y_min = eb.y
+                    y_max = eb.y + 0.18
+                else:
+                    y_min = eb.y
+                    y_max = eb.y + 0.20
+        else:
+            if campo == "apellidos":
+                y_min = max(0.0, eb.y - 0.18)
+                y_max = eb.y + 0.18
+            elif campo == "nombres":
+                y_min = max(0.0, eb.y - 0.18)
+                y_max = eb.y + 0.18
+            else:
+                y_min = max(0.0, eb.y - 0.15)
+                y_max = eb.y + 0.20
+
+        return {
+            "x_min": round(x_min, 4),
+            "x_max": round(x_max, 4),
+            "y_min": round(y_min, 4),
+            "y_max": round(y_max, 4)
+        }
+
     def calculate_spatial_relation(
         self,
         label_bbox: Any,
         candidate_bbox: Any,
-        region_y_max: Optional[float] = None,
-        region_y_min: Optional[float] = None
+        region_2d: Optional[Dict[str, float]] = None
     ) -> Tuple[str, float, str]:
         """
-        Calcula la relación espacial exacta entre la etiqueta y el candidato.
-        Soporta objetos SpatialBoundingBox, SpatialCandidate o diccionarios.
-        Retorna: (relation_category, spatial_score, description)
+        Calcula la relación espacial 2D exacta entre la etiqueta y el candidato.
+        Verifica simultáneamente las franjas cartesianas X e Y.
         """
         if hasattr(label_bbox, "bbox"):
             eb = label_bbox.bbox
@@ -153,48 +232,48 @@ class SpatialFieldExtractor:
         else:
             cb = candidate_bbox
 
-        # 1. Reglas de Veto Espacial Hard Override por límites de región (y_min e y_max)
-        if region_y_min and cb.y < region_y_min - 0.005:
-            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) por encima de la franja del campo (y_min={round(region_y_min, 3)})"
-
-        if region_y_max and cb.y >= region_y_max:
-            return "WRONG_REGION", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) por debajo de la franja del campo (y_max={round(region_y_max, 3)})"
+        # 1. Reglas de Veto Espacial 2D por límites de región cartesiana (Xmin, Xmax, Ymin, Ymax)
+        if region_2d:
+            if cb.y < region_2d["y_min"] - 0.005:
+                return "WRONG_REGION", 0.00, f"VETO ESPACIAL Y_MIN: Candidato (y={round(cb.y, 3)}) por encima de y_min={region_2d['y_min']}"
+            if cb.y >= region_2d["y_max"]:
+                return "WRONG_REGION", 0.00, f"VETO ESPACIAL Y_MAX: Candidato (y={round(cb.y, 3)}) por debajo de y_max={region_2d['y_max']}"
+            if cb.x < region_2d["x_min"] - 0.05:
+                return "WRONG_REGION", 0.00, f"VETO ESPACIAL X_MIN: Candidato (x={round(cb.x, 3)}) fuera a la izquierda de x_min={region_2d['x_min']}"
 
         dist_v_below = cb.y - eb.y
         dist_v_above = eb.y - cb.y
 
         # Permitir candidato ubicado inmediatamente por encima si la etiqueta está abajo (Cédula Amarilla)
         es_arriba_cedula_amarilla = (
-            dist_v_above > 0.0 and dist_v_above <= 0.12 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
+            dist_v_above > 0.0 and dist_v_above <= 0.14 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
         )
 
-        if cb.y < eb.y - 0.12:
+        if cb.y < eb.y - 0.14:
             return "ABOVE", 0.00, f"VETO ESPACIAL: Candidato (y={round(cb.y, 3)}) ubicado muy por encima de la etiqueta (y={round(eb.y, 3)})"
 
         dist_v = cb.y - eb.y
         dist_h = abs(cb.x - eb.x)
 
-        # 3. Candidato ubicado inmediatamente debajo (Misma columna X, Y más abajo)
+        # Candidato ubicado inmediatamente debajo (Misma columna X, Y más abajo)
         es_debajo = dist_v > 0.0 and dist_v <= 0.15 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
 
-        # 4. Candidato ubicado inmediatamente a la derecha (Misma fila Y, X más a la derecha)
+        # Candidato ubicado inmediatamente a la derecha (Misma fila Y, X más a la derecha)
         es_al_lado = abs(cb.y - eb.y) <= (eb.h * 1.8) and cb.x >= eb.x + (eb.w * 0.1)
 
-        # 5. Candidato en la misma fila horizontal
+        # Candidato en la misma fila horizontal
         misma_fila = abs(cb.cy - eb.cy) <= (eb.h * 1.5)
 
-        if es_debajo:
-            return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
-        elif es_arriba_cedula_amarilla:
+        if es_arriba_cedula_amarilla:
             return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"], f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
+        elif es_debajo:
+            return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
         elif es_al_lado:
             return "DIRECTLY_RIGHT", self.SPATIAL_SCORES["DIRECTLY_RIGHT"], f"Ubicado directamente a la derecha de la etiqueta (x_diff={round(dist_h, 3)})"
         elif misma_fila:
             return "SAME_ROW", self.SPATIAL_SCORES["SAME_ROW"], f"Ubicado en la misma fila horizontal (cy_diff={round(abs(cb.cy - eb.cy), 3)})"
         elif dist_v > 0 and dist_v <= 0.25:
             return "NEAR", self.SPATIAL_SCORES["NEAR"], f"Ubicación cercana a la etiqueta (dist_v={round(dist_v, 3)})"
-        elif dist_v > 0 and dist_v <= 0.40:
-            return "FAR", self.SPATIAL_SCORES["FAR"], f"Ubicación espacial lejana respecto a la etiqueta (dist_v={round(dist_v, 3)})"
         else:
             return "WRONG_REGION", 0.00, "Candidato fuera de la ventana espacial permitida"
 
@@ -204,84 +283,118 @@ class SpatialFieldExtractor:
         candidato: Any,
         region_y_max: Optional[float] = None
     ) -> Tuple[float, bool, str]:
-        """Método de compatibilidad retrospectiva para evaluar proximidad espacial."""
-        rel, score, desc = self.calculate_spatial_relation(etiqueta, candidato, region_y_max)
+        """Método de compatibilidad para evaluar proximidad espacial."""
+        rel, score, desc = self.calculate_spatial_relation(etiqueta, candidato)
         es_comp = rel in ["DIRECTLY_BELOW", "DIRECTLY_ABOVE", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
         return score, es_comp, desc
 
-    def extraer_campo_con_layout(
+    def extraer_todos_los_campos(
+        self,
+        lines: List[Any],
+        page_num: int = 1,
+        doc_ai_confidence: float = 0.95
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Extrae todos los campos de la página garantizando:
+          1. Exclusión mutua de tokens entre campos (used_line_indices).
+          2. Clasificación de layout 2D.
+          3. Auditoría completa de candidatos por campo.
+        """
+        if not lines:
+            return {}
+
+        layout_info = document_layout_classifier.clasificar_layout(lines, page_num)
+        etiquetas = self.identificar_etiquetas_espaciales(lines, page_num)
+
+        usados_indices: Set[int] = set()
+        resultados: Dict[str, Dict[str, Any]] = {}
+        evaluaciones_debug: Dict[str, List[Dict[str, Any]]] = {}
+        regiones_2d_debug: Dict[str, Dict[str, float]] = {}
+
+        # Orden de prioridad de extracción espacial: apellidos -> nombres -> identificacion -> resto
+        orden_campos = ["apellidos", "nombres", "identificacion", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
+
+        for campo in orden_campos:
+            res = self._extraer_campo_con_exclusion(
+                campo, lines, etiquetas, layout_info, usados_indices, page_num, doc_ai_confidence
+            )
+            resultados[campo] = res
+            evaluaciones_debug[campo] = res.get("audit_evaluaciones", [])
+            if res.get("region_2d"):
+                regiones_2d_debug[campo] = res["region_2d"]
+
+            if res and res.get("line_index") is not None and res.get("status") == "VALID":
+                usados_indices.add(res["line_index"])
+
+        # Generar artefacto de depuración visual 2D en PNG
+        spatial_visual_debugger.generar_imagen_debug_2d(
+            page_num, lines, etiquetas, evaluaciones_debug, regiones_2d_debug
+        )
+
+        return resultados
+
+    def _extraer_campo_con_exclusion(
         self,
         campo: str,
         lines: List[Any],
+        etiquetas: Dict[str, SpatialCandidate],
+        layout_info: Dict[str, Any],
+        usados_indices: Set[int],
         page_num: int = 1,
         doc_ai_confidence: float = 0.95
     ) -> Dict[str, Any]:
         """
-        Extrae un candidato espacial para un campo aplicando Veto Espacial
-        y Fórmula Centralizada de Scoring (Precisión > Completitud, 0% Diccionario).
+        Extrae un candidato espacial aplicando exclusión mutua de líneas usadas.
         """
-        if not lines:
-            return {
-                "value": None,
-                "confidence": 0.0,
-                "status": "MISSING_DATA",
-                "spatial_relation": "WRONG_REGION",
-                "spatial_score": 0.0,
-                "reason": "Líneas OCR no disponibles",
-                "evidence": ["Sin líneas OCR en página"]
-            }
-
-        etiquetas = self.identificar_etiquetas_espaciales(lines, page_num)
         etiqueta = etiquetas.get(campo)
-
-        # REGLA PRECISIÓN > COMPLETITUD: Si no existe etiqueta explícita, devolver NULL + REVIEW_REQUIRED
         if not etiqueta:
-            logger.warning(f"[SpatialFieldExtractor] Sin etiqueta explícita para campo '{campo}' en pág. {page_num}")
             return {
                 "value": None,
                 "confidence": 0.0,
                 "status": "REVIEW_REQUIRED" if campo in ["nombres", "apellidos", "identificacion"] else "MISSING_DATA",
                 "page": page_num,
-                "source": "google_document_ai",
                 "label": None,
-                "label_bbox": None,
-                "value_bbox": None,
+                "line_index": None,
                 "spatial_relation": "WRONG_REGION",
                 "spatial_score": 0.0,
                 "reason": f"Sin etiqueta explícita para '{campo}' en la página",
-                "evidence": ["Etiqueta no detectada espacialmente"]
+                "audit_evaluaciones": []
             }
 
-        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo en Cédula Amarilla
-        region_y_min = None
-        region_y_max = None
-
-        if campo == "apellidos":
-            # Apellidos se ubica arriba de la etiqueta APELLIDOS
-            if "identificacion" in etiquetas:
-                region_y_min = etiquetas["identificacion"].bbox.y
-            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de APELLIDOS (debajo está nombres)
-
-        elif campo == "nombres":
-            # Nombres se ubica arriba de la etiqueta NOMBRES y por debajo de APELLIDOS
-            if "apellidos" in etiquetas:
-                region_y_min = etiquetas["apellidos"].bbox.y
-            else:
-                region_y_min = max(0.0, etiqueta.bbox.y - 0.15)
-            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de NOMBRES (debajo está firma)
-
-        if not region_y_max:
-            region_y_max = etiqueta.bbox.y + 0.18
-
+        region_2d = self.calcular_region_2d_campo(campo, etiqueta, etiquetas, layout_info)
+        todas_lineas_etiquetas = {et.line_index for et in etiquetas.values()}
         candidates: List[SpatialCandidate] = []
+
         for idx, line in enumerate(lines):
-            txt = getattr(line, "text", "").strip()
-            if not txt or idx == etiqueta.line_index:
+            if idx in usados_indices:
                 continue
 
-            # Filtrar ruidos de encabezado y marcas de agua en nombres y apellidos
+            # Si la línea es la etiqueta de OTRO campo distinto, no evaluarla como candidato
+            if idx in todas_lineas_etiquetas and idx != etiqueta.line_index:
+                continue
+
+            txt = getattr(line, "text", "").strip()
+            if not txt:
+                continue
+
+            # Si el valor está en la misma línea inmediatamente después de la etiqueta (ej: "NOMBRES JUAN CARLOS")
+            if idx == etiqueta.line_index:
+                patron_et = r"\b(FECHA|LUGAR|EXPEDICION|EXPEDICIÓN|APELLIDOS?|NOMBRES?|NUMERO|NÚMERO|IDENTIFICACION|IDENTIFICACIÓN|CEDULA|CÉDULA|NUIP)\b[\s:]*"
+                sub_txt = re.sub(patron_et, "", txt, flags=re.IGNORECASE).strip()
+                if campo in ["nombres", "apellidos"]:
+                    sub_txt = re.sub(r"\b\d+\b", "", sub_txt).strip()
+                    sub_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", sub_txt.upper()).strip()
+                    toks = [t for t in sub_clean.split() if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
+                    sub_txt = " ".join(toks).strip()
+                elif campo in ["fecha_expedicion", "lugar_expedicion"]:
+                    if not re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", sub_txt, re.IGNORECASE):
+                        continue
+                if sub_txt:
+                    bbox_inline = SpatialBoundingBox(etiqueta.bbox.x + (etiqueta.bbox.w * 0.3), etiqueta.bbox.y, etiqueta.bbox.w, etiqueta.bbox.h, page_num)
+                    candidates.append(SpatialCandidate(sub_txt, bbox_inline, doc_ai_confidence, idx))
+                continue
+
             if campo in ["nombres", "apellidos"]:
-                # Si la línea entera contiene encabezado oficial (ej: REPUBLICA DE COLOMBIA, CEDULA DE CIUDADANIA), descartarla por completo
                 if self.NO_NOMBRE_HEADER.search(txt):
                     continue
                 txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
@@ -291,7 +404,6 @@ class SpatialFieldExtractor:
                     continue
                 txt = " ".join(tokens_validos)
 
-            # Filtrar candidatos de fecha/lugar de expedición que no contengan patrón de fecha (ej: firmas de registrador)
             if campo in ["fecha_expedicion", "lugar_expedicion"]:
                 tiene_fecha = bool(re.search(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b|\b\d{2}/\d{2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE))
                 if not tiene_fecha:
@@ -305,90 +417,80 @@ class SpatialFieldExtractor:
             bbox = SpatialBoundingBox(x, y, w, h, page_num)
             candidates.append(SpatialCandidate(txt, bbox, conf, idx))
 
-        if not candidates:
-            return {
-                "value": None,
-                "confidence": 0.0,
-                "status": "REVIEW_REQUIRED",
-                "page": page_num,
-                "source": "google_document_ai",
-                "label": etiqueta.text,
-                "label_bbox": etiqueta.bbox.to_dict(),
-                "value_bbox": None,
-                "spatial_relation": "WRONG_REGION",
-                "spatial_score": 0.0,
-                "reason": f"Sin candidatos válidos de texto dentro de la región de '{etiqueta.text}'",
-                "evidence": ["Candidatos ausentes o descartados por ruido"]
-            }
-
-        # Evaluar relación espacial de candidatos contra la etiqueta
         evaluaciones = []
         for cand in candidates:
-            rel, s_score, desc = self.calculate_spatial_relation(etiqueta.bbox, cand.bbox, region_y_max, region_y_min)
+            rel, s_score, desc = self.calculate_spatial_relation(etiqueta.bbox, cand.bbox, region_2d)
             evaluaciones.append({
                 "candidate": cand,
                 "relation": rel,
                 "spatial_score": s_score,
                 "description": desc,
-                "is_valid": rel in ["DIRECTLY_BELOW", "DIRECTLY_ABOVE", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"]
+                "is_valid": rel in ["DIRECTLY_BELOW", "DIRECTLY_ABOVE", "DIRECTLY_RIGHT", "SAME_ROW", "NEAR"],
+                "is_winner": False
             })
 
         compatibles = [e for e in evaluaciones if e["is_valid"]]
 
         if not compatibles:
-            logger.warning(f"[SpatialVeto] Campo '{campo}': VETO ESPACIAL aplicado a todos los candidatos")
             return {
                 "value": None,
                 "confidence": 0.0,
                 "status": "REVIEW_REQUIRED",
                 "page": page_num,
-                "source": "google_document_ai",
                 "label": etiqueta.text,
-                "label_bbox": etiqueta.bbox.to_dict(),
-                "value_bbox": None,
+                "line_index": None,
                 "spatial_relation": "WRONG_REGION",
                 "spatial_score": 0.0,
-                "reason": f"VETO ESPACIAL: Todos los candidatos quedaron fuera de la región permitida de '{etiqueta.text}'",
-                "evidence": ["VETO ESPACIAL activado"]
+                "reason": f"VETO ESPACIAL 2D: Sin candidatos válidos en la región de '{etiqueta.text}'",
+                "region_2d": region_2d,
+                "audit_evaluaciones": evaluaciones
             }
 
-        # Seleccionar el mejor candidato compatible por score espacial
         compatibles.sort(key=lambda item: item["spatial_score"], reverse=True)
         best = compatibles[0]
+        best["is_winner"] = True
         cand_obj = best["candidate"]
 
-        # Agrupación espacial de nombres/apellidos compuestos en la misma línea
         valor_final = cand_obj.text
-
-        # Limpieza específica para LUGAR_EXPEDICION (eliminar fechas y firmas de registrador)
         if campo == "lugar_expedicion":
-            # Remover patrón de fechas (ej: 15-OCT-2004, 09-DIC-1985)
             valor_final = re.sub(r"\b\d{1,2}-[A-Z]{3}-\d{4}\b", "", valor_final).strip()
-            # Remover palabras del registrador nacional / firmas
             palabras_excluir = {"REGISTRADOR", "NACIONAL", "CARLOS", "ARIEL", "SANCHEZ", "TORRES", "ALMABEATRIZ", "RENGIFO", "LOPEZ", "BEREN", "AMEL", "SANZ", "TAN", "ESTATURA", "SEXO", "RH"}
             toks = [t for t in valor_final.split() if t.upper() not in palabras_excluir and len(t) >= 2]
             valor_final = " ".join(toks).strip()
-        bbox_final = cand_obj.bbox
 
-        # Fórmula de scoring centralizada: Etiqueta 35% + Geometría 40% + Confianza DocAI 15% + Formato 10%
         score_final = (0.35 * 1.0) + (0.40 * best["spatial_score"]) + (0.15 * cand_obj.confidence) + (0.10 * 1.0)
-        status_final = "VALID" if score_final >= 0.85 else "REVIEW_REQUIRED"
+        status_final = "VALID" if score_final >= 0.85 and valor_final else "REVIEW_REQUIRED"
 
         return {
-            "value": valor_final,
+            "value": valor_final if valor_final else None,
             "confidence": round(cand_obj.confidence, 2),
             "score_final": round(score_final, 2),
             "status": status_final,
             "page": page_num,
-            "source": "google_document_ai",
             "label": etiqueta.text,
             "label_bbox": etiqueta.bbox.to_dict(),
-            "value_bbox": bbox_final.to_dict(),
+            "value_bbox": cand_obj.bbox.to_dict(),
+            "line_index": cand_obj.line_index,
             "spatial_relation": best["relation"],
             "spatial_score": best["spatial_score"],
+            "region_2d": region_2d,
             "reason": f"Valor '{valor_final}' extraído ({best['description']})",
-            "evidence": [best["description"]]
+            "audit_evaluaciones": evaluaciones
         }
+
+    def extraer_campo_con_layout(
+        self,
+        campo: str,
+        lines: List[Any],
+        page_num: int = 1,
+        doc_ai_confidence: float = 0.95
+    ) -> Dict[str, Any]:
+        """Método de compatibilidad para extracción individual de un solo campo."""
+        layout_info = document_layout_classifier.clasificar_layout(lines, page_num)
+        etiquetas = self.identificar_etiquetas_espaciales(lines, page_num)
+        return self._extraer_campo_con_exclusion(
+            campo, lines, etiquetas, layout_info, set(), page_num, doc_ai_confidence
+        )
 
 
 spatial_field_extractor = SpatialFieldExtractor()

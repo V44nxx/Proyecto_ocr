@@ -218,7 +218,7 @@ class ExportacionService:
     def exportar_reporte_diferencias(self, db: Session, comparacion_id: str) -> str:
         """
         Exporta el reporte estructurado de diferencias a Excel XLSX.
-        Columnas: Número Documento | Página | Campo | Valor OCR | Valor Correcto Excel | Diferencia | Confianza OCR | Estado | Motivo
+        11 Columnas: Número Documento | Página | Tipo Documento | Campo | Valor OCR | Valor Excel | Diferencia | Confianza OCR | Estado | Motor OCR | Motivo
         """
         from app.models.diferencia import Diferencia
         from app.models.persona import Persona
@@ -228,6 +228,8 @@ class ExportacionService:
         for d in difs:
             p = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion).first()
             pag = p.pagina_numero if p and p.pagina_numero else 1
+            tipo_doc = p.tipo_documento if p and p.tipo_documento else "CEDULA_CIUDADANIA"
+            motor = p.motor_ocr if p and p.motor_ocr else "google_document_ai"
             conf = float(p.confianza_extraccion or 0) if p else 0.0
             est = p.estado_registro if p and p.estado_registro else "REVIEW_REQUIRED"
 
@@ -240,20 +242,22 @@ class ExportacionService:
             datos.append({
                 "Número Documento": d.numero_identificacion,
                 "Página": pag,
+                "Tipo Documento": tipo_doc,
                 "Campo": d.campo,
                 "Valor OCR": d.valor_bd or "",
-                "Valor Correcto Excel": d.valor_excel or "",
+                "Valor Excel": d.valor_excel or "",
                 "Diferencia": d.tipo_diferencia.upper(),
                 "Confianza OCR": conf,
                 "Estado": est,
+                "Motor OCR": motor,
                 "Motivo": motivo,
             })
 
         if not datos:
             datos.append({
-                "Número Documento": "N/A", "Página": "-", "Campo": "-",
-                "Valor OCR": "-", "Valor Correcto Excel": "-", "Diferencia": "SIN DIFERENCIAS",
-                "Confianza OCR": 100.0, "Estado": "VALID", "Motivo": "Todas las coincidencia son perfectas"
+                "Número Documento": "N/A", "Página": "-", "Tipo Documento": "-", "Campo": "-",
+                "Valor OCR": "-", "Valor Excel": "-", "Diferencia": "SIN DIFERENCIAS",
+                "Confianza OCR": 100.0, "Estado": "VALID", "Motor OCR": "-", "Motivo": "Todas las coincidencia son perfectas"
             })
 
         df = pd.DataFrame(datos)

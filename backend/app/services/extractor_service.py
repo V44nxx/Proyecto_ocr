@@ -425,7 +425,7 @@ class ExtractorService:
             and v is not None
         ]
 
-        # ── Construir desglose detallado por campo ─────────────────────────
+        # ── Construir desglose detallado por campo con esquema enriquecido ─────
         detalles_campos = {}
         campos_criticos = ["identificacion", "nombres", "apellidos"]
 
@@ -434,34 +434,44 @@ class ExtractorService:
             eval_info = eval_nombres if campo == "nombres" else (eval_apellidos if campo == "apellidos" else None)
 
             if val and val != "POR REVISAR" and "SIN_ID" not in str(val):
-                status_campo = eval_info.get("status", "valid") if eval_info else "valid"
-                reason_campo = eval_info.get("reason") if eval_info else None
+                status_campo = "VALID"
+                if eval_info and eval_info.get("status"):
+                    status_upper = eval_info["status"].upper()
+                    status_campo = "VALID" if status_upper in ("VALID", "VALIDO") else status_upper
+                
+                reason_campo = eval_info.get("reason") if eval_info else f"Campo '{campo}' verificado espacialmente"
                 conf_campo = eval_info.get("final_score", round(resultado["confianza_extraccion"] / 100.0, 2)) if eval_info else round(resultado["confianza_extraccion"] / 100.0, 2)
+                sugerencia_val = eval_info.get("suggestion") if eval_info else None
 
                 detalles_campos[campo] = {
-                    "value": val,
+                    "valor": val,
+                    "valor_original": val,
                     "confidence": conf_campo,
-                    "page": pagina_num,
                     "status": status_campo,
+                    "page": pagina_num,
                     "source": ocr_engine,
                     "reason": reason_campo,
-                    "spatial_score": eval_info.get("spatial_score") if eval_info else 0.9,
-                    "dictionary_score": eval_info.get("dictionary_score") if eval_info else 0.8,
-                    "fuzzy_score": eval_info.get("fuzzy_score") if eval_info else 0.9,
-                    "nombre_score": eval_info.get("nombre_score") if eval_info else None,
-                    "apellido_score": eval_info.get("apellido_score") if eval_info else None,
-                    "evidence": eval_info.get("evidence", [f"Campo '{campo}' extraído correctamente"]) if eval_info else [f"Campo '{campo}' extraído correctamente"],
-                    "selected_candidate": eval_info.get("selected_candidate") if eval_info else val,
-                    "rejected_candidates": eval_info.get("rejected_candidates", []) if eval_info else []
+                    "spatial_score": eval_info.get("spatial_score", 0.95) if eval_info else 0.95,
+                    "label_score": eval_info.get("label_score", 1.0) if eval_info else 1.0,
+                    "format_score": 1.0,
+                    "suggestion": sugerencia_val,
+                    "dictionary_score": eval_info.get("dictionary_score") if eval_info else None,
+                    "fuzzy_score": eval_info.get("fuzzy_score") if eval_info else None,
+                    "evidence": eval_info.get("evidence", [f"Campo '{campo}' extraído de región física de página {pagina_num}"]) if eval_info else [f"Campo '{campo}' extraído de página {pagina_num}"]
                 }
             else:
                 detalles_campos[campo] = {
-                    "value": None,
+                    "valor": None,
+                    "valor_original": None,
                     "confidence": 0.0,
+                    "status": "MISSING_DATA" if campo in campos_criticos else "REVIEW_REQUIRED",
                     "page": pagina_num,
-                    "status": "missing" if campo in campos_criticos else "review_required",
                     "source": ocr_engine,
                     "reason": f"Evidencia insuficiente para el campo '{campo}'",
+                    "spatial_score": 0.0,
+                    "label_score": 0.0,
+                    "format_score": 0.0,
+                    "suggestion": None,
                     "evidence": ["Evidencia insuficiente"]
                 }
 

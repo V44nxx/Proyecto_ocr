@@ -90,6 +90,8 @@ export default function PersonasPage() {
     );
   });
 
+  const [personaSeleccionada, setPersonaSeleccionada] = useState<Persona | null>(null);
+
   return (
     <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
       <Sidebar />
@@ -106,7 +108,7 @@ export default function PersonasPage() {
             </div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Personas Registradas</h1>
             <p className="text-slate-400 text-sm mt-1">
-              Registro completo e información extraída de cédulas y documentos oficiales.
+              Registro completo con layout espacial, trazabilidad por página e inspección detallada por campo.
             </p>
           </div>
 
@@ -178,6 +180,7 @@ export default function PersonasPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="py-4 px-3 text-center">Pág.</th>
                     <th className="py-4 px-5">Cédula</th>
                     <th className="py-4 px-5">Nombres</th>
                     <th className="py-4 px-5">Apellidos</th>
@@ -192,193 +195,290 @@ export default function PersonasPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-800/40 text-xs font-normal">
-                  {personasFiltradas.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                      {editando === p.id ? (
-                        <>
-                          <td className="py-3 px-5 font-mono text-primary-400 font-bold whitespace-nowrap">
-                            {p.numero_identificacion}
-                          </td>
-                          <td className="py-3 px-3">
-                            <input
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.nombres || ""}
-                              onChange={(e) => setEditForm({ ...editForm, nombres: e.target.value })}
-                            />
-                          </td>
-                          <td className="py-3 px-3">
-                            <input
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.apellidos || ""}
-                              onChange={(e) => setEditForm({ ...editForm, apellidos: e.target.value })}
-                            />
-                          </td>
-                          <td className="py-3 px-3">
-                            <input
-                              type="text"
-                              placeholder="YYYY-MM-DD"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.fecha_nacimiento || ""}
-                              onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })}
-                            />
-                          </td>
-                          <td className="py-3 px-3">
-                            <input
-                              type="text"
-                              placeholder="YYYY-MM-DD"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.fecha_expedicion || ""}
-                              onChange={(e) => setEditForm({ ...editForm, fecha_expedicion: e.target.value })}
-                            />
-                          </td>
-                          <td className="py-3 px-3">
-                            <input
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.lugar_expedicion || ""}
-                              onChange={(e) => setEditForm({ ...editForm, lugar_expedicion: e.target.value })}
-                            />
-                          </td>
-                          <td className="py-3 px-3">
-                            <select
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
-                              value={editForm.sexo || ""}
-                              onChange={(e) => setEditForm({ ...editForm, sexo: e.target.value })}
-                            >
-                              <option value="">-</option>
-                              <option value="MASCULINO">MASCULINO</option>
-                              <option value="FEMENINO">FEMENINO</option>
-                            </select>
-                          </td>
-                          <td colSpan={2} className="text-center text-slate-500">—</td>
-                          <td className="py-3 px-5 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button onClick={() => guardarEdicion(p.id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors">
-                                <Save className="w-4 h-4" />
-                              </button>
-                              <button onClick={() => setEditando(null)} className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="py-4 px-5 font-mono text-primary-400 font-bold whitespace-nowrap">
-                            {p.numero_identificacion}
-                          </td>
-
-                          <td className="py-4 px-5 font-semibold text-slate-100 whitespace-nowrap">
-                            {p.nombres || <span className="text-slate-600 font-normal italic">Sin especificar</span>}
-                          </td>
-
-                          <td className="py-4 px-5 font-semibold text-slate-100 whitespace-nowrap">
-                            {p.apellidos || <span className="text-slate-600 font-normal italic">Sin especificar</span>}
-                          </td>
-
-                          <td className="py-4 px-4 text-slate-300 whitespace-nowrap">
-                            {p.fecha_nacimiento ? (
-                              <span className="flex items-center gap-1.5 text-xs">
-                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                {p.fecha_nacimiento}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4 text-slate-300 whitespace-nowrap">
-                            {p.fecha_expedicion ? (
-                              <span className="flex items-center gap-1.5 text-xs">
-                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                {p.fecha_expedicion}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4 text-slate-300 max-w-[160px] truncate" title={p.lugar_expedicion || undefined}>
-                            {p.lugar_expedicion ? (
-                              <span className="flex items-center gap-1.5 text-xs truncate">
-                                <MapPin className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                                <span className="truncate">{p.lugar_expedicion}</span>
-                              </span>
-                            ) : (
-                              <span className="text-slate-600">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {p.sexo ? (
-                              <span className={`inline-block px-2.5 py-0.5 text-[11px] font-semibold rounded-full ${
-                                p.sexo.toUpperCase().includes("MASCULINO") || p.sexo === "M"
-                                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                                  : "bg-pink-500/10 text-pink-400 border border-pink-500/20"
-                              }`}>
-                                {p.sexo.toUpperCase().includes("MASCULINO") || p.sexo === "M" ? "MASCULINO" : "FEMENINO"}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600">—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4 text-center whitespace-nowrap">
-                            {p.confianza_extraccion != null ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full"
-                                    style={{ width: `${p.confianza_extraccion}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs font-medium text-slate-400">
-                                  {Math.round(Number(p.confianza_extraccion))}%
-                                </span>
+                  {personasFiltradas.map((p) => {
+                    const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
+                        {editando === p.id ? (
+                          <>
+                            <td className="py-3 px-3 text-center text-slate-500">{p.pagina_numero || 1}</td>
+                            <td className="py-3 px-5 font-mono text-primary-400 font-bold whitespace-nowrap">
+                              {p.numero_identificacion}
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.nombres || ""}
+                                onChange={(e) => setEditForm({ ...editForm, nombres: e.target.value })}
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.apellidos || ""}
+                                onChange={(e) => setEditForm({ ...editForm, apellidos: e.target.value })}
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                type="text"
+                                placeholder="YYYY-MM-DD"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.fecha_nacimiento || ""}
+                                onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })}
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                type="text"
+                                placeholder="YYYY-MM-DD"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.fecha_expedicion || ""}
+                                onChange={(e) => setEditForm({ ...editForm, fecha_expedicion: e.target.value })}
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.lugar_expedicion || ""}
+                                onChange={(e) => setEditForm({ ...editForm, lugar_expedicion: e.target.value })}
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <select
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500"
+                                value={editForm.sexo || ""}
+                                onChange={(e) => setEditForm({ ...editForm, sexo: e.target.value })}
+                              >
+                                <option value="">-</option>
+                                <option value="MASCULINO">MASCULINO</option>
+                                <option value="FEMENINO">FEMENINO</option>
+                              </select>
+                            </td>
+                            <td colSpan={2} className="text-center text-slate-500">—</td>
+                            <td className="py-3 px-5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => guardarEdicion(p.id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors">
+                                  <Save className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => setEditando(null)} className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors">
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
-                            ) : (
-                              <span className="text-slate-600">—</span>
-                            )}
-                          </td>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-4 px-3 text-center whitespace-nowrap font-mono text-slate-400 text-[11px]">
+                              Pág. {p.pagina_numero || 1}
+                            </td>
 
-                          <td className="py-4 px-4 text-center whitespace-nowrap">
-                            {p.requiere_revision ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-semibold">
-                                <AlertTriangle className="w-3 h-3" /> Revisión
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold">
-                                <CheckCircle className="w-3 h-3" /> Validado
-                              </span>
-                            )}
-                          </td>
+                            <td className="py-4 px-5 font-mono text-primary-400 font-bold whitespace-nowrap">
+                              {p.numero_identificacion}
+                            </td>
 
-                          <td className="py-4 px-5 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => iniciarEdicion(p)}
-                                title="Editar datos"
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => eliminar(p.id, p.numero_identificacion)}
-                                title="Eliminar registro"
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
+                            <td className="py-4 px-5 font-semibold text-slate-100 whitespace-nowrap">
+                              {p.nombres || <span className="text-slate-600 font-normal italic">Sin especificar</span>}
+                            </td>
+
+                            <td className="py-4 px-5 font-semibold text-slate-100 whitespace-nowrap">
+                              {p.apellidos || <span className="text-slate-600 font-normal italic">Sin especificar</span>}
+                            </td>
+
+                            <td className="py-4 px-4 text-slate-300 whitespace-nowrap">
+                              {p.fecha_nacimiento ? (
+                                <span className="flex items-center gap-1.5 text-xs">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                  {p.fecha_nacimiento}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-4 text-slate-300 whitespace-nowrap">
+                              {p.fecha_expedicion ? (
+                                <span className="flex items-center gap-1.5 text-xs">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                  {p.fecha_expedicion}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-4 text-slate-300 max-w-[160px] truncate" title={p.lugar_expedicion || undefined}>
+                              {p.lugar_expedicion ? (
+                                <span className="flex items-center gap-1.5 text-xs truncate">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                                  <span className="truncate">{p.lugar_expedicion}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {p.sexo ? (
+                                <span className={`inline-block px-2.5 py-0.5 text-[11px] font-semibold rounded-full ${
+                                  p.sexo.toUpperCase().includes("MASCULINO") || p.sexo === "M"
+                                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                    : "bg-pink-500/10 text-pink-400 border border-pink-500/20"
+                                }`}>
+                                  {p.sexo.toUpperCase().includes("MASCULINO") || p.sexo === "M" ? "MASCULINO" : "FEMENINO"}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              {p.confianza_extraccion != null ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full"
+                                      style={{ width: `${p.confianza_extraccion}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-medium text-slate-400">
+                                    {Math.round(Number(p.confianza_extraccion))}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-4 text-center whitespace-nowrap">
+                              {estadoStr === "VALID" ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold">
+                                  <CheckCircle className="w-3 h-3" /> VÁLIDO
+                                </span>
+                              ) : estadoStr === "FALLBACK_TESSERACT" ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-semibold">
+                                  <AlertTriangle className="w-3 h-3" /> TESSERACT
+                                </span>
+                              ) : estadoStr === "MISSING_DATA" ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[11px] font-semibold">
+                                  <AlertTriangle className="w-3 h-3" /> FALTANTES
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-semibold">
+                                  <AlertTriangle className="w-3 h-3" /> REVISAR
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setPersonaSeleccionada(p)}
+                                  title="Inspeccionar detalle por campo"
+                                  className="p-1.5 rounded-lg text-primary-400 hover:bg-primary-500/10 transition-colors"
+                                >
+                                  <ShieldCheck className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => iniciarEdicion(p)}
+                                  title="Editar datos"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => eliminar(p.id, p.numero_identificacion)}
+                                  title="Eliminar registro"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
+
+        {/* Modal de Inspección Detallada por Campo */}
+        {personaSeleccionada && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-primary-400 uppercase tracking-wider">
+                    <UserCheck className="w-4 h-4" /> Inspección Espacial por Campo
+                  </div>
+                  <h2 className="text-xl font-bold text-white mt-1">
+                    Cédula {personaSeleccionada.numero_identificacion}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setPersonaSeleccionada(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block mb-1">Página PDF</span>
+                  <span className="font-mono text-white font-bold">Pág. {personaSeleccionada.pagina_numero || 1}</span>
+                </div>
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 block mb-1">Motor OCR</span>
+                  <span className="font-mono text-primary-400 font-bold">{personaSeleccionada.motor_ocr || "google_document_ai"}</span>
+                </div>
+              </div>
+
+              {/* Desglose por campo */}
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Desglose de Confianza por Campo</h3>
+                {["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"].map((campoKey) => {
+                  const detalle = personaSeleccionada.detalles_campos?.[campoKey];
+                  const val = (personaSeleccionada as any)[campoKey] || detalle?.value || null;
+                  const confPct = Math.round((detalle?.confidence || (personaSeleccionada.confianza_extraccion ? Number(personaSeleccionada.confianza_extraccion) / 100 : 0.85)) * 100);
+                  const status = val ? "valid" : "review_required";
+
+                  return (
+                    <div key={campoKey} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800/80">
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">{campoKey.replace("_", " ")}</span>
+                        <div className="text-xs font-semibold text-slate-100 mt-0.5">
+                          {val || <span className="text-amber-400 italic">No detectado</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
+                          status === "valid" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        }`}>
+                          {status === "valid" ? `${confPct}% VALID` : "REVISAR"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => setPersonaSeleccionada(null)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs rounded-xl transition-all"
+                >
+                  Cerrar Inspección
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

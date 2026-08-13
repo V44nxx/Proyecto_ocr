@@ -90,8 +90,13 @@ class PersonaUpdate(BaseModel):
 class PersonaResponse(PersonaBase):
     id: uuid.UUID
     documento_id: Optional[uuid.UUID]
+    pagina_numero: Optional[int] = None
+    tipo_documento: Optional[str] = "CEDULA_CIUDADANIA"
+    estado_registro: Optional[str] = "VALID"
+    motor_ocr: Optional[str] = "google_document_ai"
     confianza_extraccion: Optional[Decimal]
     requiere_revision: bool
+    detalles_campos: Optional[dict] = None
     fecha_registro: datetime
     fecha_actualizacion: datetime
 

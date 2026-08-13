@@ -49,3 +49,26 @@ def exportar_xlsx(
     except Exception as e:
         logger.error(f"Error en exportación: {e}")
         raise HTTPException(status_code=500, detail=f"Error generando exportación: {str(e)}")
+
+
+@router.get("/diferencias/{comparacion_id}", summary="Exportar reporte de diferencias a Excel")
+def exportar_diferencias_xlsx(
+    comparacion_id: str,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    try:
+        ruta_archivo = exportacion_service.exportar_reporte_diferencias(db, comparacion_id)
+        if not Path(ruta_archivo).exists():
+            raise HTTPException(status_code=500, detail="Error generando reporte de diferencias")
+
+        nombre_descarga = Path(ruta_archivo).name
+        return FileResponse(
+            path=ruta_archivo,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=nombre_descarga,
+            headers={"Content-Disposition": f"attachment; filename={nombre_descarga}"}
+        )
+    except Exception as e:
+        logger.error(f"Error exportando diferencias: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

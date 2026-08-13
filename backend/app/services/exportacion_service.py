@@ -215,8 +215,53 @@ class ExportacionService:
         ws["B3"] = total_filas
         ws["A4"] = "Fecha de exportación"
         ws["B4"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-        ws.column_dimensions["A"].width = 35
-        ws.column_dimensions["B"].width = 20
+    def exportar_reporte_diferencias(self, db: Session, comparacion_id: str) -> str:
+        """
+        Exporta el reporte estructurado de diferencias a Excel XLSX.
+        Columnas: Número Documento | Página | Campo | Valor OCR | Valor Correcto Excel | Diferencia | Confianza OCR | Estado | Motivo
+        """
+        from app.models.diferencia import Diferencia
+        from app.models.persona import Persona
+
+        difs = db.query(Diferencia).filter(Diferencia.comparacion_id == comparacion_id).all()
+        datos = []
+        for d in difs:
+            p = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion).first()
+            pag = p.pagina_numero if p and p.pagina_numero else 1
+            conf = float(p.confianza_extraccion or 0) if p else 0.0
+            est = p.estado_registro if p and p.estado_registro else "REVIEW_REQUIRED"
+
+            motivo = "Los valores no coinciden"
+            if d.tipo_diferencia == "faltante_bd":
+                motivo = "Registro presente en Excel pero ausente en BD"
+            elif d.tipo_diferencia == "nuevo_bd":
+                motivo = "Registro presente en BD pero ausente en Excel"
+
+            datos.append({
+                "Número Documento": d.numero_identificacion,
+                "Página": pag,
+                "Campo": d.campo,
+                "Valor OCR": d.valor_bd or "",
+                "Valor Correcto Excel": d.valor_excel or "",
+                "Diferencia": d.tipo_diferencia.upper(),
+                "Confianza OCR": conf,
+                "Estado": est,
+                "Motivo": motivo,
+            })
+
+        if not datos:
+            datos.append({
+                "Número Documento": "N/A", "Página": "-", "Campo": "-",
+                "Valor OCR": "-", "Valor Correcto Excel": "-", "Diferencia": "SIN DIFERENCIAS",
+                "Confianza OCR": 100.0, "Estado": "VALID", "Motivo": "Todas las coincidencia son perfectas"
+            })
+
+        df = pd.DataFrame(datos)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nombre_archivo = f"reporte_diferencias_{timestamp}.xlsx"
+        ruta_archivo = settings.export_path / nombre_archivo
+        df.to_excel(str(ruta_archivo), index=False, engine="openpyxl")
+        return str(ruta_archivo)
 
 
 exportacion_service = ExportacionService()

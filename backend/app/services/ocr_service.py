@@ -100,32 +100,34 @@ class OCRService:
                     )
                     pix = pagina.get_pixmap(dpi=300)
                     img_np = self.image_processor._pixmap_to_numpy(pix)
-                    # v3: _ocr_imagen() intenta Google Document AI primero,
-                    # luego Tesseract como fallback si falla
-                    texto_pagina, motor_usado = self._ocr_imagen(
+                    texto_pagina, motor_usado, layout_estructurado = self._ocr_imagen(
                         img_np=img_np, pagina_num=i + 1
                     )
                 else:
                     texto_pagina = texto_nativo
                     motor_usado = "texto_nativo_pdf"
+                    layout_estructurado = None
 
                 logger.info(
                     f"Página {i+1}: {len(texto_pagina)} chars extraídos "
                     f"[motor: {motor_usado}]"
                 )
 
-                # ── Extracción estructurada de campos ─────────────────────
-                # FIX: se usa ExtractorService (antes _extraer_campos_basicos
-                # nunca llamaba a self.parser.extraer())
-                datos_extraidos = self.parser.extraer(texto_pagina)
+                # ── Extracción estructurada de campos con layout ──────────
+                datos_extraidos = self.parser.extraer(
+                    texto_pagina,
+                    layout_data=layout_estructurado,
+                    pagina_num=i + 1,
+                    ocr_engine=motor_usado
+                )
 
                 confianza = datos_extraidos.get("confianza_extraccion", 0.0)
                 confianzas.append(confianza)
 
-                # Guardar persona en BD con confianza real
+                # Guardar persona en BD con metadatos completos y trazabilidad de página
                 persona = self._guardar_persona(
                     datos_extraidos, texto_pagina, documento_id, db,
-                    ocr_engine=motor_usado
+                    ocr_engine=motor_usado, pagina_num=i + 1
                 )
                 if persona:
                     personas_guardadas.append(persona)
@@ -221,27 +223,38 @@ class OCRService:
         Returns:
             Tupla (texto: str, motor: str)
         """
+    def _ocr_imagen(
+        self, img_np, pagina_num: int = 0
+    ) -> tuple:
+        """
+        Motor OCR de imagen con dos niveles:
+        Nivel 1 — Google Document AI (principal con layout estructurado)
+        Nivel 2 — Tesseract (fallback etiquetado)
+
+        Returns:
+            Tupla (texto: str, motor: str, res_estructurado: Optional[StructuredDocumentAIResult])
+        """
         # ── Nivel 1: Google Document AI ──────────────────────────────────
         if google_document_ai_service.disponible:
             try:
                 import cv2
-                # Convertir imagen numpy (BGR/gris) a bytes PNG para la API
                 success, img_encoded = cv2.imencode(".png", img_np)
                 if not success:
                     raise ValueError("No se pudo codificar la imagen a PNG")
                 img_bytes = img_encoded.tobytes()
 
-                texto, tiempo_ms = google_document_ai_service.procesar_imagen(
-                    img_bytes, mime_type="image/png"
+                res_estructurado = google_document_ai_service.procesar_documento_estructurado(
+                    img_bytes, mime_type="image/png", pagina_num_base=pagina_num
                 )
+                texto = res_estructurado.text
 
                 if texto and texto.strip():
                     palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
                     logger.info(
                         f"[DocAI] Página {pagina_num}: Google Document AI exitoso "
-                        f"({len(texto)} chars, {len(palabras)} palabras, {tiempo_ms}ms)"
+                        f"({len(texto)} chars, {len(palabras)} palabras, {res_estructurado.tiempo_ms}ms)"
                     )
-                    return texto, "google_document_ai"
+                    return texto, "google_document_ai", res_estructurado
                 else:
                     logger.warning(
                         f"[DocAI] Página {pagina_num}: Google Document AI devolvió "
@@ -262,7 +275,7 @@ class OCRService:
         # ── Nivel 2: Tesseract (fallback) ────────────────────────────────
         img_procesada = self.image_processor.preprocess(img_np)
         texto = self._ocr_con_tesseract(img_procesada, pagina_num=pagina_num)
-        return texto, "tesseract_fallback"
+        return texto, "tesseract_fallback", None
 
     # ──────────────────────────────────────────
     # OCR CON TESSERACT — CONFIGURACIÓN ÓPTIMA
@@ -273,14 +286,6 @@ class OCRService:
     ) -> str:
         """
         OCR con Tesseract 5 optimizado para cédulas colombianas.
-
-        Configuración primaria:
-          --oem 3  → LSTM + Legacy (mejor precisión combinada)
-          --psm 6  → Bloque de texto uniforme (formato cédula)
-          -l spa   → Modelo de idioma español
-
-        Fallback:
-          --psm 11 → Texto disperso (si psm 6 da texto pobre)
         """
         try:
             import pytesseract
@@ -289,14 +294,12 @@ class OCRService:
             if os.path.exists(tess_path):
                 pytesseract.pytesseract.tesseract_cmd = tess_path
 
-            # Configuración para documentos de identidad colombianos
             config_psm6 = "--oem 3 --psm 6"
 
             texto = pytesseract.image_to_string(
                 img_procesada, lang="spa", config=config_psm6
             )
 
-            # Fallback a psm 11 si el resultado es pobre
             palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
             if len(palabras) < 4:
                 logger.warning(
@@ -327,17 +330,10 @@ class OCRService:
         documento_id: str,
         db: Session,
         ocr_engine: str = "desconocido",
+        pagina_num: int = 1,
     ) -> Optional[Dict[str, Any]]:
         """
         Guarda o actualiza la persona en la BD.
-
-        FIX: confianza real del ExtractorService (antes siempre 95.0).
-        FIX: texto_ocr_crudo guardado (antes nunca se persistía).
-        FIX: requiere_revision basado en confianza real + campos críticos ausentes.
-
-        El campo datos viene de ExtractorService.extraer() que usa claves:
-          'identificacion', 'nombres', 'apellidos', 'fecha_nacimiento',
-          'fecha_expedicion', 'lugar_expedicion', 'sexo', 'confianza_extraccion'
         """
         try:
             from app.models.persona import Persona
@@ -345,20 +341,17 @@ class OCRService:
             from datetime import datetime
             import uuid
 
-            # ── Mapear campos desde ExtractorService ──────────────────────
             raw_id = datos.get("identificacion")
             nombres_val = datos.get("nombres")
             apellidos_val = datos.get("apellidos")
             confianza = float(datos.get("confianza_extraccion") or 0.0)
 
-            # Omitir paginas vacías o de reverso sin identificación ni nombres
             if not raw_id and not nombres_val and not apellidos_val and confianza < 25.0:
                 logger.info("Página sin datos de identificación ni nombres — omitiendo registro vacío")
                 return None
 
             num_doc = raw_id or f"SIN_ID_{str(uuid.uuid4())[:8]}"
 
-            # ── Validar documento padre ───────────────────────────────────
             doc_exists = (
                 db.query(Documento).filter(Documento.id == documento_id).first()
                 if documento_id
@@ -366,7 +359,6 @@ class OCRService:
             )
             doc_id_val = str(doc_exists.id) if doc_exists else None
 
-            # ── Parsear fechas con el validador robusto ───────────────────
             from app.utils.validators import validador
 
             fecha_nac = None
@@ -377,7 +369,7 @@ class OCRService:
             if datos.get("fecha_expedicion"):
                 fecha_exp = validador.parsear_fecha(datos["fecha_expedicion"])
 
-            # ── Determinar si requiere revisión manual ────────────────────
+            # ── Determinar estado del registro y si requiere revisión manual ─
             umbral_confianza = settings.OCR_CONFIDENCE_THRESHOLD * 100
             requiere_revision = (
                 confianza < umbral_confianza
@@ -386,7 +378,13 @@ class OCRService:
                 or "SIN_ID" in str(num_doc)
             )
 
-            # ── Buscar si ya existe la persona ────────────────────────────
+            if ocr_engine == "tesseract_fallback":
+                estado_reg = "FALLBACK_TESSERACT"
+            elif requiere_revision:
+                estado_reg = "REVIEW_REQUIRED"
+            else:
+                estado_reg = "VALID"
+
             persona = (
                 db.query(Persona)
                 .filter(Persona.numero_identificacion == str(num_doc))
@@ -403,13 +401,17 @@ class OCRService:
                     fecha_expedicion=fecha_exp,
                     lugar_expedicion=datos.get("lugar_expedicion"),
                     sexo=datos.get("sexo"),
-                    confianza_extraccion=confianza,       # FIX: confianza real
-                    requiere_revision=requiere_revision,  # FIX: basada en confianza
-                    texto_ocr_crudo=(texto_ocr or "")[:5000],  # FIX: ahora se guarda
+                    pagina_numero=pagina_num,
+                    tipo_documento=datos.get("tipo_documento", "CEDULA_CIUDADANIA"),
+                    estado_registro=estado_reg,
+                    motor_ocr=ocr_engine,
+                    confianza_extraccion=confianza,
+                    requiere_revision=requiere_revision,
+                    detalles_campos=datos.get("detalles_campos"),
+                    texto_ocr_crudo=(texto_ocr or "")[:5000],
                 )
                 db.add(persona)
             else:
-                # Actualizar solo campos con valores más completos
                 if doc_id_val:
                     persona.documento_id = doc_id_val
                 if datos.get("nombres") and datos["nombres"] != "POR REVISAR":
@@ -424,10 +426,15 @@ class OCRService:
                     persona.lugar_expedicion = datos["lugar_expedicion"]
                 if datos.get("sexo"):
                     persona.sexo = datos["sexo"]
-                # Actualizar confianza solo si la nueva es mayor
+                persona.pagina_numero = pagina_num
+                persona.tipo_documento = datos.get("tipo_documento", persona.tipo_documento)
+                persona.detalles_campos = datos.get("detalles_campos", persona.detalles_campos)
+
                 if confianza > float(persona.confianza_extraccion or 0):
                     persona.confianza_extraccion = confianza
                     persona.requiere_revision = requiere_revision
+                    persona.estado_registro = estado_reg
+                    persona.motor_ocr = ocr_engine
                 if texto_ocr:
                     persona.texto_ocr_crudo = texto_ocr[:5000]
 
@@ -441,8 +448,11 @@ class OCRService:
                 "apellidos": persona.apellidos,
                 "confianza_extraccion": float(persona.confianza_extraccion or 0),
                 "requiere_revision": persona.requiere_revision,
-                # Campo adicional informativo (no rompe el frontend)
-                "ocr_engine": ocr_engine,
+                "pagina_numero": persona.pagina_numero,
+                "tipo_documento": persona.tipo_documento,
+                "estado_registro": persona.estado_registro,
+                "motor_ocr": persona.motor_ocr,
+                "detalles_campos": persona.detalles_campos,
             }
 
         except Exception as e:

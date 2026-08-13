@@ -1,7 +1,7 @@
 """Modelo SQLAlchemy: Persona"""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Date, DateTime, Numeric, Boolean, Text, ForeignKey
+from sqlalchemy import Column, String, Date, DateTime, Numeric, Boolean, Text, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -22,10 +22,15 @@ class Persona(Base):
     lugar_expedicion = Column(String(200), nullable=True)
     sexo = Column(String(10), nullable=True)
 
-    # Control de calidad
+    # Control de calidad y metadatos espaciales
+    pagina_numero = Column(Integer, nullable=True)
+    tipo_documento = Column(String(50), nullable=True, default="CEDULA_CIUDADANIA")
+    estado_registro = Column(String(30), nullable=True, default="VALID")
+    motor_ocr = Column(String(50), nullable=True, default="google_document_ai")
     confianza_extraccion = Column(Numeric(5, 2), nullable=True)
     requiere_revision = Column(Boolean, default=False)
     campos_revisados = Column(JSONB, default=list)
+    detalles_campos = Column(JSONB, nullable=True)
     texto_ocr_crudo = Column(Text, nullable=True)
 
     # Timestamps

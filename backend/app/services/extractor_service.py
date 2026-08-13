@@ -195,23 +195,88 @@ class ExtractorService:
     # ──────────────────────────────────────────
     # MÉTODO PRINCIPAL DE EXTRACCIÓN
     # ──────────────────────────────────────────
-    def extraer(self, texto_ocr: str, scores_confianza: List[float] = None) -> Dict[str, Any]:
+    def detectar_tipo_documento(self, texto: str) -> str:
+        """Determina si el texto corresponde a Cédula de Ciudadanía, Tarjeta de Identidad o Desconocido."""
+        if not texto:
+            return "UNKNOWN"
+        texto_up = texto.upper()
+        if re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP)\b", texto_up):
+            return "CEDULA_CIUDADANIA"
+        elif re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD)\b", texto_up):
+            return "TARJETA_IDENTIDAD"
+        else:
+            return "UNKNOWN"
+
+    def _extraer_por_layout_espacial(self, layout_pages: List[Any]) -> Dict[str, Any]:
+        """
+        Extrae candidatos por proximidad espacial entre etiquetas y valores en el layout.
+        """
+        if not layout_pages:
+            return {}
+
+        page_data = layout_pages[0]
+        lines = getattr(page_data, "lines", [])
+        if not lines:
+            return {}
+
+        labels_map = {
+            "identificacion": [r"NUIP", r"NUMERO", r"CEDULA", r"CIUDADANIA", r"IDENTIFICACION"],
+            "nombres": [r"NOMBRES", r"NOMBRE"],
+            "apellidos": [r"APELLIDOS", r"APELLIDO"],
+            "fecha_nacimiento": [r"FECHA DE NACIMIENTO", r"NACIMIENTO"],
+            "fecha_expedicion": [r"FECHA Y LUGAR DE EXPEDICION", r"FECHA DE EXPEDICION", r"EXPEDICION"],
+            "lugar_expedicion": [r"FECHA Y LUGAR DE EXPEDICION", r"LUGAR DE EXPEDICION", r"LUGAR EXPEDICION"],
+            "sexo": [r"SEXO", r"GENERO"]
+        }
+
+        found_labels = {}
+        for line in lines:
+            txt_up = getattr(line, "text", "").upper().strip()
+            for key, patterns in labels_map.items():
+                if key not in found_labels:
+                    for pat in patterns:
+                        if re.search(rf"\b{pat}\b", txt_up):
+                            found_labels[key] = line
+                            break
+
+        spatial_candidates = {}
+        for key, label_line in found_labels.items():
+            lx, ly, lw, lh = getattr(label_line, "x", 0), getattr(label_line, "y", 0), getattr(label_line, "w", 0), getattr(label_line, "h", 0)
+            candidates = []
+            for cand_line in lines:
+                if cand_line == label_line:
+                    continue
+                cx, cy = getattr(cand_line, "x", 0), getattr(cand_line, "y", 0)
+                is_right = abs(cy - ly) <= lh * 1.5 and cx >= lx + (lw * 0.2)
+                is_below = cy > ly and cy <= ly + lh * 3.5 and abs(cx - lx) <= lw * 2.0
+                if is_right or is_below:
+                    candidates.append((getattr(cand_line, "text", ""), getattr(cand_line, "confidence", 0.9)))
+
+            if candidates:
+                spatial_candidates[key] = candidates[0]
+
+        return spatial_candidates
+
+    # ──────────────────────────────────────────
+    # MÉTODO PRINCIPAL DE EXTRACCIÓN
+    # ──────────────────────────────────────────
+    def extraer(
+        self,
+        texto_ocr: str,
+        scores_confianza: List[float] = None,
+        layout_data: Any = None,
+        pagina_num: int = 1,
+        ocr_engine: str = "google_document_ai"
+    ) -> Dict[str, Any]:
         """
         Extrae todos los campos de un texto OCR de documento colombiano.
-
-        Returns:
-            Dict con:
-              identificacion, nombres, apellidos,
-              fecha_nacimiento, fecha_expedicion,
-              lugar_expedicion, sexo,
-              confianza_extraccion (float 0-100),
-              campos_encontrados (list[str]),
-              errores (list[str])
         """
-        logger.info("Iniciando extracción inteligente de campos")
+        logger.info(f"Iniciando extracción inteligente de campos (página {pagina_num})")
 
         texto = self._normalizar_texto(texto_ocr)
         lineas = [l.strip() for l in texto.split("\n") if l.strip()]
+
+        tipo_doc = self.detectar_tipo_documento(texto)
 
         resultado = {
             "identificacion": None,
@@ -223,17 +288,40 @@ class ExtractorService:
             "sexo": None,
             "confianza_extraccion": 0.0,
             "campos_encontrados": [],
+            "tipo_documento": tipo_doc,
+            "detalles_campos": {},
             "errores": [],
         }
 
-        # ── Estrategia 0: MRZ (más preciso cuando existe) ─────────────────
+        # Si el tipo de documento es desconocido, no forzar extracciones erróneas
+        if tipo_doc == "UNKNOWN" and len(texto) < 30:
+            resultado["confianza_extraccion"] = 0.0
+            detalles_campos = {}
+            for campo in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
+                detalles_campos[campo] = {
+                    "value": None, "confidence": 0.0, "page": pagina_num,
+                    "status": "missing", "source": ocr_engine,
+                    "reason": "Tipo de documento no identificado o texto insuficiente"
+                }
+            resultado["detalles_campos"] = detalles_campos
+            return resultado
+
+        # ── Estrategia 0: Extracción por Layout Espacial (si se provee) ────
+        if layout_data and hasattr(layout_data, "pages"):
+            cand_espaciales = self._extraer_por_layout_espacial(layout_data.pages)
+            if cand_espaciales.get("nombres") and not resultado["nombres"]:
+                resultado["nombres"] = cand_espaciales["nombres"][0]
+            if cand_espaciales.get("apellidos") and not resultado["apellidos"]:
+                resultado["apellidos"] = cand_espaciales["apellidos"][0]
+
+        # ── Estrategia 1: MRZ ─────────────────────────────────────────────
         datos_mrz = self._extraer_mrz(texto, lineas)
         if datos_mrz:
             for k, v in datos_mrz.items():
                 if v and not resultado.get(k):
                     resultado[k] = v
 
-        # ── Estrategia 1: Por keywords ────────────────────────────────────
+        # ── Estrategia 2: Por keywords y reglas de negocio ────────────────
         if not resultado["identificacion"]:
             resultado["identificacion"] = self._extraer_identificacion(texto, lineas)
         if not resultado["nombres"]:
@@ -257,7 +345,7 @@ class ExtractorService:
         if not resultado["sexo"]:
             resultado["sexo"] = self._extraer_sexo(texto, lineas)
 
-        # ── Estrategia especial: cédula nueva (DDMMMYYYY + fecha,lugar) ────
+        # Cédula nueva
         if not resultado["fecha_nacimiento"]:
             resultado["fecha_nacimiento"] = self._extraer_fecha_nueva_cedula(
                 texto, lineas, self.KEYWORDS_FECHA_NAC
@@ -268,11 +356,10 @@ class ExtractorService:
                 resultado["fecha_expedicion"] = fexp
             if not resultado["lugar_expedicion"] and lugar:
                 resultado["lugar_expedicion"] = lugar
-        # Apellidos sin label: línea antes de "Nombres"
+
         if not resultado["apellidos"]:
             resultado["apellidos"] = self._extraer_apellido_antes_nombres(lineas)
 
-        # ── Estrategia 3: Clasificación inteligente por diccionario ────────
         if not resultado["nombres"] or not resultado["apellidos"]:
             nom_clas, ape_clas = self._extraer_nombres_por_clasificacion(lineas)
             if not resultado["nombres"] and nom_clas:
@@ -280,10 +367,9 @@ class ExtractorService:
             if not resultado["apellidos"] and ape_clas:
                 resultado["apellidos"] = ape_clas
 
-        # ── Corrección de nombres / apellidos invertidos por layout ───────
         self._corregir_nombres_apellidos_invertidos(resultado)
 
-        # ── Fallback de fechas cronológico si faltan nac/exp ───────────────
+        # Chronological dates fallback
         if not resultado["fecha_nacimiento"] or not resultado["fecha_expedicion"]:
             fechas_encontradas = []
             for match in re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", texto, re.IGNORECASE):
@@ -292,7 +378,6 @@ class ExtractorService:
                     fechas_encontradas.append(f_obj)
 
             fechas_encontradas.sort()
-
             if len(fechas_encontradas) >= 2:
                 if not resultado["fecha_nacimiento"]:
                     resultado["fecha_nacimiento"] = fechas_encontradas[0].isoformat()
@@ -305,16 +390,43 @@ class ExtractorService:
                 elif f_unica.year > 2010 and not resultado["fecha_expedicion"]:
                     resultado["fecha_expedicion"] = f_unica.isoformat()
 
-        # ── Calcular confianza ────────────────────────────────────────────
+        # Calcular confianza
         resultado["confianza_extraccion"] = self._calcular_confianza(
             resultado, scores_confianza
         )
 
         resultado["campos_encontrados"] = [
             k for k, v in resultado.items()
-            if k not in ["confianza_extraccion", "campos_encontrados", "errores"]
+            if k not in ["confianza_extraccion", "campos_encontrados", "errores", "detalles_campos", "tipo_documento"]
             and v is not None
         ]
+
+        # ── Construir desglose detallado por campo ─────────────────────────
+        detalles_campos = {}
+        campos_criticos = ["identificacion", "nombres", "apellidos"]
+
+        for campo in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
+            val = resultado.get(campo)
+            if val and val != "POR REVISAR" and "SIN_ID" not in str(val):
+                detalles_campos[campo] = {
+                    "value": val,
+                    "confidence": round(resultado["confianza_extraccion"] / 100.0, 2),
+                    "page": pagina_num,
+                    "status": "valid",
+                    "source": ocr_engine,
+                    "reason": None
+                }
+            else:
+                detalles_campos[campo] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "page": pagina_num,
+                    "status": "missing" if campo in campos_criticos else "review_required",
+                    "source": ocr_engine,
+                    "reason": f"Evidencia insuficiente para el campo '{campo}'"
+                }
+
+        resultado["detalles_campos"] = detalles_campos
 
         logger.info(
             f"Extracción completada. "

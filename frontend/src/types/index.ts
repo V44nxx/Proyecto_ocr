@@ -32,6 +32,10 @@ export interface Documento {
 export interface Persona {
   id: string;
   documento_id: string | null;
+  pagina_numero?: number | null;
+  tipo_documento?: string | null;
+  estado_registro?: string | null;
+  motor_ocr?: string | null;
   numero_identificacion: string;
   nombres: string | null;
   apellidos: string | null;
@@ -41,6 +45,7 @@ export interface Persona {
   sexo: string | null;
   confianza_extraccion: number | null;
   requiere_revision: boolean;
+  detalles_campos?: Record<string, { value: string | null; confidence: number; page: number; status: string; source: string; reason: string | null }> | null;
   fecha_registro: string;
   fecha_actualizacion: string;
 }

@@ -117,6 +117,18 @@ class ComparacionService:
             logger.error(f"Error cargando Excel: {e}")
             raise
 
+    def _normalizar_para_comparacion(self, val: Any) -> str:
+        if val is None or pd.isna(val):
+            return ""
+        s = str(val).strip().upper()
+        if s in ("NAN", "NONE", "NULL"):
+            return ""
+        repl = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U"}
+        for k, v in repl.items():
+            s = s.replace(k, v)
+        s = re.sub(r"\s+", " ", s)
+        return s
+
     def ejecutar_comparacion(
         self,
         comparacion_id: str,
@@ -149,12 +161,15 @@ class ComparacionService:
             personas_bd = db.query(Persona).all()
             df_bd = pd.DataFrame([{
                 "numero_identificacion": p.numero_identificacion,
-                "nombres": (p.nombres or "").upper(),
-                "apellidos": (p.apellidos or "").upper(),
+                "nombres": p.nombres or "",
+                "apellidos": p.apellidos or "",
                 "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
                 "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else "",
-                "lugar_expedicion": (p.lugar_expedicion or "").upper(),
-                "sexo": (p.sexo or "").upper(),
+                "lugar_expedicion": p.lugar_expedicion or "",
+                "sexo": p.sexo or "",
+                "pagina_numero": p.pagina_numero or 1,
+                "confianza_extraccion": float(p.confianza_extraccion or 0.0),
+                "estado_registro": p.estado_registro or "VALID",
             } for p in personas_bd])
 
             resultado["total_registros_bd"] = len(df_bd)
@@ -201,7 +216,7 @@ class ComparacionService:
                         tipo_diferencia="nuevo_bd",
                     ))
 
-                # Comparar campos de registros comunes
+                # Comparar campos de registros comunes con normalización
                 total_iguales = 0
                 total_diferentes = 0
 
@@ -211,17 +226,17 @@ class ComparacionService:
 
                     tiene_diferencias = False
                     for campo in self.CAMPOS_COMPARACION:
-                        val_bd = str(row_bd.get(campo, "")).strip().upper()
-                        val_excel = str(row_excel.get(campo, "")).strip().upper()
+                        val_bd_norm = self._normalizar_para_comparacion(row_bd.get(campo))
+                        val_excel_norm = self._normalizar_para_comparacion(row_excel.get(campo))
 
-                        if val_bd != val_excel and not (val_bd == "" and val_excel == "NAN"):
+                        if val_bd_norm != val_excel_norm:
                             tiene_diferencias = True
                             diferencias_a_guardar.append(Diferencia(
                                 comparacion_id=comparacion_id,
                                 numero_identificacion=id_comun,
                                 campo=campo,
-                                valor_bd=val_bd or None,
-                                valor_excel=val_excel if val_excel != "NAN" else None,
+                                valor_bd=row_bd.get(campo) or None,
+                                valor_excel=row_excel.get(campo) or None,
                                 tipo_diferencia="diferente",
                             ))
 

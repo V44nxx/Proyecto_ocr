@@ -8,7 +8,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,12 +16,10 @@ from app.schemas.usuario import (
     LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData
 )
 from app.config import settings
+import bcrypt
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
-
-# Contexto de hashing de contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
@@ -32,11 +29,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 # UTILIDADES JWT
 # ──────────────────────────────────────────
 def crear_hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verificar_password(password_plano: str, hash_guardado: str) -> bool:
-    return pwd_context.verify(password_plano, hash_guardado)
+    try:
+        return bcrypt.checkpw(
+            password_plano.encode("utf-8"),
+            hash_guardado.encode("utf-8")
+        )
+    except Exception:
+        return False
 
 
 def crear_token_acceso(data: dict) -> str:

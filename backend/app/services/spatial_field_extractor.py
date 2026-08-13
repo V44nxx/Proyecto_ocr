@@ -85,36 +85,36 @@ class SpatialFieldExtractor:
 
     ETIQUETAS_MAP = {
         "identificacion": [
-            r"\bNUIP\b", r"\bNUMER[O0]?\b", r"\bNÚMER[O0]?\b", r"\bCEDULA\b", r"\bCÉDULA\b",
-            r"\bIDENTIFICA[CI1Ó0]+N\b", r"\bNO\.\b"
+            r"NUIP", r"NUMER[O0]?", r"NÚMER[O0]?", r"CEDULA", r"CÉDULA",
+            r"IDENTIFICA[CI1Ó0]+N", r"NO\."
         ],
         "apellidos": [
-            r"\bAPELL[I10]+D[O0]?S?\b", r"\bPRIMER\s+APELL[I10]+D[O0]?\b", r"\bSEGUNDO\s+APELL[I10]+D[O0]?\b", r"\bSURNAMES?\b"
+            r"APELL[I10]+D[O0]?S?", r"PRIMER\s+APELL[I10]+D[O0]?", r"SEGUNDO\s+APELL[I10]+D[O0]?", r"SURNAMES?"
         ],
         "nombres": [
-            r"\bN[O0]?MBRES?\b", r"\bPRIMER\s+N[O0]?MBRE\b", r"\bSEGUNDO\s+N[O0]?MBRE\b", r"\bGIVEN\s+NAMES?\b"
+            r"N[O0]?MBRES?", r"PRIMER\s+N[O0]?MBRE", r"SEGUNDO\s+N[O0]?MBRE", r"GIVEN\s+NAMES?"
         ],
         "fecha_nacimiento": [
-            r"\bFECHA\s+DE\s+NAC[I1]M[I1]ENT[O0]?\b", r"\bNAC[I1]M[I1]ENT[O0]?\b", r"\bDATE\s+OF\s+B[I1]RTH\b"
+            r"FECHA\s+DE\s+NAC[I1]M[I1]ENT[O0]?", r"NAC[I1]M[I1]ENT[O0]?", r"DATE\s+OF\s+B[I1]RTH"
         ],
         "fecha_expedicion": [
-            r"\bFECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?N\b", r"\bFECHA\s+DE\s+EXPED[I1]C[I1][O0]?N\b",
-            r"\bEXPED[I1]C[I1][O0]?N\b"
+            r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"FECHA\s+DE\s+EXPED[I1]C[I1][O0]?",
+            r"EXPED[I1]C[I1][O0]?"
         ],
         "lugar_expedicion": [
-            r"\bLUGAR\s+DE\s+EXPED[I1]C[I1][O0]?N\b", r"\bLUGAR\s+EXPED[I1]C[I1][O0]?N\b", r"\bMUN[I1]C[I1]P[I1][O0]?\b"
+            r"LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"LUGAR\s+EXPED[I1]C[I1][O0]?", r"MUN[I1]C[I1]P[I1][O0]?"
         ],
         "sexo": [
-            r"\bSEX[O0]?\b", r"\bGENER[O0]?\b", r"\bGÉNER[O0]?\b", r"\bSEX\b"
+            r"SEX[O0]?", r"GENER[O0]?", r"GÉNER[O0]?", r"SEX"
         ]
     }
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
     NO_NOMBRE_HEADER = re.compile(
-        r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|COLOMB|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
-        r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|FIRMA|FIRMADO|DIGITAL|REGISTRADOR|"
-        r"REGISTRADURIA|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
-        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)\b",
+        r"(REPUBLICA|REPÚBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+        r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|FIRMA|FIRMADO|DIGITAL|REGISTRAD|"
+        r"OISTRAD|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
+        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)",
         re.IGNORECASE
     )
 
@@ -266,7 +266,8 @@ class SpatialFieldExtractor:
         misma_fila = abs(cb.cy - eb.cy) <= (eb.h * 1.5)
 
         if es_arriba_cedula_amarilla:
-            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"], f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
+            dist_factor = max(0.80, 1.00 - (dist_v_above / 0.14) * 0.20)
+            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"] * dist_factor, f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
         elif es_debajo:
             return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
         elif es_al_lado:
@@ -432,11 +433,12 @@ class SpatialFieldExtractor:
                     txt = m_f.group(0)
 
             if campo == "lugar_expedicion":
-                if re.search(r"\b\d{4}\b", txt) or self.NO_NOMBRE_HEADER.search(txt):
+                if self.NO_NOMBRE_HEADER.search(txt):
                     continue
-                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s-]", "", txt.upper()).strip()
+                m_lugar = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", txt, flags=re.IGNORECASE).strip()
+                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s-]", "", m_lugar.upper()).strip()
                 toks = [t for t in txt_clean.split() if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
-                if not toks:
+                if not toks or (len(toks) == 1 and toks[0] in ["DE", "DEL", "LA", "EL", "SAN"]):
                     continue
                 txt = " ".join(toks)
 

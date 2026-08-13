@@ -577,33 +577,39 @@ class ExtractorService:
         if not nombres and not apellidos:
             return
 
-        palabras_totales = [
-            p for p in (nombres + " " + apellidos).upper().split()
-            if not validador._PALABRAS_NO_NOMBRE.match(p) and len(p) >= 2
-        ]
+        palabras_totales = []
+        for p in (nombres + " " + apellidos).upper().split():
+            p_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", p)
+            if (
+                len(p_clean) >= 2
+                and not validador._PALABRAS_NO_NOMBRE.match(p_clean)
+                and not validador._PALABRAS_NO_LUGAR.match(p_clean)
+                and p_clean not in palabras_totales
+            ):
+                palabras_totales.append(p_clean)
 
         if not palabras_totales:
             return
 
-        nom_words = [p for p in palabras_totales if p in self.NOMBRES_COMUNES_COL]
-        ape_words = [p for p in palabras_totales if p not in self.NOMBRES_COMUNES_COL]
+        nom_words = [p for p in palabras_totales if p in self.NOMBRES_COMUNES_COL][:3]
+        ape_words = [p for p in palabras_totales if p not in self.NOMBRES_COMUNES_COL and p not in nom_words][:3]
 
         if nom_words:
-            resultado["nombres"] = " ".join(dict.fromkeys(nom_words))
+            resultado["nombres"] = " ".join(nom_words)
         if ape_words:
-            resultado["apellidos"] = " ".join(dict.fromkeys(ape_words))
+            resultado["apellidos"] = " ".join(ape_words)
 
     def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
         """
         Clasifica palabras sueltas encontradas en el documento separando
-        nombres de pila conocidos colombianos de los apellidos.
+        nombres de pila conocidos colombianos de los apellidos (máximo 3 palabras cada uno).
         """
         palabras_candidatas = []
 
         for linea in lineas:
             linea_up = linea.upper().strip()
             # Omitir líneas de encabezado o metadata que no contienen nombres
-            if re.search(r"\b(REPUBLICA|COLOMBIA|IDENTIFICACION|ESTATURA|FIRMA|HUELLA|REGISTRADOR|EXPEDICION|EXPIRACION)\b", linea_up):
+            if re.search(r"\b(REPUBLICA|COLOMBIA|IDENTIFICACION|ESTATURA|FIRMA|HUELLA|REGISTRADOR|EXPEDICION|EXPIRACION|LUGAR)\b", linea_up):
                 continue
 
             for palabra in linea_up.split():
@@ -611,18 +617,22 @@ class ExtractorService:
                 if re.search(r"\d", palabra):
                     continue
                 palabra_limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", palabra)
-                if len(palabra_limpia) >= 2 and not validador._PALABRAS_NO_NOMBRE.match(palabra_limpia):
+                if (
+                    len(palabra_limpia) >= 2
+                    and not validador._PALABRAS_NO_NOMBRE.match(palabra_limpia)
+                    and not validador._PALABRAS_NO_LUGAR.match(palabra_limpia)
+                ):
                     if palabra_limpia not in palabras_candidatas:
                         palabras_candidatas.append(palabra_limpia)
 
         if not palabras_candidatas:
             return None, None
 
-        nombres_clasificados = [p for p in palabras_candidatas if p in self.NOMBRES_COMUNES_COL]
-        apellidos_clasificados = [p for p in palabras_candidatas if p not in self.NOMBRES_COMUNES_COL]
+        nom_words = [p for p in palabras_candidatas if p in self.NOMBRES_COMUNES_COL][:3]
+        ape_words = [p for p in palabras_candidatas if p not in self.NOMBRES_COMUNES_COL and p not in nom_words][:3]
 
-        nom_str = " ".join(dict.fromkeys(nombres_clasificados)) if nombres_clasificados else None
-        ape_str = " ".join(dict.fromkeys(apellidos_clasificados)) if apellidos_clasificados else None
+        nom_str = " ".join(nom_words) if nom_words else None
+        ape_str = " ".join(ape_words) if ape_words else None
 
         return nom_str, ape_str
 

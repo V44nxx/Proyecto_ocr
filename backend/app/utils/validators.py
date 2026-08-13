@@ -19,13 +19,14 @@ from app.utils.logger import app_logger as logger
 class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
-    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, registradores)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
-        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADURIA|GERENTE|MINISTERIO|"
-        r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL)\b",
+        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|GERENTE|MINISTERIO|"
+        r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
+        r"ALMABEATRIZ|RENGIFO|GALINDO|VEGA|SÁNCHEZ|SANCHEZ|TORRES|SCANNED|WITH|PERSONAL|NACIONAL)\b",
         re.IGNORECASE,
     )
 
@@ -184,6 +185,20 @@ class ValidadorColombia:
         )
         if match_dmy_abrev:
             dia_t, mes_t, anio_t = match_dmy_abrev.groups()
+            mes_num = MESES.get(mes_t.upper())
+            if mes_num:
+                try:
+                    return date(int(anio_t), mes_num, int(dia_t))
+                except ValueError:
+                    pass
+
+        # ── Formato MMM DD YYYY (ej. NOV 07 1987, NOV-08-2005) ─────────────
+        match_mdy_abrev = re.search(
+            r"\b([A-Z]{3,4})[\s/\-\.](\d{1,2})[\s/\-\.](\d{4})\b",
+            texto.upper(),
+        )
+        if match_mdy_abrev:
+            mes_t, dia_t, anio_t = match_mdy_abrev.groups()
             mes_num = MESES.get(mes_t.upper())
             if mes_num:
                 try:

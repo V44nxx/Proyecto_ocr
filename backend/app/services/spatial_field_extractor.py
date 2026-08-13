@@ -186,7 +186,7 @@ class SpatialFieldExtractor:
         if es_debajo:
             return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
         elif es_arriba_cedula_amarilla:
-            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
+            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"], f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
         elif es_al_lado:
             return "DIRECTLY_RIGHT", self.SPATIAL_SCORES["DIRECTLY_RIGHT"], f"Ubicado directamente a la derecha de la etiqueta (x_diff={round(dist_h, 3)})"
         elif misma_fila:
@@ -252,29 +252,26 @@ class SpatialFieldExtractor:
                 "evidence": ["Etiqueta no detectada espacialmente"]
             }
 
-        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo
+        # Límite superior (y_min) e inferior (y_max) para acotamiento geométrico estricto por campo en Cédula Amarilla
         region_y_min = None
         region_y_max = None
 
         if campo == "apellidos":
-            # Apellidos está entre identificacion (arriba) y la etiqueta NOMBRES (abajo)
+            # Apellidos se ubica arriba de la etiqueta APELLIDOS
             if "identificacion" in etiquetas:
                 region_y_min = etiquetas["identificacion"].bbox.y
-            if "nombres" in etiquetas:
-                region_y_max = etiquetas["nombres"].bbox.y
-            else:
-                region_y_max = etiqueta.bbox.y + 0.18
+            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de APELLIDOS (debajo está nombres)
 
         elif campo == "nombres":
-            # Nombres está entre la etiqueta APELLIDOS (arriba) y la etiqueta FECHA DE NACIMIENTO (abajo)
+            # Nombres se ubica arriba de la etiqueta NOMBRES y por debajo de APELLIDOS
             if "apellidos" in etiquetas:
                 region_y_min = etiquetas["apellidos"].bbox.y
-            for nxt in ["fecha_nacimiento", "identificacion", "sexo"]:
-                if nxt in etiquetas and etiquetas[nxt].bbox.y > etiqueta.bbox.y:
-                    region_y_max = etiquetas[nxt].bbox.y
-                    break
-            if not region_y_max:
-                region_y_max = etiqueta.bbox.y + 0.18
+            else:
+                region_y_min = max(0.0, etiqueta.bbox.y - 0.15)
+            region_y_max = etiqueta.bbox.y + 0.01  # Jamás por debajo de NOMBRES (debajo está firma)
+
+        if not region_y_max:
+            region_y_max = etiqueta.bbox.y + 0.18
 
         candidates: List[SpatialCandidate] = []
         for idx, line in enumerate(lines):

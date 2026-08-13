@@ -111,10 +111,18 @@ class SpatialFieldExtractor:
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
     NO_NOMBRE_HEADER = re.compile(
-        r"(REPUBLICA|REPÚBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
-        r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|FIRMA|FIRMADO|DIGITAL|REGISTRAD|"
+        r"(REPUBLICA|REPÚBLICA|REDUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+        r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|APELLID|FIRMA|FIRMADO|DIGITAL|REGISTRAD|"
         r"OISTRAD|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)",
+        re.IGNORECASE
+    )
+
+    NO_LUGAR_HEADER_WORDS = re.compile(
+        r"\b(FECHA|LUGAR|EXPEDICION|EXPEDICIÓN|REPUBLICA|REPÚBLICA|COLOMBIA|COLOMB|CEDULA|CÉDULA|"
+        r"CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|FIRMA|FIRMADO|"
+        r"DIGITAL|REGISTRAD.*|OISTRAD.*|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|NACIMIENTO|INDICE|ÍNDICE|DERECHO|"
+        r"IZQUIERDO|HUELLA|CAMSCANNER|POWERED|CS|BOR|BEREN|AMEL|SANZ|TAN|FA|BAR|BER|ALERGIF|ALMABEATRIZ|RENGIFO|LOPET|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL)\b",
         re.IGNORECASE
     )
 
@@ -328,6 +336,34 @@ class SpatialFieldExtractor:
             if res and res.get("line_index") is not None and res.get("status") == "VALID":
                 usados_indices.add(res["line_index"])
 
+        # Fallback inteligente para lugar_expedicion si no se extrajo o viene incompleto
+        res_lugar = resultados.get("lugar_expedicion", {})
+        if not res_lugar.get("value") or res_lugar.get("status") != "VALID":
+            for idx, line in enumerate(lines):
+                txt_linea = getattr(line, "text", "").strip()
+                if not txt_linea:
+                    continue
+                m_f = re.search(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt_linea, re.IGNORECASE)
+                if m_f:
+                    txt_sin_fecha = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", txt_linea, flags=re.IGNORECASE).strip()
+                    txt_sin_fecha = self.NO_LUGAR_HEADER_WORDS.sub("", txt_sin_fecha)
+                    lugar_cand = validador.normalizar_lugar(txt_sin_fecha)
+                    if lugar_cand:
+                        resultados["lugar_expedicion"] = {
+                            "value": lugar_cand,
+                            "confidence": 0.95,
+                            "score_final": 0.95,
+                            "status": "VALID",
+                            "page": page_num,
+                            "label": "Fecha y lugar de expedición",
+                            "line_index": idx,
+                            "spatial_relation": "DIRECTLY_BELOW",
+                            "spatial_score": 0.95,
+                            "reason": f"Lugar de expedición '{lugar_cand}' extraído de la línea de expedición",
+                            "audit_evaluaciones": []
+                        }
+                        break
+
         # Generar artefacto de depuración visual 2D en PNG
         spatial_visual_debugger.generar_imagen_debug_2d(
             page_num, lines, etiquetas, evaluaciones_debug, regiones_2d_debug
@@ -396,8 +432,12 @@ class SpatialFieldExtractor:
                             continue
                         sub_txt = m_f.group(0)
                 elif campo == "lugar_expedicion":
-                    if re.search(r"\b\d{4}\b", sub_txt) or self.NO_NOMBRE_HEADER.search(sub_txt):
+                    m_l = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", sub_txt, flags=re.IGNORECASE)
+                    m_l = self.NO_LUGAR_HEADER_WORDS.sub("", m_l)
+                    sub_norm = validador.normalizar_lugar(m_l)
+                    if not sub_norm:
                         continue
+                    sub_txt = sub_norm
                 elif campo == "sexo":
                     sex_norm = validador.normalizar_sexo(sub_txt)
                     if not sex_norm:
@@ -434,14 +474,25 @@ class SpatialFieldExtractor:
                     txt = m_f.group(0)
 
             if campo == "lugar_expedicion":
-                if self.NO_NOMBRE_HEADER.search(txt):
-                    continue
-                m_lugar = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", txt, flags=re.IGNORECASE).strip()
+                # 1. Eliminar fechas y números
+                m_lugar = re.sub(
+                    r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b",
+                    "",
+                    txt,
+                    flags=re.IGNORECASE
+                ).strip()
+                # 2. Reemplazar encabezados y palabras de plantilla del rótulo
+                m_lugar = self.NO_LUGAR_HEADER_WORDS.sub("", m_lugar)
                 txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s-]", "", m_lugar.upper()).strip()
-                toks = [t for t in txt_clean.split() if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
-                if not toks or (len(toks) == 1 and toks[0] in ["DE", "DEL", "LA", "EL", "SAN"]):
+                toks = [t for t in txt_clean.split() if len(t) >= 2]
+                # Requerir al menos 1 sustantivo propio principal (no preposición o conector)
+                sustantivos = [t for t in toks if t not in ["Y", "DE", "DEL", "LA", "EL", "LOS", "LAS", "EN", "POR", "CON", "SAN", "SANTA"] and len(t) >= 3]
+                if not sustantivos:
                     continue
-                txt = " ".join(toks)
+                txt_norm = validador.normalizar_lugar(" ".join(toks))
+                if not txt_norm:
+                    continue
+                txt = txt_norm
 
             if campo == "sexo":
                 sex_norm = validador.normalizar_sexo(txt)

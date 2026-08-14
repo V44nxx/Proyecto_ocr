@@ -113,7 +113,7 @@ class SpatialFieldExtractor:
     NO_NOMBRE_HEADER = re.compile(
         r"(REPUBLICA|REPÚBLICA|REDUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
         r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|APELLID|FIRMA|FIRMADO|DIGITAL|REGISTRAD|"
-        r"OISTRAD|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
+        r"OISTRAD|NATIONAL|NACIONAL|NACIONA|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)",
         re.IGNORECASE
     )
@@ -274,8 +274,11 @@ class SpatialFieldExtractor:
         misma_fila = abs(cb.cy - eb.cy) <= (eb.h * 1.5)
 
         if es_arriba_cedula_amarilla:
-            dist_factor = max(0.80, 1.00 - (dist_v_above / 0.14) * 0.20)
-            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"] * dist_factor, f"Ubicado directamente arriba de la etiqueta (Cédula Amarilla, y_diff={round(dist_v_above, 3)})"
+            dist_v_factor = max(0.80, 1.00 - (dist_v_above / 0.14) * 0.20)
+            dist_h_diff = abs(cb.cx - eb.cx)
+            dist_h_factor = max(0.40, 1.00 - (dist_h_diff / max(eb.w * 2.0, 0.05)) * 0.60)
+            total_factor = dist_v_factor * dist_h_factor
+            return "DIRECTLY_ABOVE", self.SPATIAL_SCORES["DIRECTLY_ABOVE"] * total_factor, f"Ubicado directamente arriba de la etiqueta (y_diff={round(dist_v_above, 3)}, x_diff={round(dist_h_diff, 3)})"
         elif es_debajo:
             return "DIRECTLY_BELOW", self.SPATIAL_SCORES["DIRECTLY_BELOW"], f"Ubicado directamente debajo de la etiqueta (y_diff={round(dist_v, 3)})"
         elif es_al_lado:

@@ -30,8 +30,9 @@ services:
   # ─────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
+      target: backend
     container_name: ocr_backend
     restart: unless-stopped
     environment:
@@ -42,7 +43,7 @@ services:
       UPLOAD_DIR: /app/uploads
       EXPORT_DIR: /app/exports
       MAX_FILE_SIZE_MB: 50
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       # ─────────────────────────────────────────────
       # Google Cloud Document AI
       # Configura estas variables en tu archivo .env
@@ -58,8 +59,6 @@ services:
       - uploads_data:/app/uploads
       - exports_data:/app/exports
       # Credenciales Google Cloud — montadas como solo lectura
-      # El archivo JSON NUNCA se copia dentro de la imagen Docker
-      # Coloca tu google-document-ai.json en la carpeta credentials/ del proyecto
       - ./credentials:/app/credentials:ro
     ports:
       - "8000:8000"
@@ -68,19 +67,22 @@ services:
         condition: service_healthy
     networks:
       - ocr_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   # ─────────────────────────────────────────
   # Next.js Frontend
   # ─────────────────────────────────────────
   frontend:
     build:
-      context: ./frontend
+      context: .
       dockerfile: Dockerfile
+      target: frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: ocr_frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:

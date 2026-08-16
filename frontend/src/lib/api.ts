@@ -9,6 +9,7 @@ import type {
   Documento,
   Persona,
   PersonaUpdate,
+  PaginatedResponse,
   Comparacion,
   Diferencia,
   DashboardStats,
@@ -97,7 +98,7 @@ export const apiPersonas = {
     limit?: number;
     requiere_revision?: boolean;
     buscar?: string;
-  }) => apiClient.get<Persona[]>("/api/personas", { params }),
+  }) => apiClient.get<Persona[] | PaginatedResponse<Persona>>("/api/personas", { params }),
 
   detalle: (id: string) =>
     apiClient.get<Persona>(`/api/personas/${id}`),

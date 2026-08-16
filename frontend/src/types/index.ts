@@ -32,6 +32,9 @@ export interface Documento {
 export interface Persona {
   id: string;
   documento_id: string | null;
+  grupo_documento_id?: string | null;
+  pagina_frente?: number | null;
+  pagina_reverso?: number | null;
   pagina_numero?: number | null;
   tipo_documento?: string | null;
   estado_registro?: string | null;
@@ -45,7 +48,7 @@ export interface Persona {
   sexo: string | null;
   confianza_extraccion: number | null;
   requiere_revision: boolean;
-  detalles_campos?: Record<string, { value: string | null; confidence: number; page: number; status: string; source: string; reason: string | null }> | null;
+  detalles_campos?: Record<string, any> | null;
   fecha_registro: string;
   fecha_actualizacion: string;
 }
@@ -92,6 +95,11 @@ export interface DashboardStats {
   total_personas: number;
   personas_en_revision: number;
   total_comparaciones: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total?: number;
 }
 
 export interface ApiError {

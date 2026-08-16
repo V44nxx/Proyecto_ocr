@@ -36,7 +36,7 @@ export default function PersonasPage() {
         requiere_revision: (revOnly ?? soloRevision) || undefined,
         buscar: buscar || undefined,
       });
-      setPersonas(Array.isArray(data) ? data : (data?.items || []));
+      setPersonas(Array.isArray(data) ? data : (data.items || []));
     } catch { 
       toast.error("Error al cargar la lista de personas"); 
     } finally { 

@@ -28,7 +28,7 @@ export default function ExportacionPage() {
     setCargando(true);
     try {
       const { data } = await apiPersonas.listar({ limit: 500 });
-      setPersonas(data);
+      setPersonas(Array.isArray(data) ? data : (data.items || []));
     } catch { toast.error("Error cargando datos"); }
     finally { setCargando(false); }
   };

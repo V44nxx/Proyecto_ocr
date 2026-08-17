@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from app.config import settings
 import logging
+import bcrypt
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ def get_db():
         db.close()
 
 
+def _hash_password(password: str) -> str:
+    """Hash bcrypt directo, sin passlib"""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+
 def create_tables():
     """Crear todas las tablas del modelo e inicializar usuario admin si no existe"""
     from app.models import usuario, documento, persona, comparacion, diferencia
@@ -52,15 +58,15 @@ def create_tables():
 
     try:
         from app.models.usuario import Usuario
-        from app.routers.auth import crear_hash_password, verificar_password
         db = SessionLocal()
         try:
             admin_user = db.query(Usuario).filter(Usuario.email == "admin@ocr.com").first()
+            nuevo_hash = _hash_password("Admin123!")
             if not admin_user:
                 nuevo_admin = Usuario(
                     email="admin@ocr.com",
                     nombre="Administrador Sistema",
-                    password_hash=crear_hash_password("Admin123!"),
+                    password_hash=nuevo_hash,
                     rol="admin",
                     activo=True
                 )
@@ -68,10 +74,10 @@ def create_tables():
                 db.commit()
                 logger.info("Usuario administrador inicial creado: admin@ocr.com")
             else:
-                admin_user.password_hash = crear_hash_password("Admin123!")
+                admin_user.password_hash = nuevo_hash
                 admin_user.activo = True
                 db.commit()
-                logger.info("Usuario admin garantizado y actualizado (admin@ocr.com -> Admin123!)")
+                logger.info("Usuario admin actualizado: admin@ocr.com -> Admin123!")
         finally:
             db.close()
     except Exception as err:

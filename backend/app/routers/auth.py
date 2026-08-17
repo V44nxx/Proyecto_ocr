@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 
 from app.database import get_db
 from app.models.usuario import Usuario
@@ -24,25 +24,32 @@ router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 
-# Contexto bcrypt con passlib
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 # ──────────────────────────────────────────
-# UTILIDADES JWT
+# UTILIDADES PASSWORD (bcrypt directo, sin passlib)
 # ──────────────────────────────────────────
 def crear_hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Genera hash bcrypt de la contraseña"""
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verificar_password(password_plano: str, hash_guardado: str) -> bool:
+    """Verifica contraseña contra hash bcrypt almacenado"""
     try:
-        return pwd_context.verify(password_plano, hash_guardado)
+        password_bytes = password_plano.encode("utf-8")
+        hash_bytes = hash_guardado.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hash_bytes)
     except Exception as err:
         logger.error(f"Error verificando password: {err}")
         return False
 
 
+# ──────────────────────────────────────────
+# UTILIDADES JWT
+# ──────────────────────────────────────────
 def crear_token_acceso(data: dict) -> str:
     payload = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -98,14 +105,14 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     ).first()
 
     if not usuario:
-        logger.warning(f"Intento de login fallido (usuario no encontrado): {request.email}")
+        logger.warning(f"Login fallido (usuario no encontrado): {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
         )
 
     if not verificar_password(request.password, usuario.password_hash):
-        logger.warning(f"Intento de login fallido (password inválido): {request.email}")
+        logger.warning(f"Login fallido (password inválido): {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
@@ -138,7 +145,6 @@ def login_form(
 @router.post("/register", response_model=UsuarioResponse, status_code=201, summary="Registrar usuario")
 def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
     """Registrar nuevo usuario en el sistema"""
-    # Verificar email único
     if db.query(Usuario).filter(Usuario.email.ilike(request.email.strip())).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

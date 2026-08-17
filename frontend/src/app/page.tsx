@@ -29,9 +29,13 @@ export default function LoginPage() {
       toast.success(`Bienvenido, ${(data as TokenResponse).usuario.nombre}`);
       window.location.href = "/dashboard";
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } };
-      const mensaje = error.response?.data?.detail || "Credenciales incorrectas";
-      toast.error(typeof mensaje === "string" ? mensaje : "Error de autenticación");
+      const error = err as { response?: { data?: { detail?: string }; status?: number }; message?: string };
+      if (!error.response) {
+        toast.error(`Error de conexión con la API (${error.message || "Servidor no responde"})`);
+      } else {
+        const mensaje = error.response?.data?.detail || "Credenciales incorrectas";
+        toast.error(typeof mensaje === "string" ? mensaje : "Error de autenticación");
+      }
     } finally {
       setCargando(false);
     }

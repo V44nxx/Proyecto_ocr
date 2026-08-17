@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import http from "http";
 import https from "https";
-import dns from "dns";
 import { URL } from "url";
 
-// Candidatos de backend dentro y fuera de Docker Swarm / Dokploy
+// Candidatos de backend
 const getBackendCandidates = (): string[] => {
   const envUrl = process.env.INTERNAL_BACKEND_URL;
   const candidates: string[] = [];
@@ -13,17 +12,11 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // IP directa del VPS puerto 8000 (abierto y verificado 200 OK)
+  // IP directa del VPS en puerto 8000 (verificado y activo)
   candidates.push("http://187.77.62.85:8000");
-  candidates.push("http://172.17.0.1:8000");
-  candidates.push("https://api.v44nxx.online");
-  candidates.push("http://api.v44nxx.online");
-  // Nombre de servicio en Docker Swarm (VIP)
   candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
-  // Nombre de tarea directa en Docker Swarm (DNS de réplicas directas)
   candidates.push("http://tasks.ocr-proyecto-fastapi-d5qhym:8000");
-  // Fallback local
-  candidates.push("http://127.0.0.1:8000");
+  candidates.push("http://172.17.0.1:8000");
 
   return Array.from(new Set(candidates));
 };
@@ -46,13 +39,8 @@ function doHttpRequest(
         path: `${targetUrl.pathname}${targetUrl.search}`,
         method: method,
         headers: headers,
-        // En HTTPS ignorar certificados auto-firmados en caso de proxy interno
         ...(isHttps ? { rejectUnauthorized: false } : {}),
-        // Forzar IPv4 en la resolución DNS
-        lookup: (hostname, options, callback) => {
-          dns.lookup(hostname, { family: 4 }, callback);
-        },
-        timeout: 120000,
+        timeout: 15000, // 15 segundos timeout
       };
 
       const req = client.request(reqOptions, (res) => {
@@ -80,7 +68,7 @@ function doHttpRequest(
       });
 
       req.on("timeout", () => {
-        req.destroy(new Error(`Timeout al conectar con ${targetUrlStr}`));
+        req.destroy(new Error(`Timeout de conexión hacia ${targetUrlStr}`));
       });
 
       if (bodyBuffer && bodyBuffer.length > 0) {
@@ -131,12 +119,6 @@ async function handleProxy(
     try {
       const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer);
 
-      // Si el destino retornó 404/502 de Traefik por no estar desplegado aún, probar siguiente
-      if (result.status === 404 && result.data.toString().includes("404 page not found")) {
-        console.warn(`[Proxy Traefik 404] ${targetUrl} aún no listo en Traefik, probando siguiente candidato...`);
-        continue;
-      }
-
       const isNoBody = result.status === 204 || result.status === 304;
       const responseBody = isNoBody ? null : result.data;
 
@@ -147,14 +129,14 @@ async function handleProxy(
       });
     } catch (err: any) {
       lastError = err;
-      console.warn(`[Proxy Fallback] Falló conexión con ${targetUrl}: ${err?.message || err}. Probando siguiente...`);
+      console.warn(`[Proxy Fallback] ${targetUrl} no disponible: ${err?.message || err}. Probando siguiente...`);
     }
   }
 
   console.error(`[Next.js API Route Proxy Fatal] Error para ${method} /api/${path}:`, lastError);
   return NextResponse.json(
     {
-      detail: `No se pudo conectar con el backend FastAPI en ninguno de los candidatos (${candidates.join(", ")}). Causa: ${lastError?.message || "Servicio no alcanzable"}`,
+      detail: `No se pudo conectar con el backend FastAPI en (${candidates.join(", ")}). Error: ${lastError?.message || "Servicio no alcanzable"}`,
     },
     { status: 502 }
   );

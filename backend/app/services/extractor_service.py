@@ -19,6 +19,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from app.utils.validators import validador
 from app.utils.logger import app_logger as logger
 from app.services.spatial_field_extractor import spatial_field_extractor
+from app.services.colombia_geo_service import colombia_geo
 
 
 class ExtractorService:
@@ -920,22 +921,23 @@ class ExtractorService:
             resultado["fecha_nacimiento"] = fechas_doc[0].isoformat()
             resultado["fecha_expedicion"] = fechas_doc[-1].isoformat()
 
-        # 2. Validación y limpieza de lugar de expedición
+        # 2. Validación y limpieza de lugar de expedición universal
         lugar_actual = resultado.get("lugar_expedicion")
         lugar_limpio = validador.normalizar_lugar(str(lugar_actual)) if lugar_actual else None
 
         # Si el lugar actual es un departamento (ej: CAQUETA, VALLE) o está vacío o fue ruidoso:
-        if not lugar_limpio or lugar_limpio in self.DEPARTAMENTOS_COLOMBIA:
-            # Buscar el municipio específico exacto
-            lugar_mun = self._extraer_lugar(texto, lineas)
-            if lugar_mun and lugar_mun not in self.DEPARTAMENTOS_COLOMBIA:
+        if not lugar_limpio or lugar_limpio in colombia_geo.DEPARTAMENTOS:
+            lugar_mun = colombia_geo.extraer_lugar_universal(texto, lineas)
+            if lugar_mun and lugar_mun not in colombia_geo.DEPARTAMENTOS:
                 resultado["lugar_expedicion"] = lugar_mun
             elif lugar_limpio:
                 resultado["lugar_expedicion"] = lugar_limpio
             else:
                 resultado["lugar_expedicion"] = None
         else:
-            resultado["lugar_expedicion"] = lugar_limpio
+            # Resolver y normalizar contra el catálogo nacional de 1.100 municipios DANE
+            mun_canonico = colombia_geo.resolver_municipio_fuzzy(lugar_limpio, umbral=80)
+            resultado["lugar_expedicion"] = mun_canonico if mun_canonico else lugar_limpio
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """
@@ -1078,74 +1080,10 @@ class ExtractorService:
     # ──────────────────────────────────────────
     def _extraer_lugar(self, texto: str, lineas: List[str]) -> Optional[str]:
         """
-        Extrae el municipio/ciudad de expedición exacto (no departamento genérico).
-        Prioriza la detección de la ciudad cuando viene en formato 'CIUDAD (DEPARTAMENTO)'
-        o 'FECHA CIUDAD (DEPARTAMENTO)'.
+        Extrae el municipio/ciudad de expedición mediante el motor universal DANE.
+        Cubre los 32 departamentos y más de 1.100 municipios de Colombia con RapidFuzz.
         """
-        # Estrategia 0: Detectar formato explícito "MUNICIPIO (DEPARTAMENTO)" en las líneas
-        for linea in lineas:
-            linea_limpia = linea.strip().upper()
-            m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", linea_limpia)
-            if m_par:
-                mun_raw = m_par.group(1).strip()
-                # Quitar fechas o números iniciales que vengan en la misma línea
-                mun_sin_fecha = re.sub(r"^\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\s*|^\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\s*|^\d+\s*", "", mun_raw, flags=re.IGNORECASE).strip()
-                mun_norm = validador.normalizar_lugar(mun_sin_fecha)
-                if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
-                    return mun_norm
-
-        # Estrategia 1: Buscar municipio conocido en líneas adyacentes a 'LUGAR' / 'EXPEDICION'
-        for idx, linea in enumerate(lineas):
-            if re.search(r"\b(LUGAR|EXPEDICI[OÓ]N|EXPEDIDA|NACIMIENTO)\b", linea, re.IGNORECASE):
-                subtexto = "\n".join(lineas[max(0, idx - 1) : min(len(lineas), idx + 3)])
-                # Buscar si hay paréntesis en subtexto
-                m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", subtexto)
-                if m_par:
-                    mun_raw = m_par.group(1).strip()
-                    mun_sin_fecha = re.sub(r"^\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\s*|^\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\s*|^\d+\s*", "", mun_raw, flags=re.IGNORECASE).strip()
-                    mun_norm = validador.normalizar_lugar(mun_sin_fecha)
-                    if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
-                        return mun_norm
-
-                match_mun = self._PATRON_MUNICIPIOS.search(subtexto)
-                if match_mun:
-                    lug = validador.normalizar_lugar(match_mun.group(1))
-                    if lug and lug not in self.DEPARTAMENTOS_COLOMBIA:
-                        return lug
-
-        # Estrategia 2: Por keywords de lugar de expedición
-        for keyword in self.KEYWORDS_LUGAR_EXP:
-            patron = re.compile(
-                keyword + r"[\s:]*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s\-\.]{2,60}?)(?:\n|$|\d)",
-                re.IGNORECASE,
-            )
-            match = patron.search(texto)
-            if match:
-                lugar = match.group(1).strip()
-                lugar_filtrado = re.sub(
-                    r"\b(REPUBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|IDENTIFICACION|TARJETA|CEDULA|C[EÉ]DULA)\b",
-                    "",
-                    lugar,
-                    flags=re.IGNORECASE,
-                ).strip()
-                # Si contiene paréntesis, extraer municipio
-                m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", lugar_filtrado)
-                if m_par:
-                    mun_norm = validador.normalizar_lugar(m_par.group(1))
-                    if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
-                        return mun_norm
-
-                lugar_normalizado = validador.normalizar_lugar(lugar_filtrado)
-                if lugar_normalizado and len(lugar_normalizado) >= 3 and lugar_normalizado not in self.DEPARTAMENTOS_COLOMBIA:
-                    return lugar_normalizado
-
-        # Estrategia 3: Buscar cualquier municipio en lista conocida en todo el texto
-        for m in self._PATRON_MUNICIPIOS.finditer(texto):
-            lug = validador.normalizar_lugar(m.group(1))
-            if lug and lug not in self.DEPARTAMENTOS_COLOMBIA:
-                return lug
-
-        return None
+        return colombia_geo.extraer_lugar_universal(texto, lineas)
 
     # ──────────────────────────────────────────
     # EXTRACCIÓN DE SEXO

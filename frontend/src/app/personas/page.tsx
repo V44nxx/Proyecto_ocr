@@ -43,8 +43,13 @@ export default function PersonasPage() {
         requiere_revision: (revOnly ?? soloRevision) || undefined,
         buscar: buscar || undefined,
       });
-      setPersonas(Array.isArray(data) ? data : (data.items || []));
-    } catch { 
+      const items = Array.isArray(data) ? data : ((data as any)?.items || []);
+      setPersonas(items);
+      if (mostrarSpinner) {
+        toast.success(`${items.length} persona(s) sincronizada(s)`);
+      }
+    } catch (err) { 
+      console.error("Error al cargar personas:", err);
       if (mostrarSpinner) toast.error("Error al cargar la lista de personas"); 
     } finally { 
       if (mostrarSpinner) setCargando(false); 
@@ -69,7 +74,7 @@ export default function PersonasPage() {
       await apiPersonas.actualizar(id, editForm);
       toast.success("Datos actualizados correctamente");
       setEditando(null);
-      cargarPersonas();
+      cargarPersonas(true);
     } catch { 
       toast.error("Error guardando cambios"); 
     }
@@ -80,20 +85,21 @@ export default function PersonasPage() {
     try {
       await apiPersonas.eliminar(id);
       toast.success("Registro eliminado");
-      cargarPersonas();
+      cargarPersonas(true);
     } catch { 
       toast.error("Error al eliminar registro"); 
     }
   };
 
-  const personasFiltradas = personas.filter((p) => {
+  const personasFiltradas = (personas || []).filter((p) => {
+    if (!p) return false;
     if (!buscar) return true;
-    const q = buscar.toLowerCase().replace(/[\.\s]/g, ""); // normalizar puntos/espacios
-    const cedula = p.numero_identificacion.replace(/[\.\s]/g, "");
+    const q = buscar.toLowerCase().trim().replace(/[\.\s]/g, ""); // normalizar puntos/espacios
+    const cedula = String(p.numero_identificacion || "").replace(/[\.\s]/g, "");
     return (
       cedula.includes(q) ||
-      (p.nombres || "").toLowerCase().includes(q) ||
-      (p.apellidos || "").toLowerCase().includes(q)
+      String(p.nombres || "").toLowerCase().includes(q) ||
+      String(p.apellidos || "").toLowerCase().includes(q)
     );
   });
 
@@ -134,7 +140,7 @@ export default function PersonasPage() {
               type="text"
               value={buscar}
               onChange={(e) => setBuscar(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && cargarPersonas()}
+              onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
               placeholder="Buscar por número de cédula, nombres o apellidos..."
               className="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm"
             />
@@ -155,7 +161,7 @@ export default function PersonasPage() {
 
           <div className="md:col-span-2 flex justify-end">
             <button 
-              onClick={() => cargarPersonas()} 
+              onClick={() => cargarPersonas(true)} 
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold transition-all shadow-sm active:scale-[0.98]"
             >
               <RefreshCw className="w-3.5 h-3.5 text-primary-400" />

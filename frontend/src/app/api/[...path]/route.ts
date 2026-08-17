@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import http from "http";
+import https from "https";
 import dns from "dns";
 import { URL } from "url";
 
-// Candidatos de backend dentro de Docker Swarm / Dokploy
+// Candidatos de backend dentro y fuera de Docker Swarm / Dokploy
 const getBackendCandidates = (): string[] => {
   const envUrl = process.env.INTERNAL_BACKEND_URL;
   const candidates: string[] = [];
@@ -12,6 +13,9 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
+  // Dominio público con SSL gestionado por Traefik en Dokploy
+  candidates.push("https://api.v44nxx.online");
+  candidates.push("http://api.v44nxx.online");
   // Nombre de servicio en Docker Swarm (VIP)
   candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
   // Nombre de tarea directa en Docker Swarm (DNS de réplicas directas)
@@ -31,21 +35,25 @@ function doHttpRequest(
   return new Promise((resolve, reject) => {
     try {
       const targetUrl = new URL(targetUrlStr);
+      const isHttps = targetUrl.protocol === "https:";
+      const client = isHttps ? https : http;
 
       const reqOptions: http.RequestOptions = {
         hostname: targetUrl.hostname,
-        port: parseInt(targetUrl.port || "80", 10),
+        port: targetUrl.port ? parseInt(targetUrl.port, 10) : (isHttps ? 443 : 80),
         path: `${targetUrl.pathname}${targetUrl.search}`,
         method: method,
         headers: headers,
-        // Forzar IPv4 en la resolución DNS para total compatibilidad con Docker Swarm y Alpine
+        // En HTTPS ignorar certificados auto-firmados en caso de proxy interno
+        ...(isHttps ? { rejectUnauthorized: false } : {}),
+        // Forzar IPv4 en la resolución DNS
         lookup: (hostname, options, callback) => {
           dns.lookup(hostname, { family: 4 }, callback);
         },
         timeout: 120000,
       };
 
-      const req = http.request(reqOptions, (res) => {
+      const req = client.request(reqOptions, (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
         res.on("end", () => {
@@ -120,6 +128,12 @@ async function handleProxy(
 
     try {
       const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer);
+
+      // Si el destino retornó 404/502 de Traefik por no estar desplegado aún, probar siguiente
+      if (result.status === 404 && result.data.toString().includes("404 page not found")) {
+        console.warn(`[Proxy Traefik 404] ${targetUrl} aún no listo en Traefik, probando siguiente candidato...`);
+        continue;
+      }
 
       const isNoBody = result.status === 204 || result.status === 304;
       const responseBody = isNoBody ? null : result.data;

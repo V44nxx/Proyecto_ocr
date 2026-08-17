@@ -10,6 +10,7 @@ from app.utils.logger import app_logger as logger
 from app.utils.validators import validador
 from app.services.document_layout_classifier import document_layout_classifier
 from app.utils.spatial_visual_debugger import spatial_visual_debugger
+from app.services.colombia_geo_service import colombia_geo
 
 
 class SpatialBoundingBox:
@@ -440,12 +441,10 @@ class SpatialFieldExtractor:
                         dt_p = validador.parsear_fecha(m_f.group(0))
                         sub_txt = dt_p.isoformat() if dt_p else m_f.group(0)
                 elif campo == "lugar_expedicion":
-                    m_l = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", sub_txt, flags=re.IGNORECASE)
-                    m_l = self.NO_LUGAR_HEADER_WORDS.sub("", m_l)
-                    sub_norm = validador.normalizar_lugar(m_l)
-                    if not sub_norm:
+                    lugar_res = colombia_geo.extraer_lugar_universal(sub_txt, [sub_txt])
+                    if not lugar_res:
                         continue
-                    sub_txt = sub_norm
+                    sub_txt = lugar_res
                 elif campo == "sexo":
                     sex_norm = validador.normalizar_sexo(sub_txt)
                     if not sex_norm:
@@ -463,15 +462,17 @@ class SpatialFieldExtractor:
                 continue
 
             if campo in ["nombres", "apellidos"]:
-                if self.NO_NOMBRE_HEADER.search(txt):
+                if self.NO_NOMBRE_HEADER.search(txt) or len(txt.strip()) < 3:
                     continue
                 txt_corr = validador.corregir_errores_ocr_nombre(txt)
                 txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt_corr.upper()).strip()
                 tokens = txt_clean.split()
-                tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t)]
+                tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t) and t not in ["BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA"]]
                 if not tokens_validos:
                     continue
                 txt = " ".join(tokens_validos)
+                if len(txt) < 3 or txt in ["BLICA", "PUBLICA", "PÚBLICA", "DE COLOMBIA"]:
+                    continue
 
             if campo in ["fecha_nacimiento", "fecha_expedicion"]:
                 dt_val = validador.parsear_fecha(txt)
@@ -485,25 +486,10 @@ class SpatialFieldExtractor:
                     txt = dt_p.isoformat() if dt_p else m_f.group(0)
 
             if campo == "lugar_expedicion":
-                # 1. Eliminar fechas y números
-                m_lugar = re.sub(
-                    r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b",
-                    "",
-                    txt,
-                    flags=re.IGNORECASE
-                ).strip()
-                # 2. Reemplazar encabezados y palabras de plantilla del rótulo
-                m_lugar = self.NO_LUGAR_HEADER_WORDS.sub("", m_lugar)
-                txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s-]", "", m_lugar.upper()).strip()
-                toks = [t for t in txt_clean.split() if len(t) >= 2]
-                # Requerir al menos 1 sustantivo propio principal (no preposición o conector)
-                sustantivos = [t for t in toks if t not in ["Y", "DE", "DEL", "LA", "EL", "LOS", "LAS", "EN", "POR", "CON", "SAN", "SANTA"] and len(t) >= 3]
-                if not sustantivos:
+                lugar_res = colombia_geo.extraer_lugar_universal(txt, [txt])
+                if not lugar_res:
                     continue
-                txt_norm = validador.normalizar_lugar(" ".join(toks))
-                if not txt_norm:
-                    continue
-                txt = txt_norm
+                txt = lugar_res
 
             if campo == "sexo":
                 sex_norm = validador.normalizar_sexo(txt)

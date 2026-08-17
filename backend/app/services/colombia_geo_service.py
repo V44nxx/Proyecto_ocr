@@ -95,7 +95,7 @@ class ColombiaGeoService:
         "NORCASIA", "PACORA", "PALESTINA", "PENSILVANIA", "RIOSUCIO", "RISARALDA", "SALAMINA",
         "SAMANA", "SAN JOSE", "SUPIA", "VICTORIA", "VILLAMARIA", "VITERBO",
         # Caquetá
-        "FLORENCIA", "ALBANIA", "BELEN DE LOS ANDAQUIES", "CARTAGENA DEL CHAIRA", "CURILLO",
+        "FLORENCIA", "ALBANIA", "BELEN DE LOS ANDAQUIES", "CARTAGENA DEL CHAIRA", "CARTAGENA DE CHAIRA", "CURILLO",
         "EL DONCELLO", "EL PAUJIL", "LA MONTAÑITA", "MILAN", "MORELIA", "PUERTO RICO",
         "SAN JOSE DEL FRAGUA", "SAN VICENTE DEL CAGUAN", "SOLANO", "SOLITA", "VALPARAISO",
         # Casanare
@@ -279,6 +279,21 @@ class ColombiaGeoService:
         txt = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", " ", txt)
         return " ".join(txt.split()).strip()
 
+    ALIASES_CANONICOS = {
+        "PAUJIL": "EL PAUJIL",
+        "DONCELLO": "EL DONCELLO",
+        "CARTAGENA DE CHAIRA": "CARTAGENA DEL CHAIRA",
+        "CHAIRA": "CARTAGENA DEL CHAIRA",
+        "BOGOTA": "BOGOTA D.C.",
+        "BOGOTA DC": "BOGOTA D.C.",
+        "SAN VICENTE": "SAN VICENTE DEL CAGUAN",
+        "BAGRE": "EL BAGRE",
+        "BANCO": "EL BANCO",
+        "CARMEN DE BOLIVAR": "EL CARMEN DE BOLIVAR",
+        "COCUY": "EL COCUY",
+        "RETORNO": "EL RETORNO",
+    }
+
     def resolver_municipio_fuzzy(self, candidato: str, umbral: int = 80) -> Optional[str]:
         """
         Corrige errores tipográficos de OCR contra el catálogo oficial DANE usando RapidFuzz.
@@ -288,11 +303,15 @@ class ColombiaGeoService:
             return None
         
         candidato_norm = self._quitar_tildes(candidato.strip())
+
+        # Revisar si es un alias canónico
+        if candidato_norm in self.ALIASES_CANONICOS:
+            return self.ALIASES_CANONICOS[candidato_norm]
         
         # Coincidencia exacta directa
         for mun in self.MUNICIPIOS:
             if self._quitar_tildes(mun) == candidato_norm:
-                return mun
+                return self.ALIASES_CANONICOS.get(mun, mun)
 
         # Fuzzy match contra todos los 1.100 municipios
         resultado = process.extractOne(
@@ -305,7 +324,7 @@ class ColombiaGeoService:
             mejor_match, score, _ = resultado
             # No permitir que un departamento genérico sea el resultado si es solo depto
             if mejor_match.upper() not in self.DEPARTAMENTOS:
-                return mejor_match
+                return self.ALIASES_CANONICOS.get(mejor_match, mejor_match)
         
         return None
 

@@ -391,15 +391,17 @@ class ExtractorService:
             if not resultado["lugar_expedicion"] and lugar:
                 resultado["lugar_expedicion"] = lugar
 
+        # Si nombres o apellidos no fueron detectados por cajas espaciales o quedaron ruidosos:
+        invalidos_nombre = {"POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}
+        if not resultado["nombres"] or resultado["nombres"] in invalidos_nombre or not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre:
+            nom_pos, ape_pos = self._extraer_nombres_por_posicion(lineas)
+            if nom_pos and (not resultado["nombres"] or resultado["nombres"] in invalidos_nombre):
+                resultado["nombres"] = nom_pos
+            if ape_pos and (not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre):
+                resultado["apellidos"] = ape_pos
+
         if not resultado["apellidos"]:
             resultado["apellidos"] = self._extraer_apellido_antes_nombres(lineas)
-
-        if not resultado["nombres"] or not resultado["apellidos"]:
-            nom_clas, ape_clas = self._extraer_nombres_por_clasificacion(lineas)
-            if not resultado["nombres"] and nom_clas:
-                resultado["nombres"] = nom_clas
-            if not resultado["apellidos"] and ape_clas:
-                resultado["apellidos"] = ape_clas
 
         # Chronological dates fallback
         if not resultado["fecha_nacimiento"] or not resultado["fecha_expedicion"]:

@@ -68,10 +68,10 @@ def create_tables():
                 db.commit()
                 logger.info("Usuario administrador inicial creado: admin@ocr.com")
             else:
-                if not verificar_password("Admin123!", admin_user.password_hash):
-                    admin_user.password_hash = crear_hash_password("Admin123!")
-                    db.commit()
-                    logger.info("Password hash de usuario admin reparado/actualizado correctamente: admin@ocr.com")
+                admin_user.password_hash = crear_hash_password("Admin123!")
+                admin_user.activo = True
+                db.commit()
+                logger.info("Usuario admin garantizado y actualizado (admin@ocr.com -> Admin123!)")
         finally:
             db.close()
     except Exception as err:

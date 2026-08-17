@@ -16,31 +16,23 @@ from app.schemas.usuario import (
     LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData
 )
 from app.config import settings
-import bcrypt
-from app.utils.logger import app_logger as logger
+from passlib.context import CryptContext
 
-router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
-
-# OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ──────────────────────────────────────────
 # UTILIDADES JWT
 # ──────────────────────────────────────────
 def crear_hash_password(password: str) -> str:
-    pwd_bytes = password.encode("utf-8")
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
+    return pwd_context.hash(password)
 
 
 def verificar_password(password_plano: str, hash_guardado: str) -> bool:
     try:
-        return bcrypt.checkpw(
-            password_plano.encode("utf-8"),
-            hash_guardado.encode("utf-8")
-        )
-    except Exception:
+        return pwd_context.verify(password_plano, hash_guardado)
+    except Exception as err:
+        logger.error(f"Error verificando password: {err}")
         return False
 
 
@@ -92,8 +84,9 @@ def get_admin_actual(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
 @router.post("/login", response_model=TokenResponse, summary="Iniciar sesión")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """Autenticar usuario y obtener token JWT"""
+    email_limpio = request.email.strip()
     usuario = db.query(Usuario).filter(
-        Usuario.email == request.email,
+        Usuario.email.ilike(email_limpio),
         Usuario.activo == True
     ).first()
 

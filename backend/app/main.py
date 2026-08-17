@@ -36,9 +36,8 @@ async def lifespan(app: FastAPI):
     if not check_db_connection():
         logger.error("No se pudo conectar a PostgreSQL. Verificar configuración.")
     else:
-        # Crear tablas si no existen (solo en desarrollo)
-        if settings.ENVIRONMENT == "development":
-            create_tables()
+        # Crear tablas y garantizar usuario admin inicial si no existe
+        create_tables()
 
     # Crear directorios necesarios
     settings.upload_path

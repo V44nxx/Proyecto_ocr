@@ -45,10 +45,32 @@ def get_db():
 
 
 def create_tables():
-    """Crear todas las tablas del modelo (para desarrollo)"""
+    """Crear todas las tablas del modelo e inicializar usuario admin si no existe"""
     from app.models import usuario, documento, persona, comparacion, diferencia
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas de base de datos creadas/verificadas")
+
+    try:
+        from app.models.usuario import Usuario
+        from app.routers.auth import crear_hash_password
+        db = SessionLocal()
+        try:
+            admin_user = db.query(Usuario).filter(Usuario.email == "admin@ocr.com").first()
+            if not admin_user:
+                nuevo_admin = Usuario(
+                    email="admin@ocr.com",
+                    nombre="Administrador Sistema",
+                    password_hash=crear_hash_password("Admin123!"),
+                    rol="admin",
+                    activo=True
+                )
+                db.add(nuevo_admin)
+                db.commit()
+                logger.info("Usuario administrador inicial creado: admin@ocr.com")
+        finally:
+            db.close()
+    except Exception as err:
+        logger.warning(f"No se pudo verificar/crear usuario admin inicial: {err}")
 
 
 def check_db_connection():

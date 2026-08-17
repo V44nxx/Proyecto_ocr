@@ -39,10 +39,11 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 
 # INTERNAL_BACKEND_URL: URL interna del backend en Docker para el proxy /api/*
 # Configurar en Dokploy como Environment Variable del servicio Frontend:
 #   INTERNAL_BACKEND_URL=http://<nombre-servicio-fastapi-en-dokploy>:8000
-ENV INTERNAL_BACKEND_URL=http://localhost:8000
+ENV INTERNAL_BACKEND_URL=http://ocr-proyecto-fastapi-d5qhym:8000
 
 CMD ["node", "server.js"]

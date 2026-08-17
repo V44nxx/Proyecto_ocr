@@ -1,24 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Fallback por defecto: nombre del servicio Docker Swarm en Dokploy
-const DEFAULT_BACKEND = "http://ocr-proyecto-fastapi-d5qhym:8000";
-
-const getTargetBackend = (): string => {
+// Lista de candidatos de resolución dentro de Docker Swarm / Dokploy
+const getBackendCandidates = (): string[] => {
   const envUrl = process.env.INTERNAL_BACKEND_URL;
+  const candidates: string[] = [];
+
   if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim();
+    candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
-  return DEFAULT_BACKEND;
+
+  // Nombre de servicio en Docker Swarm (VIP)
+  candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
+  // Nombre de tarea directa en Docker Swarm (DNS de réplicas directas)
+  candidates.push("http://tasks.ocr-proyecto-fastapi-d5qhym:8000");
+  // Fallback local
+  candidates.push("http://127.0.0.1:8000");
+
+  return Array.from(new Set(candidates));
 };
 
 async function handleProxy(
   req: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  const backendBase = getTargetBackend().replace(/\/$/, "");
   const path = params.path ? params.path.join("/") : "";
   const searchParams = req.nextUrl.search || "";
-  const targetUrl = `${backendBase}/api/${path}${searchParams}`;
+  const candidates = getBackendCandidates();
 
   const headers = new Headers();
   req.headers.forEach((value, key) => {
@@ -41,41 +48,49 @@ async function handleProxy(
     }
   }
 
-  try {
-    const backendResponse = await fetch(targetUrl, {
-      method,
-      headers,
-      body,
-      cache: "no-store",
-    });
+  let lastError: any = null;
 
-    const responseHeaders = new Headers();
-    backendResponse.headers.forEach((value, key) => {
-      const k = key.toLowerCase();
-      // Ignorar transfer-encoding para evitar conflictos con Next.js Response
-      if (k !== "transfer-encoding" && k !== "content-encoding") {
-        responseHeaders.set(key, value);
-      }
-    });
+  for (const backendBase of candidates) {
+    const targetUrl = `${backendBase}/api/${path}${searchParams}`;
 
-    // En respuestas 204 No Content o 304 Not Modified, el body DEBE ser null
-    const isNoBodyStatus = backendResponse.status === 204 || backendResponse.status === 304;
-    const responseData = isNoBodyStatus ? null : await backendResponse.arrayBuffer();
+    try {
+      const backendResponse = await fetch(targetUrl, {
+        method,
+        headers,
+        body,
+        cache: "no-store",
+      });
 
-    return new NextResponse(responseData, {
-      status: backendResponse.status,
-      statusText: backendResponse.statusText,
-      headers: responseHeaders,
-    });
-  } catch (error: any) {
-    console.error(`[Next.js API Route Proxy Error] ${method} ${targetUrl}:`, error?.message || error);
-    return NextResponse.json(
-      {
-        detail: `No se pudo conectar con el servicio FastAPI backend en (${targetUrl}). Error: ${error?.message || "Servicio no alcanzable"}`,
-      },
-      { status: 502 }
-    );
+      const responseHeaders = new Headers();
+      backendResponse.headers.forEach((value, key) => {
+        const k = key.toLowerCase();
+        if (k !== "transfer-encoding" && k !== "content-encoding") {
+          responseHeaders.set(key, value);
+        }
+      });
+
+      // En respuestas 204 No Content o 304 Not Modified, el body DEBE ser null
+      const isNoBodyStatus = backendResponse.status === 204 || backendResponse.status === 304;
+      const responseData = isNoBodyStatus ? null : await backendResponse.arrayBuffer();
+
+      return new NextResponse(responseData, {
+        status: backendResponse.status,
+        statusText: backendResponse.statusText,
+        headers: responseHeaders,
+      });
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Proxy Fallback] Falló conexión con ${targetUrl} (${err?.message || err}). Intentando siguiente candidato...`);
+    }
   }
+
+  console.error(`[Next.js API Route Proxy Fatal] No se pudo conectar a ningún backend para ${method} /api/${path}:`, lastError);
+  return NextResponse.json(
+    {
+      detail: `No se pudo conectar con el backend FastAPI en ninguno de los candidatos (${candidates.join(", ")}). Error: ${lastError?.message || "Servicio no alcanzable"}`,
+    },
+    { status: 502 }
+  );
 }
 
 export const GET = handleProxy;

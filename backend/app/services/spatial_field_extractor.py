@@ -431,11 +431,14 @@ class SpatialFieldExtractor:
                     sub_txt = " ".join(toks).strip()
                 elif campo in ["fecha_nacimiento", "fecha_expedicion"]:
                     dt_val = validador.parsear_fecha(sub_txt)
-                    if not dt_val:
+                    if dt_val:
+                        sub_txt = dt_val.isoformat()
+                    else:
                         m_f = re.search(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", sub_txt, re.IGNORECASE)
                         if not m_f:
                             continue
-                        sub_txt = m_f.group(0)
+                        dt_p = validador.parsear_fecha(m_f.group(0))
+                        sub_txt = dt_p.isoformat() if dt_p else m_f.group(0)
                 elif campo == "lugar_expedicion":
                     m_l = re.sub(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d+\b", "", sub_txt, flags=re.IGNORECASE)
                     m_l = self.NO_LUGAR_HEADER_WORDS.sub("", m_l)
@@ -472,11 +475,14 @@ class SpatialFieldExtractor:
 
             if campo in ["fecha_nacimiento", "fecha_expedicion"]:
                 dt_val = validador.parsear_fecha(txt)
-                if not dt_val:
+                if dt_val:
+                    txt = dt_val.isoformat()
+                else:
                     m_f = re.search(r"\b\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\b|\b\d{1,2}/\d{1,2}/\d{4}\b|\b\d{4}-\d{2}-\d{2}\b", txt, re.IGNORECASE)
                     if not m_f:
                         continue
-                    txt = m_f.group(0)
+                    dt_p = validador.parsear_fecha(m_f.group(0))
+                    txt = dt_p.isoformat() if dt_p else m_f.group(0)
 
             if campo == "lugar_expedicion":
                 # 1. Eliminar fechas y números

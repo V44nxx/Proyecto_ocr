@@ -37,7 +37,8 @@ class ValidadorColombia:
         r"LUGAR|Y|INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|FIRMA|FIRMAS|REGISTRADOR|REGISTRADORA|REGISTRADURIA|"
         r"PANENZ|BAILS|DANCING|DEPARTAMENTO|MUNICIPIO|OFICINA|PROVINCIA|ESTADO|ESTADOL|CIVIL|GIVIL|ALDEL|DIRECTOR|SECRETARIO|"
         r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|"
-        r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH)\b",
+        r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
+        r"NACIMIENTO|NACIDO|MA|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC|ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b",
         re.IGNORECASE,
     )
 
@@ -273,38 +274,42 @@ class ValidadorColombia:
     def normalizar_lugar(cls, texto: str) -> Optional[str]:
         """
         Normaliza lugar de expedición:
-          - Solo letras, espacios, comas y guiones válidos
-          - Mayúsculas
+          - Extrae el municipio exacto si viene en formato 'MUNICIPIO (DEPARTAMENTO)'
+          - Elimina prefijos de etiquetas residuales (ej: 'MA DE NACIMIENTO CARTAGO' -> 'CARTAGO')
           - Elimina palabras genéricas (COLOMBIA, REPÚBLICA, REGISTRADOR, etc.)
-          - Limpia ruido de OCR (como 'A---M--')
+          - Limpia ruido de OCR
           - Mínimo 3 caracteres alfabéticos
         """
         if not texto:
             return None
 
-        # Reemplazar paréntesis por comas para formatear "MUNICIPIO (DEPTO)" -> "MUNICIPIO, DEPTO"
-        texto = texto.replace("(", ", ").replace(")", " ")
+        txt = str(texto).strip()
 
-        # Eliminar palabras genéricas y de registradores que no son lugares
-        texto = cls._PALABRAS_NO_LUGAR.sub("", texto)
+        # 1. Si viene con paréntesis "MUNICIPIO (DEPTO)", tomar el municipio
+        m_par = re.search(r"([A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]{3,30})\s*\)", txt)
+        if m_par:
+            txt = m_par.group(1).strip()
 
-        # Solo letras, espacios, comas y guiones
-        texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s,\-]", " ", texto)
-        # Limpiar guiones repetidos (ruido OCR)
-        texto = re.sub(r"-{2,}", " ", texto)
-        texto = re.sub(r"\s+", " ", texto).strip(" ,-")
-        texto = texto.upper()
+        # 2. Eliminar palabras de encabezado, etiquetas y registradores
+        txt = cls._PALABRAS_NO_LUGAR.sub(" ", txt)
 
-        # Validar que tenga al menos una palabra de 3 o más letras reales (no solo letras sueltas como 'A M')
-        palabras_reales = [w for w in texto.split() if len(w) >= 3 and not re.match(r"^[\-]+$", w)]
+        # 3. Solo letras y espacios
+        txt = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]", " ", txt)
+        txt = re.sub(r"\s+", " ", txt).strip().upper()
+
+        # 4. Eliminar prefijos residuales cortos como "MA ", "DE ", "DEL ", "EN "
+        txt = re.sub(r"^(?:MA\s+|DE\s+|DEL\s+|EN\s+|LA\s+|EL\s+|Y\s+)+", "", txt).strip()
+
+        # Validar que tenga al menos una palabra de 3 o más letras reales
+        palabras_reales = [w for w in txt.split() if len(w) >= 3]
         if not palabras_reales:
             return None
 
-        texto_limpio = " ".join(texto.split())
+        texto_limpio = " ".join(txt.split())
 
         if len(texto_limpio) < 3 or texto_limpio in (
             "DE", "Y DE", "NACIONAL", "PERSONAL", "DE EXPIRACION", "DE EXPIRACIÓN", 
-            "INDICE DERECHO", "INDICE IZQUIERDO", "ESTADO CIVIL"
+            "INDICE DERECHO", "INDICE IZQUIERDO", "ESTADO CIVIL", "MA DE"
         ):
             return None
 

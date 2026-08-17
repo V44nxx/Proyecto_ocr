@@ -294,6 +294,19 @@ class ColombiaGeoService:
         "RETORNO": "EL RETORNO",
     }
 
+    def normalizar_municipio(self, candidato: str) -> Optional[str]:
+        """Normaliza un nombre de municipio contra el catálogo DANE."""
+        if not candidato:
+            return None
+        limpio = self.limpiar_texto_crudo(candidato)
+        if not limpio:
+            return None
+        if limpio in self.ALIASES_CANONICOS:
+            return self.ALIASES_CANONICOS[limpio]
+        if limpio in self.MUNICIPIOS:
+            return limpio
+        return self.resolver_municipio_fuzzy(limpio, umbral=78)
+
     def resolver_municipio_fuzzy(self, candidato: str, umbral: int = 80) -> Optional[str]:
         """
         Corrige errores tipográficos de OCR contra el catálogo oficial DANE usando RapidFuzz.

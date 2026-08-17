@@ -1189,7 +1189,23 @@ class ExtractorService:
                     if m_sub:
                         return m_sub.group(1)
 
-        return None
+    def _sanitizar_y_corregir_fechas_y_lugares(self, resultado: Dict[str, Any], texto: str, lineas: List[str]):
+        """Garantiza coherencia cronológica y limpieza de nombres/lugares."""
+        # 1. Corrección cronológica de fechas
+        fn = resultado.get("fecha_nacimiento")
+        fe = resultado.get("fecha_expedicion")
+        if fn and fe:
+            dt_fn = validador.parsear_fecha(fn)
+            dt_fe = validador.parsear_fecha(fe)
+            if dt_fn and dt_fe and dt_fn > dt_fe:
+                resultado["fecha_nacimiento"], resultado["fecha_expedicion"] = dt_fe.isoformat(), dt_fn.isoformat()
+
+        # 2. Si lugar_expedicion contiene un departamento o ruido, normalizarlo
+        lugar = resultado.get("lugar_expedicion")
+        if lugar:
+            lugar_clean = colombia_geo.normalizar_municipio(lugar)
+            if lugar_clean and lugar_clean not in colombia_geo.DEPARTAMENTOS:
+                resultado["lugar_expedicion"] = lugar_clean
 
     # ──────────────────────────────────────────
     # CÁLCULO DE CONFIANZA

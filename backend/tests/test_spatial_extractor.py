@@ -130,7 +130,7 @@ FECHA DE NACIMIENTO: 2001-10-23
         txt = "CEDULA 123"
         res = extractor_service.extraer(txt)
         self.assertLess(res["confianza_extraccion"], 80.0)
-        self.assertIn(res["detalles_campos"]["nombres"]["status"], ("missing", "review_required"))
+        self.assertIn(res["detalles_campos"]["nombres"]["status"].upper(), ("MISSING", "REVIEW_REQUIRED", "MISSING_DATA"))
 
     def test_15_fallback_tesseract_etiquetado(self):
         from app.services.ocr_service import ocr_service

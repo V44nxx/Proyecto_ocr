@@ -100,14 +100,17 @@ class TestCasoA_ProcesamientoExitoso:
 
         with patch("app.services.ocr_service.google_document_ai_service") as mock_docai:
             mock_docai.disponible = True
-            mock_docai.procesar_imagen.return_value = (TEXTO_CEDULA_VALIDO, 500.0)
+            mock_struct = MagicMock()
+            mock_struct.text = TEXTO_CEDULA_VALIDO
+            mock_struct.tiempo_ms = 500.0
+            mock_docai.procesar_documento_estructurado.return_value = mock_struct
 
             from app.services.ocr_service import OCRService
             servicio = OCRService()
             img_fake = np.zeros((100, 100, 3), dtype=np.uint8)
 
             with patch("cv2.imencode", return_value=(True, MagicMock(tobytes=lambda: b"img"))):
-                texto, motor = servicio._ocr_imagen(img_fake, pagina_num=1)
+                texto, motor, *_ = servicio._ocr_imagen(img_fake, pagina_num=1)
 
             assert motor == "google_document_ai"
             assert TEXTO_CEDULA_VALIDO in texto
@@ -128,15 +131,15 @@ class TestCasoB_FallbackTesseract:
              patch("app.services.ocr_service.OCRService._ocr_con_tesseract") as mock_tess:
 
             mock_docai.disponible = True
-            mock_docai.procesar_imagen.side_effect = Exception("API Error simulado")
-            mock_tess.return_value = TEXTO_CEDULA_VALIDO
+            mock_docai.procesar_documento_estructurado.side_effect = Exception("API Error simulado")
+            mock_tess.return_value = (TEXTO_CEDULA_VALIDO, [])
 
             from app.services.ocr_service import OCRService
             servicio = OCRService()
             img_fake = np.zeros((100, 100, 3), dtype=np.uint8)
 
             with patch("cv2.imencode", return_value=(True, MagicMock(tobytes=lambda: b"img"))):
-                texto, motor = servicio._ocr_imagen(img_fake, pagina_num=1)
+                texto, motor, *_ = servicio._ocr_imagen(img_fake, pagina_num=1)
 
             assert motor == "tesseract_fallback"
             mock_tess.assert_called_once()
@@ -149,15 +152,18 @@ class TestCasoB_FallbackTesseract:
              patch("app.services.ocr_service.OCRService._ocr_con_tesseract") as mock_tess:
 
             mock_docai.disponible = True
-            mock_docai.procesar_imagen.return_value = ("", 100.0)
-            mock_tess.return_value = TEXTO_CEDULA_VALIDO
+            mock_struct = MagicMock()
+            mock_struct.text = ""
+            mock_struct.tiempo_ms = 100.0
+            mock_docai.procesar_documento_estructurado.return_value = mock_struct
+            mock_tess.return_value = (TEXTO_CEDULA_VALIDO, [])
 
             from app.services.ocr_service import OCRService
             servicio = OCRService()
             img_fake = np.zeros((100, 100, 3), dtype=np.uint8)
 
             with patch("cv2.imencode", return_value=(True, MagicMock(tobytes=lambda: b"img"))):
-                texto, motor = servicio._ocr_imagen(img_fake, pagina_num=1)
+                texto, motor, *_ = servicio._ocr_imagen(img_fake, pagina_num=1)
 
             assert motor == "tesseract_fallback"
 
@@ -169,13 +175,13 @@ class TestCasoB_FallbackTesseract:
              patch("app.services.ocr_service.OCRService._ocr_con_tesseract") as mock_tess:
 
             mock_docai.disponible = False
-            mock_tess.return_value = TEXTO_CEDULA_VALIDO
+            mock_tess.return_value = (TEXTO_CEDULA_VALIDO, [])
 
             from app.services.ocr_service import OCRService
             servicio = OCRService()
             img_fake = np.zeros((100, 100, 3), dtype=np.uint8)
 
-            texto, motor = servicio._ocr_imagen(img_fake, pagina_num=1)
+            texto, motor, *_ = servicio._ocr_imagen(img_fake, pagina_num=1)
 
             assert motor == "tesseract_fallback"
             mock_tess.assert_called_once()
@@ -353,7 +359,8 @@ class TestCasoH_CredencialesFaltantes:
 
     def test_servicio_no_disponible_sin_credenciales(self):
         """H: El servicio queda no disponible si no hay credenciales configuradas."""
-        with patch("app.services.google_document_ai_service.settings") as mock_settings:
+        with patch("app.services.google_document_ai_service.settings") as mock_settings, \
+             patch("app.services.google_document_ai_service.os.path.exists", return_value=False):
             mock_settings.GOOGLE_DOCUMENT_AI_ENABLED = True
             mock_settings.GOOGLE_DOCUMENT_AI_PROCESSOR_ID = "test_id"
             mock_settings.GOOGLE_APPLICATION_CREDENTIALS = ""  # Sin credenciales

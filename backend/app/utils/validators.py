@@ -214,6 +214,20 @@ class ValidadorColombia:
                 except ValueError:
                     pass
 
+        # ── Formato DDMMMYYYY sin separador (ej. 22OCT2006) ─────────────────
+        match_unseparated = re.search(
+            r"\b(\d{1,2})([A-Z]{3,4})(\d{4})\b",
+            texto.upper(),
+        )
+        if match_unseparated:
+            dia_t, mes_t, anio_t = match_unseparated.groups()
+            mes_num = MESES.get(mes_t.upper())
+            if mes_num:
+                try:
+                    return date(int(anio_t), mes_num, int(dia_t))
+                except ValueError:
+                    pass
+
         # ── Formato MMM DD YYYY (ej. NOV 07 1987, NOV-08-2005) ─────────────
         match_mdy_abrev = re.search(
             r"\b([A-Z]{3,4})[\s/\-\.](\d{1,2})[\s/\-\.](\d{4})\b",

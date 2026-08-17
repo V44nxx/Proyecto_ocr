@@ -139,8 +139,8 @@ class GoogleDocumentAIService:
             )
             return
 
-        # Verificar que el archivo de credenciales existe
-        creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        # Verificar que el archivo de credenciales existe (o crearlo desde env var si no existe)
+        creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS or "/app/credentials/google-document-ai.json"
         if not os.path.exists(creds_path):
             # Probar rutas relativas comunes
             cand1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", creds_path))
@@ -153,11 +153,42 @@ class GoogleDocumentAIService:
             elif os.path.exists(cand3):
                 creds_path = cand3
             else:
-                logger.warning(
-                    f"[DocAI] Archivo de credenciales no encontrado en la ruta configurada ({creds_path}). "
-                    f"Google Document AI no estará disponible. Se usará Tesseract."
-                )
-                return
+                # Si el archivo no existe en el contenedor, crearlo dinámicamente desde GOOGLE_CREDENTIALS_JSON o GOOGLE_CREDENTIALS_BASE64
+                raw_json = getattr(settings, "GOOGLE_CREDENTIALS_JSON", None) or os.getenv("GOOGLE_CREDENTIALS_JSON")
+                b64_json = getattr(settings, "GOOGLE_CREDENTIALS_BASE64", None) or os.getenv("GOOGLE_CREDENTIALS_BASE64")
+
+                target_path = creds_path if os.path.isabs(creds_path) else os.path.abspath(creds_path)
+                written = False
+
+                if raw_json and raw_json.strip():
+                    try:
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        with open(target_path, "w", encoding="utf-8") as f:
+                            f.write(raw_json.strip())
+                        creds_path = target_path
+                        written = True
+                        logger.info(f"[DocAI] Archivo de credenciales generado dinámicamente en '{creds_path}' desde GOOGLE_CREDENTIALS_JSON")
+                    except Exception as err:
+                        logger.error(f"[DocAI] Error al escribir credenciales desde GOOGLE_CREDENTIALS_JSON: {err}")
+                elif b64_json and b64_json.strip():
+                    try:
+                        import base64
+                        decoded = base64.b64decode(b64_json.strip()).decode("utf-8")
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        with open(target_path, "w", encoding="utf-8") as f:
+                            f.write(decoded)
+                        creds_path = target_path
+                        written = True
+                        logger.info(f"[DocAI] Archivo de credenciales generado dinámicamente en '{creds_path}' desde GOOGLE_CREDENTIALS_BASE64")
+                    except Exception as err:
+                        logger.error(f"[DocAI] Error al escribir credenciales desde GOOGLE_CREDENTIALS_BASE64: {err}")
+
+                if not written and not os.path.exists(creds_path):
+                    logger.warning(
+                        f"[DocAI] Archivo de credenciales no encontrado en la ruta configurada ({creds_path}). "
+                        f"Google Document AI no estará disponible. Se usará Tesseract."
+                    )
+                    return
 
         creds_path = os.path.abspath(creds_path)
 

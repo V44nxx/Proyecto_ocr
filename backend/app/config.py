@@ -2,6 +2,7 @@
 Configuración global del sistema OCR
 v2: agrega soporte para Google Cloud Document AI
 """
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import AnyUrl
 from functools import lru_cache
@@ -62,6 +63,9 @@ class Settings(BaseSettings):
     # En Docker: /app/credentials/google-document-ai.json
     # En local:  ./credentials/google-document-ai.json
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    # Contenido raw o Base64 del JSON de credenciales (para producción/Dokploy sin montar archivos)
+    GOOGLE_CREDENTIALS_JSON: Optional[str] = None
+    GOOGLE_CREDENTIALS_BASE64: Optional[str] = None
     # Switch para habilitar/deshabilitar Google Document AI
     # Si es False, usa Tesseract directamente
     GOOGLE_DOCUMENT_AI_ENABLED: bool = True

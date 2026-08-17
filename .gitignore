@@ -5,7 +5,12 @@
 *.env
 
 # Google Cloud Credentials (NUNCA subir al repositorio)
+credentials/
 /credentials/
+backend/credentials/
+google-document-ai.json
+*-credentials.json
+*service-account*.json
 
 # Python / Virtual Environment
 .venv/

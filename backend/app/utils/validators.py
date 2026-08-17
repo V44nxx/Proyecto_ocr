@@ -30,12 +30,14 @@ class ValidadorColombia:
         re.IGNORECASE,
     )
 
-    # Palabras que no son nombres de lugar válidos (aparecen en encabezados y labels)
+    # Palabras que no son nombres de lugar válidos (aparecen en encabezados, labels, firmas y registradores)
     _PALABRAS_NO_LUGAR = re.compile(
         r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|"
         r"TARJETA|CEDULA|CÉDULA|NUIP|PERSONAL|NACIONAL|FECHA|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
-        r"LUGAR|Y|INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|FIRMA|REGISTRADOR|REGISTRADURIA|PANENZ|BAILS|DANCING|"
-        r"DEPARTAMENTO|MUNICIPIO|OFICINA|PROVINCIA|ALERGIF|ALMABEATRIZ|RENGIFO|LOPET|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|SANCHEZ|TORRES)\b",
+        r"LUGAR|Y|INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|FIRMA|FIRMAS|REGISTRADOR|REGISTRADORA|REGISTRADURIA|"
+        r"PANENZ|BAILS|DANCING|DEPARTAMENTO|MUNICIPIO|OFICINA|PROVINCIA|ESTADO|CIVIL|DIRECTOR|SECRETARIO|"
+        r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|"
+        r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH)\b",
         re.IGNORECASE,
     )
 
@@ -267,35 +269,46 @@ class ValidadorColombia:
 
         return None
 
-    # ──────────────────────────────────────────
-    # LUGAR DE EXPEDICIÓN
-    # ──────────────────────────────────────────
     @classmethod
     def normalizar_lugar(cls, texto: str) -> Optional[str]:
         """
         Normaliza lugar de expedición:
-          - Solo letras, espacios y guiones
+          - Solo letras, espacios, comas y guiones válidos
           - Mayúsculas
-          - Elimina palabras genéricas (COLOMBIA, REPÚBLICA, etc.)
-          - Mínimo 3 caracteres
-
-        FIX: antes no filtraba palabras de encabezado → "REPUBLICA DE
-        COLOMBIA" era aceptado como lugar de expedición válido.
+          - Elimina palabras genéricas (COLOMBIA, REPÚBLICA, REGISTRADOR, etc.)
+          - Limpia ruido de OCR (como 'A---M--')
+          - Mínimo 3 caracteres alfabéticos
         """
         if not texto:
             return None
 
-        # Eliminar palabras genéricas que no son lugares
+        # Reemplazar paréntesis por comas para formatear "MUNICIPIO (DEPTO)" -> "MUNICIPIO, DEPTO"
+        texto = texto.replace("(", ", ").replace(")", " ")
+
+        # Eliminar palabras genéricas y de registradores que no son lugares
         texto = cls._PALABRAS_NO_LUGAR.sub("", texto)
 
-        # Solo letras, espacios y guiones
-        texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]", "", texto)
-        texto = " ".join(texto.split()).upper()
+        # Solo letras, espacios, comas y guiones
+        texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s,\-]", " ", texto)
+        # Limpiar guiones repetidos (ruido OCR)
+        texto = re.sub(r"-{2,}", " ", texto)
+        texto = re.sub(r"\s+", " ", texto).strip(" ,-")
+        texto = texto.upper()
 
-        if len(texto) < 3 or texto in ("DE", "Y DE", "NACIONAL", "PERSONAL", "DE EXPIRACION", "DE EXPIRACIÓN", "INDICE DERECHO"):
+        # Validar que tenga al menos una palabra de 3 o más letras reales (no solo letras sueltas como 'A M')
+        palabras_reales = [w for w in texto.split() if len(w) >= 3 and not re.match(r"^[\-]+$", w)]
+        if not palabras_reales:
             return None
 
-        return texto
+        texto_limpio = " ".join(texto.split())
+
+        if len(texto_limpio) < 3 or texto_limpio in (
+            "DE", "Y DE", "NACIONAL", "PERSONAL", "DE EXPIRACION", "DE EXPIRACIÓN", 
+            "INDICE DERECHO", "INDICE IZQUIERDO", "ESTADO CIVIL"
+        ):
+            return None
+
+        return texto_limpio
 
 
 validador = ValidadorColombia()

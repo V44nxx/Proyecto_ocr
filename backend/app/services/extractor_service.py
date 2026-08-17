@@ -157,15 +157,23 @@ class ExtractorService:
         "EL BANCO", "MOMPOX", "MOMPOS", "CARMEN DE BOLIVAR",
         "SAN MARCOS", "PLANETA RICA", "SAHAGUN", "SAHAGÚN", "CERETE",
         "CERETÉ", "LORICA", "TIERRALTA",
-        "MAICAO", "MANAURE", "URIBIA", "ALBANIA",
-        "TUMACO", "IPIALES", "LA UNION", "BELEN DE LOS ANDAQUIES",
-        "PUERTO ASIS", "PUERTO ASÍS", "PIAMONTE",
-        "ACACIAS", "GRANADA", "PUERTO LOPEZ", "PUERTO LÓPEZ",
-        "RESTREPO", "CUMARAL",
-        "TAURAMENA", "AGUAZUL", "OROCUE", "OROCUÉ", "PAZ DE ARIPORO",
-        "SARAVENA", "TAME", "ARAUQUITA", "FORTUL",
-        "MIRAFLORES", "EL RETORNO",
-        "PUERTO GAITAN", "LA MACARENA", "VISTA HERMOSA",
+        # Departamentos de Colombia
+        "AMAZONAS", "ANTIOQUIA", "ARAUCA", "ATLANTICO", "ATLÁNTICO", "BOLIVAR", "BOLÍVAR",
+        "BOYACA", "BOYACÁ", "CALDAS", "CAQUETA", "CAQUETÁ", "CASANARE", "CAUCA", "CESAR",
+        "CHOCO", "CHOCÓ", "CORDOBA", "CÓRDOBA", "CUNDINAMARCA", "GUAINIA", "GUAINÍA",
+        "GUAVIARE", "HUILA", "LA GUAJIRA", "GUAJIRA", "MAGDALENA", "META", "NARIÑO",
+        "NORTE DE SANTANDER", "PUTUMAYO", "QUINDIO", "QUINDÍO", "RISARALDA",
+        "SAN ANDRES Y PROVIDENCIA", "SAN ANDRES", "SAN ANDRÉS", "SANTANDER", "SUCRE",
+        "TOLIMA", "VALLE DEL CAUCA", "VALLE", "VAUPES", "VAUPÉS", "VICHADA", "BOGOTA D.C.", "BOGOTA D.C", "BOGOTA DC",
+        # Municipios de Caquetá y región sur
+        "CURILLO", "EL PAUJIL", "PAUJIL", "LA MONTAÑITA", "MONTAÑITA", "MILAN", "MILÁN",
+        "MORELIA", "SAN JOSE DEL FRAGUA", "SOLANO", "SOLITA", "VALPARAISO", "VALPARAÍSO",
+        "CARTAGENA DEL CHAIRA", "CHAIRA",
+        "PITALITO", "ACEVEDO", "AGRADO", "AIPE", "ALGECIRAS", "ALTAMIRA", "BARAYA",
+        "CAMPOALEGRE", "COLOMBIA", "ELIAS", "GUADALUPE", "HOBO", "IQUIRA", "ISNOS",
+        "LA ARGENTINA", "LA PLATA", "NATAGA", "OPORAPA", "PAICOL", "PALERMO", "PALESTINA",
+        "RIVERA", "SALADOBLANCO", "SAN AGUSTIN", "SAN AGUSTÍN", "SANTA MARIA", "SUAZA",
+        "TARQUI", "TELLO", "TERUEL", "TESALIA", "TIMANA", "TIMANÁ", "VILLAVIEJA", "YAGUARA",
     ]
 
     # Patrón compilado de municipios (para búsqueda rápida)
@@ -395,6 +403,9 @@ class ExtractorService:
                 elif f_unica.year > 2010 and not resultado["fecha_expedicion"]:
                     resultado["fecha_expedicion"] = f_unica.isoformat()
 
+        # ── Sanitización y Corrección Cronológica Garantizada ─────────────
+        self._sanitizar_y_corregir_fechas_y_lugares(resultado, texto, lineas)
+
         # Calcular confianza
         resultado["confianza_extraccion"] = self._calcular_confianza(
             resultado, scores_confianza
@@ -529,6 +540,13 @@ class ExtractorService:
             "estado_registro": getattr(group, "status", "VALID"),
             "detalles_campos": {}
         }
+
+        # Sanitizar y corregir cronología de fechas y lugar combinado
+        self._sanitizar_y_corregir_fechas_y_lugares(
+            res,
+            f"{front_data.get('texto', '')} {back_data.get('texto', '')}",
+            list(front_data.get("lineas", [])) + list(back_data.get("lineas", []))
+        )
 
         # Combinar detalles_campos con validación cruzada entre caras
         f_det = front_data.get("detalles_campos", {})
@@ -847,6 +865,62 @@ class ExtractorService:
         "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12,
         "JAN": 1, "APR": 4, "AUG": 8, "DEC": 12,
     }
+
+    def _sanitizar_y_corregir_fechas_y_lugares(self, resultado: Dict[str, Any], texto: str, lineas: List[str]):
+        """
+        Garantiza consistencia cronológica de fechas y validación de lugares:
+          1. En Colombia la fecha de nacimiento DEBE ser anterior a la de expedición.
+             Si están invertidas (ej. Nacimiento 1985 y Expedición 1967), las intercambia.
+          2. Si fecha_nacimiento == fecha_expedicion (imposible para cédula de adulto),
+             busca en el texto otras fechas para asignar la correcta.
+          3. Sanitiza el lugar de expedición eliminando cualquier nombre de registrador,
+             firmas o ruido residual.
+        """
+        # 1. Validación cronológica de fechas
+        fn_str = resultado.get("fecha_nacimiento")
+        fe_str = resultado.get("fecha_expedicion")
+        
+        fn_obj = validador.parsear_fecha(fn_str) if fn_str else None
+        fe_obj = validador.parsear_fecha(fe_str) if fe_str else None
+        
+        # Buscar todas las fechas candidatas en el documento ordenadas cronológicamente
+        fechas_doc = []
+        for match in re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", texto, re.IGNORECASE):
+            f_obj = validador.parsear_fecha(match.group(1))
+            if f_obj and f_obj not in fechas_doc:
+                fechas_doc.append(f_obj)
+        fechas_doc.sort()
+
+        if fn_obj and fe_obj:
+            if fe_obj < fn_obj:
+                # Fechas invertidas -> Intercambiar
+                resultado["fecha_nacimiento"] = fe_obj.isoformat()
+                resultado["fecha_expedicion"] = fn_obj.isoformat()
+                fn_obj, fe_obj = fe_obj, fn_obj
+            elif fe_obj == fn_obj:
+                # Fechas idénticas -> Buscar fecha alternativa en el documento
+                otras = [f for f in fechas_doc if f != fn_obj]
+                if otras:
+                    fechas_combinadas = sorted([fn_obj] + otras)
+                    resultado["fecha_nacimiento"] = fechas_combinadas[0].isoformat()
+                    resultado["fecha_expedicion"] = fechas_combinadas[-1].isoformat()
+        elif not fn_obj and fe_obj and len(fechas_doc) >= 2:
+            resultado["fecha_nacimiento"] = fechas_doc[0].isoformat()
+            resultado["fecha_expedicion"] = fechas_doc[-1].isoformat()
+        elif fn_obj and not fe_obj and len(fechas_doc) >= 2:
+            resultado["fecha_nacimiento"] = fechas_doc[0].isoformat()
+            resultado["fecha_expedicion"] = fechas_doc[-1].isoformat()
+
+        # 2. Validación y limpieza de lugar de expedición
+        lugar_actual = resultado.get("lugar_expedicion")
+        if lugar_actual:
+            lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
+            if not lugar_limpio or len(lugar_limpio) < 3:
+                resultado["lugar_expedicion"] = self._extraer_lugar(texto, lineas)
+            else:
+                resultado["lugar_expedicion"] = lugar_limpio
+        else:
+            resultado["lugar_expedicion"] = self._extraer_lugar(texto, lineas)
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """

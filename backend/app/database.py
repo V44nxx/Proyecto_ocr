@@ -52,7 +52,7 @@ def create_tables():
 
     try:
         from app.models.usuario import Usuario
-        from app.routers.auth import crear_hash_password
+        from app.routers.auth import crear_hash_password, verificar_password
         db = SessionLocal()
         try:
             admin_user = db.query(Usuario).filter(Usuario.email == "admin@ocr.com").first()
@@ -67,6 +67,11 @@ def create_tables():
                 db.add(nuevo_admin)
                 db.commit()
                 logger.info("Usuario administrador inicial creado: admin@ocr.com")
+            else:
+                if not verificar_password("Admin123!", admin_user.password_hash):
+                    admin_user.password_hash = crear_hash_password("Admin123!")
+                    db.commit()
+                    logger.info("Password hash de usuario admin reparado/actualizado correctamente: admin@ocr.com")
         finally:
             db.close()
     except Exception as err:

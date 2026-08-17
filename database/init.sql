@@ -162,7 +162,7 @@ CREATE TRIGGER trigger_personas_timestamp
 INSERT INTO usuarios (email, password_hash, nombre, rol) 
 VALUES (
     'admin@ocr.com',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8eSiGHi',
+    '$2b$12$o9fg6PwcDAYntMGW7sxtm.B1dS8xLBsZv6DT.VpGpXgoWGvUmeIn.',
     'Administrador Sistema',
     'admin'
 ) ON CONFLICT (email) DO NOTHING;

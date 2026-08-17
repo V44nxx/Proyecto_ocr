@@ -550,8 +550,8 @@ class ExtractorService:
             "pagina_reverso": getattr(group, "pagina_reverso", 2),
             "tipo_documento": front_data.get("tipo_documento", back_data.get("tipo_documento", "CEDULA_CIUDADANIA")),
             "identificacion": front_data.get("identificacion") or back_data.get("identificacion"),
-            "nombres": front_data.get("nombres"),
-            "apellidos": front_data.get("apellidos"),
+            "nombres": front_data.get("nombres") or back_data.get("nombres"),
+            "apellidos": front_data.get("apellidos") or back_data.get("apellidos"),
             "fecha_nacimiento": front_data.get("fecha_nacimiento") or back_data.get("fecha_nacimiento"),
             "fecha_expedicion": back_data.get("fecha_expedicion") or front_data.get("fecha_expedicion"),
             "lugar_expedicion": back_data.get("lugar_expedicion") or front_data.get("lugar_expedicion"),
@@ -562,11 +562,33 @@ class ExtractorService:
             "detalles_campos": {}
         }
 
+        texto_combinado = f"{front_data.get('texto', '')} {back_data.get('texto', '')}"
+        lineas_combinadas = list(front_data.get("lineas", [])) + list(back_data.get("lineas", []))
+        if not lineas_combinadas:
+            lineas_combinadas = [l.strip() for l in texto_combinado.splitlines() if l.strip()]
+
+        # Fallback de nombres/apellidos si quedaron vacíos o con 'POR REVISAR'
+        invalidos_nombre = {"POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}
+        if not res["nombres"] or res["nombres"] in invalidos_nombre or not res["apellidos"] or res["apellidos"] in invalidos_nombre:
+            nom_pos, ape_pos = self._extraer_nombres_por_posicion(lineas_combinadas)
+            if nom_pos and (not res["nombres"] or res["nombres"] in invalidos_nombre):
+                res["nombres"] = nom_pos
+            if ape_pos and (not res["apellidos"] or res["apellidos"] in invalidos_nombre):
+                res["apellidos"] = ape_pos
+
+        # Fallback de lugar y fecha de expedición si quedaron vacíos
+        if not res["fecha_expedicion"] or not res["lugar_expedicion"] or res["lugar_expedicion"] in colombia_geo.DEPARTAMENTOS:
+            fexp, lug_exp = self._extraer_fecha_y_lugar_reverso_colombia(texto_combinado, lineas_combinadas)
+            if not res["fecha_expedicion"] and fexp:
+                res["fecha_expedicion"] = fexp
+            if (not res["lugar_expedicion"] or res["lugar_expedicion"] in colombia_geo.DEPARTAMENTOS) and lug_exp:
+                res["lugar_expedicion"] = lug_exp
+
         # Sanitizar y corregir cronología de fechas y lugar combinado
         self._sanitizar_y_corregir_fechas_y_lugares(
             res,
-            f"{front_data.get('texto', '')} {back_data.get('texto', '')}",
-            list(front_data.get("lineas", [])) + list(back_data.get("lineas", []))
+            texto_combinado,
+            lineas_combinadas
         )
 
         # Combinar detalles_campos con validación cruzada entre caras

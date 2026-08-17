@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import http from "http";
+import dns from "dns";
+import { URL } from "url";
 
-// Lista de candidatos de resolución dentro de Docker Swarm / Dokploy
+// Candidatos de backend dentro de Docker Swarm / Dokploy
 const getBackendCandidates = (): string[] => {
   const envUrl = process.env.INTERNAL_BACKEND_URL;
   const candidates: string[] = [];
@@ -19,6 +22,67 @@ const getBackendCandidates = (): string[] => {
   return Array.from(new Set(candidates));
 };
 
+function doHttpRequest(
+  targetUrlStr: string,
+  method: string,
+  headers: Record<string, string>,
+  bodyBuffer?: Buffer
+): Promise<{ status: number; statusText: string; headers: Record<string, string>; data: Buffer }> {
+  return new Promise((resolve, reject) => {
+    try {
+      const targetUrl = new URL(targetUrlStr);
+
+      const reqOptions: http.RequestOptions = {
+        hostname: targetUrl.hostname,
+        port: parseInt(targetUrl.port || "80", 10),
+        path: `${targetUrl.pathname}${targetUrl.search}`,
+        method: method,
+        headers: headers,
+        // Forzar IPv4 en la resolución DNS para total compatibilidad con Docker Swarm y Alpine
+        lookup: (hostname, options, callback) => {
+          dns.lookup(hostname, { family: 4 }, callback);
+        },
+        timeout: 120000,
+      };
+
+      const req = http.request(reqOptions, (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        res.on("end", () => {
+          const responseData = Buffer.concat(chunks);
+          const resHeaders: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (v && k !== "transfer-encoding" && k !== "content-encoding") {
+              resHeaders[k] = Array.isArray(v) ? v.join(", ") : v;
+            }
+          }
+          resolve({
+            status: res.statusCode || 200,
+            statusText: res.statusMessage || "OK",
+            headers: resHeaders,
+            data: responseData,
+          });
+        });
+      });
+
+      req.on("error", (err) => {
+        reject(err);
+      });
+
+      req.on("timeout", () => {
+        req.destroy(new Error(`Timeout al conectar con ${targetUrlStr}`));
+      });
+
+      if (bodyBuffer && bodyBuffer.length > 0) {
+        req.write(bodyBuffer);
+      }
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 async function handleProxy(
   req: NextRequest,
   { params }: { params: { path: string[] } }
@@ -27,24 +91,25 @@ async function handleProxy(
   const searchParams = req.nextUrl.search || "";
   const candidates = getBackendCandidates();
 
-  const headers = new Headers();
+  const reqHeaders: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     const k = key.toLowerCase();
-    // No reenviar host, connection ni content-length para que fetch calcule la longitud exacta del payload
     if (k !== "host" && k !== "connection" && k !== "content-length" && k !== "transfer-encoding") {
-      headers.set(key, value);
+      reqHeaders[key] = value;
     }
   });
 
   const method = req.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
-  let body: ArrayBuffer | undefined = undefined;
+  let bodyBuffer: Buffer | undefined = undefined;
   if (hasBody) {
     try {
-      body = await req.arrayBuffer();
+      const arrayBuffer = await req.arrayBuffer();
+      bodyBuffer = Buffer.from(arrayBuffer);
+      reqHeaders["content-length"] = bodyBuffer.length.toString();
     } catch {
-      body = undefined;
+      bodyBuffer = undefined;
     }
   }
 
@@ -54,40 +119,26 @@ async function handleProxy(
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
 
     try {
-      const backendResponse = await fetch(targetUrl, {
-        method,
-        headers,
-        body,
-        cache: "no-store",
-      });
+      const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer);
 
-      const responseHeaders = new Headers();
-      backendResponse.headers.forEach((value, key) => {
-        const k = key.toLowerCase();
-        if (k !== "transfer-encoding" && k !== "content-encoding") {
-          responseHeaders.set(key, value);
-        }
-      });
+      const isNoBody = result.status === 204 || result.status === 304;
+      const responseBody = isNoBody ? null : result.data;
 
-      // En respuestas 204 No Content o 304 Not Modified, el body DEBE ser null
-      const isNoBodyStatus = backendResponse.status === 204 || backendResponse.status === 304;
-      const responseData = isNoBodyStatus ? null : await backendResponse.arrayBuffer();
-
-      return new NextResponse(responseData, {
-        status: backendResponse.status,
-        statusText: backendResponse.statusText,
-        headers: responseHeaders,
+      return new NextResponse(responseBody as any, {
+        status: result.status,
+        statusText: result.statusText,
+        headers: result.headers,
       });
     } catch (err: any) {
       lastError = err;
-      console.warn(`[Proxy Fallback] Falló conexión con ${targetUrl} (${err?.message || err}). Intentando siguiente candidato...`);
+      console.warn(`[Proxy Fallback] Falló conexión con ${targetUrl}: ${err?.message || err}. Probando siguiente...`);
     }
   }
 
-  console.error(`[Next.js API Route Proxy Fatal] No se pudo conectar a ningún backend para ${method} /api/${path}:`, lastError);
+  console.error(`[Next.js API Route Proxy Fatal] Error para ${method} /api/${path}:`, lastError);
   return NextResponse.json(
     {
-      detail: `No se pudo conectar con el backend FastAPI en ninguno de los candidatos (${candidates.join(", ")}). Error: ${lastError?.message || "Servicio no alcanzable"}`,
+      detail: `No se pudo conectar con el backend FastAPI en ninguno de los candidatos (${candidates.join(", ")}). Causa: ${lastError?.message || "Servicio no alcanzable"}`,
     },
     { status: 502 }
   );

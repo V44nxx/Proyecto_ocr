@@ -156,25 +156,32 @@ class ExtractorService:
         "BELLO", "SAMPUES", "SINCE", "COROZAL", "MAGANGUE", "MAGANGUÉ",
         "EL BANCO", "MOMPOX", "MOMPOS", "CARMEN DE BOLIVAR",
         "SAN MARCOS", "PLANETA RICA", "SAHAGUN", "SAHAGÚN", "CERETE",
-        "CERETÉ", "LORICA", "TIERRALTA",
-        # Departamentos de Colombia
+        "CERETÉ", "LORICA", "TIERRALTA", "MAICAO", "URIBIA", "ALBANIA",
+        "TUMACO", "IPIALES", "LA UNION", "BELEN DE LOS ANDAQUIES", "PUERTO ASIS", "PUERTO ASÍS", "PIAMONTE",
+        "ACACIAS", "GRANADA", "PUERTO LOPEZ", "PUERTO LÓPEZ", "RESTREPO", "CUMARAL",
+        "TAURAMENA", "AGUAZUL", "OROCUE", "OROCUÉ", "PAZ DE ARIPORO", "SARAVENA", "TAME", "ARAUQUITA", "FORTUL",
+        "MIRAFLORES", "EL RETORNO", "PUERTO GAITAN", "LA MACARENA", "VISTA HERMOSA",
+        # Municipios de Caquetá y Huila
+        "CURILLO", "EL PAUJIL", "PAUJIL", "LA MONTAÑITA", "MONTAÑITA", "MILAN", "MILÁN",
+        "MORELIA", "SAN JOSE DEL FRAGUA", "SOLANO", "SOLITA", "VALPARAISO", "VALPARAÍSO",
+        "CARTAGENA DEL CHAIRA", "CHAIRA", "PITALITO", "ACEVEDO", "AGRADO", "AIPE", "ALGECIRAS",
+        "ALTAMIRA", "BARAYA", "CAMPOALEGRE", "COLOMBIA", "ELIAS", "GUADALUPE", "HOBO", "IQUIRA",
+        "ISNOS", "LA ARGENTINA", "LA PLATA", "NATAGA", "OPORAPA", "PAICOL", "PALERMO", "PALESTINA",
+        "RIVERA", "SALADOBLANCO", "SAN AGUSTIN", "SAN AGUSTÍN", "SANTA MARIA", "SUAZA",
+        "TARQUI", "TELLO", "TERUEL", "TESALIA", "TIMANA", "TIMANÁ", "VILLAVIEJA", "YAGUARA",
+        "BOGOTA D.C.", "BOGOTA D.C", "BOGOTA DC",
+    ]
+
+    # Departamentos de Colombia (para evitar que se tomen como lugar de expedición en vez del municipio)
+    DEPARTAMENTOS_COLOMBIA = {
         "AMAZONAS", "ANTIOQUIA", "ARAUCA", "ATLANTICO", "ATLÁNTICO", "BOLIVAR", "BOLÍVAR",
         "BOYACA", "BOYACÁ", "CALDAS", "CAQUETA", "CAQUETÁ", "CASANARE", "CAUCA", "CESAR",
         "CHOCO", "CHOCÓ", "CORDOBA", "CÓRDOBA", "CUNDINAMARCA", "GUAINIA", "GUAINÍA",
         "GUAVIARE", "HUILA", "LA GUAJIRA", "GUAJIRA", "MAGDALENA", "META", "NARIÑO",
         "NORTE DE SANTANDER", "PUTUMAYO", "QUINDIO", "QUINDÍO", "RISARALDA",
         "SAN ANDRES Y PROVIDENCIA", "SAN ANDRES", "SAN ANDRÉS", "SANTANDER", "SUCRE",
-        "TOLIMA", "VALLE DEL CAUCA", "VALLE", "VAUPES", "VAUPÉS", "VICHADA", "BOGOTA D.C.", "BOGOTA D.C", "BOGOTA DC",
-        # Municipios de Caquetá y región sur
-        "CURILLO", "EL PAUJIL", "PAUJIL", "LA MONTAÑITA", "MONTAÑITA", "MILAN", "MILÁN",
-        "MORELIA", "SAN JOSE DEL FRAGUA", "SOLANO", "SOLITA", "VALPARAISO", "VALPARAÍSO",
-        "CARTAGENA DEL CHAIRA", "CHAIRA",
-        "PITALITO", "ACEVEDO", "AGRADO", "AIPE", "ALGECIRAS", "ALTAMIRA", "BARAYA",
-        "CAMPOALEGRE", "COLOMBIA", "ELIAS", "GUADALUPE", "HOBO", "IQUIRA", "ISNOS",
-        "LA ARGENTINA", "LA PLATA", "NATAGA", "OPORAPA", "PAICOL", "PALERMO", "PALESTINA",
-        "RIVERA", "SALADOBLANCO", "SAN AGUSTIN", "SAN AGUSTÍN", "SANTA MARIA", "SUAZA",
-        "TARQUI", "TELLO", "TERUEL", "TESALIA", "TIMANA", "TIMANÁ", "VILLAVIEJA", "YAGUARA",
-    ]
+        "TOLIMA", "VALLE DEL CAUCA", "VALLE", "VAUPES", "VAUPÉS", "VICHADA"
+    }
 
     # Patrón compilado de municipios (para búsqueda rápida)
     _PATRON_MUNICIPIOS = None
@@ -189,10 +196,12 @@ class ExtractorService:
             r"\b(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})\b|"
             r"\b(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})\b"
         )
-        # Compilar patrón de municipios solo una vez
+        # Compilar patrón de municipios (priorizando nombres compuestos y largos)
         if ExtractorService._PATRON_MUNICIPIOS is None:
+            # Filtrar departamentos para que no eclipsen los municipios
+            municipios_puros = [m for m in self.MUNICIPIOS_COLOMBIA if m.upper() not in self.DEPARTAMENTOS_COLOMBIA]
             municipios_sorted = sorted(
-                self.MUNICIPIOS_COLOMBIA, key=len, reverse=True
+                municipios_puros, key=len, reverse=True
             )
             patron_str = "|".join(
                 re.escape(m) for m in municipios_sorted
@@ -913,14 +922,20 @@ class ExtractorService:
 
         # 2. Validación y limpieza de lugar de expedición
         lugar_actual = resultado.get("lugar_expedicion")
-        if lugar_actual:
-            lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
-            if not lugar_limpio or len(lugar_limpio) < 3:
-                resultado["lugar_expedicion"] = self._extraer_lugar(texto, lineas)
-            else:
+        lugar_limpio = validador.normalizar_lugar(str(lugar_actual)) if lugar_actual else None
+
+        # Si el lugar actual es un departamento (ej: CAQUETA, VALLE) o está vacío o fue ruidoso:
+        if not lugar_limpio or lugar_limpio in self.DEPARTAMENTOS_COLOMBIA:
+            # Buscar el municipio específico exacto
+            lugar_mun = self._extraer_lugar(texto, lineas)
+            if lugar_mun and lugar_mun not in self.DEPARTAMENTOS_COLOMBIA:
+                resultado["lugar_expedicion"] = lugar_mun
+            elif lugar_limpio:
                 resultado["lugar_expedicion"] = lugar_limpio
+            else:
+                resultado["lugar_expedicion"] = None
         else:
-            resultado["lugar_expedicion"] = self._extraer_lugar(texto, lineas)
+            resultado["lugar_expedicion"] = lugar_limpio
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """
@@ -1063,22 +1078,42 @@ class ExtractorService:
     # ──────────────────────────────────────────
     def _extraer_lugar(self, texto: str, lineas: List[str]) -> Optional[str]:
         """
-        Extrae lugar de expedición con tres estrategias:
-          1. Keyword + texto siguiente
-          2. Nombre de municipio colombiano en la lista
-          3. Keyword + línea adyacente
+        Extrae el municipio/ciudad de expedición exacto (no departamento genérico).
+        Prioriza la detección de la ciudad cuando viene en formato 'CIUDAD (DEPARTAMENTO)'
+        o 'FECHA CIUDAD (DEPARTAMENTO)'.
         """
-        # Estrategia 0: Buscar municipio conocido en la misma línea o adyacente a 'LUGAR' / 'EXPEDICION'
+        # Estrategia 0: Detectar formato explícito "MUNICIPIO (DEPARTAMENTO)" en las líneas
+        for linea in lineas:
+            linea_limpia = linea.strip().upper()
+            m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", linea_limpia)
+            if m_par:
+                mun_raw = m_par.group(1).strip()
+                # Quitar fechas o números iniciales que vengan en la misma línea
+                mun_sin_fecha = re.sub(r"^\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\s*|^\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\s*|^\d+\s*", "", mun_raw, flags=re.IGNORECASE).strip()
+                mun_norm = validador.normalizar_lugar(mun_sin_fecha)
+                if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
+                    return mun_norm
+
+        # Estrategia 1: Buscar municipio conocido en líneas adyacentes a 'LUGAR' / 'EXPEDICION'
         for idx, linea in enumerate(lineas):
-            if re.search(r"\b(LUGAR|EXPEDICI[OÓ]N|EXPEDIDA)\b", linea, re.IGNORECASE):
-                subtexto = "\n".join(lineas[max(0, idx - 1) : min(len(lineas), idx + 4)])
+            if re.search(r"\b(LUGAR|EXPEDICI[OÓ]N|EXPEDIDA|NACIMIENTO)\b", linea, re.IGNORECASE):
+                subtexto = "\n".join(lineas[max(0, idx - 1) : min(len(lineas), idx + 3)])
+                # Buscar si hay paréntesis en subtexto
+                m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", subtexto)
+                if m_par:
+                    mun_raw = m_par.group(1).strip()
+                    mun_sin_fecha = re.sub(r"^\d{1,2}[\s/\-\.][A-Z0-9]{3,4}[\s/\-\.]\d{4}\s*|^\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\s*|^\d+\s*", "", mun_raw, flags=re.IGNORECASE).strip()
+                    mun_norm = validador.normalizar_lugar(mun_sin_fecha)
+                    if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
+                        return mun_norm
+
                 match_mun = self._PATRON_MUNICIPIOS.search(subtexto)
                 if match_mun:
                     lug = validador.normalizar_lugar(match_mun.group(1))
-                    if lug:
+                    if lug and lug not in self.DEPARTAMENTOS_COLOMBIA:
                         return lug
 
-        # Estrategia 1: Por keyword
+        # Estrategia 2: Por keywords de lugar de expedición
         for keyword in self.KEYWORDS_LUGAR_EXP:
             patron = re.compile(
                 keyword + r"[\s:]*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s\-\.]{2,60}?)(?:\n|$|\d)",
@@ -1087,28 +1122,28 @@ class ExtractorService:
             match = patron.search(texto)
             if match:
                 lugar = match.group(1).strip()
-                # Filtrar encabezados de país que no son lugares de expedición
                 lugar_filtrado = re.sub(
                     r"\b(REPUBLICA|COLOMBIA|CIUDADANA|CIUDADANIA|IDENTIFICACION|TARJETA|CEDULA|C[EÉ]DULA)\b",
                     "",
                     lugar,
                     flags=re.IGNORECASE,
                 ).strip()
+                # Si contiene paréntesis, extraer municipio
+                m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,30})\s*\)", lugar_filtrado)
+                if m_par:
+                    mun_norm = validador.normalizar_lugar(m_par.group(1))
+                    if mun_norm and mun_norm not in self.DEPARTAMENTOS_COLOMBIA:
+                        return mun_norm
+
                 lugar_normalizado = validador.normalizar_lugar(lugar_filtrado)
-                if lugar_normalizado and len(lugar_normalizado) >= 3:
+                if lugar_normalizado and len(lugar_normalizado) >= 3 and lugar_normalizado not in self.DEPARTAMENTOS_COLOMBIA:
                     return lugar_normalizado
 
-        # Estrategia 2: Buscar cualquier municipio en lista conocida
-        match_mun = self._PATRON_MUNICIPIOS.search(texto)
-        if match_mun:
-            return validador.normalizar_lugar(match_mun.group(1))
-
-        # Estrategia 3: Línea adyacente a keyword de lugar
-        for idx, linea in enumerate(lineas):
-            if re.search(r"\b(LUGAR|EXPEDICION|EXPEDIDA)\b", linea, re.IGNORECASE):
-                candidato = self._siguiente_linea_valida(lineas, idx)
-                if candidato:
-                    return candidato
+        # Estrategia 3: Buscar cualquier municipio en lista conocida en todo el texto
+        for m in self._PATRON_MUNICIPIOS.finditer(texto):
+            lug = validador.normalizar_lugar(m.group(1))
+            if lug and lug not in self.DEPARTAMENTOS_COLOMBIA:
+                return lug
 
         return None
 

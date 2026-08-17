@@ -100,10 +100,11 @@ class SpatialFieldExtractor:
         ],
         "fecha_expedicion": [
             r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"FECHA\s+DE\s+EXPED[I1]C[I1][O0]?",
-            r"EXPED[I1]C[I1][O0]?"
+            r"FECHA\s+EXPED[I1]C[I1][O0]?", r"EXPED[I1]C[I1][O0]?"
         ],
         "lugar_expedicion": [
-            r"LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"LUGAR\s+EXPED[I1]C[I1][O0]?", r"MUN[I1]C[I1]P[I1][O0]?"
+            r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?",
+            r"LUGAR\s+EXPED[I1]C[I1][O0]?", r"EXPED[I1]C[I1][O0]?"
         ],
         "sexo": [
             r"SEX[O0]?", r"GENER[O0]?", r"GÉNER[O0]?", r"SEX"
@@ -112,10 +113,13 @@ class SpatialFieldExtractor:
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
     NO_NOMBRE_HEADER = re.compile(
-        r"(REPUBLICA|REPÚBLICA|REDUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
-        r"IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|NOMBRES|APELLIDOS|APELLID|FIRMA|FIRMADO|DIGITAL|REGISTRAD|"
-        r"OISTRAD|NATIONAL|NACIONAL|NACIONA|PERSONAL|DOCUMENTO|CIVIL|TARJETA|EXPEDICION|EXPEDICIÓN|NACIMIENTO|"
-        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|BAILS|PANENZ|DANCING)",
+        r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+        r"IDENTIFICACIÓN|NUMERO|NÚMERO|NUIP|APELLIDOS?|NOMBRES?|PRIMER|SEGUNDO|FIRMA|FIRMAS|TITULAR|DIGITAL|"
+        r"REGISTRAD.*|OISTRAD.*|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
+        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|CS|BOR|BEREN|AMEL|SANZ|TAN|FA|BAR|BER|"
+        r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|"
+        r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
+        r"BLICA|PUBLICA|PÚBLICA)\b",
         re.IGNORECASE
     )
 
@@ -168,10 +172,7 @@ class SpatialFieldExtractor:
         Calcula las fronteras cartesianas 2D (Xmin, Xmax, Ymin, Ymax) de la región del campo.
         """
         eb = etiqueta.bbox
-        layout_type = layout_info.get("layout_type", "CEDULA_AMARILLA_FRENTE")
-
-        # Límites por defecto (ancho holgado si no hay restricciones laterales)
-        x_min = max(0.0, eb.x - 0.15)
+        x_min = max(0.0, eb.x - 0.20)
         x_max = min(1.0, eb.x + max(eb.w * 4.5, 0.70))
 
         has_nombres = "nombres" in etiquetas
@@ -181,34 +182,31 @@ class SpatialFieldExtractor:
             y_nom = etiquetas["nombres"].bbox.y
             y_ape = etiquetas["apellidos"].bbox.y
             if y_ape < y_nom:
-                # Cédula Amarilla: APELLIDOS está arriba de NOMBRES (valores impresos por encima de etiquetas)
+                # Cédula Amarilla: Valores impresos por encima de etiquetas
                 if campo == "apellidos":
-                    y_min = etiquetas["identificacion"].bbox.y if "identificacion" in etiquetas else max(0.0, eb.y - 0.18)
-                    y_max = eb.y + 0.01
+                    y_min = max(0.0, eb.y - 0.20)
+                    y_max = eb.y + 0.04
                 elif campo == "nombres":
-                    y_min = y_ape
-                    y_max = eb.y + 0.01
+                    y_min = max(0.0, eb.y - 0.20)
+                    y_max = eb.y + 0.04
                 else:
                     y_min = max(0.0, eb.y - 0.15)
                     y_max = eb.y + 0.20
             else:
-                # Cédula Digital / Tarjeta Identidad: NOMBRES está arriba de APELLIDOS (valores por debajo de etiquetas)
+                # Cédula Digital / Tarjeta Identidad: Valores por debajo de etiquetas
                 if campo == "nombres":
-                    y_min = eb.y
-                    y_max = y_ape
+                    y_min = max(0.0, eb.y - 0.02)
+                    y_max = eb.y + 0.18
                 elif campo == "apellidos":
-                    y_min = eb.y
+                    y_min = max(0.0, eb.y - 0.02)
                     y_max = eb.y + 0.18
                 else:
                     y_min = eb.y
                     y_max = eb.y + 0.20
         else:
-            if campo == "apellidos":
-                y_min = max(0.0, eb.y - 0.18)
-                y_max = eb.y + 0.18
-            elif campo == "nombres":
-                y_min = max(0.0, eb.y - 0.18)
-                y_max = eb.y + 0.18
+            if campo in ["apellidos", "nombres"]:
+                y_min = max(0.0, eb.y - 0.20)
+                y_max = eb.y + 0.20
             else:
                 y_min = max(0.0, eb.y - 0.15)
                 y_max = eb.y + 0.20

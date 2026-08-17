@@ -22,6 +22,18 @@ from app.services.spatial_field_extractor import spatial_field_extractor
 from app.services.colombia_geo_service import colombia_geo
 
 
+NO_NOMBRE_HEADER = re.compile(
+    r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+    r"IDENTIFICACIÓN|NUMERO|NÚMERO|NUIP|APELLIDOS?|NOMBRES?|PRIMER|SEGUNDO|FIRMA|FIRMAS|TITULAR|DIGITAL|"
+    r"REGISTRAD.*|OISTRAD.*|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
+    r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|CS|BOR|BEREN|AMEL|SANZ|TAN|FA|BAR|BER|"
+    r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|"
+    r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
+    r"BLICA|PUBLICA|PÚBLICA)\b",
+    re.IGNORECASE
+)
+
+
 class ExtractorService:
     """
     Capa de extracción inteligente posterior al OCR.
@@ -33,6 +45,8 @@ class ExtractorService:
       4. Patrones numéricos directos (fallback NUIP)
       5. Corrección de errores OCR + reintento
     """
+
+    NO_NOMBRE_HEADER = NO_NOMBRE_HEADER
 
     # ──────────────────────────────────────────
     # TABLA DE CORRECCIONES OCR (NÚMEROS)
@@ -803,8 +817,7 @@ class ExtractorService:
                 valor = match.group(1).strip()
                 # Limitar a máximo 5 palabras y filtrar ruidos de encabezado
                 palabras = valor.split()[:5]
-                from app.services.spatial_field_extractor import spatial_field_extractor
-                palabras_validas = [p for p in palabras if len(p) >= 2 and not spatial_field_extractor.NO_NOMBRE_HEADER.search(p)]
+                palabras_validas = [p for p in palabras if len(p) >= 2 and not NO_NOMBRE_HEADER.search(p)]
                 if not palabras_validas:
                     continue
                 valor_normalizado = validador.normalizar_nombre(" ".join(palabras_validas))
@@ -861,8 +874,7 @@ class ExtractorService:
         if re.search(r"\d", txt):
             return None
         txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
-        from app.services.spatial_field_extractor import spatial_field_extractor
-        tokens = [t for t in txt_clean.split() if len(t) >= 2 and not spatial_field_extractor.NO_NOMBRE_HEADER.search(t)]
+        tokens = [t for t in txt_clean.split() if len(t) >= 2 and not NO_NOMBRE_HEADER.search(t)]
         if not tokens or len(tokens) > 5:
             return None
         res = " ".join(tokens)

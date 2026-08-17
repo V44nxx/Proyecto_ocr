@@ -3,7 +3,7 @@ import http from "http";
 import https from "https";
 import { URL } from "url";
 
-// Candidatos de backend
+// Candidatos de backend dentro y fuera de Docker Swarm / Dokploy
 const getBackendCandidates = (): string[] => {
   const envUrl = process.env.INTERNAL_BACKEND_URL;
   const candidates: string[] = [];
@@ -12,11 +12,12 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // IP directa del VPS en puerto 8000 (verificado y activo)
-  candidates.push("http://187.77.62.85:8000");
+  // Nombre de servicio en Docker Swarm (VIP)
   candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
+  // Nombre de tarea directa en Docker Swarm (DNS de réplicas directas)
   candidates.push("http://tasks.ocr-proyecto-fastapi-d5qhym:8000");
-  candidates.push("http://172.17.0.1:8000");
+  // Fallback local
+  candidates.push("http://127.0.0.1:8000");
 
   return Array.from(new Set(candidates));
 };
@@ -40,7 +41,7 @@ function doHttpRequest(
         method: method,
         headers: headers,
         ...(isHttps ? { rejectUnauthorized: false } : {}),
-        timeout: 15000, // 15 segundos timeout
+        timeout: 20000,
       };
 
       const req = client.request(reqOptions, (res) => {
@@ -50,7 +51,8 @@ function doHttpRequest(
           const responseData = Buffer.concat(chunks);
           const resHeaders: Record<string, string> = {};
           for (const [k, v] of Object.entries(res.headers)) {
-            if (v && k !== "transfer-encoding" && k !== "content-encoding") {
+            const kl = k.toLowerCase();
+            if (v && kl !== "transfer-encoding" && kl !== "content-encoding") {
               resHeaders[k] = Array.isArray(v) ? v.join(", ") : v;
             }
           }
@@ -92,10 +94,13 @@ async function handleProxy(
   const reqHeaders: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     const k = key.toLowerCase();
-    if (k !== "host" && k !== "connection" && k !== "content-length" && k !== "transfer-encoding") {
+    if (k !== "host" && k !== "connection" && k !== "content-length" && k !== "transfer-encoding" && k !== "accept-encoding") {
       reqHeaders[key] = value;
     }
   });
+
+  // Forzar respuesta sin comprimir para evitar doble compresión o binario corrupto
+  reqHeaders["accept-encoding"] = "identity";
 
   const method = req.method;
   const hasBody = method !== "GET" && method !== "HEAD";

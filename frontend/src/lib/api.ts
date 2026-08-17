@@ -1,8 +1,10 @@
 /**
  * Cliente Axios para comunicación con el backend FastAPI
+ * - En HTTPS producción: usa URL relativa "" para que Next.js haga el proxy /api/*
+ * - En local: usa NEXT_PUBLIC_API_URL o http://localhost:8000
  */
 
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 import { auth } from "./auth";
 import type {
   TokenResponse,
@@ -15,25 +17,12 @@ import type {
   DashboardStats,
 } from "@/types";
 
-const getBaseUrl = (): string => {
-  if (typeof window !== "undefined") {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (envUrl && !envUrl.includes("localhost") && !envUrl.includes("127.0.0.1")) {
-      return envUrl;
-    }
-    // Si la web corre bajo HTTPS en produccion, usar el proxy relativo de Next.js (mismo origen)
-    if (window.location.protocol === "https:") {
-      return "";
-    }
-    const hostname = window.location.hostname;
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return `${window.location.protocol}//${hostname}:8000`;
-    }
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-};
-
-const BASE_URL = getBaseUrl();
+// En producción HTTPS, el frontend está en el mismo dominio y Next.js hace proxy a /api/*
+// En local, apunta directo al backend
+const BASE_URL =
+  typeof window !== "undefined" && window.location.protocol === "https:"
+    ? "" // mismo origen → Next.js rewrite intercepta /api/*
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -55,7 +44,7 @@ apiClient.interceptors.request.use((config) => {
 // Interceptor: manejar errores de autenticación
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  (error) => {
     if (error.response?.status === 401) {
       auth.cerrarSesion();
       if (typeof window !== "undefined") {

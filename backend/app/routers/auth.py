@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 from app.database import get_db
 from app.models.usuario import Usuario
@@ -16,8 +17,14 @@ from app.schemas.usuario import (
     LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData
 )
 from app.config import settings
-from passlib.context import CryptContext
+from app.utils.logger import app_logger as logger
 
+router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
+
+# OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
+
+# Contexto bcrypt con passlib
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -84,14 +91,21 @@ def get_admin_actual(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
 @router.post("/login", response_model=TokenResponse, summary="Iniciar sesión")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """Autenticar usuario y obtener token JWT"""
-    email_limpio = request.email.strip()
+    email_limpio = request.email.strip().lower()
     usuario = db.query(Usuario).filter(
         Usuario.email.ilike(email_limpio),
         Usuario.activo == True
     ).first()
 
-    if not usuario or not verificar_password(request.password, usuario.password_hash):
-        logger.warning(f"Intento de login fallido: {request.email}")
+    if not usuario:
+        logger.warning(f"Intento de login fallido (usuario no encontrado): {request.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas"
+        )
+
+    if not verificar_password(request.password, usuario.password_hash):
+        logger.warning(f"Intento de login fallido (password inválido): {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
@@ -125,14 +139,14 @@ def login_form(
 def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
     """Registrar nuevo usuario en el sistema"""
     # Verificar email único
-    if db.query(Usuario).filter(Usuario.email == request.email).first():
+    if db.query(Usuario).filter(Usuario.email.ilike(request.email.strip())).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El email ya está registrado"
         )
 
     usuario = Usuario(
-        email=request.email,
+        email=request.email.strip().lower(),
         nombre=request.nombre,
         password_hash=crear_hash_password(request.password),
         rol=request.rol,

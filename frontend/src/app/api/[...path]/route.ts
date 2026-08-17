@@ -22,8 +22,9 @@ async function handleProxy(
 
   const headers = new Headers();
   req.headers.forEach((value, key) => {
-    // No reenviar host del frontend al backend para evitar discrepancias
-    if (key.toLowerCase() !== "host" && key.toLowerCase() !== "connection") {
+    const k = key.toLowerCase();
+    // No reenviar host, connection ni content-length para que fetch calcule la longitud exacta del payload
+    if (k !== "host" && k !== "connection" && k !== "content-length" && k !== "transfer-encoding") {
       headers.set(key, value);
     }
   });

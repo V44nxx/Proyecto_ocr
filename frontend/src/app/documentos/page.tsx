@@ -67,13 +67,13 @@ export default function DocumentosPage() {
     setSubiendo(true);
     try {
       const { data } = await apiDocumentos.upload(archivosSeleccionados);
-      toast.success(`Documento procesado correctamente. Redirigiendo a personas...`);
+      toast.success("PDF(s) subidos con éxito. Procesando con Google Document AI...");
       setArchivosSeleccionados([]);
       cargarDocumentos();
-      // Redirigir directamente a la pantalla de Personas para ver los datos extraídos
+      // Redirigir a la pantalla de Personas donde se actualizarán automáticamente
       setTimeout(() => {
         router.push("/personas");
-      }, 1000);
+      }, 1500);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
       toast.error(error.response?.data?.detail || "Error subiendo archivos");

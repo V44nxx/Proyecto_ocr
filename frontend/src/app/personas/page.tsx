@@ -25,11 +25,18 @@ export default function PersonasPage() {
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
     // Carga inmediata de la lista de personas desde el servidor
-    cargarPersonas();
+    cargarPersonas(true);
+
+    // Polling automático cada 4 segundos para detectar nuevas personas procesadas en segundo plano
+    const interval = setInterval(() => {
+      cargarPersonas(false);
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, [pathname, soloRevision]);
 
-  const cargarPersonas = async (revOnly?: boolean) => {
-    setCargando(true);
+  const cargarPersonas = async (mostrarSpinner: boolean = false, revOnly?: boolean) => {
+    if (mostrarSpinner) setCargando(true);
     try {
       const { data } = await apiPersonas.listar({
         limit: 100,
@@ -38,9 +45,9 @@ export default function PersonasPage() {
       });
       setPersonas(Array.isArray(data) ? data : (data.items || []));
     } catch { 
-      toast.error("Error al cargar la lista de personas"); 
+      if (mostrarSpinner) toast.error("Error al cargar la lista de personas"); 
     } finally { 
-      setCargando(false); 
+      if (mostrarSpinner) setCargando(false); 
     }
   };
 

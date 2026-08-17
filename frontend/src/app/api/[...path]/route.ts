@@ -13,7 +13,9 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // Dominio público con SSL gestionado por Traefik en Dokploy
+  // IP directa del VPS puerto 8000 (abierto y verificado 200 OK)
+  candidates.push("http://187.77.62.85:8000");
+  candidates.push("http://172.17.0.1:8000");
   candidates.push("https://api.v44nxx.online");
   candidates.push("http://api.v44nxx.online");
   // Nombre de servicio en Docker Swarm (VIP)

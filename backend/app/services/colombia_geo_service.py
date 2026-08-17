@@ -271,6 +271,10 @@ class ColombiaGeoService:
         txt = re.sub(r"\b(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC|ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b", " ", txt)
         # Eliminar prefijos de etiquetas, verbos de expedición y cargos oficiales
         txt = re.sub(r"\b(FECHA|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|EXPEDIDA|EXPEDIDO|EXPEDIDAS|EXPEDIDOS|NACIMIENTO|NACIDO|MA|DE|DEL|EN|LA|EL|Y|POR|CON|FIRMA|FIRMAS|TITULAR|HUELLA|INDICE|ÍNDICE|DERECHO|IZQUIERDO|REGISTRADOR|REGISTRADORA|REGISTRADURIA|ESTADO|CIVIL|GIVIL|ALDEL|ESTADOL|DIRECTOR|SECRETARIO|REPUBLICA|REPÚBLICA|COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|NUMERO|NÚMERO|TARJETA|PERSONAL|NACIONAL)\b", " ", txt)
+        # Eliminar nombres de departamentos si vienen adjuntos al municipio (ej: "VILLAGARZON PUTUMAYO" -> "VILLAGARZON")
+        for depto in cls.DEPARTAMENTOS:
+            if len(depto) >= 4:
+                txt = re.sub(rf"\b{re.escape(depto)}\b", " ", txt)
         # Solo letras y espacios
         txt = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", " ", txt)
         return " ".join(txt.split()).strip()

@@ -352,12 +352,21 @@ class ExtractorService:
                 if info and info.get("value") and info.get("status") == "VALID":
                     resultado[campo] = info["value"]
 
-        # ── Estrategia 1: MRZ (Zona Legible por Máquina) ─────────────────
+        # ── Estrategia 1: MRZ (Zona Legible por Máquina - Máxima Prioridad) ─────────
         datos_mrz = self._extraer_mrz(texto, lineas)
         if datos_mrz:
             for k, v in datos_mrz.items():
-                if v and not resultado.get(k):
+                if v:
                     resultado[k] = v
+
+        # Si nombres y apellidos quedaron idénticos erróneamente por proximidad de labels:
+        if resultado.get("nombres") and resultado.get("apellidos") and resultado["nombres"] == resultado["apellidos"]:
+            if not datos_mrz or not datos_mrz.get("nombres"):
+                nom_pos, ape_pos = self._extraer_nombres_por_posicion(lineas)
+                if nom_pos and nom_pos != resultado["apellidos"]:
+                    resultado["nombres"] = nom_pos
+                elif ape_pos and ape_pos != resultado["nombres"]:
+                    resultado["apellidos"] = ape_pos
 
         # ── Estrategia 2: Fallbacks para identificación y fechas (NO sobreescribir nombres/apellidos) ─────
         if not resultado["identificacion"]:
@@ -376,7 +385,7 @@ class ExtractorService:
         if not resultado["fecha_nacimiento"]:
             resultado["fecha_nacimiento"] = self._extraer_fecha_nueva_cedula(texto, lineas, self.KEYWORDS_FECHA_NAC)
         if not resultado["fecha_expedicion"] or not resultado["lugar_expedicion"]:
-            fexp, lugar = self._extraer_fecha_y_lugar_nueva_cedula(texto, lineas)
+            fexp, lugar = self._extraer_fecha_y_lugar_reverso_colombia(texto, lineas)
             if not resultado["fecha_expedicion"] and fexp:
                 resultado["fecha_expedicion"] = fexp
             if not resultado["lugar_expedicion"] and lugar:
@@ -661,24 +670,26 @@ class ExtractorService:
             if valido:
                 datos["identificacion"] = num
 
-        # ── Bloque MRZ nombres: apellidos<<nombres ────────────────────────
-        # La cédula colombiana usa << como separador entre apellidos y nombres
-        # y < como separador entre palabras dentro del mismo campo
-        match_nombres = re.search(
-            r"([A-ZÁÉÍÓÚÜÑ<]{3,})<<([A-ZÁÉÍÓÚÜÑ<]{2,})",
-            texto,
-        )
-        if match_nombres:
-            raw_aps = match_nombres.group(1).replace("<", " ").strip()
-            raw_noms = match_nombres.group(2).replace("<", " ").strip()
-
-            aps = validador.normalizar_nombre(raw_aps)
-            noms = validador.normalizar_nombre(raw_noms)
-
-            if aps:
-                datos["apellidos"] = aps
-            if noms:
-                datos["nombres"] = noms
+        # ── Bloque MRZ nombres: apellidos<<nombres (TD1 de 3 líneas y TD2/TD3 de 2 líneas) ────
+        for linea in lineas:
+            linea_clean = linea.strip().replace(" ", "")
+            if "<<" in linea_clean:
+                partes = linea_clean.split("<<")
+                if len(partes) >= 2:
+                    p_ape = partes[0].replace("<", " ").strip()
+                    p_nom = partes[1].replace("<", " ").strip()
+                    p_ape_letras = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", p_ape).strip()
+                    p_nom_letras = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", p_nom).strip()
+                    if p_ape_letras and len(p_ape_letras) >= 2:
+                        norm_a = validador.normalizar_nombre(p_ape_letras)
+                        if norm_a:
+                            datos["apellidos"] = norm_a
+                    if p_nom_letras and len(p_nom_letras) >= 2:
+                        norm_n = validador.normalizar_nombre(p_nom_letras)
+                        if norm_n:
+                            datos["nombres"] = norm_n
+                if "apellidos" in datos and "nombres" in datos:
+                    break
 
         return datos
 
@@ -795,6 +806,9 @@ class ExtractorService:
         Solo acepta la línea siguiente si parece texto de nombre
         (solo letras, ≥ 3 chars, ≤ 5 palabras).
         """
+        nombres = None
+        apellidos = None
+
         for idx, linea in enumerate(lineas):
             linea_up = linea.upper().strip()
 
@@ -923,21 +937,15 @@ class ExtractorService:
 
         # 2. Validación y limpieza de lugar de expedición universal
         lugar_actual = resultado.get("lugar_expedicion")
-        lugar_limpio = validador.normalizar_lugar(str(lugar_actual)) if lugar_actual else None
-
-        # Si el lugar actual es un departamento (ej: CAQUETA, VALLE) o está vacío o fue ruidoso:
-        if not lugar_limpio or lugar_limpio in colombia_geo.DEPARTAMENTOS:
-            lugar_mun = colombia_geo.extraer_lugar_universal(texto, lineas)
-            if lugar_mun and lugar_mun not in colombia_geo.DEPARTAMENTOS:
+        if lugar_actual:
+            lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)])
+            if lugar_mun:
                 resultado["lugar_expedicion"] = lugar_mun
-            elif lugar_limpio:
-                resultado["lugar_expedicion"] = lugar_limpio
             else:
-                resultado["lugar_expedicion"] = None
+                lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
+                resultado["lugar_expedicion"] = lugar_limpio
         else:
-            # Resolver y normalizar contra el catálogo nacional de 1.100 municipios DANE
-            mun_canonico = colombia_geo.resolver_municipio_fuzzy(lugar_limpio, umbral=80)
-            resultado["lugar_expedicion"] = mun_canonico if mun_canonico else lugar_limpio
+            resultado["lugar_expedicion"] = colombia_geo.extraer_lugar_universal(texto, lineas)
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """
@@ -1021,37 +1029,59 @@ class ExtractorService:
                                 return fecha.isoformat()
         return None
 
-    def _extraer_fecha_y_lugar_nueva_cedula(
+    def _extraer_fecha_y_lugar_reverso_colombia(
         self, texto: str, lineas: List[str]
     ) -> Tuple[Optional[str], Optional[str]]:
         """
-        La cédula nueva combina fecha y lugar en una sola línea:
-        'Fecha y lugar de expedición'
-        '23 OCT 2024, FLORENCIA'
-        Extrae ambos a la vez.
+        En las cédulas colombianas (amarillas y digitales), la fecha y el lugar
+        de expedición aparecen en formato '[FECHA] [MUNICIPIO]' adyacente a 'FECHA Y LUGAR DE EXPEDICION'.
+        Ejemplos:
+          '16-ABR-2019 GARZON'
+          '12-JUN-2000 EL PAUJIL'
+          '30-ENE-2019 FLORENCIA'
+          '11-NOV-2014 SOLANO'
+          '08-NOV-2005 EL DONCELLO'
+          '04-ABR-2003 CARTAGENA DE CHAIRA'
+          '09-DIC-1985 CARTAGO'
+          '15-OCT-2004 FLORENCIA'
+          '23 OCT 2024, FLORENCIA'
+          '11 JUN 2004, VILLAGARZON'
         """
         fecha_exp = None
         lugar_exp = None
 
+        patron_linea_exp = re.compile(
+            r"^(?:(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\s*,?\s*)([A-ZÁÉÍÓÚÜÑ\s]{3,40})$",
+            re.IGNORECASE
+        )
+
         for idx, linea in enumerate(lineas):
-            if re.search(r"FECHA\s+Y\s+LUGAR", linea, re.IGNORECASE):
-                # La siguiente línea tiene 'DD MMM YYYY, LUGAR'
-                for candidata in lineas[idx+1:idx+4]:
-                    m = re.match(
-                        r"(\d{1,2}\s*[A-Z]{3}\s*\d{4})[,\s]+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+)",
-                        candidata.strip().upper()
-                    )
+            if re.search(r"\b(EXPEDICI[OÓ]N|EXPEDIDA|FECHA\s+Y\s+LUGAR)\b", linea, re.IGNORECASE):
+                # Revisar la misma línea y las 3 adyacentes (anterior y siguientes)
+                rango = lineas[max(0, idx - 2) : min(len(lineas), idx + 4)]
+                for candidata in rango:
+                    cand_clean = candidata.strip()
+                    m = patron_linea_exp.match(cand_clean)
                     if m:
-                        fecha_raw = m.group(1).strip()
-                        lugar_raw = m.group(2).strip()
-                        fecha_obj = self._parsear_fecha_ddmmmyyyy(fecha_raw)
-                        if fecha_obj:
-                            fecha_exp = fecha_obj.isoformat()
-                        lugar_norm = validador.normalizar_lugar(lugar_raw)
-                        if lugar_norm:
-                            lugar_exp = lugar_norm
-                        break
-                break
+                        f_raw, l_raw = m.groups()
+                        f_obj = validador.parsear_fecha(f_raw)
+                        if f_obj:
+                            fecha_exp = f_obj.isoformat()
+                        l_mun = colombia_geo.extraer_lugar_universal(l_raw, [l_raw])
+                        if l_mun:
+                            lugar_exp = l_mun
+                        if fecha_exp and lugar_exp:
+                            return fecha_exp, lugar_exp
+
+        # Fallback: buscar en cualquier línea del texto
+        for linea in lineas:
+            m = patron_linea_exp.match(linea.strip())
+            if m:
+                f_raw, l_raw = m.groups()
+                f_obj = validador.parsear_fecha(f_raw)
+                l_mun = colombia_geo.extraer_lugar_universal(l_raw, [l_raw])
+                if f_obj and l_mun:
+                    return f_obj.isoformat(), l_mun
 
         return fecha_exp, lugar_exp
 
@@ -1104,13 +1134,24 @@ class ExtractorService:
         if match:
             return validador.normalizar_sexo(match.group(1))
 
-        # Fallback 2: "SEXO" en una línea y M/F en líneas siguientes (formato vertical de Google DocAI)
+        # Fallback 2: "SEXO" en una línea y M/F en líneas adyacentes (arriba o abajo)
         for idx, linea in enumerate(lineas):
             if re.search(r"\bSEXO\b", linea, re.IGNORECASE):
-                for sublinea in lineas[idx + 1 : idx + 5]:
+                # Revisar línea inmediatamente anterior (formato estándar: "1.71 B+ M" sobre "ESTATURA G.S. RH SEXO")
+                if idx > 0:
+                    linea_prev = lineas[idx - 1].strip().upper()
+                    m_prev = re.search(r"\b([MF])\b", linea_prev)
+                    if m_prev:
+                        return m_prev.group(1)
+
+                # Revisar líneas siguientes
+                for sublinea in lineas[idx + 1 : idx + 4]:
                     sub_clean = sublinea.strip().upper()
                     if sub_clean in ("M", "F", "MASCULINO", "FEMENINO", "MASC", "FEM"):
                         return validador.normalizar_sexo(sub_clean)
+                    m_sub = re.search(r"\b([MF])\b", sub_clean)
+                    if m_sub:
+                        return m_sub.group(1)
 
         return None
 

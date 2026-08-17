@@ -1,4 +1,5 @@
 # Frontend Dockerfile - Next.js 14
+# ──────────────────────────────────────────
 FROM node:20-alpine AS base
 
 # Dependencias
@@ -11,12 +12,14 @@ RUN npm ci
 # Builder
 FROM base AS builder
 WORKDIR /app
-ARG NEXT_PUBLIC_API_URL
+# NEXT_PUBLIC_API_URL: baked en el bundle del cliente al compilar
+# Se usa como fallback solo en desarrollo local
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p public
-ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # Runner (producción)
@@ -36,5 +39,10 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# INTERNAL_BACKEND_URL: URL interna del backend en Docker para el proxy /api/*
+# Configurar en Dokploy como Environment Variable del servicio Frontend:
+#   INTERNAL_BACKEND_URL=http://<nombre-servicio-fastapi-en-dokploy>:8000
+ENV INTERNAL_BACKEND_URL=http://localhost:8000
 
 CMD ["node", "server.js"]

@@ -1,7 +1,11 @@
 /**
  * Cliente Axios para comunicación con el backend FastAPI
- * - En HTTPS producción: usa URL relativa "" para que Next.js haga el proxy /api/*
- * - En local: usa NEXT_PUBLIC_API_URL o http://localhost:8000
+ *
+ * ESTRATEGIA DE URL:
+ * - En producción HTTPS (navegador): baseURL = "" (vacío)
+ *   → El navegador envía peticiones al mismo origen (proyectoocr.v44nxx.online)
+ *   → Next.js server intercepta /api/* con rewrites → redirige al backend interno
+ * - En desarrollo local: baseURL = NEXT_PUBLIC_API_URL || "http://localhost:8000"
  */
 
 import axios from "axios";
@@ -17,22 +21,33 @@ import type {
   DashboardStats,
 } from "@/types";
 
-// En producción HTTPS, el frontend está en el mismo dominio y Next.js hace proxy a /api/*
-// En local, apunta directo al backend
-const BASE_URL =
-  typeof window !== "undefined" && window.location.protocol === "https:"
-    ? "" // mismo origen → Next.js rewrite intercepta /api/*
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function getBaseUrl(): string {
+  // Solo en el navegador
+  if (typeof window !== "undefined") {
+    // Producción HTTPS: usar proxy relativo de Next.js (mismo origen)
+    if (window.location.protocol === "https:") {
+      return "";
+    }
+    // HTTP local pero no localhost (VPS sin SSL):
+    // Construir URL del backend en el mismo host pero puerto 8000
+    const hostname = window.location.hostname;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return `http://${hostname}:8000`;
+    }
+  }
+  // Server-side o localhost: usar variable de entorno
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+}
 
 const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: getBaseUrl(),
   timeout: 120000, // 2 minutos para OCR
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Interceptor: agregar token JWT
+// Interceptor: agregar token JWT a cada petición
 apiClient.interceptors.request.use((config) => {
   const token = auth.getToken();
   if (token) {
@@ -41,7 +56,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor: manejar errores de autenticación
+// Interceptor: manejar errores de autenticación (401)
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -130,8 +145,6 @@ export const apiExportacion = {
       params,
       responseType: "blob",
     });
-
-    // Trigger descarga en browser
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement("a");
     link.href = url;

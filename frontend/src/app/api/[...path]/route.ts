@@ -51,13 +51,16 @@ async function handleProxy(
 
     const responseHeaders = new Headers();
     backendResponse.headers.forEach((value, key) => {
+      const k = key.toLowerCase();
       // Ignorar transfer-encoding para evitar conflictos con Next.js Response
-      if (key.toLowerCase() !== "transfer-encoding" && key.toLowerCase() !== "content-encoding") {
+      if (k !== "transfer-encoding" && k !== "content-encoding") {
         responseHeaders.set(key, value);
       }
     });
 
-    const responseData = await backendResponse.arrayBuffer();
+    // En respuestas 204 No Content o 304 Not Modified, el body DEBE ser null
+    const isNoBodyStatus = backendResponse.status === 204 || backendResponse.status === 304;
+    const responseData = isNoBodyStatus ? null : await backendResponse.arrayBuffer();
 
     return new NextResponse(responseData, {
       status: backendResponse.status,

@@ -132,8 +132,10 @@ def listar_documentos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista todos los documentos subidos por el usuario"""
-    query = db.query(Documento).filter(Documento.usuario_id == usuario.id)
+    """Lista todos los documentos subidos por el usuario (o todos si es admin)"""
+    query = db.query(Documento)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
 
     if estado:
         query = query.filter(Documento.estado == estado)
@@ -149,10 +151,10 @@ def obtener_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Obtiene el detalle de un documento específico"""
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -189,17 +191,20 @@ def eliminar_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Elimina un documento y su archivo asociado"""
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
     # Eliminar archivo físico
-    if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
-        Path(documento.ruta_archivo).unlink()
+    try:
+        if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
+            Path(documento.ruta_archivo).unlink()
+    except Exception as e:
+        logger.warning(f"No se pudo eliminar archivo físico {documento.ruta_archivo}: {e}")
 
     db.delete(documento)
     db.commit()

@@ -555,7 +555,24 @@ class ExtractorService:
             res["pagina_frente"] = None
             res["pagina_reverso"] = getattr(group, "pagina_reverso", 1)
             res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
+            # El reverso no contiene nombres/apellidos — limpiar para no retornar valores erróneos
+            res["nombres"] = None
+            res["apellidos"] = None
+            res["requiere_revision"] = True
+            res["estado_registro"] = "REVIEW_REQUIRED"
+            if "detalles_campos" not in res:
+                res["detalles_campos"] = {}
+            for campo in ["nombres", "apellidos"]:
+                res["detalles_campos"][campo] = {
+                    "valor": None, "value": None, "valor_original": None,
+                    "confidence": 0.0, "status": "MISSING_DATA",
+                    "page": res["pagina_reverso"],
+                    "source": ocr_engine,
+                    "reason": "Solo reverso disponible — frente de cédula no enviado, nombres no extractibles",
+                    "evidence": ["Grupo BACK-ONLY: el frente con nombres/apellidos no está en el PDF"]
+                }
             return res
+
 
         # ── Frente + Reverso disponibles: Combinación e Integración Complementaria ──
         res = {

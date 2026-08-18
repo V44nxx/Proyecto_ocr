@@ -379,12 +379,18 @@ class SpatialFieldExtractor:
 
         # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla y Digital) ──
         if not resultado_campos["nombres"]["value"] or not resultado_campos["apellidos"]["value"]:
-            lineas_frente = [l for l in lines if getattr(l, "y", 0.0) < 0.35 and getattr(l, "x", 0.0) < 0.55]
-            
+            # ZONA AMPLIADA: y < 0.55 sin restricción de X para cubrir layouts comprimidos/rotados
+            lineas_frente = [
+                l for l in lines
+                if getattr(l, "y", 0.0) < 0.55
+            ]
+            # Ordenar por y para garantizar secuencia vertical correcta
+            lineas_frente = sorted(lineas_frente, key=lambda l: getattr(l, "y", 0.0))
+
             idx_num = -1
             idx_ape = -1
             idx_nom = -1
-            
+
             for idx, l in enumerate(lineas_frente):
                 t = getattr(l, "text", "").upper().strip()
                 if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP)\b", t) or re.search(r"\b\d{7,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
@@ -448,24 +454,36 @@ class SpatialFieldExtractor:
                         if cand_ape and not resultado_campos["apellidos"]["value"]:
                             resultado_campos["apellidos"] = {"value": " ".join(cand_ape), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS"}
 
-            # Fallback por líneas consecutivas limpias del frente
+            # Fallback por líneas consecutivas limpias del frente (mejorado: validación de ruido)
+            RUIDO_NOMBRES = {
+                "COLOMBIA", "REPUBLICA", "REPÚBLICA", "DE COLOMBIA", "PERSONAL", "CEDULA",
+                "CIUDADANIA", "CIUDADANÍA", "IDENTIFICACION", "IDENTIFICACIÓN", "NUIP",
+                "NUMERO", "NÚMERO", "CC", "POR REVISAR"
+            }
             if not resultado_campos["apellidos"]["value"] or not resultado_campos["nombres"]["value"]:
                 cands_limpios = []
                 for l in lineas_frente:
                     y_pos = getattr(l, "y", 0.0)
                     t_val = getattr(l, "text", "")
-                    if 0.12 < y_pos < 0.32:
+                    if 0.10 < y_pos < 0.50:
                         limpio = self.limpiar_nombre(t_val)
-                        if limpio and limpio not in cands_limpios and not re.search(r"\d", t_val):
+                        if not limpio:
+                            continue
+                        # Filtro robusto: sin dígitos, no es ruido, tiene >=1 palabras de >=3 letras
+                        palabras_validas = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ]{3,}", limpio)
+                        es_ruido = limpio.upper() in RUIDO_NOMBRES or any(r in limpio.upper() for r in ["CEDULA", "COLOMBI", "REPUBLIC", "IDENTIF"])
+                        tiene_digito = bool(re.search(r"\d", t_val))
+                        if len(palabras_validas) >= 1 and not es_ruido and not tiene_digito and limpio not in cands_limpios:
                             cands_limpios.append(limpio)
+
                 if len(cands_limpios) >= 2:
                     if not resultado_campos["apellidos"]["value"]:
-                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
                     if not resultado_campos["nombres"]["value"]:
-                        resultado_campos["nombres"] = {"value": cands_limpios[1], "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
+                        resultado_campos["nombres"] = {"value": cands_limpios[1], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
                 elif len(cands_limpios) == 1:
                     if not resultado_campos["apellidos"]["value"]:
-                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
 
         # ── 4. Fechas (Estrategia Universal Cronológica Invariante) ──
         fechas_doc = set()

@@ -90,7 +90,7 @@ class DocumentSideClassifier:
 
         max_score = max(score_front_c, score_back_c, score_front_t, score_back_t)
 
-        if max_score < 3:
+        if max_score < 2:
             return {
                 "cara": "UNKNOWN",
                 "tipo_documento": "UNKNOWN",

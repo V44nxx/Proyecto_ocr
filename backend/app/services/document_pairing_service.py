@@ -91,6 +91,9 @@ class DocumentPairingService:
             counter += 1
 
         # 3. Iterar sobre cada FRONT y buscar su mejor BACK compatible
+        # Umbral base: 0.40 (tolerante para PDFs sin MRZ, cédulas amarillas en 2 páginas)
+        UMBRAL_MIN_SCORE = 0.40
+
         for f_page in list(fronts):
             grp = DocumentGroup(f"DOC-{counter:03d}")
             grp.front_page = f_page
@@ -105,7 +108,13 @@ class DocumentPairingService:
 
             for b_page in list(backs):
                 score, reasons = self.evaluar_asociacion(f_page, b_page)
-                if score > best_score and score >= 0.50:
+                # Bonus adicional si el back es la página inmediatamente siguiente al front
+                p_front = f_page.get("pagina_numero", 1)
+                p_back = b_page.get("pagina_numero", 2)
+                if p_back == p_front + 1:
+                    score = min(0.99, score + 0.20)
+                    reasons = reasons + ["Bonus: páginas físicamente consecutivas (+0.20)"]
+                if score > best_score and score >= UMBRAL_MIN_SCORE:
                     best_score = score
                     best_back = b_page
                     best_reasons = reasons
@@ -131,6 +140,19 @@ class DocumentPairingService:
 
             grupos.append(grp)
             counter += 1
+
+        # Pairing optimista: si quedan exactamente 1 FRONT huérfano + 1 BACK huérfano,
+        # los emparejamos sin importar el score (son el único par posible en el PDF)
+        grupos_fronts_huerfanos = [g for g in grupos if g.front_page and not g.back_page]
+        if len(grupos_fronts_huerfanos) == 1 and len(backs) == 1:
+            grp_huerfano = grupos_fronts_huerfanos[0]
+            b_solo = backs[0]
+            grp_huerfano.back_page = b_solo
+            grp_huerfano.grouping_confidence = max(grp_huerfano.grouping_confidence, 0.55)
+            grp_huerfano.reasons.append("Pairing optimista: único FRONT + único BACK disponibles en PDF")
+            if grp_huerfano.status == "REVIEW_REQUIRED":
+                grp_huerfano.status = "VALID"
+            backs.clear()
 
         # 3. Procesar BACKs huérfanos que no encontraron FRONT
         for b_page in backs:

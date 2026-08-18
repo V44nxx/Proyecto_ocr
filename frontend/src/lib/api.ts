@@ -90,9 +90,9 @@ export const apiDocumentos = {
   upload: (files: File[]) => {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
-    return apiClient.post("/api/documentos/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    // No establecer Content-Type manualmente — axios lo hace automáticamente
+    // con el boundary correcto cuando recibe FormData
+    return apiClient.post("/api/documentos/upload", formData);
   },
 
   listar: (params?: { skip?: number; limit?: number; estado?: string }) =>

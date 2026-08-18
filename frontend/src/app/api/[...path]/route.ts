@@ -7,30 +7,32 @@ import { URL } from "url";
 const getBackendCandidates = (): string[] => {
   const candidates: string[] = [];
 
-  // 1. Variable de entorno explícita (la más confiable — configurable en Dokploy)
+  // 1. Variable de entorno explícita — CONFIGURA ESTO EN DOKPLOY → Frontend → Environment:
+  //    INTERNAL_BACKEND_URL=http://10.0.1.189:8000
   const envUrl = process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL;
   if (envUrl && envUrl.trim().length > 0) {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres conocidos del servicio FastAPI en este proyecto Dokploy (Docker Swarm DNS)
+  // 2. Nombres Docker Swarm del servicio FastAPI (requieren estar en la misma red overlay)
   const serviceNames = [
     "ocr-proyecto-fastapi-d5qhym",   // nombre Docker Swarm del servicio FastAPI
     "fastapi",                         // nombre del servicio en Dokploy UI (minúsculas)
-    "FastAPI",                         // nombre con mayúscula tal como aparece en Dokploy
+    "FastAPI",                         // nombre con mayúscula
     "ocr-proyecto-fastapi",            // sin sufijo hash
     "backend",
   ];
-
   for (const name of serviceNames) {
     candidates.push(`http://${name}:8000`);
   }
 
-  // 3. host.docker.internal — funciona en Docker Desktop y algunos entornos Linux
-  candidates.push("http://host.docker.internal:8000");
+  // 3. IPs conocidas del contenedor FastAPI en la red overlay de Docker Swarm
+  //    Nota: estas IPs cambian si el contenedor se reinicia — usar INTERNAL_BACKEND_URL es más fiable
+  candidates.push("http://10.0.1.189:8000");   // IP actual del FastAPI (red 10.0.1.x)
+  candidates.push("http://172.16.1.20:8000");   // IP alternativa del FastAPI
 
-  // 4. IP del gateway Docker (172.17.0.1) — accesible desde cualquier contenedor Linux
-  //    Solo funciona si el FastAPI está escuchando en 0.0.0.0:8000 en el host
+  // 4. host.docker.internal y gateway Docker
+  candidates.push("http://host.docker.internal:8000");
   candidates.push("http://172.17.0.1:8000");
 
   // 5. Fallback localhost

@@ -115,9 +115,11 @@ export const apiAuth = {
 export const apiDocumentos = {
   upload: (files: File[]) => {
     const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
-    // No establecer Content-Type manualmente — axios lo hace automáticamente
-    // con el boundary correcto cuando recibe FormData
+    files.forEach((file) => {
+      formData.append("files", file);
+      formData.append("file", file);
+    });
+    // No forzar Content-Type — axios genera multipart/form-data con el boundary correcto
     return apiClient.post("/api/documentos/upload", formData);
   },
 

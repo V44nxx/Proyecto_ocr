@@ -63,20 +63,28 @@ def _procesar_ocr_background(pdf_path: str, documento_id: str):
 )
 async def upload_pdf(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(..., description="Uno o múltiples archivos PDF"),
+    files: Optional[List[UploadFile]] = File(default=None, description="Uno o múltiples archivos PDF"),
+    file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
     Sube uno o múltiples archivos PDF y los encola para procesamiento OCR.
+    Acepta tanto el parámetro 'files' (múltiple) como 'file' (individual).
     El procesamiento ocurre en segundo plano.
     """
-    if not files:
-        raise HTTPException(status_code=400, detail="No se enviaron archivos")
+    archivos_recibidos: List[UploadFile] = []
+    if files:
+        archivos_recibidos.extend([f for f in files if f and f.filename])
+    if file and file.filename:
+        archivos_recibidos.append(file)
+
+    if not archivos_recibidos:
+        raise HTTPException(status_code=400, detail="No se enviaron archivos PDF válidos")
 
     resultados = []
 
-    for file in files:
+    for file in archivos_recibidos:
         _validar_pdf(file)
 
         # Guardar archivo con nombre único

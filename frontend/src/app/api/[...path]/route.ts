@@ -115,7 +115,7 @@ async function handleProxy(
   req.headers.forEach((value, key) => {
     const k = key.toLowerCase();
     if (k !== "host" && k !== "connection" && k !== "content-length" && k !== "transfer-encoding" && k !== "accept-encoding") {
-      reqHeaders[key] = value;
+      reqHeaders[k] = value;
     }
   });
 

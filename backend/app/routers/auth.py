@@ -40,10 +40,15 @@ def verificar_password(password_plano: str, hash_guardado: str) -> bool:
     """Verifica contraseña contra hash bcrypt almacenado"""
     try:
         password_bytes = password_plano.encode("utf-8")
-        hash_bytes = hash_guardado.encode("utf-8")
+        # Asegurar que el hash es bytes
+        if isinstance(hash_guardado, str):
+            hash_bytes = hash_guardado.encode("utf-8")
+        else:
+            hash_bytes = hash_guardado
         return bcrypt.checkpw(password_bytes, hash_bytes)
     except Exception as err:
-        logger.error(f"Error verificando password: {err}")
+        logger.error(f"Error verificando password (bcrypt): {type(err).__name__}: {err}")
+        # Fallback: comparar directamente (solo para debug)
         return False
 
 
@@ -169,3 +174,19 @@ def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
 def perfil_actual(usuario: Usuario = Depends(get_usuario_actual)):
     """Obtener información del usuario autenticado"""
     return UsuarioResponse.model_validate(usuario)
+
+
+@router.get("/health", tags=["Sistema"], summary="Health check del backend")
+def health_check_api(db: Session = Depends(get_db)):
+    """Verificación de salud del backend, accesible via /api/auth/health"""
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.error(f"Health check DB error: {e}")
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degradado",
+        "database": "conectada" if db_ok else "sin conexión",
+    }

@@ -91,7 +91,7 @@ class TestCasoA_ProcesamientoExitoso:
                 texto, tiempo_ms = servicio.procesar_documento(b"pdf_bytes_fake")
 
                 assert texto == TEXTO_CEDULA_VALIDO
-                assert tiempo_ms > 0
+                assert tiempo_ms >= 0  # En mock puede ser 0 (sin llamada real de red)
                 mock_client.process_document.assert_called_once()
 
     def test_ocr_imagen_usa_google_document_ai_cuando_disponible(self):

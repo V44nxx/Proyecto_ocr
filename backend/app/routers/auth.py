@@ -9,7 +9,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-import bcrypt
+
+# Usar passlib como motor principal (compatible con hashes de bcrypt directo Y de passlib)
+try:
+    from passlib.context import CryptContext
+    _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    _PASSLIB_OK = True
+except ImportError:
+    _pwd_context = None
+    _PASSLIB_OK = False
+
+# bcrypt directo como fallback
+try:
+    import bcrypt as _bcrypt
+    _BCRYPT_OK = True
+except ImportError:
+    _bcrypt = None
+    _BCRYPT_OK = False
 
 from app.database import get_db
 from app.models.usuario import Usuario
@@ -26,30 +42,45 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 
 
 # ──────────────────────────────────────────
-# UTILIDADES PASSWORD (bcrypt directo, sin passlib)
+# UTILIDADES PASSWORD
+# Motor: passlib (bcrypt) con fallback a bcrypt directo
 # ──────────────────────────────────────────
 def crear_hash_password(password: str) -> str:
-    """Genera hash bcrypt de la contraseña"""
-    password_bytes = password.encode("utf-8")
-    salt = bcrypt.gensalt(rounds=12)
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode("utf-8")
+    """Genera hash bcrypt de la contraseña usando passlib"""
+    if _PASSLIB_OK:
+        return _pwd_context.hash(password)
+    if _BCRYPT_OK:
+        return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+    raise RuntimeError("No hay motor de hashing disponible (instala passlib o bcrypt)")
 
 
 def verificar_password(password_plano: str, hash_guardado: str) -> bool:
-    """Verifica contraseña contra hash bcrypt almacenado"""
-    try:
-        password_bytes = password_plano.encode("utf-8")
-        # Asegurar que el hash es bytes
-        if isinstance(hash_guardado, str):
-            hash_bytes = hash_guardado.encode("utf-8")
-        else:
-            hash_bytes = hash_guardado
-        return bcrypt.checkpw(password_bytes, hash_bytes)
-    except Exception as err:
-        logger.error(f"Error verificando password (bcrypt): {type(err).__name__}: {err}")
-        # Fallback: comparar directamente (solo para debug)
+    """Verifica contraseña con triple fallback: passlib → bcrypt directo"""
+    if not password_plano or not hash_guardado:
         return False
+
+    # Intento 1: passlib (maneja $2b$, $2a$, $2y$ y cualquier formato bcrypt)
+    if _PASSLIB_OK:
+        try:
+            result = _pwd_context.verify(password_plano, hash_guardado)
+            logger.debug(f"[Auth] Verificación passlib: {result}")
+            return result
+        except Exception as e:
+            logger.warning(f"[Auth] passlib.verify falló: {type(e).__name__}: {e} — probando bcrypt directo")
+
+    # Intento 2: bcrypt directo
+    if _BCRYPT_OK:
+        try:
+            pwd_b = password_plano.encode("utf-8")
+            hash_b = hash_guardado.encode("utf-8") if isinstance(hash_guardado, str) else hash_guardado
+            result = _bcrypt.checkpw(pwd_b, hash_b)
+            logger.debug(f"[Auth] Verificación bcrypt directo: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"[Auth] bcrypt.checkpw falló: {type(e).__name__}: {e}")
+
+    logger.error("[Auth] Todos los métodos de verificación fallaron")
+    return False
 
 
 # ──────────────────────────────────────────

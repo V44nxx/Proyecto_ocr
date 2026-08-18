@@ -6,7 +6,22 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from app.config import settings
 import logging
-import bcrypt
+
+# Motor de hashing: passlib (mismo que auth.py) con fallback a bcrypt directo
+try:
+    from passlib.context import CryptContext
+    _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    _PASSLIB_OK = True
+except ImportError:
+    _pwd_ctx = None
+    _PASSLIB_OK = False
+
+try:
+    import bcrypt as _bcrypt_raw
+    _BCRYPT_OK = True
+except ImportError:
+    _bcrypt_raw = None
+    _BCRYPT_OK = False
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +61,12 @@ def get_db():
 
 
 def _hash_password(password: str) -> str:
-    """Hash bcrypt directo, sin passlib"""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+    """Hash bcrypt usando passlib (mismo motor que auth.py para verificar)"""
+    if _PASSLIB_OK:
+        return _pwd_ctx.hash(password)
+    if _BCRYPT_OK:
+        return _bcrypt_raw.hashpw(password.encode("utf-8"), _bcrypt_raw.gensalt(rounds=12)).decode("utf-8")
+    raise RuntimeError("No hay motor de hashing disponible")
 
 
 def create_tables():

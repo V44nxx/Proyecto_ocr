@@ -10,7 +10,7 @@ import {
   Plus, Minus, Equal,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiComparacion } from "@/lib/api";
+import { apiComparacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Comparacion, Diferencia } from "@/types";
 
@@ -86,8 +86,7 @@ export default function ComparacionPage() {
         } catch { clearInterval(polling); }
       }, 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } };
-      toast.error(error.response?.data?.detail || "Error subiendo archivo");
+      toast.error(getErrorMessage(err, "Error subiendo archivo"));
     } finally { setSubiendo(false); }
   }, []);
 

@@ -8,7 +8,7 @@ import {
   Clock, Trash2, RefreshCw, Eye,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiDocumentos } from "@/lib/api";
+import { apiDocumentos, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import type { Documento } from "@/types";
@@ -100,8 +100,7 @@ export default function DocumentosPage() {
         router.push("/personas");
       }, 1500);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } };
-      toast.error(error.response?.data?.detail || "Error subiendo archivos");
+      toast.error(getErrorMessage(err, "Error subiendo archivos"));
     } finally {
       setSubiendo(false);
     }
@@ -113,8 +112,8 @@ export default function DocumentosPage() {
       await apiDocumentos.eliminar(id);
       toast.success("Documento eliminado");
       cargarDocumentos();
-    } catch {
-      toast.error("Error eliminando documento");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Error eliminando documento"));
     }
   };
 

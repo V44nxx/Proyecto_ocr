@@ -1,13 +1,3 @@
-/**
- * Cliente Axios para comunicación con el backend FastAPI
- *
- * ESTRATEGIA DE URL:
- * - En producción HTTPS (navegador): baseURL = "" (vacío)
- *   → El navegador envía peticiones al mismo origen (proyectoocr.v44nxx.online)
- *   → Next.js server intercepta /api/* con rewrites → redirige al backend interno
- * - En desarrollo local: baseURL = NEXT_PUBLIC_API_URL || "http://localhost:8000"
- */
-
 import axios from "axios";
 import { auth } from "./auth";
 import type {
@@ -20,6 +10,42 @@ import type {
   Diferencia,
   DashboardStats,
 } from "@/types";
+
+/**
+ * Extrae de forma segura un mensaje legible como string de cualquier error de API,
+ * evitando pasar objetos o arrays de Pydantic/FastAPI directamente a React (Minified React Error #31)
+ */
+export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un error inesperado"): string {
+  if (!err) return defaultMsg;
+  if (typeof err === "string") return err;
+
+  const anyErr = err as any;
+  const data = anyErr?.response?.data;
+
+  if (data) {
+    if (typeof data === "string") return data;
+    if (typeof data.detail === "string") return data.detail;
+    if (Array.isArray(data.detail)) {
+      const messages = data.detail.map((d: any) => {
+        if (typeof d === "string") return d;
+        if (d?.msg) {
+          const loc = Array.isArray(d.loc) ? d.loc.filter((l: any) => l !== "body").join(".") : "";
+          return loc ? `${loc}: ${d.msg}` : d.msg;
+        }
+        return JSON.stringify(d);
+      });
+      return messages.filter(Boolean).join("; ") || defaultMsg;
+    }
+    if (data.message && typeof data.message === "string") return data.message;
+    if (data.error && typeof data.error === "string") return data.error;
+  }
+
+  if (anyErr.message && typeof anyErr.message === "string") {
+    return anyErr.message;
+  }
+
+  return defaultMsg;
+}
 
 function getBaseUrl(): string {
   // Solo en el navegador

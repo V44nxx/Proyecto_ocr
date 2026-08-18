@@ -53,6 +53,7 @@ function doHttpRequest(
       const isHttps = targetUrl.protocol === "https:";
       const client = isHttps ? https : http;
 
+      const isUploadOrMutate = method === "POST" || method === "PUT" || method === "PATCH";
       const reqOptions: http.RequestOptions = {
         hostname: targetUrl.hostname,
         port: targetUrl.port ? parseInt(targetUrl.port, 10) : (isHttps ? 443 : 80),
@@ -60,7 +61,7 @@ function doHttpRequest(
         method: method,
         headers: headers,
         ...(isHttps ? { rejectUnauthorized: false } : {}),
-        timeout: 5000,  // 5s por candidato — fallar rápido si DNS no resuelve
+        timeout: isUploadOrMutate ? 120000 : 10000,
       };
 
       const req = client.request(reqOptions, (res) => {

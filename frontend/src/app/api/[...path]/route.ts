@@ -130,6 +130,8 @@ async function handleProxy(
   let lastError: any = null;
   const triedUrls: string[] = [];
 
+  const candidateErrors: Record<string, string> = {};
+
   for (let i = 0; i < candidates.length; i++) {
     const backendBase = candidates[i];
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
@@ -157,18 +159,26 @@ async function handleProxy(
       });
     } catch (err: any) {
       lastError = err;
+      const errMsg = err?.message || String(err);
+      candidateErrors[targetUrl] = errMsg;
+
       if (cachedWorkingBackend === backendBase) {
         cachedWorkingBackend = null; // Invalidar caché si falló
       }
-      console.warn(`[Proxy Miss] ${targetUrl}: ${err?.message || err}`);
+      console.warn(`[Proxy Miss] ${targetUrl}: ${errMsg}`);
     }
   }
 
-  console.error(`[Proxy Fatal] ${method} /api/${path} — probados: ${triedUrls.join(", ")} — último error: ${lastError?.message}`);
+  console.error(`[Proxy Fatal] ${method} /api/${path} — probados:`, candidateErrors);
 
   return NextResponse.json(
     {
       detail: `No se pudo conectar con el backend. Error: ${lastError?.message || "Servicio no alcanzable"}.`,
+      diagnostic: {
+        method,
+        path: `/api/${path}`,
+        candidates_tested: candidateErrors,
+      },
     },
     { status: 502 }
   );

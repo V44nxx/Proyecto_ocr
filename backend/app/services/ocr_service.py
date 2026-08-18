@@ -360,11 +360,17 @@ class OCRService:
             apellidos_val = datos.get("apellidos")
             confianza = float(datos.get("confianza_extraccion") or 0.0)
 
-            if not raw_id and not nombres_val and not apellidos_val and confianza < 25.0:
-                logger.info("Página sin datos de identificación ni nombres — omitiendo registro vacío")
+            # Criterio estricto: Una persona válida debe tener Cédula extraída O (Nombres y Apellidos válidos).
+            # Páginas de reversos huérfanos sin datos, sellos, o carátulas NO deben crear registros fantasma.
+            tiene_identificacion = bool(raw_id and str(raw_id).strip() and not str(raw_id).startswith("SIN_ID"))
+            tiene_nombres = bool(nombres_val and str(nombres_val).strip() and nombres_val != "POR REVISAR")
+            tiene_apellidos = bool(apellidos_val and str(apellidos_val).strip() and apellidos_val != "POR REVISAR")
+
+            if not tiene_identificacion and not (tiene_nombres and tiene_apellidos):
+                logger.info("Omitiendo guardado: la página/grupo no contiene identificación ni nombres válidos (evita personas fantasma)")
                 return None
 
-            num_doc = raw_id or f"SIN_ID_{str(uuid.uuid4())[:8]}"
+            num_doc = str(raw_id).strip() if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
 
             doc_exists = (
                 db.query(Documento).filter(Documento.id == documento_id).first()

@@ -91,39 +91,63 @@ class DocumentPairingService:
             counter += 1
 
         # 3. Iterar sobre cada FRONT y buscar su mejor BACK compatible
-        # Umbral base: 0.40 (tolerante para PDFs sin MRZ, cédulas amarillas en 2 páginas)
-        UMBRAL_MIN_SCORE = 0.40
+        # Umbral base: 0.35 (tolerante para PDFs sin MRZ, cédulas amarillas en 2 páginas)
+        UMBRAL_MIN_SCORE = 0.35
 
-        for f_page in list(fronts):
+        # Ordenar f_pages por número de página ascendente
+        fronts_ordenados = sorted(list(fronts), key=lambda p: p.get("pagina_numero", 1))
+
+        for f_page in fronts_ordenados:
+            p_front = f_page.get("pagina_numero", 1)
+            id_front = f_page.get("numero_identificacion")
+
             grp = DocumentGroup(f"DOC-{counter:03d}")
             grp.front_page = f_page
             grp.tipo_documento = f_page.get("tipo_documento", "CEDULA_CIUDADANIA")
-            id_front = f_page.get("numero_identificacion")
             grp.numero_identificacion = id_front
 
-            # Buscar BACK emparejable
             best_back = None
             best_score = 0.0
             best_reasons = []
 
-            for b_page in list(backs):
-                score, reasons = self.evaluar_asociacion(f_page, b_page)
-                # Bonus adicional si el back es la página inmediatamente siguiente al front
-                p_front = f_page.get("pagina_numero", 1)
-                p_back = b_page.get("pagina_numero", 2)
-                if p_back == p_front + 1:
-                    score = min(0.99, score + 0.20)
-                    reasons = reasons + ["Bonus: páginas físicamente consecutivas (+0.20)"]
-                if score > best_score and score >= UMBRAL_MIN_SCORE:
-                    best_score = score
-                    best_back = b_page
-                    best_reasons = reasons
+            # Prioridad 1: Buscar si la página siguiente p_front + 1 está en backs
+            next_page_back = next((b for b in backs if b.get("pagina_numero") == p_front + 1), None)
+            if next_page_back:
+                score, reasons = self.evaluar_asociacion(f_page, next_page_back)
+                if score >= 0.20:
+                    best_back = next_page_back
+                    best_score = min(0.99, max(0.85, score + 0.30))
+                    best_reasons = reasons + ["Emparejamiento de alta certeza: páginas consecutivas (Pág N -> Pág N+1)"]
+
+            # Prioridad 2: Si no hubo back consecutivo, buscar si la página siguiente p_front + 1 está en unknowns
+            if not best_back:
+                next_page_unk = next((u for u in unknowns if u.get("pagina_numero") == p_front + 1), None)
+                if next_page_unk:
+                    best_back = next_page_unk
+                    best_score = 0.75
+                    best_reasons = [f"Reverso complementario inferido por secuencia consecutiva (Pág {p_front} y {p_front + 1})"]
+                    unknowns.remove(next_page_unk)
+
+            # Prioridad 3: Buscar en la lista general de backs por mejor puntuación
+            if not best_back:
+                for b_page in list(backs):
+                    score, reasons = self.evaluar_asociacion(f_page, b_page)
+                    p_back = b_page.get("pagina_numero", 2)
+                    dist_pag = abs(p_back - p_front)
+                    if dist_pag == 1:
+                        score = min(0.99, score + 0.25)
+                        reasons = reasons + ["Bonus: páginas consecutivas (+0.25)"]
+                    if score > best_score and score >= UMBRAL_MIN_SCORE:
+                        best_score = score
+                        best_back = b_page
+                        best_reasons = reasons
 
             if best_back:
                 grp.back_page = best_back
                 grp.grouping_confidence = best_score
                 grp.reasons = best_reasons
-                backs.remove(best_back)
+                if best_back in backs:
+                    backs.remove(best_back)
             else:
                 # Documento de 1 sola página FRONT (ej. escaneo frontal)
                 grp.grouping_confidence = f_page.get("confianza", 0.90)
@@ -141,25 +165,33 @@ class DocumentPairingService:
             grupos.append(grp)
             counter += 1
 
-        # Pairing optimista: si quedan exactamente 1 FRONT huérfano + 1 BACK huérfano,
-        # los emparejamos sin importar el score (son el único par posible en el PDF)
+        # Pairing optimista: si quedan exactamente 1 FRONT huérfano + 1 BACK huérfano
         grupos_fronts_huerfanos = [g for g in grupos if g.front_page and not g.back_page]
         if len(grupos_fronts_huerfanos) == 1 and len(backs) == 1:
             grp_huerfano = grupos_fronts_huerfanos[0]
             b_solo = backs[0]
             grp_huerfano.back_page = b_solo
-            grp_huerfano.grouping_confidence = max(grp_huerfano.grouping_confidence, 0.55)
+            grp_huerfano.grouping_confidence = max(grp_huerfano.grouping_confidence, 0.70)
             grp_huerfano.reasons.append("Pairing optimista: único FRONT + único BACK disponibles en PDF")
-            if grp_huerfano.status == "REVIEW_REQUIRED":
+            if grp_huerfano.status == "REVIEW_REQUIRED" and grp_huerfano.numero_identificacion:
                 grp_huerfano.status = "VALID"
             backs.clear()
 
-        # 3. Procesar BACKs huérfanos que no encontraron FRONT
+        # 3. Procesar BACKs huérfanos que no encontraron FRONT (solo si tienen cédula/MRZ extraíble)
         for b_page in backs:
+            id_back = b_page.get("numero_identificacion")
+            # Si el reverso tiene una cédula ya vista en un grupo anterior, fusionarlo
+            if id_back and id_back in ids_vistos:
+                grp_prev = next((g for g in grupos if g.group_id == ids_vistos[id_back]), None)
+                if grp_prev and not grp_prev.back_page:
+                    grp_prev.back_page = b_page
+                    grp_prev.reasons.append(f"Reverso tardío asociado por coincidencia de cédula '{id_back}'")
+                    continue
+
             grp = DocumentGroup(f"DOC-{counter:03d}")
             grp.back_page = b_page
             grp.tipo_documento = b_page.get("tipo_documento", "CEDULA_CIUDADANIA")
-            grp.numero_identificacion = b_page.get("numero_identificacion")
+            grp.numero_identificacion = id_back
             grp.grouping_confidence = 0.70
             grp.reasons = ["Reverso huérfano (sin frente asociado)"]
             grp.status = "REVIEW_REQUIRED"

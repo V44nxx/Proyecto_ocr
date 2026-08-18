@@ -7,27 +7,27 @@ import { URL } from "url";
 const getBackendCandidates = (): string[] => {
   const candidates: string[] = [];
 
-  // 1. Variable de entorno explícita (configurada en Dokploy → Frontend → Environment)
+  // 1. Variable de entorno explícita (la más confiable — configurable en Dokploy)
   const envUrl = process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL;
   if (envUrl && envUrl.trim().length > 0) {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres de servicio Docker Swarm / Dokploy (variantes conocidas del proyecto)
+  // 2. Nombres conocidos del servicio FastAPI en este proyecto Dokploy
   const serviceNames = [
-    "ocr-proyecto-fastapi-d5qhym",    // nombre original
-    "fastapi",                          // nombre genérico
-    "backend",                          // nombre genérico alternativo
-    "ocr-fastapi",                      // variante corta
-    "proyecto-ocr-fastapi",             // variante larga
+    "ocr-proyecto-fastapi-d5qhym",   // nombre generado por Dokploy (actual)
+    "fastapi",                         // nombre del servicio en Dokploy UI
+    "FastAPI",                         // nombre con mayúscula tal como aparece en Dokploy
+    "ocr-proyecto-fastapi",            // sin sufijo hash
+    "backend",
+    "ocr-fastapi",
   ];
 
   for (const name of serviceNames) {
     candidates.push(`http://${name}:8000`);
-    candidates.push(`http://tasks.${name}:8000`);
   }
 
-  // 3. Fallbacks locales
+  // 3. Fallback localhost
   candidates.push("http://127.0.0.1:8000");
   candidates.push("http://localhost:8000");
 

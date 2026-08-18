@@ -3,40 +3,31 @@ import http from "http";
 import https from "https";
 import { URL } from "url";
 
-// Candidatos de backend dentro y fuera de Docker Swarm / Dokploy
+// Memoria caché del backend activo: una vez descubierto, todas las peticiones van directo sin latencia
+let cachedWorkingBackend: string | null = null;
+
 const getBackendCandidates = (): string[] => {
   const candidates: string[] = [];
 
-  // 1. Variable de entorno explícita — CONFIGURA ESTO EN DOKPLOY → Frontend → Environment:
-  //    INTERNAL_BACKEND_URL=http://10.0.1.189:8000
+  // Si ya sabemos qué backend funciona, ponerlo de primerísimo
+  if (cachedWorkingBackend) {
+    candidates.push(cachedWorkingBackend);
+  }
+
+  // 1. Variable de entorno explícita (Dokploy)
   const envUrl = process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL;
   if (envUrl && envUrl.trim().length > 0) {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres Docker Swarm del servicio FastAPI (requieren estar en la misma red overlay)
-  const serviceNames = [
-    "ocr-proyecto-fastapi-d5qhym",   // nombre Docker Swarm del servicio FastAPI
-    "fastapi",                         // nombre del servicio en Dokploy UI (minúsculas)
-    "FastAPI",                         // nombre con mayúscula
-    "ocr-proyecto-fastapi",            // sin sufijo hash
-    "backend",
-  ];
-  for (const name of serviceNames) {
-    candidates.push(`http://${name}:8000`);
-  }
+  // 2. Nombres Docker Swarm canónicos en la red dokploy-network
+  candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
+  candidates.push("http://fastapi:8000");
+  candidates.push("http://ocr-proyecto-fastapi:8000");
 
-  // 3. IPs conocidas del contenedor FastAPI en la red overlay de Docker Swarm
-  //    Nota: estas IPs cambian si el contenedor se reinicia — usar INTERNAL_BACKEND_URL es más fiable
-  candidates.push("http://10.0.1.189:8000");   // IP actual del FastAPI (red 10.0.1.x)
-  candidates.push("http://172.16.1.20:8000");   // IP alternativa del FastAPI
-
-  // 4. host.docker.internal y gateway Docker
-  candidates.push("http://host.docker.internal:8000");
-  candidates.push("http://172.17.0.1:8000");
-
-  // 5. Fallback localhost
+  // 3. Fallbacks locales
   candidates.push("http://127.0.0.1:8000");
+  candidates.push("http://localhost:8000");
 
   return Array.from(new Set(candidates));
 };
@@ -45,7 +36,8 @@ function doHttpRequest(
   targetUrlStr: string,
   method: string,
   headers: Record<string, string>,
-  bodyBuffer?: Buffer
+  bodyBuffer?: Buffer,
+  timeoutMs: number = 120000
 ): Promise<{ status: number; statusText: string; headers: Record<string, string>; data: Buffer }> {
   return new Promise((resolve, reject) => {
     try {
@@ -53,7 +45,6 @@ function doHttpRequest(
       const isHttps = targetUrl.protocol === "https:";
       const client = isHttps ? https : http;
 
-      const isUploadOrMutate = method === "POST" || method === "PUT" || method === "PATCH";
       const reqOptions: http.RequestOptions = {
         hostname: targetUrl.hostname,
         port: targetUrl.port ? parseInt(targetUrl.port, 10) : (isHttps ? 443 : 80),
@@ -61,7 +52,7 @@ function doHttpRequest(
         method: method,
         headers: headers,
         ...(isHttps ? { rejectUnauthorized: false } : {}),
-        timeout: isUploadOrMutate ? 120000 : 10000,
+        timeout: timeoutMs,
       };
 
       const req = client.request(reqOptions, (res) => {
@@ -90,7 +81,7 @@ function doHttpRequest(
       });
 
       req.on("timeout", () => {
-        req.destroy(new Error(`Timeout de conexión hacia ${targetUrlStr}`));
+        req.destroy(new Error(`Timeout (${timeoutMs}ms) hacia ${targetUrlStr}`));
       });
 
       if (bodyBuffer && bodyBuffer.length > 0) {
@@ -119,7 +110,7 @@ async function handleProxy(
     }
   });
 
-  // Forzar respuesta sin comprimir para evitar doble compresión o binario corrupto
+  // Forzar respuesta sin comprimir para evitar binario corrupto
   reqHeaders["accept-encoding"] = "identity";
 
   const method = req.method;
@@ -139,15 +130,22 @@ async function handleProxy(
   let lastError: any = null;
   const triedUrls: string[] = [];
 
-  for (const backendBase of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const backendBase = candidates[i];
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
     triedUrls.push(targetUrl);
 
-    try {
-      const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer);
+    // Si es el backend ya cacheado, permitir timeout completo (120s para subidas, 30s para GET)
+    // Si estamos descubriendo candidatos, usar 3s para descartar IPs/DNS caídos velozmente
+    const isCached = cachedWorkingBackend === backendBase;
+    const isOnlyOne = candidates.length === 1;
+    const timeoutMs = (isCached || isOnlyOne || hasBody) ? 120000 : 3000;
 
-      // Éxito — loguear qué candidato funcionó
-      console.log(`[Proxy OK] ${method} ${targetUrl} → ${result.status}`);
+    try {
+      const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer, timeoutMs);
+
+      // Guardar el backend que funcionó para futuras peticiones instantáneas
+      cachedWorkingBackend = backendBase;
 
       const isNoBody = result.status === 204 || result.status === 304;
       const responseBody = isNoBody ? null : result.data;
@@ -159,21 +157,18 @@ async function handleProxy(
       });
     } catch (err: any) {
       lastError = err;
+      if (cachedWorkingBackend === backendBase) {
+        cachedWorkingBackend = null; // Invalidar caché si falló
+      }
       console.warn(`[Proxy Miss] ${targetUrl}: ${err?.message || err}`);
     }
   }
 
-  // Diagnóstico completo en el error
   console.error(`[Proxy Fatal] ${method} /api/${path} — probados: ${triedUrls.join(", ")} — último error: ${lastError?.message}`);
 
   return NextResponse.json(
     {
-      detail: `No se pudo conectar con el backend. URLs probadas: ${triedUrls.slice(0, 3).join(", ")}. Error: ${lastError?.message || "Servicio no alcanzable"}. SOLUCIÓN: Verifica que los servicios FastAPI y Frontend estén en la misma red Docker en Dokploy, y que INTERNAL_BACKEND_URL esté correctamente configurado.`,
-      debug: {
-        internal_backend_url: process.env.INTERNAL_BACKEND_URL || "(no configurado)",
-        candidates_tried: triedUrls.length,
-        last_error: lastError?.message,
-      },
+      detail: `No se pudo conectar con el backend. Error: ${lastError?.message || "Servicio no alcanzable"}.`,
     },
     { status: 502 }
   );

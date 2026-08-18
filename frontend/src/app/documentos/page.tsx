@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import toast from "react-hot-toast";
 import {
   Upload, FileText, CheckCircle, AlertTriangle,
@@ -13,7 +13,7 @@ import { auth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import type { Documento } from "@/types";
 
-const ESTADO_CONFIG = {
+const ESTADO_CONFIG: Record<string, { label: string; clase: string; icon: React.ReactNode }> = {
   pendiente: { label: "Pendiente", clase: "badge-neutral", icon: <Clock className="w-3 h-3" /> },
   procesando: { label: "Procesando", clase: "badge-warning", icon: <RefreshCw className="w-3 h-3 animate-spin" /> },
   completado: { label: "Completado", clase: "badge-success", icon: <CheckCircle className="w-3 h-3" /> },
@@ -28,25 +28,38 @@ export default function DocumentosPage() {
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    if (!auth.isAuthenticated()) { router.push("/"); return; }
-    cargarDocumentos();
-    const i = setInterval(cargarDocumentos, 5000);
-    return () => clearInterval(i);
-  }, []);
-
   const cargarDocumentos = async () => {
     try {
-      const { data } = await apiDocumentos.listar({ limit: 50 });
-      setDocumentos(data);
-    } catch { } finally { setCargando(false); }
+      const res = await apiDocumentos.listar({ limit: 50 });
+      if (Array.isArray(res?.data)) {
+        setDocumentos(res.data);
+      } else if (res?.data && Array.isArray((res.data as any).documentos)) {
+        setDocumentos((res.data as any).documentos);
+      } else {
+        setDocumentos([]);
+      }
+    } catch (err) {
+      console.error("Error al cargar documentos:", err);
+    } finally {
+      setCargando(false);
+    }
   };
+
+  useEffect(() => {
+    if (!auth.isAuthenticated()) {
+      router.push("/");
+      return;
+    }
+    cargarDocumentos();
+    const interval = setInterval(cargarDocumentos, 5000);
+    return () => clearInterval(interval);
+  }, [router]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const pdfs = acceptedFiles.filter((f) => {
-      const ext = f.name.toLowerCase();
-      const type = f.type.toLowerCase();
-      return ext.endsWith(".pdf") || type === "application/pdf" || type === "application/x-pdf" || type === "";
+      const ext = f.name?.toLowerCase() || "";
+      const type = f.type?.toLowerCase() || "";
+      return ext.endsWith(".pdf") || type.includes("pdf") || type === "";
     });
     if (pdfs.length !== acceptedFiles.length) {
       toast.error("Solo se aceptan archivos PDF");
@@ -56,9 +69,9 @@ export default function DocumentosPage() {
     }
   }, []);
 
-  const onDropRejected = useCallback((fileRejections: import("react-dropzone").FileRejection[]) => {
-    if (fileRejections.length > 0) {
-      const nombres = fileRejections.map(r => r.file.name).join(", ");
+  const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
+    if (fileRejections && fileRejections.length > 0) {
+      const nombres = fileRejections.map(r => r.file?.name || "archivo").join(", ");
       toast.error(`Archivo(s) rechazado(s): ${nombres}. Solo se aceptan PDF.`);
     }
   }, []);
@@ -66,8 +79,6 @@ export default function DocumentosPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     onDropRejected,
-    // Sin restricción MIME — validación manual por extensión en onDrop
-    // (el MIME de PDF varía en Windows y puede causar rechazos silenciosos)
     multiple: true,
     noClick: false,
     noKeyboard: false,
@@ -81,11 +92,10 @@ export default function DocumentosPage() {
 
     setSubiendo(true);
     try {
-      const { data } = await apiDocumentos.upload(archivosSeleccionados);
+      await apiDocumentos.upload(archivosSeleccionados);
       toast.success("PDF(s) subidos con éxito. Procesando con Google Document AI...");
       setArchivosSeleccionados([]);
       cargarDocumentos();
-      // Redirigir a la pantalla de Personas donde se actualizarán automáticamente
       setTimeout(() => {
         router.push("/personas");
       }, 1500);
@@ -103,14 +113,33 @@ export default function DocumentosPage() {
       await apiDocumentos.eliminar(id);
       toast.success("Documento eliminado");
       cargarDocumentos();
-    } catch { toast.error("Error eliminando documento"); }
+    } catch {
+      toast.error("Error eliminando documento");
+    }
   };
 
-  const formatSize = (bytes: number | null) => {
-    if (!bytes) return "-";
+  const formatSize = (bytes: number | null | undefined) => {
+    if (!bytes || isNaN(bytes)) return "-";
     return bytes > 1024 * 1024
       ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
       : `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "-";
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? "-" : d.toLocaleString("es-CO");
+    } catch {
+      return "-";
+    }
+  };
+
+  const getConfianzaDisplay = (conf: number | null | undefined) => {
+    if (conf == null || isNaN(Number(conf))) return null;
+    const num = Number(conf);
+    const pct = num > 1 ? num : num * 100;
+    return Math.min(100, Math.max(0, Math.round(pct)));
   };
 
   return (
@@ -146,7 +175,7 @@ export default function DocumentosPage() {
                 {isDragActive ? "Suelta los archivos aquí" : "Arrastra PDFs o haz clic para seleccionar"}
               </p>
               <p className="text-slate-500 text-sm mt-1">
-                PDF · Máximo {50}MB por archivo · Múltiples archivos permitidos
+                PDF · Máximo 50MB por archivo · Múltiples archivos permitidos
               </p>
             </div>
           </div>
@@ -197,7 +226,7 @@ export default function DocumentosPage() {
                 <div key={i} className="skeleton h-12 rounded-xl" />
               ))}
             </div>
-          ) : documentos.length === 0 ? (
+          ) : !documentos || documentos.length === 0 ? (
             <div className="text-center py-16">
               <FileText className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-400">No hay documentos cargados aún</p>
@@ -219,7 +248,10 @@ export default function DocumentosPage() {
                 </thead>
                 <tbody>
                   {documentos.map((doc) => {
-                    const cfg = ESTADO_CONFIG[doc.estado] || ESTADO_CONFIG.pendiente;
+                    const estadoKey = String(doc.estado || "pendiente").toLowerCase();
+                    const cfg = ESTADO_CONFIG[estadoKey] || ESTADO_CONFIG.pendiente;
+                    const confPct = getConfianzaDisplay(doc.confianza_ocr);
+
                     return (
                       <tr key={doc.id}>
                         <td>
@@ -245,15 +277,15 @@ export default function DocumentosPage() {
                         </td>
                         <td>{doc.total_paginas || "-"}</td>
                         <td>
-                          {doc.confianza_ocr != null ? (
+                          {confPct !== null ? (
                             <div className="flex items-center gap-2">
                               <div className="progress-bar w-16">
                                 <div
                                   className="progress-fill"
-                                  style={{ width: `${doc.confianza_ocr}%` }}
+                                  style={{ width: `${confPct}%` }}
                                 />
                               </div>
-                              <span className="text-xs text-slate-400">{Math.round(Number(doc.confianza_ocr))}%</span>
+                              <span className="text-xs text-slate-400">{confPct}%</span>
                             </div>
                           ) : "-"}
                         </td>
@@ -263,7 +295,7 @@ export default function DocumentosPage() {
                             : "-"}
                         </td>
                         <td className="text-slate-400 text-xs">
-                          {new Date(doc.fecha_carga).toLocaleString("es-CO")}
+                          {formatDate(doc.fecha_carga)}
                         </td>
                         <td>
                           <button

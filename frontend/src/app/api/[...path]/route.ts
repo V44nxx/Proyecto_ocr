@@ -5,19 +5,31 @@ import { URL } from "url";
 
 // Candidatos de backend dentro y fuera de Docker Swarm / Dokploy
 const getBackendCandidates = (): string[] => {
-  const envUrl = process.env.INTERNAL_BACKEND_URL;
   const candidates: string[] = [];
 
+  // 1. Variable de entorno explícita (configurada en Dokploy → Frontend → Environment)
+  const envUrl = process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL;
   if (envUrl && envUrl.trim().length > 0) {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // Nombre de servicio en Docker Swarm (VIP)
-  candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
-  // Nombre de tarea directa en Docker Swarm (DNS de réplicas directas)
-  candidates.push("http://tasks.ocr-proyecto-fastapi-d5qhym:8000");
-  // Fallback local
+  // 2. Nombres de servicio Docker Swarm / Dokploy (variantes conocidas del proyecto)
+  const serviceNames = [
+    "ocr-proyecto-fastapi-d5qhym",    // nombre original
+    "fastapi",                          // nombre genérico
+    "backend",                          // nombre genérico alternativo
+    "ocr-fastapi",                      // variante corta
+    "proyecto-ocr-fastapi",             // variante larga
+  ];
+
+  for (const name of serviceNames) {
+    candidates.push(`http://${name}:8000`);
+    candidates.push(`http://tasks.${name}:8000`);
+  }
+
+  // 3. Fallbacks locales
   candidates.push("http://127.0.0.1:8000");
+  candidates.push("http://localhost:8000");
 
   return Array.from(new Set(candidates));
 };

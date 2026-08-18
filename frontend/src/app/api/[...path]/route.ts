@@ -53,7 +53,7 @@ function doHttpRequest(
         method: method,
         headers: headers,
         ...(isHttps ? { rejectUnauthorized: false } : {}),
-        timeout: 20000,
+        timeout: 5000,  // 5s por candidato — fallar rápido si DNS no resuelve
       };
 
       const req = client.request(reqOptions, (res) => {
@@ -129,12 +129,17 @@ async function handleProxy(
   }
 
   let lastError: any = null;
+  const triedUrls: string[] = [];
 
   for (const backendBase of candidates) {
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
+    triedUrls.push(targetUrl);
 
     try {
       const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer);
+
+      // Éxito — loguear qué candidato funcionó
+      console.log(`[Proxy OK] ${method} ${targetUrl} → ${result.status}`);
 
       const isNoBody = result.status === 204 || result.status === 304;
       const responseBody = isNoBody ? null : result.data;
@@ -146,14 +151,21 @@ async function handleProxy(
       });
     } catch (err: any) {
       lastError = err;
-      console.warn(`[Proxy Fallback] ${targetUrl} no disponible: ${err?.message || err}. Probando siguiente...`);
+      console.warn(`[Proxy Miss] ${targetUrl}: ${err?.message || err}`);
     }
   }
 
-  console.error(`[Next.js API Route Proxy Fatal] Error para ${method} /api/${path}:`, lastError);
+  // Diagnóstico completo en el error
+  console.error(`[Proxy Fatal] ${method} /api/${path} — probados: ${triedUrls.join(", ")} — último error: ${lastError?.message}`);
+
   return NextResponse.json(
     {
-      detail: `No se pudo conectar con el backend FastAPI en (${candidates.join(", ")}). Error: ${lastError?.message || "Servicio no alcanzable"}`,
+      detail: `No se pudo conectar con el backend. URLs probadas: ${triedUrls.slice(0, 3).join(", ")}. Error: ${lastError?.message || "Servicio no alcanzable"}. SOLUCIÓN: Verifica que los servicios FastAPI y Frontend estén en la misma red Docker en Dokploy, y que INTERNAL_BACKEND_URL esté correctamente configurado.`,
+      debug: {
+        internal_backend_url: process.env.INTERNAL_BACKEND_URL || "(no configurado)",
+        candidates_tried: triedUrls.length,
+        last_error: lastError?.message,
+      },
     },
     { status: 502 }
   );

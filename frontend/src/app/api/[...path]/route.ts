@@ -13,23 +13,28 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres conocidos del servicio FastAPI en este proyecto Dokploy
+  // 2. Nombres conocidos del servicio FastAPI en este proyecto Dokploy (Docker Swarm DNS)
   const serviceNames = [
-    "ocr-proyecto-fastapi-d5qhym",   // nombre generado por Dokploy (actual)
-    "fastapi",                         // nombre del servicio en Dokploy UI
+    "ocr-proyecto-fastapi-d5qhym",   // nombre Docker Swarm del servicio FastAPI
+    "fastapi",                         // nombre del servicio en Dokploy UI (minúsculas)
     "FastAPI",                         // nombre con mayúscula tal como aparece en Dokploy
     "ocr-proyecto-fastapi",            // sin sufijo hash
     "backend",
-    "ocr-fastapi",
   ];
 
   for (const name of serviceNames) {
     candidates.push(`http://${name}:8000`);
   }
 
-  // 3. Fallback localhost
+  // 3. host.docker.internal — funciona en Docker Desktop y algunos entornos Linux
+  candidates.push("http://host.docker.internal:8000");
+
+  // 4. IP del gateway Docker (172.17.0.1) — accesible desde cualquier contenedor Linux
+  //    Solo funciona si el FastAPI está escuchando en 0.0.0.0:8000 en el host
+  candidates.push("http://172.17.0.1:8000");
+
+  // 5. Fallback localhost
   candidates.push("http://127.0.0.1:8000");
-  candidates.push("http://localhost:8000");
 
   return Array.from(new Set(candidates));
 };

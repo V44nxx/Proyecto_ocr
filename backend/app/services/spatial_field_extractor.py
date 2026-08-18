@@ -113,9 +113,9 @@ class SpatialFieldExtractor:
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
     NO_NOMBRE_HEADER = re.compile(
-        r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|FEPUBLICA|COLOMBIA|COLOMB|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
+        r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|FEPUBLICA|REPUTE|COLOMBIA|COLOMB|COL|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
         r"IDENTIFICACIÓN|NUMERO|NÚMERO|NUIP|APELLIDOS?|NOMBRES?|PRIMER|SEGUNDO|FIRMA|FIRMAS|TITULAR|DIGITAL|"
-        r"REGISTRAD.*|OISTRAD.*|NATIONAL|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
+        r"REGISTRAD.*|OISTRAD.*|NATIONAL|NACIONAL.*|NACIONA.*|COLESARIA.*|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|CS|BOR|BEREN|AMEL|SANZ|TAN|FA|BAR|BER|"
         r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS\s+ARIEL|"
         r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
@@ -409,12 +409,14 @@ class SpatialFieldExtractor:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
                         cand_ape = []
-                        for i in range(idx_num + 1 if idx_num != -1 and idx_num < idx_ape else max(0, idx_ape - 2), idx_ape):
+                        for i in range(idx_num + 1 if idx_num != -1 and idx_num < idx_ape else max(0, idx_ape - 3), idx_ape):
                             limpio = self.limpiar_nombre(getattr(lineas_frente[i], "text", ""))
                             if limpio:
                                 cand_ape.append(limpio)
                         if cand_ape and not resultado_campos["apellidos"]["value"]:
-                            resultado_campos["apellidos"] = {"value": " ".join(cand_ape), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
+                            # Tomar únicamente las líneas más cercanas a la etiqueta APELLIDOS (máximo 2 líneas)
+                            ape_val = " ".join(cand_ape[-2:])
+                            resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
 
                     # 2. Verificar si hay valor inline en la misma línea de NOMBRES
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(NOMBRES?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
@@ -427,7 +429,9 @@ class SpatialFieldExtractor:
                             if limpio:
                                 cand_nom.append(limpio)
                         if cand_nom and not resultado_campos["nombres"]["value"]:
-                            resultado_campos["nombres"] = {"value": " ".join(cand_nom), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
+                            # Tomar únicamente las líneas más cercanas a la etiqueta NOMBRES (máximo 2 líneas)
+                            nom_val = " ".join(cand_nom[-2:])
+                            resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                 else:
                     # Layout Cédula Digital / Formato Inverso: NOMBRES_LABEL -> NOMBRES_VAL -> APELLIDOS_LABEL -> APELLIDOS_VAL
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(NOMBRES?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))

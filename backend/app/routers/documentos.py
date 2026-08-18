@@ -26,16 +26,11 @@ router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
 
 def _validar_pdf(file: UploadFile):
     """Valida que el archivo sea un PDF válido"""
-    if not file.filename.lower().endswith(".pdf"):
+    fname = (file.filename or "").strip()
+    if not fname.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
-            detail=f"Solo se aceptan archivos PDF. Archivo recibido: {file.filename}"
-        )
-
-    if file.size and file.size > settings.max_file_size_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Archivo muy grande. Máximo {settings.MAX_FILE_SIZE_MB}MB"
+            detail=f"Solo se aceptan archivos PDF (extensión .pdf). Archivo recibido: '{fname}'"
         )
 
 

@@ -56,29 +56,39 @@ export default function DocumentosPage() {
   }, [router]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (!acceptedFiles || acceptedFiles.length === 0) return;
     const pdfs = acceptedFiles.filter((f) => {
-      const ext = f.name?.toLowerCase() || "";
-      const type = f.type?.toLowerCase() || "";
-      return ext.endsWith(".pdf") || type.includes("pdf") || type === "";
+      const name = (f?.name || "").trim().toLowerCase();
+      const type = (f?.type || "").trim().toLowerCase();
+      return name.endsWith(".pdf") || type.includes("pdf") || type.includes("octet-stream") || !name.includes(".");
     });
+    if (pdfs.length === 0) {
+      toast.error("Solo se aceptan archivos en formato PDF (.pdf)");
+      return;
+    }
     if (pdfs.length !== acceptedFiles.length) {
-      toast.error("Solo se aceptan archivos PDF");
+      toast.error("Se ignoraron los archivos que no tienen extensión .pdf");
     }
-    if (pdfs.length > 0) {
-      setArchivosSeleccionados((prev) => [...prev, ...pdfs]);
-    }
+    setArchivosSeleccionados((prev) => {
+      const existingKeys = new Set(prev.map(p => `${p.name}_${p.size}`));
+      const newUnique = pdfs.filter(p => !existingKeys.has(`${p.name}_${p.size}`));
+      return [...prev, ...newUnique];
+    });
   }, []);
 
   const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
     if (fileRejections && fileRejections.length > 0) {
       const nombres = fileRejections.map(r => r.file?.name || "archivo").join(", ");
-      toast.error(`Archivo(s) rechazado(s): ${nombres}. Solo se aceptan PDF.`);
+      toast.error(`No se pudo seleccionar: ${nombres}. Asegúrate de que sea un archivo PDF.`);
     }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     onDropRejected,
+    accept: {
+      "application/pdf": [".pdf"],
+    },
     multiple: true,
     noClick: false,
     noKeyboard: false,

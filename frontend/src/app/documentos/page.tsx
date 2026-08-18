@@ -43,7 +43,11 @@ export default function DocumentosPage() {
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const pdfs = acceptedFiles.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    const pdfs = acceptedFiles.filter((f) => {
+      const ext = f.name.toLowerCase();
+      const type = f.type.toLowerCase();
+      return ext.endsWith(".pdf") || type === "application/pdf" || type === "application/x-pdf" || type === "";
+    });
     if (pdfs.length !== acceptedFiles.length) {
       toast.error("Solo se aceptan archivos PDF");
     }
@@ -52,10 +56,21 @@ export default function DocumentosPage() {
     }
   }, []);
 
+  const onDropRejected = useCallback((fileRejections: import("react-dropzone").FileRejection[]) => {
+    if (fileRejections.length > 0) {
+      const nombres = fileRejections.map(r => r.file.name).join(", ");
+      toast.error(`Archivo(s) rechazado(s): ${nombres}. Solo se aceptan PDF.`);
+    }
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    onDropRejected,
+    // Sin restricción MIME — validación manual por extensión en onDrop
+    // (el MIME de PDF varía en Windows y puede causar rechazos silenciosos)
     multiple: true,
+    noClick: false,
+    noKeyboard: false,
   });
 
   const subirArchivos = async () => {

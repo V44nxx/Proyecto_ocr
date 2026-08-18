@@ -5,7 +5,7 @@ Endpoints: Upload PDF, listar, detalle, eliminar
 import uuid
 import shutil
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Union
 from datetime import datetime
 import threading
 

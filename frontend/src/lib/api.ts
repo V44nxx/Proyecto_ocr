@@ -68,17 +68,26 @@ function getBaseUrl(): string {
 const apiClient = axios.create({
   baseURL: getBaseUrl(),
   timeout: 120000, // 2 minutos para OCR
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
-// Interceptor: agregar token JWT a cada petición
+// Interceptor: agregar token JWT y gestionar Content-Type para FormData
 apiClient.interceptors.request.use((config) => {
   const token = auth.getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Si enviamos FormData, eliminar cualquier Content-Type manual para que Axios y el navegador
+  // generen el multipart/form-data con el delimitador boundary exacto
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+    }
+  } else if (!config.headers["Content-Type"] && !config.headers["content-type"]) {
+    config.headers["Content-Type"] = "application/json";
+  }
+
   return config;
 });
 
@@ -116,10 +125,8 @@ export const apiDocumentos = {
   upload: (files: File[]) => {
     const formData = new FormData();
     files.forEach((file) => {
-      formData.append("files", file);
-      formData.append("file", file);
+      formData.append("files", file, file.name);
     });
-    // No forzar Content-Type — axios genera multipart/form-data con el boundary correcto
     return apiClient.post("/api/documentos/upload", formData);
   },
 

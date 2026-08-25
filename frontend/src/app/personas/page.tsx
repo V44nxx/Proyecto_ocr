@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   Users, Search, AlertTriangle, CheckCircle,
-  Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin, ShieldCheck, UserCheck
+  Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
+  ShieldCheck, UserCheck, FileText, Eye, ChevronLeft, ChevronRight,
+  ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiPersonas } from "@/lib/api";
+import { apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Persona, PersonaUpdate } from "@/types";
 
@@ -104,6 +106,25 @@ export default function PersonasPage() {
   });
 
   const [personaSeleccionada, setPersonaSeleccionada] = useState<Persona | null>(null);
+  const [paginaVistaPrevia, setPaginaVistaPrevia] = useState<number>(1);
+  const [imagenCargando, setImagenCargando] = useState(false);
+  const [imagenError, setImagenError] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  const abrirVistaPrevia = (p: Persona) => {
+    setPersonaSeleccionada(p);
+    const paginaInicial = p.pagina_frente || p.pagina_numero || 1;
+    setPaginaVistaPrevia(paginaInicial);
+    setImagenCargando(true);
+    setImagenError(false);
+    setZoom(1);
+  };
+
+  const cerrarVistaPrevia = () => {
+    setPersonaSeleccionada(null);
+    setImagenError(false);
+    setZoom(1);
+  };
 
   return (
     <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
@@ -386,11 +407,11 @@ export default function PersonasPage() {
                             <td className="py-4 px-5 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-2">
                                 <button
-                                  onClick={() => setPersonaSeleccionada(p)}
-                                  title="Inspeccionar detalle por campo"
+                                  onClick={() => abrirVistaPrevia(p)}
+                                  title="Ver documento y datos extraídos"
                                   className="p-1.5 rounded-lg text-primary-400 hover:bg-primary-500/10 transition-colors"
                                 >
-                                  <ShieldCheck className="w-4 h-4" />
+                                  <Eye className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => iniciarEdicion(p)}
@@ -419,116 +440,266 @@ export default function PersonasPage() {
           )}
         </div>
 
-        {/* Modal de Inspección Detallada por Campo */}
-        {personaSeleccionada && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-primary-400 uppercase tracking-wider">
-                    <UserCheck className="w-4 h-4" /> Inspección Espacial por Campo
+        {/* ─── Modal de Vista Previa PDF + Datos OCR ─── */}
+        {personaSeleccionada && (() => {
+          const p = personaSeleccionada;
+          const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
+          const docId = p.documento_id ? String(p.documento_id) : null;
+          const tieneFrenteYReverso = p.pagina_frente && p.pagina_reverso;
+
+          const campos = [
+            { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
+            { key: "nombres", label: "Nombres", icono: <UserCheck className="w-3.5 h-3.5" />, valor: p.nombres },
+            { key: "apellidos", label: "Apellidos", icono: <UserCheck className="w-3.5 h-3.5" />, valor: p.apellidos },
+            { key: "fecha_nacimiento", label: "Fecha de Nacimiento", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null },
+            { key: "fecha_expedicion", label: "Fecha de Expedición", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
+            { key: "lugar_expedicion", label: "Lugar de Expedición", icono: <MapPin className="w-3.5 h-3.5" />, valor: p.lugar_expedicion },
+            { key: "sexo", label: "Sexo", icono: <Users className="w-3.5 h-3.5" />, valor: p.sexo },
+          ];
+
+          const getConfianzaCampo = (campoKey: string): number => {
+            const detalle = p.detalles_campos?.[campoKey] as any;
+            if (detalle?.confidence != null) return Math.round(detalle.confidence * 100);
+            return p.confianza_extraccion != null ? Math.round(Number(p.confianza_extraccion)) : 85;
+          };
+
+          const getColorConfianza = (conf: number) => {
+            if (conf >= 85) return { bar: "from-emerald-500 to-emerald-400", text: "text-emerald-400", badge: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" };
+            if (conf >= 65) return { bar: "from-amber-500 to-yellow-400", text: "text-amber-400", badge: "bg-amber-500/15 border-amber-500/30 text-amber-400" };
+            return { bar: "from-rose-500 to-red-400", text: "text-rose-400", badge: "bg-rose-500/15 border-rose-500/30 text-rose-400" };
+          };
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md animate-fadeIn p-4">
+              <div className="bg-slate-900 border border-slate-800/80 rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+
+                {/* Header del modal */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-slate-950/60 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary-500/10 border border-primary-500/20">
+                      <FileText className="w-5 h-5 text-primary-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-primary-400 uppercase tracking-wider">Documento OCR</div>
+                      <h2 className="text-lg font-bold text-white">
+                        Cédula <span className="font-mono text-primary-300">{p.numero_identificacion}</span>
+                        {(p.nombres || p.apellidos) && (
+                          <span className="text-slate-400 font-normal text-base ml-2">— {[p.nombres, p.apellidos].filter(Boolean).join(" ")}</span>
+                        )}
+                      </h2>
+                    </div>
                   </div>
-                  <h2 className="text-xl font-bold text-white mt-1">
-                    Cédula {personaSeleccionada.numero_identificacion}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    {estadoStr === "VALID" ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                        <CheckCircle className="w-3.5 h-3.5" /> VÁLIDO
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold">
+                        <AlertTriangle className="w-3.5 h-3.5" /> REVISAR
+                      </span>
+                    )}
+                    <button onClick={cerrarVistaPrevia} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setPersonaSeleccionada(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
 
-              <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1">Grupo Documento</span>
-                  <span className="font-mono text-primary-400 font-bold">{personaSeleccionada.grupo_documento_id || "DOC-001"}</span>
-                </div>
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1">Páginas (F / R)</span>
-                  <span className="font-mono text-white font-bold">
-                    Frente: {personaSeleccionada.pagina_frente || personaSeleccionada.pagina_numero || 1} | Rev: {personaSeleccionada.pagina_reverso || "-"}
-                  </span>
-                </div>
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1">Motor OCR</span>
-                  <span className="font-mono text-emerald-400 font-bold">{personaSeleccionada.motor_ocr || "google_document_ai"}</span>
-                </div>
-              </div>
+                {/* Cuerpo split */}
+                <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
 
-              {/* Evidencias de Agrupación del Documento */}
-              {personaSeleccionada.detalles_campos?.grouping?.reasons && (
-                <div className="p-3 rounded-xl bg-slate-950/80 border border-primary-500/30 text-xs space-y-1">
-                  <span className="text-primary-400 font-bold uppercase text-[10px]">✓ Evidencias de Agrupación de Documento:</span>
-                  <ul className="list-disc list-inside text-slate-300 space-y-0.5 text-[11px]">
-                    {personaSeleccionada.detalles_campos.grouping.reasons.map((r: string, idx: number) => (
-                      <li key={idx}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                  {/* ─── Panel Izquierdo: Vista previa PDF ─── */}
+                  <div className="lg:w-[52%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/60 bg-slate-950/40 min-h-[300px] lg:min-h-0">
 
-              {/* Desglose por campo */}
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Desglose de Confianza por Campo</h3>
-                {["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"].map((campoKey) => {
-                  const detalle = personaSeleccionada.detalles_campos?.[campoKey] as any;
-                  const val = (personaSeleccionada as any)[campoKey] || detalle?.value || null;
-                  const confPct = Math.round((detalle?.confidence || (personaSeleccionada.confianza_extraccion ? Number(personaSeleccionada.confianza_extraccion) / 100 : 0.85)) * 100);
-                  const status = val ? "valid" : "review_required";
-
-                  return (
-                    <div key={campoKey} className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-[11px] font-bold text-slate-400 uppercase">{campoKey.replace("_", " ")}</span>
-                          <div className="text-xs font-semibold text-slate-100 mt-0.5">
-                            {val || <span className="text-amber-400 italic">No detectado</span>}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
-                            status === "valid" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                          }`}>
-                            {status === "valid" ? `${confPct}% VALID` : "REVISAR"}
+                    {/* Barra de controles PDF */}
+                    <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-800/60 bg-slate-900/80 flex-shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        {tieneFrenteYReverso && (
+                          <>
+                            <button
+                              onClick={() => { setPaginaVistaPrevia(p.pagina_frente!); setImagenCargando(true); setImagenError(false); }}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${paginaVistaPrevia === p.pagina_frente ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-white"}`}
+                            >
+                              Frente (pág. {p.pagina_frente})
+                            </button>
+                            <button
+                              onClick={() => { setPaginaVistaPrevia(p.pagina_reverso!); setImagenCargando(true); setImagenError(false); }}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${paginaVistaPrevia === p.pagina_reverso ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-white"}`}
+                            >
+                              Reverso (pág. {p.pagina_reverso})
+                            </button>
+                          </>
+                        )}
+                        {!tieneFrenteYReverso && (
+                          <span className="text-xs text-slate-400">
+                            Página <span className="font-mono text-white font-bold">{paginaVistaPrevia}</span>
                           </span>
-                        </div>
+                        )}
                       </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Alejar">
+                          <ZoomOut className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-xs text-slate-500 font-mono w-10 text-center">{Math.round(zoom * 100)}%</span>
+                        <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Acercar">
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setZoom(1)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Restablecer zoom">
+                          <RotateCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
 
-                      {/* Sección de Explicabilidad Evidencial y Geometría Espacial */}
-                      {detalle?.spatial_relation && (
-                        <div className="pt-2 border-t border-slate-800/60 text-[11px] space-y-1 bg-slate-900/60 p-2 rounded-lg mt-2">
-                          <div className="flex items-center justify-between text-[10px] text-primary-400 font-bold uppercase">
-                            <span>Geometría Espacial ({detalle.spatial_relation})</span>
-                            <span>Score: {Math.round((detalle.spatial_score || 1.0) * 100)}%</span>
-                          </div>
-                          <p className="text-slate-300 text-[11px] font-medium">{detalle.reason || "Validado espacialmente"}</p>
-                          {detalle.label_bbox && (
-                            <div className="text-[10px] text-slate-500 font-mono flex gap-3">
-                              <span>Label BBox: x:{detalle.label_bbox.x}, y:{detalle.label_bbox.y}</span>
-                              {detalle.value_bbox && <span>Valor BBox: x:{detalle.value_bbox.x}, y:{detalle.value_bbox.y}</span>}
+                    {/* Área de imagen */}
+                    <div className="flex-1 overflow-auto flex items-start justify-center p-4 min-h-0">
+                      {!docId ? (
+                        <div className="flex flex-col items-center justify-center gap-3 text-slate-500 h-full">
+                          <ImageOff className="w-12 h-12 text-slate-700" />
+                          <p className="text-sm font-medium text-slate-400">Sin documento asociado</p>
+                          <p className="text-xs text-slate-600 text-center max-w-xs">Esta persona no tiene un documento PDF vinculado en el sistema.</p>
+                        </div>
+                      ) : imagenError ? (
+                        <div className="flex flex-col items-center justify-center gap-3 text-slate-500 h-full">
+                          <ImageOff className="w-12 h-12 text-slate-700" />
+                          <p className="text-sm font-medium text-slate-400">Archivo no disponible</p>
+                          <p className="text-xs text-slate-600 text-center max-w-xs">El archivo PDF original no está disponible en el servidor.</p>
+                        </div>
+                      ) : (
+                        <div className="relative" style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}>
+                          {imagenCargando && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-10 rounded-xl">
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="w-8 h-8 border-2 border-slate-700 border-t-primary-400 rounded-full animate-spin" />
+                                <span className="text-xs text-slate-400">Cargando página {paginaVistaPrevia}…</span>
+                              </div>
                             </div>
                           )}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            key={`${docId}-${paginaVistaPrevia}`}
+                            src={apiDocumentos.paginaPdfUrl(docId, paginaVistaPrevia, 150)}
+                            alt={`Página ${paginaVistaPrevia} del documento`}
+                            className="rounded-xl shadow-2xl max-w-full border border-slate-700/40"
+                            style={{ display: imagenCargando ? "none" : "block" }}
+                            onLoad={() => setImagenCargando(false)}
+                            onError={() => { setImagenCargando(false); setImagenError(true); }}
+                          />
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  onClick={() => setPersonaSeleccionada(null)}
-                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs rounded-xl transition-all"
-                >
-                  Cerrar Inspección
-                </button>
+                  {/* ─── Panel Derecho: Datos OCR ─── */}
+                  <div className="lg:w-[48%] flex flex-col overflow-hidden">
+
+                    {/* Info del documento fuente */}
+                    <div className="px-5 py-3 border-b border-slate-800/60 bg-slate-900/60 flex-shrink-0">
+                      <div className="grid grid-cols-3 gap-2 text-[11px]">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-slate-500 font-medium uppercase tracking-wider">Documento</span>
+                          <span className="text-slate-300 font-mono truncate" title={p.grupo_documento_id || "—"}>
+                            {p.grupo_documento_id ? p.grupo_documento_id.slice(0, 12) + "…" : "—"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1"><Cpu className="w-3 h-3" /> Motor</span>
+                          <span className="text-emerald-400 font-mono">{p.motor_ocr || "doc_ai"}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1"><Clock className="w-3 h-3" /> Registrado</span>
+                          <span className="text-slate-300 font-mono">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de campos con confianza */}
+                    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
+                      <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Datos Extraídos por OCR</h3>
+
+                      {campos.map(({ key, label, icono, valor }) => {
+                        const conf = getConfianzaCampo(key);
+                        const colores = getColorConfianza(valor ? conf : 0);
+                        const detalle = p.detalles_campos?.[key] as any;
+
+                        return (
+                          <div key={key} className="rounded-xl bg-slate-950/60 border border-slate-800/70 overflow-hidden hover:border-slate-700 transition-colors">
+                            {/* Cabecera del campo */}
+                            <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
+                              <div className="flex items-center gap-2 text-slate-400">
+                                {icono}
+                                <span className="text-[11px] font-bold uppercase tracking-wider">{label}</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-bold ${valor ? colores.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
+                                {valor ? (
+                                  <>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                    {conf}%
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle className="w-3 h-3" />
+                                    No detectado
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Valor extraído */}
+                            <div className="px-4 pb-2">
+                              {valor ? (
+                                <span className="text-sm font-semibold text-white">{valor}</span>
+                              ) : (
+                                <span className="text-xs italic text-slate-600">Sin datos — requiere revisión manual</span>
+                              )}
+                            </div>
+
+                            {/* Barra de confianza */}
+                            {valor && (
+                              <div className="px-4 pb-3">
+                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full bg-gradient-to-r ${colores.bar} rounded-full transition-all duration-700`}
+                                    style={{ width: `${conf}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Detalle espacial si existe */}
+                            {detalle?.spatial_relation && (
+                              <div className="px-4 pb-3 pt-1 border-t border-slate-800/50">
+                                <p className="text-[10px] text-slate-500 font-mono">
+                                  Relación espacial: <span className="text-primary-400">{detalle.spatial_relation}</span>
+                                  {detalle.spatial_score != null && <span className="ml-2 text-slate-600">score {Math.round(detalle.spatial_score * 100)}%</span>}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer con acciones */}
+                    <div className="px-5 py-4 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between flex-shrink-0">
+                      <button
+                        onClick={() => { cerrarVistaPrevia(); iniciarEdicion(p); }}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-200 text-xs font-semibold transition-all"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" /> Editar Datos
+                      </button>
+                      <button
+                        onClick={cerrarVistaPrevia}
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/30 text-primary-300 text-xs font-semibold transition-all"
+                      >
+                        <X className="w-3.5 h-3.5" /> Cerrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
     </div>
   );

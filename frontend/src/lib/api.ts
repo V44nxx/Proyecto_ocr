@@ -144,6 +144,18 @@ export const apiDocumentos = {
 
   estadisticas: () =>
     apiClient.get<DashboardStats>("/api/documentos/dashboard/estadisticas"),
+
+  /**
+   * Construye la URL para la imagen de preview de una página del PDF.
+   * Incluye el token JWT como query param para autenticación en <img src>.
+   */
+  paginaPdfUrl: (documentoId: string, pagina: number, dpi: number = 150): string => {
+    const base = getBaseUrl();
+    const token = auth.getToken();
+    const params = new URLSearchParams({ dpi: String(dpi) });
+    if (token) params.set("token", token);
+    return `${base}/api/documentos/${documentoId}/pagina/${pagina}?${params.toString()}`;
+  },
 };
 
 // ──────────────────────────────────────────

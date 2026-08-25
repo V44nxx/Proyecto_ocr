@@ -1,8 +1,9 @@
 """
 Router de Documentos
-Endpoints: Upload PDF, listar, detalle, eliminar
+Endpoints: Upload PDF, listar, detalle, eliminar, preview de página
 """
 import uuid
+import io
 import shutil
 from pathlib import Path
 from typing import List, Optional, Union
@@ -10,6 +11,7 @@ from datetime import datetime
 import threading
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -258,3 +260,77 @@ def debug_espacial_documento(
     from app.services.spatial_debug_service import spatial_debug_service
     # Para depuración visual, retornar reporte espacial de la página solicitada
     return spatial_debug_service.generar_reporte_debug(lines=[], page_num=pagina)
+
+
+@router.get(
+    "/{documento_id}/pagina/{numero}",
+    summary="Vista previa de página del PDF como imagen",
+    response_class=StreamingResponse,
+)
+def preview_pagina_pdf(
+    documento_id: str,
+    numero: int,
+    dpi: int = 150,
+    token: Optional[str] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Renderiza la página `numero` (1-indexed) del PDF asociado al documento
+    y la devuelve como imagen PNG. Permite al frontend mostrar una vista
+    previa de la página exacta donde se detectó la persona.
+    """
+    # 1. Obtener el documento
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
+
+    if not documento:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    # 2. Verificar que el archivo existe
+    ruta = Path(documento.ruta_archivo) if documento.ruta_archivo else None
+    if not ruta or not ruta.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Archivo PDF no disponible en el servidor: {documento.nombre_original}"
+        )
+
+    # 3. Renderizar con PyMuPDF
+    try:
+        import fitz  # PyMuPDF
+        pdf_doc = fitz.open(str(ruta))
+        total_paginas = len(pdf_doc)
+
+        # Convertir a 0-indexed y validar rango
+        idx = numero - 1
+        if idx < 0 or idx >= total_paginas:
+            pdf_doc.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Página {numero} fuera de rango. El documento tiene {total_paginas} página(s)."
+            )
+
+        page = pdf_doc[idx]
+        # Calcular zoom para el DPI solicitado (base PDF = 72 DPI)
+        zoom = dpi / 72.0
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        png_bytes = pix.tobytes("png")
+        pdf_doc.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error renderizando página {numero} del PDF {documento_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al renderizar la página del PDF: {str(e)}")
+
+    return StreamingResponse(
+        io.BytesIO(png_bytes),
+        media_type="image/png",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f'inline; filename="doc_{documento_id}_p{numero}.png"',
+        },
+    )

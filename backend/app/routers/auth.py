@@ -118,6 +118,48 @@ def get_usuario_actual(
     return usuario
 
 
+def get_usuario_desde_token_o_query(
+    authorization: Optional[str] = Depends(
+        lambda request: request.headers.get("Authorization", "")
+    ),
+    token_query: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """
+    Dependency especial: acepta JWT tanto del header 'Authorization: Bearer ...'
+    como del query param 'token=...' (necesario para <img src> en el frontend).
+    """
+    from fastapi import Request
+    credenciales_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token inválido o expirado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    raw_token: Optional[str] = None
+
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization[len("Bearer "):]
+    elif token_query:
+        raw_token = token_query
+
+    if not raw_token:
+        raise credenciales_exception
+
+    try:
+        payload = jwt.decode(raw_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credenciales_exception
+    except JWTError:
+        raise credenciales_exception
+
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not usuario or not usuario.activo:
+        raise credenciales_exception
+
+    return usuario
+
+
 def get_admin_actual(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
     """Dependency: requiere rol de administrador"""
     if usuario.rol != "admin":

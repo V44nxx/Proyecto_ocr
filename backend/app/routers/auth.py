@@ -5,7 +5,7 @@ Endpoints: Login, Registro, Perfil
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -119,28 +119,28 @@ def get_usuario_actual(
 
 
 def get_usuario_desde_token_o_query(
-    authorization: Optional[str] = Depends(
-        lambda request: request.headers.get("Authorization", "")
-    ),
-    token_query: Optional[str] = None,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> Usuario:
     """
     Dependency especial: acepta JWT tanto del header 'Authorization: Bearer ...'
-    como del query param 'token=...' (necesario para <img src> en el frontend).
+    como del query param '?token=...' (necesario para usar en <img src> del frontend).
     """
-    from fastapi import Request
     credenciales_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token inválido o expirado",
+        detail="Token invalido o expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
     raw_token: Optional[str] = None
 
-    if authorization and authorization.startswith("Bearer "):
-        raw_token = authorization[len("Bearer "):]
-    elif token_query:
-        raw_token = token_query
+    # 1. Intentar leer desde header Authorization
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        raw_token = auth_header[7:]
+
+    # 2. Fallback: query param ?token=
+    if not raw_token:
+        raw_token = request.query_params.get("token")
 
     if not raw_token:
         raise credenciales_exception

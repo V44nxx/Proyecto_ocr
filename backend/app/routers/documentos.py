@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 from datetime import datetime
 import threading
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from app.database import get_db
 from app.models.documento import Documento
 from app.models.usuario import Usuario
 from app.schemas.documento import DocumentoResponse
-from app.routers.auth import get_usuario_actual
+from app.routers.auth import get_usuario_actual, get_usuario_desde_token_o_query
 from app.services.ocr_service import ocr_service
 from app.config import settings
 from app.utils.logger import app_logger as logger
@@ -270,10 +270,11 @@ def debug_espacial_documento(
 def preview_pagina_pdf(
     documento_id: str,
     numero: int,
+    request: Request,
     dpi: int = 150,
     token: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_actual),
+    usuario: Usuario = Depends(get_usuario_desde_token_o_query),
 ):
     """
     Renderiza la página `numero` (1-indexed) del PDF asociado al documento

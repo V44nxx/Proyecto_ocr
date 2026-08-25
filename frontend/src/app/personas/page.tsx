@@ -312,8 +312,8 @@ export default function PersonasPage() {
 
         {/* Barra de Búsqueda y Filtros */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-6">
-          {/* Búsqueda prominente por cédula o nombre */}
-          <div className="md:col-span-6 relative">
+          {/* Búsqueda unificada por cédula, nombres o apellidos */}
+          <div className="md:col-span-8 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               id="buscar-persona"
@@ -323,33 +323,20 @@ export default function PersonasPage() {
               onChange={(e) => setBuscar(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
               placeholder="Buscar por número de cédula, nombres o apellidos..."
-              className="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/60 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm"
+              className="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/60 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono sm:font-sans"
             />
             {buscar && (
               <button
                 onClick={() => { setBuscar(""); cargarPersonas(true); }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-white transition-colors"
+                title="Limpiar búsqueda"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* Filtro rápido por cédula exacta */}
-          <div className="md:col-span-3 relative">
-            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-            <input
-              id="filtro-cedula"
-              type="text"
-              inputMode="numeric"
-              value={buscar.match(/^\d+$/) ? buscar : ""}
-              onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setBuscar(v); }}
-              placeholder="Filtrar por cédula..."
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/60 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono"
-            />
-          </div>
-
-          <div className="md:col-span-2 flex items-center">
+          <div className="md:col-span-3 flex items-center">
             <label className="flex items-center gap-2 cursor-pointer w-full py-2.5 px-3 bg-slate-900/90 border border-slate-800 rounded-xl hover:bg-slate-800/50 transition-colors">
               <input
                 type="checkbox"
@@ -366,6 +353,7 @@ export default function PersonasPage() {
             <button
               onClick={() => cargarPersonas(true)}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold transition-all"
+              title="Recargar datos"
             >
               <RefreshCw className="w-3.5 h-3.5 text-primary-400" />
             </button>

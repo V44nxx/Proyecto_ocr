@@ -50,13 +50,16 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
 function getBaseUrl(): string {
   // Solo en el navegador
   if (typeof window !== "undefined") {
-    // Producción HTTPS: usar proxy relativo de Next.js (mismo origen)
-    if (window.location.protocol === "https:") {
-      return "";
+    const hostname = window.location.hostname;
+    // Si estamos en el dominio de producción v44nxx.online
+    if (hostname.endsWith("v44nxx.online")) {
+      return "https://api.v44nxx.online";
+    }
+    // Si NEXT_PUBLIC_API_URL está explícitamente configurada y no es localhost
+    if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost")) {
+      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
     }
     // HTTP local pero no localhost (VPS sin SSL):
-    // Construir URL del backend en el mismo host pero puerto 8000
-    const hostname = window.location.hostname;
     if (hostname !== "localhost" && hostname !== "127.0.0.1") {
       return `http://${hostname}:8000`;
     }

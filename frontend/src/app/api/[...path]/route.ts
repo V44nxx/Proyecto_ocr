@@ -22,6 +22,7 @@ const getBackendCandidates = (): string[] => {
 
   // 2. Nombres Docker Swarm canónicos en la red dokploy-network
   candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
+  candidates.push("https://api.v44nxx.online");
   candidates.push("http://fastapi:8000");
   candidates.push("http://ocr-proyecto-fastapi:8000");
 

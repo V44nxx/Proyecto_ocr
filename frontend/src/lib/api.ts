@@ -3,6 +3,7 @@ import { auth } from "./auth";
 import type {
   TokenResponse,
   Documento,
+  DocumentoEstadoResponse,
   Persona,
   PersonaUpdate,
   PaginatedResponse,
@@ -140,7 +141,7 @@ export const apiDocumentos = {
     apiClient.get<Documento>(`/api/documentos/${id}`),
 
   estado: (id: string) =>
-    apiClient.get(`/api/documentos/${id}/estado`),
+    apiClient.get<DocumentoEstadoResponse>(`/api/documentos/${id}/estado`),
 
   eliminar: (id: string) =>
     apiClient.delete(`/api/documentos/${id}`),

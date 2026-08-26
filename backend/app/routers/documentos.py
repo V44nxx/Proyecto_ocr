@@ -179,14 +179,47 @@ def estado_documento(
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
+    meta = documento.metadatos or {}
+    progreso = meta.get("progreso")
+    if progreso is None:
+        if documento.estado == "completado":
+            progreso = 100
+        elif documento.estado == "procesando":
+            progreso = 25
+        elif documento.estado == "error":
+            progreso = 100
+        else:
+            progreso = 0
+
+    paso = meta.get("paso")
+    if not paso:
+        if documento.estado == "completado":
+            paso = "Procesamiento completado"
+        elif documento.estado == "procesando":
+            paso = "Procesando documento con OCR..."
+        elif documento.estado == "error":
+            paso = "Error durante el procesamiento"
+        else:
+            paso = "Pendiente en cola"
+
+    personas_count = len(documento.personas) if documento.personas else meta.get("personas_extraidas", 0)
+
     return {
         "id": str(documento.id),
+        "nombre_original": documento.nombre_original,
         "estado": documento.estado,
+        "progreso": progreso,
+        "paso": paso,
+        "total_paginas": documento.total_paginas or meta.get("total_paginas", 0),
+        "pagina_actual": meta.get("pagina_actual", 0),
+        "personas_count": personas_count,
         "confianza_ocr": float(documento.confianza_ocr) if documento.confianza_ocr else None,
         "tiempo_procesamiento_ms": documento.tiempo_procesamiento_ms,
         "mensaje_error": documento.mensaje_error,
         "fecha_procesamiento": documento.fecha_procesamiento,
+        "metadatos": meta,
     }
+
 
 
 @router.delete("/{documento_id}", status_code=204, summary="Eliminar documento")

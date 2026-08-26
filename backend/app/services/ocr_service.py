@@ -83,21 +83,41 @@ class OCRService:
             resultado["total_paginas"] = total_paginas
             logger.info(f"PDF abierto: {total_paginas} páginas")
 
+            self._actualizar_progreso(
+                documento_id=documento_id,
+                db=db,
+                progreso=5,
+                paso=f"Iniciando análisis del PDF ({total_paginas} {'página' if total_paginas == 1 else 'páginas'})...",
+                pagina_actual=0,
+                total_paginas=total_paginas,
+            )
+
             personas_guardadas = []
             confianzas = []
             paginas_clasificadas = []
 
             # ── Paso 1: Procesar cada página con Document AI y clasificar su cara ──
             for i in range(total_paginas):
+                pagina_num = i + 1
+                progreso_pct = 10 + int((i / max(total_paginas, 1)) * 60)
+                self._actualizar_progreso(
+                    documento_id=documento_id,
+                    db=db,
+                    progreso=progreso_pct,
+                    paso=f"Procesando página {pagina_num} de {total_paginas} con OCR...",
+                    pagina_actual=pagina_num,
+                    total_paginas=total_paginas,
+                )
+
                 pagina = doc[i]
                 texto_nativo = pagina.get_text("text")
 
                 if self._necesita_ocr_imagen(texto_nativo):
-                    logger.info(f"Página {i+1}/{total_paginas}: Aplicando OCR de imagen (300 DPI)")
+                    logger.info(f"Página {pagina_num}/{total_paginas}: Aplicando OCR de imagen (300 DPI)")
                     pix = pagina.get_pixmap(dpi=300)
                     img_np = self.image_processor._pixmap_to_numpy(pix)
                     texto_pagina, motor_usado, layout_estructurado = self._ocr_imagen(
-                        img_np=img_np, pagina_num=i + 1
+                        img_np=img_np, pagina_num=pagina_num
                     )
                 else:
                     texto_pagina = texto_nativo
@@ -115,7 +135,7 @@ class OCRService:
                 id_pre = self.parser._extraer_identificacion(texto_pagina, texto_pagina.split("\n"))
 
                 paginas_clasificadas.append({
-                    "pagina_numero": i + 1,
+                    "pagina_numero": pagina_num,
                     "texto": texto_pagina,
                     "layout": layout_estructurado,
                     "motor": motor_usado,
@@ -126,10 +146,26 @@ class OCRService:
                 })
 
             # ── Paso 2: Agrupar páginas en documentos físicos (Frente + Reverso) ──
+            self._actualizar_progreso(
+                documento_id=documento_id,
+                db=db,
+                progreso=72,
+                paso="Clasificando y agrupando páginas (Frentes y Reversos)...",
+                pagina_actual=total_paginas,
+                total_paginas=total_paginas,
+            )
             from app.services.document_pairing_service import document_pairing_service
             grupos = document_pairing_service.agrupar_paginas(paginas_clasificadas)
 
             # ── Paso 3: Extraer y guardar 1 Persona por DocumentGroup ──
+            self._actualizar_progreso(
+                documento_id=documento_id,
+                db=db,
+                progreso=85,
+                paso=f"Estructurando datos y registrando personas ({len(grupos)} detectadas)...",
+                pagina_actual=total_paginas,
+                total_paginas=total_paginas,
+            )
             for grp in grupos:
                 datos_grupo = self.parser.extraer_grupo(grp, ocr_engine="google_document_ai")
                 confianza = datos_grupo.get("confianza_extraccion", 0.0)
@@ -154,7 +190,11 @@ class OCRService:
             tiempo_ms = int((time.time() - inicio) * 1000)
 
             self._actualizar_documento_completado(
-                documento_id, total_paginas, confianza_promedio, db
+                documento_id=documento_id,
+                total_paginas=total_paginas,
+                confianza=confianza_promedio,
+                db=db,
+                personas_count=len(personas_guardadas),
             )
 
             resultado["personas_extraidas"] = personas_guardadas
@@ -182,6 +222,12 @@ class OCRService:
                 if doc_db:
                     doc_db.estado = "error"
                     doc_db.mensaje_error = f"{error_msg}\n{tb_str[-500:]}"
+                    meta = dict(doc_db.metadatos or {})
+                    meta.update({
+                        "progreso": 100,
+                        "paso": f"Error: {error_msg}",
+                    })
+                    doc_db.metadatos = meta
                     db.commit()
             except Exception:
                 pass
@@ -490,16 +536,45 @@ class OCRService:
             return None
 
     # ──────────────────────────────────────────
-    # ACTUALIZAR ESTADO DEL DOCUMENTO
+    # ACTUALIZAR ESTADO Y PROGRESO DEL DOCUMENTO
     # ──────────────────────────────────────────
+    def _actualizar_progreso(
+        self,
+        documento_id: str,
+        db: Session,
+        progreso: int,
+        paso: str,
+        pagina_actual: int = 0,
+        total_paginas: int = 0,
+    ):
+        """Actualiza el progreso en metadatos para polling en tiempo real desde el frontend."""
+        try:
+            from app.models.documento import Documento
+            doc = db.query(Documento).filter(Documento.id == documento_id).first()
+            if doc:
+                meta = dict(doc.metadatos or {})
+                meta.update({
+                    "progreso": progreso,
+                    "paso": paso,
+                    "pagina_actual": pagina_actual,
+                    "total_paginas": total_paginas or doc.total_paginas or 0,
+                })
+                doc.metadatos = meta
+                if total_paginas and not doc.total_paginas:
+                    doc.total_paginas = total_paginas
+                db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo actualizar progreso para {documento_id}: {e}")
+
     def _actualizar_documento_completado(
         self,
         documento_id: str,
         total_paginas: int,
         confianza: float,
         db: Session,
+        personas_count: int = 0,
     ):
-        """Marca el documento como completado con confianza promedio real."""
+        """Marca el documento como completado con confianza promedio real y metadatos de finalización."""
         try:
             from app.models.documento import Documento
             from datetime import datetime
@@ -508,8 +583,17 @@ class OCRService:
             if doc:
                 doc.estado = "completado"
                 doc.total_paginas = total_paginas
-                doc.confianza_ocr = confianza  # ahora es la confianza real
+                doc.confianza_ocr = confianza  # confianza real
                 doc.fecha_procesamiento = datetime.utcnow()
+                meta = dict(doc.metadatos or {})
+                meta.update({
+                    "progreso": 100,
+                    "paso": f"Extracción completada con éxito ({personas_count} personas encontradas)",
+                    "pagina_actual": total_paginas,
+                    "total_paginas": total_paginas,
+                    "personas_extraidas": personas_count,
+                })
+                doc.metadatos = meta
                 db.commit()
         except Exception as e:
             logger.error(f"Error actualizando estado del documento: {e}")
@@ -517,3 +601,4 @@ class OCRService:
 
 # Instancia única del servicio
 ocr_service = OCRService()
+

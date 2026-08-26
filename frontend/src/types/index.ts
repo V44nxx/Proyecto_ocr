@@ -27,7 +27,25 @@ export interface Documento {
   tiempo_procesamiento_ms: number | null;
   fecha_carga: string;
   fecha_procesamiento: string | null;
+  metadatos?: Record<string, any>;
 }
+
+export interface DocumentoEstadoResponse {
+  id: string;
+  nombre_original?: string;
+  estado: "pendiente" | "procesando" | "completado" | "error" | "revision";
+  progreso: number;
+  paso: string;
+  total_paginas: number;
+  pagina_actual: number;
+  personas_count: number;
+  confianza_ocr: number | null;
+  tiempo_procesamiento_ms: number | null;
+  mensaje_error: string | null;
+  fecha_procesamiento: string | null;
+  metadatos?: Record<string, any>;
+}
+
 
 export interface Persona {
   id: string;

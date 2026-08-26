@@ -8,7 +8,7 @@ import {
   Clock, Trash2, RefreshCw, Eye, Sparkles,
   ArrowRight, Users, CheckCircle2, ChevronRight,
   Layers, Timer, X, AlertCircle, Cpu, FileCheck2,
-  Hourglass, ArrowUpCircle
+  Hourglass, ArrowUpCircle, Check
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
@@ -55,6 +55,11 @@ export default function DocumentosPage() {
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const uploadStartTimeRef = useRef<number>(0);
+
+  // Redirección automática a la tabla de personas al finalizar
+  const [cuentaAtrasRedireccion, setCuentaAtrasRedireccion] = useState<number | null>(null);
+  const canceladoRedireccionRef = useRef<boolean>(false);
+  const redireccionIniciadaRef = useRef<boolean>(false);
 
   const cargarDocumentos = async () => {
     try {
@@ -167,6 +172,51 @@ export default function DocumentosPage() {
     return () => clearInterval(interval);
   }, [faseActual, docsEnProceso]);
 
+  const totalDocsTracking = docsEnProceso.length;
+  const docsCompletadosCount = docsEnProceso.filter((d) => d.estado === "completado").length;
+  const docsErrorCount = docsEnProceso.filter((d) => d.estado === "error").length;
+  const totalPersonasDetectadas = docsEnProceso.reduce((acc, d) => acc + (d.personas_count || 0), 0);
+  const totalPaginasProcesadas = docsEnProceso.reduce((acc, d) => acc + (d.total_paginas || 0), 0);
+
+  const progresoGlobal = totalDocsTracking > 0
+    ? Math.round(docsEnProceso.reduce((acc, d) => acc + (d.progreso || 0), 0) / totalDocsTracking)
+    : 0;
+
+  const procesoFinalizado = totalDocsTracking > 0 &&
+    docsEnProceso.every((d) => d.estado === "completado" || d.estado === "error");
+
+  // Suma de tiempo real de procesamiento
+  const tiempoTotalBackendMs = docsEnProceso.reduce((acc, d) => acc + (d.tiempo_procesamiento_ms || 0), 0);
+  const tiempoProcesamientoTexto = tiempoTotalBackendMs > 0
+    ? `${(tiempoTotalBackendMs / 1000).toFixed(1)}s`
+    : `${tiempoTranscurrido}s`;
+
+  // Efecto de redirección automática una vez finalizada la extracción
+  useEffect(() => {
+    if (procesoFinalizado && docsCompletadosCount > 0 && !canceladoRedireccionRef.current) {
+      if (!redireccionIniciadaRef.current) {
+        redireccionIniciadaRef.current = true;
+        setCuentaAtrasRedireccion(3); // Iniciar cuenta regresiva de 3 segundos
+      }
+    }
+  }, [procesoFinalizado, docsCompletadosCount]);
+
+  // Manejador del temporizador de redirección
+  useEffect(() => {
+    if (cuentaAtrasRedireccion === null) return;
+
+    if (cuentaAtrasRedireccion <= 0) {
+      router.push("/personas");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCuentaAtrasRedireccion((prev) => (prev !== null && prev > 0 ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [cuentaAtrasRedireccion, router]);
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles || acceptedFiles.length === 0) return;
     const pdfs = acceptedFiles.filter((f) => {
@@ -216,6 +266,9 @@ export default function DocumentosPage() {
     setFaseActual("subiendo");
     setProgresoSubida(0);
     setTiempoTranscurrido(0);
+    setCuentaAtrasRedireccion(null);
+    canceladoRedireccionRef.current = false;
+    redireccionIniciadaRef.current = false;
     uploadStartTimeRef.current = Date.now();
 
     const totalBytes = archivosSeleccionados.reduce((acc, f) => acc + f.size, 0);
@@ -324,20 +377,6 @@ export default function DocumentosPage() {
     return Math.min(100, Math.max(0, Math.round(pct)));
   };
 
-  // Métricas calculadas para la barra de progreso global
-  const totalDocsTracking = docsEnProceso.length;
-  const docsCompletadosCount = docsEnProceso.filter((d) => d.estado === "completado").length;
-  const docsErrorCount = docsEnProceso.filter((d) => d.estado === "error").length;
-  const totalPersonasDetectadas = docsEnProceso.reduce((acc, d) => acc + (d.personas_count || 0), 0);
-  const totalPaginasProcesadas = docsEnProceso.reduce((acc, d) => acc + (d.total_paginas || 0), 0);
-
-  const progresoGlobal = totalDocsTracking > 0
-    ? Math.round(docsEnProceso.reduce((acc, d) => acc + (d.progreso || 0), 0) / totalDocsTracking)
-    : 0;
-
-  const procesoFinalizado = totalDocsTracking > 0 &&
-    docsEnProceso.every((d) => d.estado === "completado" || d.estado === "error");
-
   // Estimación dinámica del tiempo restante
   const calcularTiempoEstimado = (): string => {
     if (procesoFinalizado) {
@@ -422,7 +461,7 @@ export default function DocumentosPage() {
                   <div className="flex items-center gap-2.5">
                     <h3 className="text-lg font-bold text-white">
                       {procesoFinalizado
-                        ? "¡Extracción de Datos Completada!"
+                        ? `¡Extracción Completada en ${tiempoProcesamientoTexto}!`
                         : faseActual === "subiendo"
                         ? "Subiendo Documento al Servidor..."
                         : "Extrayendo Datos del Documento PDF..."}
@@ -443,7 +482,7 @@ export default function DocumentosPage() {
                   </div>
                   <p className="text-sm text-slate-400 mt-0.5">
                     {procesoFinalizado
-                      ? "La información ha sido estructurada y guardada en el sistema."
+                      ? `Se estructuraron ${totalPersonasDetectadas} personas y se guardaron en la base de datos.`
                       : faseActual === "subiendo"
                       ? "Transfiriendo archivo con cifrado seguro al motor de procesamiento..."
                       : "Google Document AI y el motor OCR están leyendo y agrupando los datos."}
@@ -455,16 +494,27 @@ export default function DocumentosPage() {
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-dark-800/80 border border-white/[0.08] text-xs font-mono text-slate-300">
                   <Timer className="w-3.5 h-3.5 text-primary-400" />
-                  <span>Transcurrido: <strong className="text-white">{formatTimer(tiempoTranscurrido)}</strong></span>
+                  <span>
+                    {procesoFinalizado ? "Tiempo total:" : "Transcurrido:"}{" "}
+                    <strong className="text-white">
+                      {procesoFinalizado ? tiempoProcesamientoTexto : formatTimer(tiempoTranscurrido)}
+                    </strong>
+                  </span>
                 </div>
 
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-xs font-mono text-primary-300">
-                  <Hourglass className="w-3.5 h-3.5 text-primary-400" />
-                  <span>Estimado: <strong className="text-white">{calcularTiempoEstimado()}</strong></span>
-                </div>
+                {!procesoFinalizado && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-xs font-mono text-primary-300">
+                    <Hourglass className="w-3.5 h-3.5 text-primary-400" />
+                    <span>Estimado: <strong className="text-white">{calcularTiempoEstimado()}</strong></span>
+                  </div>
+                )}
 
                 <button
-                  onClick={() => setMostrandoProgreso(false)}
+                  onClick={() => {
+                    canceladoRedireccionRef.current = true;
+                    setCuentaAtrasRedireccion(null);
+                    setMostrandoProgreso(false);
+                  }}
                   className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-dark-800 transition-colors"
                   title="Minimizar panel de progreso"
                 >
@@ -472,6 +522,38 @@ export default function DocumentosPage() {
                 </button>
               </div>
             </div>
+
+            {/* Banner de Redirección Automática si el proceso finalizó */}
+            {procesoFinalizado && cuentaAtrasRedireccion !== null && (
+              <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs">
+                    {cuentaAtrasRedireccion}
+                  </div>
+                  <span>
+                    Las personas ya están listas en el sistema. <strong>Redirigiendo a la tabla de personas en {cuentaAtrasRedireccion}s...</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={() => {
+                      canceladoRedireccionRef.current = true;
+                      setCuentaAtrasRedireccion(null);
+                    }}
+                    className="text-xs text-slate-300 hover:text-white underline px-2 py-1"
+                  >
+                    Permanecer aquí
+                  </button>
+                  <button
+                    onClick={() => router.push("/personas")}
+                    className="text-xs bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md hover:shadow-emerald-500/30"
+                  >
+                    <span>Ir a Personas</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Barra de Progreso Principal (Subida o Extracción) */}
             <div className="mt-6 space-y-2 relative z-10">
@@ -602,6 +684,11 @@ export default function DocumentosPage() {
                             • {doc.pagina_actual > 0 ? `Pág. ${doc.pagina_actual}/${doc.total_paginas}` : `${doc.total_paginas} págs`}
                           </span>
                         )}
+                        {doc.tiempo_procesamiento_ms && (
+                          <span className="text-primary-400 font-mono">
+                            • {(doc.tiempo_procesamiento_ms / 1000).toFixed(1)}s
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -630,9 +717,13 @@ export default function DocumentosPage() {
             {procesoFinalizado && (
               <div className="mt-6 pt-5 border-t border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 animate-in fade-in duration-300">
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
+                  <div className="flex items-center gap-1.5 bg-primary-500/10 px-2.5 py-1 rounded-lg border border-primary-500/20">
+                    <Timer className="w-4 h-4 text-primary-400" />
+                    <span>Tiempo total de extracción: <strong className="text-white text-sm font-mono">{tiempoProcesamientoTexto}</strong></span>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-emerald-400" />
-                    <span>Total personas extraídas: <strong className="text-white text-sm">{totalPersonasDetectadas}</strong></span>
+                    <span>Personas extraídas: <strong className="text-white text-sm">{totalPersonasDetectadas}</strong></span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-primary-400" />
@@ -649,6 +740,8 @@ export default function DocumentosPage() {
                 <div className="flex items-center gap-3 w-full md:w-auto">
                   <button
                     onClick={() => {
+                      canceladoRedireccionRef.current = true;
+                      setCuentaAtrasRedireccion(null);
                       setMostrandoProgreso(false);
                       cargarDocumentos();
                     }}

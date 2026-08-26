@@ -195,6 +195,7 @@ class OCRService:
                 confianza=confianza_promedio,
                 db=db,
                 personas_count=len(personas_guardadas),
+                tiempo_ms=tiempo_ms,
             )
 
             resultado["personas_extraidas"] = personas_guardadas
@@ -573,6 +574,7 @@ class OCRService:
         confianza: float,
         db: Session,
         personas_count: int = 0,
+        tiempo_ms: int = 0,
     ):
         """Marca el documento como completado con confianza promedio real y metadatos de finalización."""
         try:
@@ -584,6 +586,7 @@ class OCRService:
                 doc.estado = "completado"
                 doc.total_paginas = total_paginas
                 doc.confianza_ocr = confianza  # confianza real
+                doc.tiempo_procesamiento_ms = tiempo_ms or doc.tiempo_procesamiento_ms
                 doc.fecha_procesamiento = datetime.utcnow()
                 meta = dict(doc.metadatos or {})
                 meta.update({
@@ -592,6 +595,7 @@ class OCRService:
                     "pagina_actual": total_paginas,
                     "total_paginas": total_paginas,
                     "personas_extraidas": personas_count,
+                    "tiempo_procesamiento_ms": tiempo_ms,
                 })
                 doc.metadatos = meta
                 db.commit()

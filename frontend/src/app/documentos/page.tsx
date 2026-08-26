@@ -7,7 +7,8 @@ import {
   Upload, FileText, CheckCircle, AlertTriangle,
   Clock, Trash2, RefreshCw, Eye, Sparkles,
   ArrowRight, Users, CheckCircle2, ChevronRight,
-  Layers, Timer, X, AlertCircle, Cpu, FileCheck2
+  Layers, Timer, X, AlertCircle, Cpu, FileCheck2,
+  Hourglass, ArrowUpCircle
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
@@ -44,11 +45,16 @@ export default function DocumentosPage() {
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  // Estado para el seguimiento de extracción OCR en vivo
+  // Estado para el seguimiento de subida y extracción OCR en vivo
   const [docsEnProceso, setDocsEnProceso] = useState<DocTracking[]>([]);
   const [mostrandoProgreso, setMostrandoProgreso] = useState(false);
+  const [faseActual, setFaseActual] = useState<"inactivo" | "subiendo" | "procesando" | "completado" | "error">("inactivo");
+  const [progresoSubida, setProgresoSubida] = useState(0);
+  const [bytesSubidos, setBytesSubidos] = useState(0);
+  const [bytesTotales, setBytesTotales] = useState(0);
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const uploadStartTimeRef = useRef<number>(0);
 
   const cargarDocumentos = async () => {
     try {
@@ -77,11 +83,11 @@ export default function DocumentosPage() {
     return () => clearInterval(interval);
   }, [router]);
 
-  // Cronómetro durante procesamiento activo
+  // Cronómetro durante procesamiento o subida activa
   useEffect(() => {
-    const hayActivos = docsEnProceso.some(
-      (d) => d.estado === "procesando" || d.estado === "pendiente"
-    );
+    const hayActivos =
+      faseActual === "subiendo" ||
+      docsEnProceso.some((d) => d.estado === "procesando" || d.estado === "pendiente");
 
     if (hayActivos) {
       if (!timerRef.current) {
@@ -102,10 +108,12 @@ export default function DocumentosPage() {
         timerRef.current = null;
       }
     };
-  }, [docsEnProceso]);
+  }, [faseActual, docsEnProceso]);
 
   // Polling de estado detallado de extracción OCR
   useEffect(() => {
+    if (faseActual === "subiendo") return;
+
     const docsPendientes = docsEnProceso.filter(
       (d) => d.estado === "procesando" || d.estado === "pendiente"
     );
@@ -147,7 +155,9 @@ export default function DocumentosPage() {
 
       if (huboCambios) {
         setDocsEnProceso(updates);
-        // Si alguno terminó, refrescar tabla de fondo
+        if (updates.every((u) => u.estado === "completado" || u.estado === "error")) {
+          setFaseActual("completado");
+        }
         if (updates.some((u) => u.estado === "completado" || u.estado === "error")) {
           cargarDocumentos();
         }
@@ -155,7 +165,7 @@ export default function DocumentosPage() {
     }, 1200);
 
     return () => clearInterval(interval);
-  }, [docsEnProceso]);
+  }, [faseActual, docsEnProceso]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles || acceptedFiles.length === 0) return;
@@ -203,16 +213,48 @@ export default function DocumentosPage() {
     }
 
     setSubiendo(true);
+    setFaseActual("subiendo");
+    setProgresoSubida(0);
     setTiempoTranscurrido(0);
+    uploadStartTimeRef.current = Date.now();
+
+    const totalBytes = archivosSeleccionados.reduce((acc, f) => acc + f.size, 0);
+    setBytesTotales(totalBytes);
+    setBytesSubidos(0);
+
+    // Inicializar seguimiento visual inmediatamente
+    const initialTracking: DocTracking[] = archivosSeleccionados.map((f, i) => ({
+      id: `prep-${i}`,
+      nombre: f.name,
+      estado: "procesando",
+      progreso: 5,
+      paso: "Transfiriendo archivo al servidor...",
+      total_paginas: 0,
+      pagina_actual: 0,
+      personas_count: 0,
+      confianza_ocr: null,
+    }));
+
+    setDocsEnProceso(initialTracking);
+    setMostrandoProgreso(true);
 
     try {
-      const res = await apiDocumentos.upload(archivosSeleccionados);
+      const res = await apiDocumentos.upload(archivosSeleccionados, (progressEvent) => {
+        if (progressEvent.total) {
+          const pct = Math.min(100, Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          setProgresoSubida(pct);
+          setBytesSubidos(progressEvent.loaded);
+          setBytesTotales(progressEvent.total);
+        }
+      });
+
+      setFaseActual("procesando");
       const docsResp = res.data?.documentos || [];
 
-      const initialTracking: DocTracking[] = (docsResp.length > 0
+      const trackingEncolado: DocTracking[] = (docsResp.length > 0
         ? docsResp
         : archivosSeleccionados.map((f, i) => ({
-            id: `temp-${i}`,
+            id: `doc-${i}`,
             nombre_original: f.name,
             estado: "procesando",
           }))
@@ -220,7 +262,7 @@ export default function DocumentosPage() {
         id: d.id,
         nombre: d.nombre_original || d.nombre || "Documento PDF",
         estado: (d.estado as any) || "procesando",
-        progreso: 8,
+        progreso: 12,
         paso: "Iniciando lectura y OCR con Google Document AI...",
         total_paginas: 0,
         pagina_actual: 0,
@@ -228,13 +270,13 @@ export default function DocumentosPage() {
         confianza_ocr: null,
       }));
 
-      setDocsEnProceso(initialTracking);
-      setMostrandoProgreso(true);
+      setDocsEnProceso(trackingEncolado);
       setArchivosSeleccionados([]);
       cargarDocumentos();
 
-      toast.success("Documento(s) encolado(s) para extracción OCR");
+      toast.success("Documento(s) recibido(s). Iniciando extracción OCR...");
     } catch (err: unknown) {
+      setFaseActual("error");
       toast.error(getErrorMessage(err, "Error subiendo archivos"));
     } finally {
       setSubiendo(false);
@@ -296,6 +338,43 @@ export default function DocumentosPage() {
   const procesoFinalizado = totalDocsTracking > 0 &&
     docsEnProceso.every((d) => d.estado === "completado" || d.estado === "error");
 
+  // Estimación dinámica del tiempo restante
+  const calcularTiempoEstimado = (): string => {
+    if (procesoFinalizado) {
+      return "0s (Completado)";
+    }
+
+    if (faseActual === "subiendo") {
+      if (progresoSubida <= 0) return "Calculando...";
+      const segundosSubiendo = Math.max(0.4, (Date.now() - uploadStartTimeRef.current) / 1000);
+      const velocidad = bytesSubidos / segundosSubiendo; // bytes / sec
+      if (velocidad > 0 && bytesTotales > bytesSubidos) {
+        const segRestantes = Math.max(1, Math.ceil((bytesTotales - bytesSubidos) / velocidad));
+        return `~${segRestantes}s (subida)`;
+      }
+      return "~1s";
+    }
+
+    if (faseActual === "procesando" || docsEnProceso.some((d) => d.estado === "procesando" || d.estado === "pendiente")) {
+      if (tiempoTranscurrido < 2 && progresoGlobal < 15) {
+        const estPaginas = totalPaginasProcesadas > 0 ? totalPaginasProcesadas : Math.max(1, totalDocsTracking) * 2;
+        const estSegundos = Math.max(4, Math.round(estPaginas * 2.5));
+        return `~${estSegundos}s`;
+      }
+
+      if (progresoGlobal > 0 && progresoGlobal < 100) {
+        const progresoRestante = 100 - progresoGlobal;
+        const segundosPorPunto = Math.max(0.1, (tiempoTranscurrido + 1) / Math.max(progresoGlobal, 10));
+        const estSegundos = Math.max(1, Math.round(progresoRestante * segundosPorPunto));
+        return `~${estSegundos}s`;
+      }
+
+      return "~3s";
+    }
+
+    return "-";
+  };
+
   return (
     <div className="flex min-h-screen bg-dark-950 text-slate-100">
       <Sidebar />
@@ -313,7 +392,7 @@ export default function DocumentosPage() {
         </div>
 
         {/* ─────────────────────────────────────────────────────────────
-            MODAL / TARJETA DE PROGRESO DE EXTRACCIÓN OCR EN VIVO
+            MODAL / TARJETA DE PROGRESO DE SUBIDA Y EXTRACCIÓN OCR EN VIVO
            ───────────────────────────────────────────────────────────── */}
         {mostrandoProgreso && docsEnProceso.length > 0 && (
           <div className="mb-8 p-6 sm:p-7 rounded-2xl bg-dark-900/95 border border-primary-500/30 shadow-2xl shadow-primary-950/40 relative overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
@@ -327,10 +406,14 @@ export default function DocumentosPage() {
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
                   procesoFinalizado
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : faseActual === "subiendo"
+                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30 animate-pulse"
                     : "bg-primary-500/20 text-primary-400 border border-primary-500/30 animate-pulse"
                 }`}>
                   {procesoFinalizado ? (
                     <CheckCircle2 className="w-6 h-6" />
+                  ) : faseActual === "subiendo" ? (
+                    <ArrowUpCircle className="w-6 h-6 animate-bounce" />
                   ) : (
                     <Cpu className="w-6 h-6" />
                   )}
@@ -340,25 +423,46 @@ export default function DocumentosPage() {
                     <h3 className="text-lg font-bold text-white">
                       {procesoFinalizado
                         ? "¡Extracción de Datos Completada!"
+                        : faseActual === "subiendo"
+                        ? "Subiendo Documento al Servidor..."
                         : "Extrayendo Datos del Documento PDF..."}
                     </h3>
-                    <span className={`badge ${procesoFinalizado ? "badge-success" : "badge-warning"} text-xs px-2.5 py-0.5`}>
-                      {procesoFinalizado ? "Finalizado" : "En progreso"}
+                    <span className={`badge ${
+                      procesoFinalizado
+                        ? "badge-success"
+                        : faseActual === "subiendo"
+                        ? "badge-info"
+                        : "badge-warning"
+                    } text-xs px-2.5 py-0.5`}>
+                      {procesoFinalizado
+                        ? "Finalizado"
+                        : faseActual === "subiendo"
+                        ? "Transfiriendo"
+                        : "En progreso"}
                     </span>
                   </div>
                   <p className="text-sm text-slate-400 mt-0.5">
                     {procesoFinalizado
                       ? "La información ha sido estructurada y guardada en el sistema."
-                      : "Google Document AI y el motor OCR están leyendo los datos de identidad."}
+                      : faseActual === "subiendo"
+                      ? "Transfiriendo archivo con cifrado seguro al motor de procesamiento..."
+                      : "Google Document AI y el motor OCR están leyendo y agrupando los datos."}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Indicadores de Cronómetro y Tiempo Estimado */}
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-dark-800/80 border border-white/[0.08] text-xs font-mono text-slate-300">
                   <Timer className="w-3.5 h-3.5 text-primary-400" />
-                  <span>Tiempo: {formatTimer(tiempoTranscurrido)}</span>
+                  <span>Transcurrido: <strong className="text-white">{formatTimer(tiempoTranscurrido)}</strong></span>
                 </div>
+
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-xs font-mono text-primary-300">
+                  <Hourglass className="w-3.5 h-3.5 text-primary-400" />
+                  <span>Estimado: <strong className="text-white">{calcularTiempoEstimado()}</strong></span>
+                </div>
+
                 <button
                   onClick={() => setMostrandoProgreso(false)}
                   className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-dark-800 transition-colors"
@@ -369,26 +473,41 @@ export default function DocumentosPage() {
               </div>
             </div>
 
-            {/* Barra de Progreso Principal */}
+            {/* Barra de Progreso Principal (Subida o Extracción) */}
             <div className="mt-6 space-y-2 relative z-10">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-semibold text-slate-200 flex items-center gap-2">
-                  <span>Progreso de Extracción</span>
-                  <span className="text-xs text-primary-400 font-mono">({progresoGlobal}%)</span>
+                  <span>
+                    {faseActual === "subiendo"
+                      ? "Progreso de Subida de Archivo"
+                      : "Progreso de Extracción OCR"}
+                  </span>
+                  <span className="text-xs text-primary-400 font-mono">
+                    ({faseActual === "subiendo" ? progresoSubida : progresoGlobal}%)
+                  </span>
                 </span>
                 <span className="text-xs text-slate-400">
-                  {docsCompletadosCount} de {totalDocsTracking} documento(s) procesados
+                  {faseActual === "subiendo"
+                    ? `${formatSize(bytesSubidos)} de ${formatSize(bytesTotales)}`
+                    : `${docsCompletadosCount} de ${totalDocsTracking} documento(s) procesados`}
                 </span>
               </div>
 
-              <div className="w-full h-3 bg-dark-800 rounded-full overflow-hidden p-0.5 border border-white/[0.08] relative">
+              <div className="w-full h-3.5 bg-dark-800 rounded-full overflow-hidden p-0.5 border border-white/[0.08] relative">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ease-out relative ${
+                  className={`h-full rounded-full transition-all duration-300 ease-out relative ${
                     procesoFinalizado
                       ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30"
+                      : faseActual === "subiendo"
+                      ? "bg-gradient-to-r from-blue-600 to-cyan-400 shadow-lg shadow-blue-500/30"
                       : "bg-gradient-to-r from-primary-600 via-blue-500 to-primary-400 shadow-lg shadow-primary-500/30"
                   }`}
-                  style={{ width: `${Math.min(100, Math.max(5, progresoGlobal))}%` }}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(5, faseActual === "subiendo" ? progresoSubida : progresoGlobal)
+                    )}%`,
+                  }}
                 >
                   {!procesoFinalizado && (
                     <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]" />
@@ -400,15 +519,19 @@ export default function DocumentosPage() {
             {/* Línea de Etapas del Proceso */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-2 relative z-10">
               <div className={`p-3 rounded-xl border transition-all ${
-                progresoGlobal >= 10
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-300"
+                progresoSubida >= 100 || faseActual === "procesando" || procesoFinalizado
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  : faseActual === "subiendo"
+                  ? "bg-blue-500/10 border-blue-500/30 text-blue-300 animate-pulse"
                   : "bg-dark-800/40 border-white/[0.04] text-slate-500"
               }`}>
                 <div className="flex items-center gap-2 font-medium text-xs mb-1">
                   <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
-                  Lectura de PDF
+                  Carga del PDF
                 </div>
-                <p className="text-[11px] text-slate-400">Carga y conteo de páginas</p>
+                <p className="text-[11px] text-slate-400">
+                  {progresoSubida >= 100 ? "Subida completada" : `${progresoSubida}% cargado`}
+                </p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
@@ -432,7 +555,7 @@ export default function DocumentosPage() {
                   <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
                   Emparejamiento
                 </div>
-                <p className="text-[11px] text-slate-400">Frente y Reverso de cédula</p>
+                <p className="text-[11px] text-slate-400">Frente y Reverso</p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
@@ -496,7 +619,7 @@ export default function DocumentosPage() {
                       </span>
                     )}
                     <span className="text-xs font-mono font-bold text-primary-400 w-10 text-right">
-                      {doc.progreso}%
+                      {faseActual === "subiendo" ? `${progresoSubida}%` : `${doc.progreso}%`}
                     </span>
                   </div>
                 </div>
@@ -653,7 +776,11 @@ export default function DocumentosPage() {
                   {subiendo ? (
                     <>
                       <div className="spinner" />
-                      <span>Iniciando OCR...</span>
+                      <span>
+                        {faseActual === "subiendo"
+                          ? `Subiendo (${progresoSubida}%)...`
+                          : "Iniciando OCR..."}
+                      </span>
                     </>
                   ) : (
                     <>

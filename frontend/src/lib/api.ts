@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosProgressEvent } from "axios";
 import { auth } from "./auth";
 import type {
   TokenResponse,
@@ -126,12 +126,17 @@ export const apiAuth = {
 // DOCUMENTOS
 // ──────────────────────────────────────────
 export const apiDocumentos = {
-  upload: (files: File[]) => {
+  upload: (
+    files: File[],
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+  ) => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append("files", file, file.name);
     });
-    return apiClient.post("/api/documentos/upload", formData);
+    return apiClient.post("/api/documentos/upload", formData, {
+      onUploadProgress,
+    });
   },
 
   listar: (params?: { skip?: number; limit?: number; estado?: string }) =>

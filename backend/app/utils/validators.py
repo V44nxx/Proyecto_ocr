@@ -46,6 +46,22 @@ class ValidadorColombia:
     # IDENTIFICACIÓN
     # ──────────────────────────────────────────
     @staticmethod
+    def limpiar_identificacion(numero: str) -> str:
+        """
+        Limpia y normaliza el número de identificación para comparaciones y consultas en BD.
+        Elimina prefijos como 'CC', 'NUIP', 'No.', puntos, comas, espacios y guiones.
+        """
+        if not numero:
+            return ""
+        txt = str(numero).strip()
+        txt = re.sub(r"^(C\.?C\.?|NUIP|NO\.?|N[UÚ]MERO|CEDULA|C[EÉ]DULA)\s*:?", "", txt, flags=re.IGNORECASE)
+        txt = txt.replace(" ", "").replace(".", "").replace(",", "").replace("-", "").replace("_", "")
+        m = re.search(r"\d{6,10}", txt)
+        if m:
+            return m.group(0)
+        return txt.strip()
+
+    @staticmethod
     def validar_cedula(numero: str) -> Tuple[bool, str]:
         """
         Valida número de cédula colombiana.

@@ -157,15 +157,17 @@ class OCRService:
             from app.services.document_pairing_service import document_pairing_service
             grupos = document_pairing_service.agrupar_paginas(paginas_clasificadas)
 
-            # ── Paso 3: Extraer y guardar 1 Persona por DocumentGroup ──
+            # ── Paso 3: Extraer y guardar personas unificadas por documento ──
             self._actualizar_progreso(
                 documento_id=documento_id,
                 db=db,
                 progreso=85,
-                paso=f"Estructurando datos y registrando personas ({len(grupos)} detectadas)...",
+                paso=f"Estructurando datos y unificando hojas ({len(grupos)} grupos detectados)...",
                 pagina_actual=total_paginas,
                 total_paginas=total_paginas,
             )
+            personas_guardadas_map: Dict[str, Dict[str, Any]] = {}
+
             for grp in grupos:
                 datos_grupo = self.parser.extraer_grupo(grp, ocr_engine="google_document_ai")
                 confianza = datos_grupo.get("confianza_extraccion", 0.0)
@@ -180,10 +182,13 @@ class OCRService:
                     pagina_num=grp.pagina_frente or grp.pagina_reverso or 1
                 )
                 if persona:
-                    personas_guardadas.append(persona)
+                    # Usar número de identificación o ID como clave única para evitar duplicados en la respuesta y contador
+                    key = str(persona.get("numero_identificacion") or persona.get("id"))
+                    personas_guardadas_map[key] = persona
 
             doc.close()
 
+            personas_guardadas = list(personas_guardadas_map.values())
             confianza_promedio = (
                 sum(confianzas) / len(confianzas) if confianzas else 0.0
             )
@@ -204,7 +209,7 @@ class OCRService:
 
             logger.info(
                 f"OCR finalizado para {documento_id}: "
-                f"{len(personas_guardadas)} personas, "
+                f"{len(personas_guardadas)} persona(s) única(s), "
                 f"confianza promedio={confianza_promedio:.1f}%"
             )
 
@@ -402,14 +407,16 @@ class OCRService:
             from datetime import datetime
             import uuid
 
+            from app.utils.validators import validador
+
             raw_id = datos.get("identificacion")
+            id_limpio = validador.limpiar_identificacion(raw_id)
             nombres_val = datos.get("nombres")
             apellidos_val = datos.get("apellidos")
             confianza = float(datos.get("confianza_extraccion") or 0.0)
 
             # Criterio estricto: Una persona válida debe tener Cédula extraída O (Nombres y Apellidos válidos).
-            # Páginas de reversos huérfanos sin datos, sellos, o carátulas NO deben crear registros fantasma.
-            tiene_identificacion = bool(raw_id and str(raw_id).strip() and not str(raw_id).startswith("SIN_ID"))
+            tiene_identificacion = bool(id_limpio and not id_limpio.startswith("SIN_ID"))
             tiene_nombres = bool(nombres_val and str(nombres_val).strip() and nombres_val != "POR REVISAR")
             tiene_apellidos = bool(apellidos_val and str(apellidos_val).strip() and apellidos_val != "POR REVISAR")
 
@@ -417,7 +424,7 @@ class OCRService:
                 logger.info("Omitiendo guardado: la página/grupo no contiene identificación ni nombres válidos (evita personas fantasma)")
                 return None
 
-            num_doc = str(raw_id).strip() if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
+            num_doc = id_limpio if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
 
             doc_exists = (
                 db.query(Documento).filter(Documento.id == documento_id).first()
@@ -425,8 +432,6 @@ class OCRService:
                 else None
             )
             doc_id_val = str(doc_exists.id) if doc_exists else None
-
-            from app.utils.validators import validador
 
             fecha_nac = None
             if datos.get("fecha_nacimiento"):
@@ -443,8 +448,7 @@ class OCRService:
                 or not datos.get("nombres")
                 or not datos.get("apellidos")
                 or not datos.get("identificacion")
-                or not datos.get("fecha_expedicion")
-                or not datos.get("lugar_expedicion")
+                or not (datos.get("fecha_expedicion") or datos.get("fecha_nacimiento"))
                 or "SIN_ID" in str(num_doc)
             )
 
@@ -484,35 +488,73 @@ class OCRService:
                     texto_ocr_crudo=(texto_ocr or "")[:5000],
                 )
                 db.add(persona)
+                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo()})")
             else:
+                # ── UNIFICACIÓN INTELIGENTE DE HOJAS / PÁGINAS ──
+                # Si la cédula ya existe (ej. repartida en 2 hojas), no duplicar y fusionar datos faltantes
+                logger.info(f"Unificando datos para persona existente ID '{num_doc}'...")
                 if doc_id_val:
                     persona.documento_id = doc_id_val
-                persona.grupo_documento_id = datos.get("grupo_documento_id", persona.grupo_documento_id)
-                persona.pagina_frente = datos.get("pagina_frente", persona.pagina_frente)
-                persona.pagina_reverso = datos.get("pagina_reverso", persona.pagina_reverso)
-                if datos.get("nombres") and datos["nombres"] != "POR REVISAR":
-                    persona.nombres = datos["nombres"]
-                if datos.get("apellidos") and datos["apellidos"] != "POR REVISAR":
-                    persona.apellidos = datos["apellidos"]
-                if fecha_nac:
-                    persona.fecha_nacimiento = fecha_nac
-                if fecha_exp:
-                    persona.fecha_expedicion = fecha_exp
-                if datos.get("lugar_expedicion"):
-                    persona.lugar_expedicion = datos["lugar_expedicion"]
-                if datos.get("sexo"):
-                    persona.sexo = str(datos["sexo"])[:10]
-                persona.pagina_numero = pagina_num
-                persona.tipo_documento = datos.get("tipo_documento", persona.tipo_documento)
-                persona.detalles_campos = datos.get("detalles_campos", persona.detalles_campos)
 
+                # Unificar páginas de frente y reverso
+                if not persona.pagina_frente and datos.get("pagina_frente"):
+                    persona.pagina_frente = datos["pagina_frente"]
+                if not persona.pagina_reverso and datos.get("pagina_reverso"):
+                    persona.pagina_reverso = datos["pagina_reverso"]
+                elif not persona.pagina_reverso and datos.get("pagina_frente") and persona.pagina_frente != datos.get("pagina_frente"):
+                    persona.pagina_reverso = datos.get("pagina_frente")
+
+                # Nombres y Apellidos
+                if (not persona.nombres or persona.nombres == "POR REVISAR") and datos.get("nombres") and datos["nombres"] != "POR REVISAR":
+                    persona.nombres = datos["nombres"]
+                if (not persona.apellidos or persona.apellidos == "POR REVISAR") and datos.get("apellidos") and datos["apellidos"] != "POR REVISAR":
+                    persona.apellidos = datos["apellidos"]
+
+                # Fechas y Lugar
+                if not persona.fecha_nacimiento and fecha_nac:
+                    persona.fecha_nacimiento = fecha_nac
+                if not persona.fecha_expedicion and fecha_exp:
+                    persona.fecha_expedicion = fecha_exp
+                if (not persona.lugar_expedicion or persona.lugar_expedicion in ["COLOMBIA", "REPUBLICA DE COLOMBIA"]) and datos.get("lugar_expedicion"):
+                    persona.lugar_expedicion = datos["lugar_expedicion"]
+                if not persona.sexo and datos.get("sexo"):
+                    persona.sexo = str(datos["sexo"])[:10]
+
+                # Fusión de detalles de campos
+                detalles_existentes = dict(persona.detalles_campos or {})
+                detalles_nuevos = dict(datos.get("detalles_campos") or {})
+                for k, v in detalles_nuevos.items():
+                    if k not in detalles_existentes or not detalles_existentes[k].get("valor"):
+                        detalles_existentes[k] = v
+                persona.detalles_campos = detalles_existentes
+
+                # Unificar texto crudo
+                if texto_ocr and texto_ocr not in (persona.texto_ocr_crudo or ""):
+                    persona.texto_ocr_crudo = f"{(persona.texto_ocr_crudo or '').strip()}\n---\n{texto_ocr}".strip()[:5000]
+
+                # Ajuste de confianza
                 if confianza > float(persona.confianza_extraccion or 0):
                     persona.confianza_extraccion = confianza
+                    persona.motor_ocr = ocr_engine
+
+                # Reevaluar si ya no requiere revisión tras la unificación de ambas hojas
+                tiene_datos_completos = bool(
+                    persona.numero_identificacion
+                    and not str(persona.numero_identificacion).startswith("SIN_ID")
+                    and persona.nombres and persona.nombres != "POR REVISAR"
+                    and persona.apellidos and persona.apellidos != "POR REVISAR"
+                    and (persona.fecha_expedicion or persona.fecha_nacimiento)
+                    and float(persona.confianza_extraccion or 0) >= (settings.OCR_CONFIDENCE_THRESHOLD * 100)
+                )
+
+                if tiene_datos_completos:
+                    persona.requiere_revision = False
+                    persona.estado_registro = "VALID"
+                else:
                     persona.requiere_revision = requiere_revision
                     persona.estado_registro = estado_reg
-                    persona.motor_ocr = ocr_engine
-                if texto_ocr:
-                    persona.texto_ocr_crudo = texto_ocr[:5000]
+
+                persona.fecha_actualizacion = datetime.utcnow()
 
             db.commit()
             db.refresh(persona)

@@ -74,11 +74,13 @@ class TestDocumentPairingServiceSuite(unittest.TestCase):
         self.assertIsNone(grupos[0].pagina_reverso)
 
     def test_8_mismo_numero_en_dos_grupos_duplicados(self):
+        # Cuando el mismo número de identificación aparece en 2 páginas/hojas, el sistema las unifica en 1 solo grupo
         p1 = {"pagina_numero": 1, "cara": "CEDULA_FRONT", "tipo_documento": "CEDULA_CIUDADANIA", "confianza": 0.95, "numero_identificacion": "1006501709"}
         p2 = {"pagina_numero": 3, "cara": "CEDULA_FRONT", "tipo_documento": "CEDULA_CIUDADANIA", "confianza": 0.95, "numero_identificacion": "1006501709"}
         grupos = document_pairing_service.agrupar_paginas([p1, p2])
-        self.assertEqual(len(grupos), 2)
-        self.assertEqual(grupos[1].status, "DUPLICATE_REVIEW_REQUIRED")
+        self.assertEqual(len(grupos), 1, "No debe duplicar grupos cuando el número de identificación coincide")
+        self.assertEqual(grupos[0].numero_identificacion, "1006501709")
+        self.assertIn(3, grupos[0].pages)
 
     def test_9_paginas_fuera_de_orden(self):
         p2 = {"pagina_numero": 2, "cara": "CEDULA_BACK", "tipo_documento": "CEDULA_CIUDADANIA", "confianza": 0.95, "numero_identificacion": "1006501709"}
@@ -149,6 +151,89 @@ class TestDocumentPairingServiceSuite(unittest.TestCase):
 
         ruta = exportacion_service.exportar_reporte_diferencias(mock_db, "comp-999")
         self.assertTrue(ruta.endswith(".xlsx"))
+
+    def test_18_cedula_repartida_en_dos_hojas_unifica_sin_duplicar(self):
+        # Escenario: Cédula repartida en 2 hojas distintas con el mismo ID (con y sin puntos)
+        p1 = {"pagina_numero": 1, "cara": "CEDULA_FRONT", "tipo_documento": "CEDULA_CIUDADANIA", "confianza": 0.95, "numero_identificacion": "10.065.017"}
+        p2 = {"pagina_numero": 2, "cara": "CEDULA_BACK", "tipo_documento": "CEDULA_CIUDADANIA", "confianza": 0.95, "numero_identificacion": "10065017"}
+        
+        grupos = document_pairing_service.agrupar_paginas([p1, p2])
+        self.assertEqual(len(grupos), 1, "No debe generar 2 grupos duplicados para la misma cédula")
+        self.assertEqual(grupos[0].pagina_frente, 1)
+        self.assertEqual(grupos[0].pagina_reverso, 2)
+        self.assertEqual(grupos[0].numero_identificacion, "10065017")
+
+    def test_19_fusion_datos_faltantes_mismo_numero_identificacion(self):
+        from app.services.ocr_service import ocr_service
+        from app.models.persona import Persona
+        import uuid
+
+        mock_db = MagicMock()
+        
+        # Simular que en la primera hoja se extraen Nombres y Cédula pero falta fecha de nacimiento
+        datos_hoja1 = {
+            "identificacion": "1006501709",
+            "nombres": "DIEGO ARMANDO",
+            "apellidos": "MARADONA",
+            "fecha_nacimiento": None,
+            "fecha_expedicion": None,
+            "lugar_expedicion": None,
+            "confianza_extraccion": 85.0,
+            "pagina_frente": 1,
+            "pagina_reverso": None,
+            "detalles_campos": {"nombres": {"valor": "DIEGO ARMANDO"}}
+        }
+
+        persona_mock = Persona(
+            id=uuid.uuid4(),
+            numero_identificacion="1006501709",
+            nombres="DIEGO ARMANDO",
+            apellidos="MARADONA",
+            fecha_nacimiento=None,
+            fecha_expedicion=None,
+            lugar_expedicion=None,
+            pagina_frente=1,
+            pagina_reverso=None,
+            confianza_extraccion=85.0,
+            detalles_campos={"nombres": {"valor": "DIEGO ARMANDO"}},
+            texto_ocr_crudo="Página 1 Frente"
+        )
+
+        # Cuando busque la persona en DB, primero no existe, luego sí
+        mock_db.query.return_value.filter.return_value.first.return_value = persona_mock
+
+        # Hoja 2: Trae fecha de nacimiento y lugar pero nombres vacíos
+        datos_hoja2 = {
+            "identificacion": "1006501709",
+            "nombres": None,
+            "apellidos": None,
+            "fecha_nacimiento": "1990-05-15",
+            "fecha_expedicion": "2008-06-20",
+            "lugar_expedicion": "MEDELLIN",
+            "confianza_extraccion": 90.0,
+            "pagina_frente": None,
+            "pagina_reverso": 2,
+            "detalles_campos": {"fecha_nacimiento": {"valor": "1990-05-15"}}
+        }
+
+        res = ocr_service._guardar_persona(
+            datos=datos_hoja2,
+            texto_ocr="Página 2 Reverso",
+            documento_id=str(uuid.uuid4()),
+            db=mock_db,
+            ocr_engine="google_document_ai",
+            pagina_num=2
+        )
+
+        self.assertIsNotNone(res)
+        self.assertEqual(res["numero_identificacion"], "1006501709")
+        # Verificar que se preservaron los nombres de la hoja 1 y se llenaron los datos de la hoja 2
+        self.assertEqual(persona_mock.nombres, "DIEGO ARMANDO")
+        self.assertEqual(persona_mock.apellidos, "MARADONA")
+        self.assertIsNotNone(persona_mock.fecha_nacimiento)
+        self.assertIsNotNone(persona_mock.fecha_expedicion)
+        self.assertEqual(persona_mock.lugar_expedicion, "MEDELLIN")
+        self.assertEqual(persona_mock.pagina_reverso, 2)
 
 
 if __name__ == "__main__":

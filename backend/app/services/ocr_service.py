@@ -31,6 +31,7 @@ from app.utils.logger import logger
 from app.utils.image_processor import image_processor
 from app.services.extractor_service import extractor_service
 from app.services.google_document_ai_service import google_document_ai_service
+from app.services.rapid_ocr_service import rapid_ocr_service
 from app.config import settings
 
 
@@ -293,14 +294,15 @@ class OCRService:
         self, img_np, pagina_num: int = 0
     ) -> tuple:
         """
-        Motor OCR de imagen con dos niveles:
-        Nivel 1 — Google Document AI (principal con layout estructurado)
-        Nivel 2 — Tesseract (fallback etiquetado)
+        Motor OCR de imagen con cascada inteligente de tres niveles:
+        Nivel 1 — Google Document AI (Cloud principal con layout estructurado)
+        Nivel 2 — RapidOCR ONNX Runtime (Local neural de alta precisión para VPS y offline)
+        Nivel 3 — Tesseract 5 (Fallback local tradicional)
 
         Returns:
             Tupla (texto: str, motor: str, res_estructurado: Optional[StructuredDocumentAIResult])
         """
-        # ── Nivel 1: Google Document AI ──────────────────────────────────
+        # ── Nivel 1: Google Document AI (Cloud) ──────────────────────────
         if google_document_ai_service.disponible:
             try:
                 import cv2
@@ -318,27 +320,42 @@ class OCRService:
                     palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
                     logger.info(
                         f"[DocAI] Página {pagina_num}: Google Document AI exitoso "
-                        f"({len(texto)} chars, {len(palabras)} palabras, {res_estructurado.tiempo_ms}ms)"
+                        f"({len(texto)} chars, {len(palabras)} palabras, {res_estructurado.tiempo_ms:.1f}ms)"
                     )
                     return texto, "google_document_ai", res_estructurado
                 else:
                     logger.warning(
                         f"[DocAI] Página {pagina_num}: Google Document AI devolvió "
-                        f"texto vacío — usando Tesseract como fallback"
+                        f"texto vacío — pasando a RapidOCR"
                     )
 
             except Exception as e:
                 logger.error(
                     f"[DocAI] Página {pagina_num}: Error en Google Document AI "
-                    f"({type(e).__name__}: {e}) — usando Tesseract como fallback"
+                    f"({type(e).__name__}: {e}) — pasando a RapidOCR"
                 )
         else:
             logger.info(
-                f"[DocAI] Página {pagina_num}: Google Document AI no disponible "
-                f"— usando Tesseract directamente"
+                f"[OCR] Página {pagina_num}: Google Document AI no disponible "
+                f"— ejecutando RapidOCR local"
             )
 
-        # ── Nivel 2: Tesseract (fallback) ────────────────────────────────
+        # ── Nivel 2: RapidOCR (ONNX Runtime Local) ───────────────────────
+        if rapid_ocr_service.disponible:
+            try:
+                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(img_np, pagina_num=pagina_num)
+                if texto_rapid and texto_rapid.strip():
+                    logger.info(
+                        f"[RapidOCR] Página {pagina_num}: RapidOCR exitoso "
+                        f"({len(texto_rapid)} chars, confianza={conf_rapid:.1f}%)"
+                    )
+                    return texto_rapid, "rapid_ocr", res_rapid
+                else:
+                    logger.warning(f"[RapidOCR] Página {pagina_num}: RapidOCR devolvió texto vacío — pasando a Tesseract")
+            except Exception as e:
+                logger.error(f"[RapidOCR] Página {pagina_num}: Error en RapidOCR ({type(e).__name__}: {e}) — pasando a Tesseract")
+
+        # ── Nivel 3: Tesseract 5 (Fallback tradicional) ──────────────────
         img_procesada = self.image_processor.preprocess(img_np)
         texto = self._ocr_con_tesseract(img_procesada, pagina_num=pagina_num)
         return texto, "tesseract_fallback", None

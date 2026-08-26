@@ -25,15 +25,15 @@ pydantic==2.9.2
 pydantic-settings==2.6.1
 email-validator==2.2.0
 
-# OCR - Motor Principal (se mantiene por compatibilidad)
-paddleocr==2.9.1
-paddlepaddle==2.6.2
-
-# OCR - Tesseract (fallback cuando Google Document AI no está disponible)
-pytesseract==0.3.13
-
-# OCR - Google Cloud Document AI (motor principal)
+# OCR - Google Cloud Document AI (motor principal nube)
 google-cloud-documentai==2.31.0
+
+# OCR - RapidOCR ONNX (motor neural local de alta velocidad para VPS y offline)
+rapidocr-onnxruntime>=1.4.0
+onnxruntime>=1.20.0
+
+# OCR - Tesseract (fallback tradicional de respaldo)
+pytesseract==0.3.13
 
 # Procesamiento de Imágenes
 opencv-python-headless==4.10.0.84

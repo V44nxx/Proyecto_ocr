@@ -67,8 +67,12 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_JSON: Optional[str] = None
     GOOGLE_CREDENTIALS_BASE64: Optional[str] = None
     # Switch para habilitar/deshabilitar Google Document AI
-    # Si es False, usa Tesseract directamente
     GOOGLE_DOCUMENT_AI_ENABLED: bool = True
+
+    # ─────────────────────────────────────
+    # RapidOCR (ONNX Runtime Local)
+    # ─────────────────────────────────────
+    RAPID_OCR_ENABLED: bool = True
 
     # ─────────────────────────────────────
     # CORS

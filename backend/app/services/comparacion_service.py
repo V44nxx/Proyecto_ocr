@@ -7,7 +7,7 @@ import re
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple, Set
 from sqlalchemy.orm import Session
 
 from app.utils.logger import app_logger as logger
@@ -127,85 +127,138 @@ class ComparacionService:
             s = s[:-2]
         s = re.sub(r"[^\d]", "", s)
         return s
+    def _son_nombres_equivalentes(
+        self,
+        nombres_bd: str,
+        apellidos_bd: str,
+        nombres_excel: str,
+        apellidos_excel: str = ""
+    ) -> bool:
+        """
+        Verifica si los nombres/apellidos coinciden independientemente de si el Excel
+        los tiene en una sola columna ('JEISON BASTIDAS ORTIZ') o separados.
+        """
+        norm_nb = self._normalizar_para_comparacion(nombres_bd)
+        norm_ab = self._normalizar_para_comparacion(apellidos_bd)
+        norm_ne = self._normalizar_para_comparacion(nombres_excel)
+        norm_ae = self._normalizar_para_comparacion(apellidos_excel)
+
+        # Si el Excel tiene nombres y apellidos en columnas separadas
+        if norm_ae:
+            if norm_nb == norm_ne and norm_ab == norm_ae:
+                return True
+
+        # Si el Excel tiene todo en una sola columna (Nombre Completo)
+        palabras_bd = set(re.findall(r"[A-Z0-9]+", f"{norm_nb} {norm_ab}"))
+        palabras_excel = set(re.findall(r"[A-Z0-9]+", f"{norm_ne} {norm_ae}"))
+
+        if not palabras_bd or not palabras_excel:
+            return False
+
+        # Si el conjunto de palabras es idéntico
+        inter = palabras_bd.intersection(palabras_excel)
+        if len(inter) == len(palabras_excel) and len(inter) == len(palabras_bd):
+            return True
+
+        # Coincidencia de tokens >= 80% (por ejemplo si falta un segundo nombre menor)
+        coincidencia = len(inter) / max(len(palabras_bd), len(palabras_excel))
+        return coincidencia >= 0.75
+
+    def _procesar_hoja_excel(self, df_raw: pd.DataFrame, filepath: str, sheet_name: str) -> Optional[pd.DataFrame]:
+        """Procesa una hoja individual de Excel identificando encabezados y columnas."""
+        if df_raw is None or df_raw.empty:
+            return None
+
+        header_row_idx = None
+        cols_norm = [self._normalizar_nombre_columna(c) for c in df_raw.columns]
+
+        tiene_id = any(c in self.MAPEO_COLUMNAS_EXCEL and self.MAPEO_COLUMNAS_EXCEL[c] == "numero_identificacion" for c in cols_norm)
+
+        df = df_raw
+        if not tiene_id and len(df_raw) > 0:
+            for r_idx in range(min(15, len(df_raw))):
+                fila_valores = [self._normalizar_nombre_columna(v) for v in df_raw.iloc[r_idx].dropna()]
+                if any(v in self.MAPEO_COLUMNAS_EXCEL and self.MAPEO_COLUMNAS_EXCEL[v] == "numero_identificacion" for v in fila_valores):
+                    header_row_idx = r_idx + 1
+                    break
+
+            if header_row_idx is not None:
+                logger.info(f"Encabezados detectados en hoja '{sheet_name}', fila {header_row_idx}")
+                df = pd.read_excel(filepath, sheet_name=sheet_name, header=header_row_idx, dtype=str)
+
+        # Normalizar columnas
+        df.columns = [self._normalizar_nombre_columna(col) for col in df.columns]
+
+        renombres = {
+            col: self.MAPEO_COLUMNAS_EXCEL[col]
+            for col in df.columns
+            if col in self.MAPEO_COLUMNAS_EXCEL
+        }
+        df = df.rename(columns=renombres)
+
+        if "numero_identificacion" not in df.columns:
+            return None
+
+        # Combinar primer_nombre y segundo_nombre si vienen separados
+        if "primer_nombre" in df.columns:
+            p_nom = df["primer_nombre"].fillna("").astype(str).str.strip()
+            s_nom = df["segundo_nombre"].fillna("").astype(str).str.strip() if "segundo_nombre" in df.columns else ""
+            noms_combinados = (p_nom + " " + s_nom).str.strip()
+            if "nombres" not in df.columns or df["nombres"].isna().all():
+                df["nombres"] = noms_combinados
+
+        # Combinar primer_apellido y segundo_apellido si vienen separados
+        if "primer_apellido" in df.columns:
+            p_ape = df["primer_apellido"].fillna("").astype(str).str.strip()
+            s_ape = df["segundo_apellido"].fillna("").astype(str).str.strip() if "segundo_apellido" in df.columns else ""
+            apes_combinados = (p_ape + " " + s_ape).str.strip()
+            if "apellidos" not in df.columns or df["apellidos"].isna().all():
+                df["apellidos"] = apes_combinados
+
+        # Limpiar identificaciones (ej. "CC - 1110487315" -> "1110487315")
+        df["numero_identificacion"] = df["numero_identificacion"].apply(self._limpiar_numero_id)
+        df = df[df["numero_identificacion"].str.len() >= 5]
+
+        # Normalizar campos de texto
+        for campo in ["nombres", "apellidos", "lugar_expedicion", "sexo"]:
+            if campo in df.columns:
+                df[campo] = df[campo].fillna("").astype(str).str.strip().str.upper()
+                df[campo] = df[campo].replace({"NAN": "", "NONE": "", "NULL": ""})
+
+        return df
 
     def cargar_excel(self, filepath: str) -> pd.DataFrame:
         """
-        Carga y normaliza un archivo Excel externo con detección inteligente de encabezados
-        y mapeo flexible de columnas.
+        Carga y normaliza un archivo Excel externo leyendo todas las hojas disponibles
+        (ej: 'Inscritos Primera Opción', 'Inscritos Segunda Opción').
         """
-        logger.info(f"Cargando Excel externo: {filepath}")
+        logger.info(f"Cargando Excel externo multi-hoja: {filepath}")
 
         try:
-            # 1. Leer Excel preliminar
-            df = pd.read_excel(filepath, dtype=str)
+            excel_file = pd.ExcelFile(filepath)
+            dfs_validos: List[pd.DataFrame] = []
 
-            # 2. Detección inteligente de fila de encabezados si hay títulos arriba
-            header_row_idx = None
-            cols_norm = [self._normalizar_nombre_columna(c) for c in df.columns]
+            for sheet_name in excel_file.sheet_names:
+                try:
+                    df_sheet_raw = pd.read_excel(filepath, sheet_name=sheet_name, dtype=str)
+                    df_procesado = self._procesar_hoja_excel(df_sheet_raw, filepath, sheet_name)
+                    if df_procesado is not None and not df_procesado.empty:
+                        logger.info(f"Hoja '{sheet_name}': {len(df_procesado)} registros válidos cargados")
+                        dfs_validos.append(df_procesado)
+                except Exception as e_sheet:
+                    logger.warning(f"No se pudo procesar hoja '{sheet_name}': {e_sheet}")
 
-            # Verificar si ya tiene columna de identificación en fila 0
-            tiene_id = any(c in self.MAPEO_COLUMNAS_EXCEL and self.MAPEO_COLUMNAS_EXCEL[c] == "numero_identificacion" for c in cols_norm)
-
-            if not tiene_id and len(df) > 0:
-                # Buscar en las primeras 10 filas cuál fila tiene los nombres de columnas
-                for r_idx in range(min(10, len(df))):
-                    fila_valores = [self._normalizar_nombre_columna(v) for v in df.iloc[r_idx].dropna()]
-                    if any(v in self.MAPEO_COLUMNAS_EXCEL and self.MAPEO_COLUMNAS_EXCEL[v] == "numero_identificacion" for v in fila_valores):
-                        header_row_idx = r_idx + 1  # +1 porque fila 0 de iloc es fila 1 de Excel
-                        break
-
-                if header_row_idx is not None:
-                    logger.info(f"Encabezados de Excel detectados en la fila {header_row_idx}")
-                    df = pd.read_excel(filepath, header=header_row_idx, dtype=str)
-
-            # 3. Normalizar nombres de columnas del DataFrame
-            df.columns = [self._normalizar_nombre_columna(col) for col in df.columns]
-
-            # 4. Renombrar columnas según mapeo flexible
-            renombres = {
-                col: self.MAPEO_COLUMNAS_EXCEL[col]
-                for col in df.columns
-                if col in self.MAPEO_COLUMNAS_EXCEL
-            }
-            df = df.rename(columns=renombres)
-
-            # 5. Combinar primer_nombre y segundo_nombre si vienen separados
-            if "primer_nombre" in df.columns:
-                p_nom = df["primer_nombre"].fillna("").astype(str).str.strip()
-                s_nom = df["segundo_nombre"].fillna("").astype(str).str.strip() if "segundo_nombre" in df.columns else ""
-                noms_combinados = (p_nom + " " + s_nom).str.strip()
-                if "nombres" not in df.columns or df["nombres"].isna().all():
-                    df["nombres"] = noms_combinados
-
-            # 6. Combinar primer_apellido y segundo_apellido si vienen separados
-            if "primer_apellido" in df.columns:
-                p_ape = df["primer_apellido"].fillna("").astype(str).str.strip()
-                s_ape = df["segundo_apellido"].fillna("").astype(str).str.strip() if "segundo_apellido" in df.columns else ""
-                apes_combinados = (p_ape + " " + s_ape).str.strip()
-                if "apellidos" not in df.columns or df["apellidos"].isna().all():
-                    df["apellidos"] = apes_combinados
-
-            # 7. Verificar que existe columna de identificación
-            if "numero_identificacion" not in df.columns:
-                cols_encontradas = ", ".join(list(df.columns)[:8])
+            if not dfs_validos:
                 raise ValueError(
-                    f"No se encontró columna de identificación en el Excel. "
-                    f"Columnas detectadas: [{cols_encontradas}]. "
-                    f"Se esperan columnas como: Cédula, Documento, Identificación, CC o No. Documento."
+                    "No se encontró ninguna columna de identificación válida (Identificación, Cédula, Documento, CC) en las hojas del archivo Excel."
                 )
 
-            # 8. Limpiar y validar identificaciones (eliminar puntos, comas, .0)
-            df["numero_identificacion"] = df["numero_identificacion"].apply(self._limpiar_numero_id)
-            df = df[df["numero_identificacion"].str.len() >= 5]
+            df_total = pd.concat(dfs_validos, ignore_index=True)
+            # Eliminar duplicados si una persona está en ambas hojas
+            df_total = df_total.drop_duplicates(subset=["numero_identificacion"], keep="first")
 
-            # 9. Normalizar campos de texto
-            for campo in ["nombres", "apellidos", "lugar_expedicion", "sexo"]:
-                if campo in df.columns:
-                    df[campo] = df[campo].fillna("").astype(str).str.strip().str.upper()
-                    df[campo] = df[campo].replace({"NAN": "", "NONE": "", "NULL": ""})
-
-            logger.info(f"Excel cargado y normalizado exitosamente: {len(df)} registros válidos")
-            return df
+            logger.info(f"Excel consolidado: {len(df_total)} registros únicos listos para comparar")
+            return df_total
 
         except Exception as e:
             logger.error(f"Error cargando Excel: {e}")
@@ -285,7 +338,7 @@ class ComparacionService:
 
             resultado["total_registros_bd"] = len(df_bd)
 
-            # 2. Cargar Excel externo
+            # 2. Cargar Excel externo (todas las hojas)
             df_excel = self.cargar_excel(excel_path)
             resultado["total_registros_excel"] = len(df_excel)
 
@@ -328,17 +381,61 @@ class ComparacionService:
                         tipo_diferencia="nuevo_bd",
                     ))
 
-                # Comparar campos de registros comunes con normalización
+                # Comparar campos de registros comunes con normalización inteligente
                 total_iguales = 0
                 total_diferentes = 0
+
+                tiene_col_apellidos = "apellidos" in df_excel.columns and not df_excel["apellidos"].isna().all()
 
                 for id_comun in ids_comunes:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_comun].iloc[0]
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_comun].iloc[0]
 
                     tiene_diferencias = False
-                    for campo in self.CAMPOS_COMPARACION:
-                        if campo in row_excel:
+
+                    # Comparación especial de Nombres y Apellidos
+                    if "nombres" in row_excel:
+                        if not tiene_col_apellidos:
+                            # Caso SENA / Planilla con una sola columna 'Nombre' que incluye apellidos
+                            noms_coinciden = self._son_nombres_equivalentes(
+                                nombres_bd=str(row_bd.get("nombres") or ""),
+                                apellidos_bd=str(row_bd.get("apellidos") or ""),
+                                nombres_excel=str(row_excel.get("nombres") or ""),
+                                apellidos_excel=""
+                            )
+                            if not noms_coinciden:
+                                tiene_diferencias = True
+                                nombre_bd_completo = f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}".strip()
+                                diferencias_a_guardar.append(Diferencia(
+                                    comparacion_id=comp_uuid,
+                                    numero_identificacion=id_comun,
+                                    campo="nombres",
+                                    valor_bd=nombre_bd_completo,
+                                    valor_excel=str(row_excel.get("nombres") or ""),
+                                    tipo_diferencia="diferente",
+                                ))
+                        else:
+                            # Columnas separadas
+                            val_bd_norm = self._normalizar_para_comparacion(row_bd.get("nombres"), campo="nombres")
+                            val_excel_norm = self._normalizar_para_comparacion(row_excel.get("nombres"), campo="nombres")
+                            if val_bd_norm != val_excel_norm:
+                                tiene_diferencias = True
+                                diferencias_a_guardar.append(Diferencia(
+                                    comparacion_id=comp_uuid,
+                                    numero_identificacion=id_comun,
+                                    campo="nombres",
+                                    valor_bd=str(row_bd.get("nombres") or "") or None,
+                                    valor_excel=str(row_excel.get("nombres") or "") or None,
+                                    tipo_diferencia="diferente",
+                                ))
+
+                    # Comparar los demás campos
+                    campos_resto = ["apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
+                    if not tiene_col_apellidos:
+                        campos_resto.remove("apellidos")
+
+                    for campo in campos_resto:
+                        if campo in row_excel and str(row_excel.get(campo) or "").strip():
                             val_bd_norm = self._normalizar_para_comparacion(row_bd.get(campo), campo=campo)
                             val_excel_norm = self._normalizar_para_comparacion(row_excel.get(campo), campo=campo)
 
@@ -351,7 +448,7 @@ class ComparacionService:
                                     valor_bd=str(row_bd.get(campo) or "") or None,
                                     valor_excel=str(row_excel.get(campo) or "") or None,
                                     tipo_diferencia="diferente",
-                                    ))
+                                ))
 
                     if tiene_diferencias:
                         total_diferentes += 1
@@ -373,6 +470,7 @@ class ComparacionService:
                         valor_excel=str(row.to_dict()),
                         tipo_diferencia="faltante_bd",
                     ))
+
 
             # 4. Guardar diferencias en BD (por lotes)
             BATCH_SIZE = 500

@@ -148,6 +148,30 @@ FECHA DE NACIMIENTO: 2001-10-23
         self.assertEqual(p_dict["motor_ocr"], "tesseract_fallback")
         self.assertEqual(p_dict["pagina_numero"], 5)
 
+    def test_16_comparacion_excel_sena_con_nombre_completo(self):
+        from app.services.comparacion_service import comparacion_service
+        # Validar limpieza de CC - 1110487315
+        id_limpio = comparacion_service._limpiar_numero_id("CC - 1110487315")
+        self.assertEqual(id_limpio, "1110487315")
+
+        # Validar equivalencia de nombres cuando Excel tiene Nombre Completo
+        coincide = comparacion_service._son_nombres_equivalentes(
+            nombres_bd="JEISON",
+            apellidos_bd="BASTIDAS ORTIZ",
+            nombres_excel="JEISON BASTIDAS ORTIZ",
+            apellidos_excel=""
+        )
+        self.assertTrue(coincide)
+
+        # Validar cuando el orden en BD es apellidos primero o nombres
+        coincide2 = comparacion_service._son_nombres_equivalentes(
+            nombres_bd="ANDREA PATRICIA",
+            apellidos_bd="SANCHEZ PINZON",
+            nombres_excel="ANDREA PATRICIA SANCHEZ PINZON",
+            apellidos_excel=""
+        )
+        self.assertTrue(coincide2)
+
 
 if __name__ == "__main__":
     unittest.main()

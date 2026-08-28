@@ -423,8 +423,26 @@ class ExtractorService:
             if ape_pos and (not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre):
                 resultado["apellidos"] = ape_pos
 
-        if not resultado["apellidos"]:
-            resultado["apellidos"] = self._extraer_apellido_antes_nombres(lineas)
+        # ── Estrategia 3: Keyword + texto en misma línea / línea siguiente ────
+        # Cubre casos como: "APELLIDOS BASTIDAS ORTIZ" o "NOMBRES: JEISON CAMILO"
+        # donde el extractor espacial falla por OCR ruidoso o el valor está inline.
+        if not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre:
+            ape_ctx = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_APELLIDOS, "apellidos")
+            if ape_ctx and ape_ctx not in invalidos_nombre:
+                resultado["apellidos"] = ape_ctx
+
+        if not resultado["nombres"] or resultado["nombres"] in invalidos_nombre:
+            nom_ctx = self._extraer_por_contexto(texto, lineas, self.KEYWORDS_NOMBRES, "nombres")
+            if nom_ctx and nom_ctx not in invalidos_nombre and nom_ctx != resultado.get("apellidos"):
+                resultado["nombres"] = nom_ctx
+
+        # ── Estrategia 4: Scan libre de líneas de solo-letras entre encabezado y número ──
+        # Ultra-fallback: si aún no hay apellidos, busca líneas de solo-letras en mayúsculas
+        # ubicadas entre el encabezado (REPÚBLICA DE COLOMBIA) y el número de cédula.
+        if not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre:
+            ape_scan = self._escanear_nombre_libre(lineas, resultado.get("identificacion"))
+            if ape_scan and ape_scan not in invalidos_nombre:
+                resultado["apellidos"] = ape_scan
 
         # Chronological dates fallback
         if not resultado["fecha_nacimiento"] or not resultado["fecha_expedicion"]:
@@ -1062,14 +1080,81 @@ class ExtractorService:
         )
         return nombres, apellidos
 
+    def _escanear_nombre_libre(
+        self, lineas: List[str], numero_id: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Ultra-fallback de extracción: escanea TODAS las líneas del documento
+        buscando la primera línea de solo-letras mayúsculas que:
+          - No sea un encabezado de cédula (REPÚBLICA, COLOMBIA, CEDULA...)
+          - No sea un municipio/departamento colombiano
+          - Tenga entre 2 y 5 palabras
+          - Esté CERCA (dentro de 5 líneas) del número de identificación
+
+        Se usa solo cuando todos los demás métodos han fallado.
+        No inventa datos: solo retorna lo que encuentra literalmente en el OCR.
+        """
+        RUIDO = re.compile(
+            r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|CEDULA|CÉDULA|CIUDADANÍA|CIUDADANIA|"
+            r"IDENTIFICACION|IDENTIFICACIÓN|PERSONAL|DIGITAL|FIRMA|REGISTRAD|"
+            r"HUELLA|ESTATURA|GRUPO|SANGUINEO|RH|FECHA|NACIMIENTO|EXPEDICION|"
+            r"EXPEDICIÓN|LUGAR|TARJETA|IDENTIDAD|NUIP|NUMERO|NÚMERO|INDICE|"
+            r"DERECHO|IZQUIERDO|MINISTERIO|INTERIOR|JUSTICIA|NACIONAL)\b",
+            re.IGNORECASE
+        )
+
+        # Localizar el índice de la línea que contiene el número de cédula
+        idx_numero = -1
+        if numero_id:
+            for i, linea in enumerate(lineas):
+                if numero_id in linea.replace(".", "").replace(" ", ""):
+                    idx_numero = i
+                    break
+
+        candidatos_globales: List[str] = []
+
+        for i, linea in enumerate(lineas):
+            linea = linea.strip()
+            if not linea or re.search(r"\d", linea):
+                continue
+            # Solo letras, espacios y guiones
+            limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑA-Za-záéíóúüñ\s\-]", "", linea).strip()
+            if RUIDO.search(limpia):
+                continue
+            tokens = [t for t in limpia.split() if len(t) >= 2]
+            if not tokens or len(tokens) > 5 or len(tokens) < 1:
+                continue
+            res = validador.normalizar_nombre(" ".join(tokens))
+            if not res or len(res) < 3:
+                continue
+            res_up = res.upper()
+            if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+                continue
+            if NO_NOMBRE_HEADER.search(res_up):
+                continue
+
+            # Priorizar líneas cercanas al número (dentro de 5 líneas)
+            if idx_numero >= 0 and abs(i - idx_numero) <= 5:
+                logger.info(f"[ScanLibre] Candidato cercano al número (idx={i}): '{res}'")
+                return res
+
+            candidatos_globales.append(res)
+
+        # Si no hay candidatos cercanos, usar el primero global que sea plausible
+        if candidatos_globales:
+            logger.info(f"[ScanLibre] Candidato global: '{candidatos_globales[0]}'")
+            return candidatos_globales[0]
+
+        return None
+
     def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
         """
         REGLA DE PRECISIÓN Y CERO INVENCIÓN:
         No se utiliza clasificación por diccionarios de nombres/apellidos.
         La detección se realiza 100% por coordenadas y estructura de Document AI.
         """
-
         return None, None
+
 
     def _corregir_nombres_apellidos_invertidos(self, resultado: Dict[str, Any]):
         """

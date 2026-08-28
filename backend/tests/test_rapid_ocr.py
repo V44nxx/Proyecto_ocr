@@ -50,7 +50,7 @@ class TestRapidOCRService(unittest.TestCase):
 
         texto, motor, struct_res = ocr_service._ocr_imagen(img, pagina_num=1)
         self.assertIn("COLOMBIA", texto.upper())
-        self.assertIn(motor, ["google_document_ai", "rapid_ocr", "tesseract_fallback"])
+        self.assertIn(motor, ["google_document_ai", "rapid_ocr", "tesseract_fallback", "google_document_ai+rapid_ocr"])
 
 
 if __name__ == "__main__":

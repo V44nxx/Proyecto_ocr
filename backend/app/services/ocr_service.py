@@ -268,97 +268,166 @@ class OCRService:
         return len(palabras_validas) < 5 or len(texto_limpio) < 50
 
     # ──────────────────────────────────────────
-    # OCR DE IMAGEN — GOOGLE DOCUMENT AI + FALLBACK TESSERACT
+    # OCR DE IMAGEN — MODO DUAL (DocAI + RapidOCR) + FALLBACK TESSERACT
     # ──────────────────────────────────────────
     def _ocr_imagen(
         self, img_np, pagina_num: int = 0
     ) -> tuple:
         """
-        Motor OCR de imagen con dos niveles:
+        Motor OCR de imagen con modo DUAL activo (DocAI + RapidOCR en paralelo):
 
-        Nivel 1 — Google Document AI (principal):
-          - Convierte la imagen numpy a bytes PNG
-          - Envía a la API de Google Document AI
-          - Devuelve texto + nombre del motor 'google_document_ai'
+        Modo DUAL (cuando ambos disponibles):
+          1. Google Document AI → texto principal + layout 2D estructurado
+          2. RapidOCR ONNX     → corre sobre la misma imagen
+          3. Fusión de textos  → líneas de RapidOCR que DocAI no capturó se agregan
+             al texto final, garantizando máxima cobertura de campos
+          Motor reportado: 'google_document_ai+rapid_ocr'
 
-        Nivel 2 — Tesseract (fallback):
-          - Se activa si Google Document AI falla, devuelve texto vacío
-            o si GOOGLE_DOCUMENT_AI_ENABLED=False
-          - Aplica preprocesamiento OpenCV antes de Tesseract
-          - Devuelve texto + nombre del motor 'tesseract_fallback'
+        Modo SOLO DocAI (si RapidOCR no disponible):
+          Motor reportado: 'google_document_ai'
 
-        Returns:
-            Tupla (texto: str, motor: str)
-        """
-    def _ocr_imagen(
-        self, img_np, pagina_num: int = 0
-    ) -> tuple:
-        """
-        Motor OCR de imagen con cascada inteligente de tres niveles:
-        Nivel 1 — Google Document AI (Cloud principal con layout estructurado)
-        Nivel 2 — RapidOCR ONNX Runtime (Local neural de alta precisión para VPS y offline)
-        Nivel 3 — Tesseract 5 (Fallback local tradicional)
+        Modo SOLO RapidOCR (si DocAI falla o no disponible):
+          Motor reportado: 'rapid_ocr'
+
+        Fallback TESSERACT (si todos los anteriores fallan):
+          Motor reportado: 'tesseract_fallback'
 
         Returns:
             Tupla (texto: str, motor: str, res_estructurado: Optional[StructuredDocumentAIResult])
         """
-        # ── Nivel 1: Google Document AI (Cloud) ──────────────────────────
+        import cv2
+        from app.services.google_document_ai_service import StructuredDocumentAIResult
+
+        texto_docai: str = ""
+        res_docai = None
+
+        # ── Paso 1: Google Document AI ────────────────────────────────────
         if google_document_ai_service.disponible:
             try:
-                import cv2
                 success, img_encoded = cv2.imencode(".png", img_np)
                 if not success:
                     raise ValueError("No se pudo codificar la imagen a PNG")
                 img_bytes = img_encoded.tobytes()
 
-                res_estructurado = google_document_ai_service.procesar_documento_estructurado(
+                res_docai = google_document_ai_service.procesar_documento_estructurado(
                     img_bytes, mime_type="image/png", pagina_num_base=pagina_num
                 )
-                texto = res_estructurado.text
+                texto_docai = res_docai.text or ""
 
-                if texto and texto.strip():
-                    palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto)
+                if texto_docai.strip():
+                    palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto_docai)
                     logger.info(
-                        f"[DocAI] Página {pagina_num}: Google Document AI exitoso "
-                        f"({len(texto)} chars, {len(palabras)} palabras, {res_estructurado.tiempo_ms:.1f}ms)"
+                        f"[DocAI] Página {pagina_num}: OK "
+                        f"({len(texto_docai)} chars, {len(palabras)} palabras, {res_docai.tiempo_ms:.1f}ms)"
                     )
-                    return texto, "google_document_ai", res_estructurado
                 else:
-                    logger.warning(
-                        f"[DocAI] Página {pagina_num}: Google Document AI devolvió "
-                        f"texto vacío — pasando a RapidOCR"
-                    )
+                    logger.warning(f"[DocAI] Página {pagina_num}: texto vacío")
+                    res_docai = None
 
             except Exception as e:
-                logger.error(
-                    f"[DocAI] Página {pagina_num}: Error en Google Document AI "
-                    f"({type(e).__name__}: {e}) — pasando a RapidOCR"
-                )
+                logger.error(f"[DocAI] Página {pagina_num}: Error ({type(e).__name__}: {e})")
+                res_docai = None
         else:
-            logger.info(
-                f"[OCR] Página {pagina_num}: Google Document AI no disponible "
-                f"— ejecutando RapidOCR local"
-            )
+            logger.info(f"[OCR] Página {pagina_num}: Google Document AI no disponible")
 
-        # ── Nivel 2: RapidOCR (ONNX Runtime Local) ───────────────────────
+        # ── Paso 2: RapidOCR — corre SIEMPRE (no solo como fallback) ─────
+        texto_rapid: str = ""
+        res_rapid = None
+
         if rapid_ocr_service.disponible:
             try:
-                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(img_np, pagina_num=pagina_num)
-                if texto_rapid and texto_rapid.strip():
+                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(
+                    img_np, pagina_num=pagina_num
+                )
+                texto_rapid = texto_rapid or ""
+                if texto_rapid.strip():
                     logger.info(
-                        f"[RapidOCR] Página {pagina_num}: RapidOCR exitoso "
+                        f"[RapidOCR] Página {pagina_num}: OK "
                         f"({len(texto_rapid)} chars, confianza={conf_rapid:.1f}%)"
                     )
-                    return texto_rapid, "rapid_ocr", res_rapid
                 else:
-                    logger.warning(f"[RapidOCR] Página {pagina_num}: RapidOCR devolvió texto vacío — pasando a Tesseract")
+                    logger.warning(f"[RapidOCR] Página {pagina_num}: texto vacío")
+                    texto_rapid = ""
+                    res_rapid = None
             except Exception as e:
-                logger.error(f"[RapidOCR] Página {pagina_num}: Error en RapidOCR ({type(e).__name__}: {e}) — pasando a Tesseract")
+                logger.error(f"[RapidOCR] Página {pagina_num}: Error ({type(e).__name__}: {e})")
+                texto_rapid = ""
+                res_rapid = None
+        else:
+            logger.info(f"[RapidOCR] Página {pagina_num}: motor no disponible")
 
-        # ── Nivel 3: Tesseract 5 (Fallback tradicional) ──────────────────
+        # ── Paso 3: Fusión inteligente de resultados ─────────────────────
+        # Caso A: Ambos motores tienen texto → fusionar
+        if texto_docai.strip() and texto_rapid.strip():
+            texto_fusionado, lineas_nuevas = self._fusionar_texto_dual(texto_docai, texto_rapid)
+            motor = "google_document_ai+rapid_ocr"
+            # Actualizar el texto en el resultado estructurado de DocAI (mantiene su layout superior)
+            if lineas_nuevas > 0:
+                logger.info(
+                    f"[DualOCR] Página {pagina_num}: Fusión exitosa — "
+                    f"{lineas_nuevas} línea(s) nueva(s) de RapidOCR añadidas al texto de DocAI"
+                )
+                # Crear copia del resultado con texto enriquecido manteniendo las páginas/layout de DocAI
+                res_final = StructuredDocumentAIResult(
+                    text=texto_fusionado,
+                    tiempo_ms=res_docai.tiempo_ms,
+                    pages=res_docai.pages,
+                )
+            else:
+                logger.info(f"[DualOCR] Página {pagina_num}: Ambos motores coincidentes — sin líneas adicionales")
+                res_final = res_docai
+            return texto_fusionado, motor, res_final
+
+        # Caso B: Solo DocAI tiene texto
+        if texto_docai.strip():
+            return texto_docai, "google_document_ai", res_docai
+
+        # Caso C: Solo RapidOCR tiene texto (DocAI falló)
+        if texto_rapid.strip():
+            logger.info(f"[RapidOCR] Página {pagina_num}: Usando RapidOCR como motor principal (DocAI sin resultado)")
+            return texto_rapid, "rapid_ocr", res_rapid
+
+        # ── Paso 4: Tesseract (último fallback si ambos fallaron) ─────────
+        logger.warning(f"[Tesseract] Página {pagina_num}: Todos los motores principales fallaron, usando Tesseract")
         img_procesada = self.image_processor.preprocess(img_np)
-        texto = self._ocr_con_tesseract(img_procesada, pagina_num=pagina_num)
-        return texto, "tesseract_fallback", None
+        texto_tess = self._ocr_con_tesseract(img_procesada, pagina_num=pagina_num)
+        return texto_tess, "tesseract_fallback", None
+
+    def _fusionar_texto_dual(self, texto_principal: str, texto_secundario: str) -> tuple[str, int]:
+        """
+        Fusiona dos textos OCR usando el principal como base y añadiendo
+        líneas únicas del secundario que no hayan sido capturadas.
+
+        Usa rapidfuzz para detectar líneas similares (umbral 82%) evitando duplicados.
+        Ignora líneas de menos de 3 caracteres.
+
+        Returns:
+            (texto_fusionado: str, cantidad_lineas_nuevas: int)
+        """
+        from rapidfuzz import fuzz
+
+        lineas_base = [l.strip() for l in texto_principal.split("\n") if l.strip()]
+        lineas_secundarias = [l.strip() for l in texto_secundario.split("\n") if len(l.strip()) >= 3]
+
+        lineas_nuevas: list[str] = []
+        for linea in lineas_secundarias:
+            linea_up = linea.upper()
+            # Verificar si ya existe una línea similar en el texto base
+            ya_existe = any(
+                fuzz.ratio(linea_up, lb.upper()) >= 82
+                for lb in lineas_base
+                if lb.strip()
+            )
+            if not ya_existe:
+                lineas_nuevas.append(linea)
+
+        if lineas_nuevas:
+            texto_fusionado = texto_principal.rstrip() + "\n" + "\n".join(lineas_nuevas)
+        else:
+            texto_fusionado = texto_principal
+
+        return texto_fusionado, len(lineas_nuevas)
+
 
     # ──────────────────────────────────────────
     # OCR CON TESSERACT — CONFIGURACIÓN ÓPTIMA

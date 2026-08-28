@@ -42,6 +42,12 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
   }
 
   if (anyErr.message && typeof anyErr.message === "string") {
+    if (anyErr.message.toLowerCase().includes("network error")) {
+      return "Error de red: No se pudo conectar con el servidor (el servicio de backend podría estar reiniciándose o actualizándose en Dokploy). Por favor reintenta en unos segundos.";
+    }
+    if (anyErr.message.toLowerCase().includes("timeout")) {
+      return "Tiempo de espera agotado al transferir el archivo. Por favor reintenta la subida.";
+    }
     return anyErr.message;
   }
 
@@ -71,7 +77,7 @@ function getBaseUrl(): string {
 
 const apiClient = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 120000, // 2 minutos para OCR
+  timeout: 300000, // 5 minutos para subidas y OCR
 });
 
 // Interceptor: agregar token JWT y gestionar Content-Type para FormData
@@ -222,8 +228,7 @@ export const apiComparacion = {
     formData.append("file", file);
     return apiClient.post<Comparacion>(
       `/api/comparacion/upload?ejecutar=${ejecutar}`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      formData
     );
   },
 

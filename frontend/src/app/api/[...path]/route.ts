@@ -9,18 +9,18 @@ let cachedWorkingBackend: string | null = null;
 const getBackendCandidates = (): string[] => {
   const candidates: string[] = [];
 
-  // Si ya sabemos qué backend funciona, ponerlo de primerísimo
-  if (cachedWorkingBackend) {
-    candidates.push(cachedWorkingBackend);
-  }
-
   // 1. Variable de entorno explícita (Dokploy)
   const envUrl = process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL;
   if (envUrl && envUrl.trim().length > 0) {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres Docker canónicos en la red dokploy-network
+  // 2. Si ya sabemos qué backend funciona, ponerlo de primero
+  if (cachedWorkingBackend && !candidates.includes(cachedWorkingBackend)) {
+    candidates.push(cachedWorkingBackend);
+  }
+
+  // 3. Nombres Docker canónicos en la red dokploy-network
   candidates.push("http://ocr-proyecto-fastapi:8000");
   candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
   candidates.push("http://fastapi:8000");
@@ -36,7 +36,7 @@ function doHttpRequest(
   method: string,
   headers: Record<string, string>,
   bodyBuffer?: Buffer,
-  timeoutMs: number = 120000
+  timeoutMs: number = 300000
 ): Promise<{ status: number; statusText: string; headers: Record<string, string>; data: Buffer }> {
   return new Promise((resolve, reject) => {
     try {
@@ -93,6 +93,41 @@ function doHttpRequest(
   });
 }
 
+async function quickProbe(baseUrl: string): Promise<boolean> {
+  try {
+    const res = await doHttpRequest(`${baseUrl}/docs`, "GET", {}, undefined, 1500);
+    return res.status >= 200 && res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+async function discoverActiveBackend(candidates: string[]): Promise<string> {
+  if (cachedWorkingBackend) {
+    return cachedWorkingBackend;
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  // Sondear todos los candidatos en paralelo en ~50ms
+  const probePromises = candidates.map(async (c) => {
+    const ok = await quickProbe(c);
+    return ok ? c : null;
+  });
+
+  const results = await Promise.all(probePromises);
+  const active = results.find((c) => c !== null);
+  if (active) {
+    cachedWorkingBackend = active;
+    console.log(`[Proxy Discovery] Backend activo detectado: ${active}`);
+    return active;
+  }
+
+  return candidates[0];
+}
+
 async function handleProxy(
   req: NextRequest,
   { params }: { params: { path: string[] } }
@@ -109,7 +144,6 @@ async function handleProxy(
     }
   });
 
-  // Forzar respuesta sin comprimir para evitar binario corrupto
   reqHeaders["accept-encoding"] = "identity";
 
   const method = req.method;
@@ -126,26 +160,27 @@ async function handleProxy(
     }
   }
 
-  let lastError: any = null;
-  const triedUrls: string[] = [];
+  // Descubrir inmediatamente cuál backend está vivo en 50ms
+  const preferredBackend = await discoverActiveBackend(candidates);
+  const orderedCandidates = [
+    preferredBackend,
+    ...candidates.filter((c) => c !== preferredBackend)
+  ];
 
+  let lastError: any = null;
   const candidateErrors: Record<string, string> = {};
 
-  for (let i = 0; i < candidates.length; i++) {
-    const backendBase = candidates[i];
+  for (let i = 0; i < orderedCandidates.length; i++) {
+    const backendBase = orderedCandidates[i];
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
-    triedUrls.push(targetUrl);
 
-    // Si es el backend ya cacheado o subida de archivo, permitir timeout completo (300s para subidas)
-    // Si estamos descubriendo candidatos, usar 3s para descartar IPs/DNS caídos velozmente
-    const isCached = cachedWorkingBackend === backendBase;
-    const isOnlyOne = candidates.length === 1;
-    const timeoutMs = (isCached || isOnlyOne || hasBody) ? 300000 : 3000;
+    // Si es el preferido, dar timeout completo de 5 minutos; si es descarte secundario, dar 2s
+    const isPreferred = backendBase === preferredBackend;
+    const timeoutMs = isPreferred ? 300000 : 2000;
 
     try {
       const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer, timeoutMs);
 
-      // Guardar el backend que funcionó para futuras peticiones instantáneas
       cachedWorkingBackend = backendBase;
 
       const isNoBody = result.status === 204 || result.status === 304;
@@ -162,7 +197,7 @@ async function handleProxy(
       candidateErrors[targetUrl] = errMsg;
 
       if (cachedWorkingBackend === backendBase) {
-        cachedWorkingBackend = null; // Invalidar caché si falló
+        cachedWorkingBackend = null;
       }
       console.warn(`[Proxy Miss] ${targetUrl}: ${errMsg}`);
     }

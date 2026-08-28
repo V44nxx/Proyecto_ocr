@@ -55,24 +55,16 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
 }
 
 function getBaseUrl(): string {
-  // Solo en el navegador
+  // En el navegador, usar la misma ruta relativa "" para aprovechar el proxy integrado de Next.js
+  // Esto elimina totalmente errores de red por subdominios DNS no configurados, CORS o SSL.
   if (typeof window !== "undefined") {
-    const hostname = window.location.hostname;
-    // Si estamos en el dominio de producción v44nxx.online
-    if (hostname.endsWith("v44nxx.online")) {
-      return "https://api.v44nxx.online";
-    }
-    // Si NEXT_PUBLIC_API_URL está explícitamente configurada y no es localhost
-    if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost")) {
+    if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost") && !process.env.NEXT_PUBLIC_API_URL.includes("api.v44nxx.online")) {
       return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
     }
-    // HTTP local pero no localhost (VPS sin SSL):
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return `http://${hostname}:8000`;
-    }
+    return "";
   }
-  // Server-side o localhost: usar variable de entorno
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  // Server-side o SSR: usar variable de entorno
+  return process.env.INTERNAL_BACKEND_URL || process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
 const apiClient = axios.create({

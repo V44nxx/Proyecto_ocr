@@ -20,15 +20,13 @@ const getBackendCandidates = (): string[] => {
     candidates.push(envUrl.trim().replace(/\/$/, ""));
   }
 
-  // 2. Nombres Docker Swarm canónicos en la red dokploy-network
-  candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
-  candidates.push("https://api.v44nxx.online");
-  candidates.push("http://fastapi:8000");
+  // 2. Nombres Docker canónicos en la red dokploy-network
   candidates.push("http://ocr-proyecto-fastapi:8000");
-
-  // 3. Fallbacks locales
+  candidates.push("http://ocr-proyecto-fastapi-d5qhym:8000");
+  candidates.push("http://fastapi:8000");
   candidates.push("http://127.0.0.1:8000");
   candidates.push("http://localhost:8000");
+  candidates.push("https://api.v44nxx.online");
 
   return Array.from(new Set(candidates));
 };
@@ -138,11 +136,11 @@ async function handleProxy(
     const targetUrl = `${backendBase}/api/${path}${searchParams}`;
     triedUrls.push(targetUrl);
 
-    // Si es el backend ya cacheado, permitir timeout completo (120s para subidas, 30s para GET)
+    // Si es el backend ya cacheado o subida de archivo, permitir timeout completo (300s para subidas)
     // Si estamos descubriendo candidatos, usar 3s para descartar IPs/DNS caídos velozmente
     const isCached = cachedWorkingBackend === backendBase;
     const isOnlyOne = candidates.length === 1;
-    const timeoutMs = (isCached || isOnlyOne || hasBody) ? 120000 : 3000;
+    const timeoutMs = (isCached || isOnlyOne || hasBody) ? 300000 : 3000;
 
     try {
       const result = await doHttpRequest(targetUrl, method, reqHeaders, bodyBuffer, timeoutMs);

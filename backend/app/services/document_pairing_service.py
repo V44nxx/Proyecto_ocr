@@ -61,8 +61,15 @@ class DocumentPairingService:
 
     def agrupar_paginas(self, paginas_clasificadas: List[Dict[str, Any]]) -> List[DocumentGroup]:
         """
-        Toma la lista de páginas procesadas y clasificadas y las agrupa en objetos DocumentGroup.
-        Si dos o más páginas comparten el mismo número de identidad, las unifica en un solo grupo.
+        Agrupa páginas clasificadas en DocumentGroups (un grupo = un documento físico real).
+
+        Reglas de agrupación (en orden de prioridad):
+        1. Si una página tiene AMBOS LADOS (Frente + Reverso en la misma imagen) → 1 grupo, 1 persona.
+        2. Si FRENTE y REVERSO tienen el mismo número de cédula → unificar en 1 grupo (sin importar posición).
+        3. Si un FRENTE va seguido inmediatamente de un REVERSO (páginas consecutivas) → 1 grupo.
+        4. Si queda un único FRONT huérfano y un único BACK disponible → emparejar de forma optimista.
+        5. Un reverso huérfano SIN frente asociado NO crea una persona nueva si no tiene ID ni nombres.
+        6. NUNCA se duplica si la cédula ya fue vista en un grupo anterior.
         """
         if not paginas_clasificadas:
             return []
@@ -70,28 +77,28 @@ class DocumentPairingService:
         from app.utils.validators import validador
 
         grupos: List[DocumentGroup] = []
-        paginas_pendientes = list(paginas_clasificadas)
         counter = 1
 
-        # 1. Separar páginas CEDULA_AMBOS_LADOS (2 caras en 1 sola página), FRONT, BACK y UNKNOWN
-        both_sides = [p for p in paginas_pendientes if p.get("cara") == "CEDULA_AMBOS_LADOS"]
-        fronts = [p for p in paginas_pendientes if "FRONT" in p.get("cara", "") and p not in both_sides]
-        backs = [p for p in paginas_pendientes if "BACK" in p.get("cara", "") and p not in both_sides]
-        unknowns = [p for p in paginas_pendientes if p.get("cara") == "UNKNOWN" and p not in both_sides]
+        # Separar por tipo de cara
+        both_sides = [p for p in paginas_clasificadas if p.get("cara") == "CEDULA_AMBOS_LADOS"]
+        fronts = [p for p in paginas_clasificadas if "FRONT" in p.get("cara", "") and p not in both_sides]
+        backs = [p for p in paginas_clasificadas if "BACK" in p.get("cara", "") and p not in both_sides]
+        unknowns = [p for p in paginas_clasificadas if p.get("cara") == "UNKNOWN" and p not in both_sides]
 
-        # Control de IDs asignados para detectar duplicados y unificar hojas
+        # Registro de IDs ya asignados a grupos (id_limpio → group_id)
         ids_vistos: Dict[str, str] = {}
 
-        # 2. Procesar páginas de 2 caras simultáneas (CEDULA_AMBOS_LADOS)
+        # ── Paso 1: CEDULA_AMBOS_LADOS (frente y reverso en la misma página) ──────────────────
         for b_side in both_sides:
             raw_id = b_side.get("numero_identificacion")
             id_clean = validador.limpiar_identificacion(raw_id)
 
             if id_clean and id_clean in ids_vistos:
+                # Ya existe un grupo con esta cédula: fusionar
                 grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_clean]), None)
                 if grp_existente:
                     grp_existente.other_pages.append(b_side)
-                    grp_existente.reasons.append(f"Unificación de página de 2 caras por coincidencia de identificación '{id_clean}'")
+                    grp_existente.reasons.append(f"Página de 2 caras adicional unificada por ID '{id_clean}'")
                     continue
 
             grp = DocumentGroup(f"DOC-{counter:03d}")
@@ -100,7 +107,7 @@ class DocumentPairingService:
             grp.tipo_documento = b_side.get("tipo_documento", "CEDULA_CIUDADANIA")
             grp.numero_identificacion = id_clean or raw_id
             grp.grouping_confidence = 0.99
-            grp.reasons = ["Documento de 2 caras escaneado en una misma página (Frente + Reverso)"]
+            grp.reasons = ["Ambas caras escaneadas en la misma página"]
             grp.status = "VALID" if grp.numero_identificacion else "REVIEW_REQUIRED"
 
             if id_clean:
@@ -109,19 +116,16 @@ class DocumentPairingService:
             grupos.append(grp)
             counter += 1
 
-        # 3. Iterar sobre cada FRONT y buscar su mejor BACK compatible
-        # Umbral base: 0.35 (tolerante para PDFs sin MRZ, cédulas amarillas en 2 páginas)
-        UMBRAL_MIN_SCORE = 0.35
-
-        # Ordenar f_pages por número de página ascendente
-        fronts_ordenados = sorted(list(fronts), key=lambda p: p.get("pagina_numero", 1))
+        # ── Paso 2: Emparejar FRONTs con BACKs ────────────────────────────────────────────────
+        fronts_ordenados = sorted(fronts, key=lambda p: p.get("pagina_numero", 1))
+        backs_disponibles = list(backs)  # copia mutable para ir consumiendo
 
         for f_page in fronts_ordenados:
             p_front = f_page.get("pagina_numero", 1)
             raw_id_front = f_page.get("numero_identificacion")
             id_front = validador.limpiar_identificacion(raw_id_front)
 
-            # Si este FRONT comparte ID con un grupo ya creado (cédula en múltiples hojas), unificar
+            # ¿Ya existe un grupo con este ID? → fusionar en lugar de crear uno nuevo
             if id_front and id_front in ids_vistos:
                 grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_front]), None)
                 if grp_existente:
@@ -129,7 +133,7 @@ class DocumentPairingService:
                         grp_existente.front_page = f_page
                     elif grp_existente.front_page.get("pagina_numero") != p_front:
                         grp_existente.other_pages.append(f_page)
-                    grp_existente.reasons.append(f"Frente (Pág {p_front}) unificado por coincidencia de identificación '{id_front}'")
+                    grp_existente.reasons.append(f"Frente (Pág {p_front}) unificado por ID '{id_front}'")
                     continue
 
             grp = DocumentGroup(f"DOC-{counter:03d}")
@@ -137,49 +141,59 @@ class DocumentPairingService:
             grp.tipo_documento = f_page.get("tipo_documento", "CEDULA_CIUDADANIA")
             grp.numero_identificacion = id_front or raw_id_front
 
-            best_back = None
+            best_back: Optional[Dict[str, Any]] = None
             best_score = 0.0
-            best_reasons = []
+            best_reasons: List[str] = []
 
-            # Prioridad 0: Coincidencia directa de ID en backs
+            # Prioridad A: Coincidencia exacta de ID en cualquier reverso disponible
             if id_front:
-                for b_page in list(backs):
+                for b_page in list(backs_disponibles):
                     b_id = validador.limpiar_identificacion(b_page.get("numero_identificacion"))
                     if b_id and b_id == id_front:
                         best_back = b_page
                         best_score = 0.99
-                        best_reasons = [f"Coincidencia exacta de número de identificación '{id_front}' entre Frente y Reverso"]
+                        best_reasons = [f"ID idéntico en Frente y Reverso: '{id_front}'"]
                         break
 
-            # Prioridad 1: Buscar si la página siguiente p_front + 1 está en backs
+            # Prioridad B: REVERSO inmediatamente consecutivo (página siguiente)
+            # Esta regla es la más importante para cédulas sin MRZ / sin ID en reverso
             if not best_back:
-                next_page_back = next((b for b in backs if b.get("pagina_numero") == p_front + 1), None)
-                if next_page_back:
-                    score, reasons = self.evaluar_asociacion(f_page, next_page_back)
-                    if score >= 0.20:
-                        best_back = next_page_back
-                        best_score = min(0.99, max(0.85, score + 0.30))
-                        best_reasons = reasons + ["Emparejamiento de alta certeza: páginas consecutivas (Pág N -> Pág N+1)"]
+                pagina_siguiente = p_front + 1
+                back_consecutivo = next(
+                    (b for b in backs_disponibles if b.get("pagina_numero") == pagina_siguiente),
+                    None
+                )
+                if back_consecutivo:
+                    b_id = validador.limpiar_identificacion(back_consecutivo.get("numero_identificacion"))
+                    # Si el reverso tiene un ID diferente al frente → NO emparejar (pertenece a otra cédula)
+                    ids_en_conflicto = bool(id_front and b_id and id_front != b_id)
+                    if not ids_en_conflicto:
+                        best_back = back_consecutivo
+                        best_score = 0.92
+                        best_reasons = [f"Reverso inmediatamente consecutivo (Pág {p_front}→{pagina_siguiente})"]
 
-            # Prioridad 2: Si no hubo back consecutivo, buscar si la página siguiente p_front + 1 está en unknowns
+            # Prioridad C: Buscar UNKNOWN en la página siguiente como reverso complementario
             if not best_back:
-                next_page_unk = next((u for u in unknowns if u.get("pagina_numero") == p_front + 1), None)
-                if next_page_unk:
-                    best_back = next_page_unk
+                pagina_siguiente = p_front + 1
+                unk_consecutivo = next(
+                    (u for u in unknowns if u.get("pagina_numero") == pagina_siguiente),
+                    None
+                )
+                if unk_consecutivo:
+                    best_back = unk_consecutivo
                     best_score = 0.75
-                    best_reasons = [f"Reverso complementario inferido por secuencia consecutiva (Pág {p_front} y {p_front + 1})"]
-                    unknowns.remove(next_page_unk)
+                    best_reasons = [f"Página siguiente de tipo desconocido asignada como Reverso (Pág {pagina_siguiente})"]
+                    unknowns.remove(unk_consecutivo)
 
-            # Prioridad 3: Buscar en la lista general de backs por mejor puntuación
+            # Prioridad D: Búsqueda global por puntuación (último recurso)
             if not best_back:
-                for b_page in list(backs):
+                for b_page in list(backs_disponibles):
                     score, reasons = self.evaluar_asociacion(f_page, b_page)
                     p_back = b_page.get("pagina_numero", 2)
-                    dist_pag = abs(p_back - p_front)
-                    if dist_pag == 1:
-                        score = min(0.99, score + 0.25)
-                        reasons = reasons + ["Bonus: páginas consecutivas (+0.25)"]
-                    if score > best_score and score >= UMBRAL_MIN_SCORE:
+                    if abs(p_back - p_front) == 1:
+                        score = min(0.99, score + 0.20)
+                        reasons = reasons + ["Bonus: páginas contiguas (+0.20)"]
+                    if score > best_score and score >= 0.35:
                         best_score = score
                         best_back = b_page
                         best_reasons = reasons
@@ -188,38 +202,52 @@ class DocumentPairingService:
                 grp.back_page = best_back
                 grp.grouping_confidence = best_score
                 grp.reasons = best_reasons
-                if best_back in backs:
-                    backs.remove(best_back)
+                # Tomar el ID del reverso si el frente no lo tenía
+                if not grp.numero_identificacion:
+                    b_id = validador.limpiar_identificacion(best_back.get("numero_identificacion"))
+                    if b_id:
+                        grp.numero_identificacion = b_id
+                if best_back in backs_disponibles:
+                    backs_disponibles.remove(best_back)
+                grp.status = "VALID" if grp.numero_identificacion else "REVIEW_REQUIRED"
             else:
-                # Documento de 1 sola página FRONT (ej. escaneo frontal)
                 grp.grouping_confidence = f_page.get("confianza", 0.90)
-                grp.reasons = ["Documento de una sola cara (FRONT)"]
+                grp.reasons = ["Cédula de una sola cara (solo Frente disponible)"]
                 grp.status = "VALID" if grp.numero_identificacion else "REVIEW_REQUIRED"
 
             if id_front:
                 ids_vistos[id_front] = grp.group_id
+            if grp.numero_identificacion and grp.numero_identificacion not in ids_vistos:
+                ids_vistos[grp.numero_identificacion] = grp.group_id
 
             grupos.append(grp)
             counter += 1
 
-        # Pairing optimista: si quedan exactamente 1 FRONT huérfano + 1 BACK huérfano
-        grupos_fronts_huerfanos = [g for g in grupos if g.front_page and not g.back_page]
-        if len(grupos_fronts_huerfanos) == 1 and len(backs) == 1:
-            grp_huerfano = grupos_fronts_huerfanos[0]
-            b_solo = backs[0]
-            grp_huerfano.back_page = b_solo
-            grp_huerfano.grouping_confidence = max(grp_huerfano.grouping_confidence, 0.70)
-            grp_huerfano.reasons.append("Pairing optimista: único FRONT + único BACK disponibles en PDF")
-            if grp_huerfano.status == "REVIEW_REQUIRED" and grp_huerfano.numero_identificacion:
-                grp_huerfano.status = "VALID"
-            backs.clear()
+        # ── Paso 3: Pairing optimista — 1 FRONT huérfano + 1 BACK huérfano ─────────────────────
+        grupos_sin_back = [g for g in grupos if g.front_page and not g.back_page]
+        if len(grupos_sin_back) == 1 and len(backs_disponibles) == 1:
+            grp_huerfano = grupos_sin_back[0]
+            b_solo = backs_disponibles[0]
+            # Solo emparejar si no hay conflicto de ID
+            b_id = validador.limpiar_identificacion(b_solo.get("numero_identificacion"))
+            id_g = grp_huerfano.numero_identificacion
+            if not (id_g and b_id and id_g != b_id):
+                grp_huerfano.back_page = b_solo
+                grp_huerfano.grouping_confidence = max(grp_huerfano.grouping_confidence, 0.70)
+                grp_huerfano.reasons.append("Pairing optimista: único Frente + único Reverso disponibles")
+                if not grp_huerfano.numero_identificacion and b_id:
+                    grp_huerfano.numero_identificacion = b_id
+                    ids_vistos[b_id] = grp_huerfano.group_id
+                if grp_huerfano.numero_identificacion:
+                    grp_huerfano.status = "VALID"
+                backs_disponibles.clear()
 
-        # 4. Procesar BACKs huérfanos que no encontraron FRONT
-        for b_page in backs:
+        # ── Paso 4: BACKs huérfanos ────────────────────────────────────────────────────────────
+        for b_page in backs_disponibles:
             raw_id_back = b_page.get("numero_identificacion")
             id_back = validador.limpiar_identificacion(raw_id_back)
 
-            # Si el reverso tiene una cédula ya vista en un grupo anterior, fusionarlo
+            # Si el ID ya fue visto en otro grupo → fusionar (no crear duplicado)
             if id_back and id_back in ids_vistos:
                 grp_prev = next((g for g in grupos if g.group_id == ids_vistos[id_back]), None)
                 if grp_prev:
@@ -227,24 +255,32 @@ class DocumentPairingService:
                         grp_prev.back_page = b_page
                     else:
                         grp_prev.other_pages.append(b_page)
-                    grp_prev.reasons.append(f"Reverso (Pág {b_page.get('pagina_numero')}) unificado por coincidencia de cédula '{id_back}'")
+                    grp_prev.reasons.append(f"Reverso (Pág {b_page.get('pagina_numero')}) unificado por ID '{id_back}'")
                     continue
 
-            grp = DocumentGroup(f"DOC-{counter:03d}")
-            grp.back_page = b_page
-            grp.tipo_documento = b_page.get("tipo_documento", "CEDULA_CIUDADANIA")
-            grp.numero_identificacion = id_back or raw_id_back
-            grp.grouping_confidence = 0.70
-            grp.reasons = ["Reverso huérfano (sin frente asociado)"]
-            grp.status = "REVIEW_REQUIRED"
+            # REGLA ANTI-DUPLICADOS: Un reverso huérfano sin ID y sin frente NO crea persona nueva,
+            # a menos que sea la única página del PDF (para no dejar el procesamiento en blanco).
+            es_unica_pagina = len(paginas_clasificadas) == 1
+            if id_back or es_unica_pagina:
+                grp = DocumentGroup(f"DOC-{counter:03d}")
+                grp.back_page = b_page
+                grp.tipo_documento = b_page.get("tipo_documento", "CEDULA_CIUDADANIA")
+                grp.numero_identificacion = id_back
+                grp.grouping_confidence = 0.70
+                grp.reasons = ["Reverso huérfano con ID propio (Frente no encontrado en el PDF)"]
+                grp.status = "REVIEW_REQUIRED"
+                if id_back:
+                    ids_vistos[id_back] = grp.group_id
+                grupos.append(grp)
+                counter += 1
+            else:
+                # Reverso sin ID ni frente en PDF de múltiples páginas → descartado para no generar personas fantasma
+                logger.info(
+                    f"[DocumentPairingService] Reverso Pág {b_page.get('pagina_numero')} "
+                    f"descartado: sin ID y sin frente asociado (evita duplicado fantasma)"
+                )
 
-            if id_back:
-                ids_vistos[id_back] = grp.group_id
-
-            grupos.append(grp)
-            counter += 1
-
-        # 5. Procesar UNKNOWNs
+        # ── Paso 5: UNKNOWNs ──────────────────────────────────────────────────────────────────
         for u_page in unknowns:
             raw_id_unk = u_page.get("numero_identificacion")
             id_unk = validador.limpiar_identificacion(raw_id_unk)
@@ -253,19 +289,36 @@ class DocumentPairingService:
                 grp_prev = next((g for g in grupos if g.group_id == ids_vistos[id_unk]), None)
                 if grp_prev:
                     grp_prev.other_pages.append(u_page)
-                    grp_prev.reasons.append(f"Página adicional (Pág {u_page.get('pagina_numero')}) unificada por coincidencia de cédula '{id_unk}'")
+                    grp_prev.reasons.append(f"Página adicional (Pág {u_page.get('pagina_numero')}) fusionada por ID '{id_unk}'")
                     continue
 
-            grp = DocumentGroup(f"DOC-{counter:03d}")
-            grp.other_pages.append(u_page)
-            grp.tipo_documento = "UNKNOWN"
-            grp.grouping_confidence = 0.30
-            grp.reasons = ["Página no reconocida como documento válido"]
-            grp.status = "REVIEW_REQUIRED"
-            grupos.append(grp)
-            counter += 1
+            # Crear grupo UNKNOWN si:
+            #  a) tiene ID propio, o
+            #  b) es la única página del PDF (así el extractor puede intentar extraer algo)
+            es_unica_pagina = len(paginas_clasificadas) == 1
+            if id_unk or es_unica_pagina:
+                grp = DocumentGroup(f"DOC-{counter:03d}")
+                grp.other_pages.append(u_page)
+                grp.tipo_documento = u_page.get("tipo_documento", "UNKNOWN")
+                grp.numero_identificacion = id_unk
+                grp.grouping_confidence = 0.30
+                grp.reasons = ["Página no reconocida como documento válido"]
+                grp.status = "REVIEW_REQUIRED"
+                if id_unk:
+                    ids_vistos[id_unk] = grp.group_id
+                grupos.append(grp)
+                counter += 1
+            else:
+                logger.info(
+                    f"[DocumentPairingService] Página UNKNOWN Pág {u_page.get('pagina_numero')} "
+                    f"descartada (PDF de múltiples páginas, sin ID reconocido)"
+                )
 
-        logger.info(f"[DocumentPairingService] Agrupadas {len(paginas_clasificadas)} páginas en {len(grupos)} grupo(s) de documentos únicos")
+        logger.info(
+            f"[DocumentPairingService] {len(paginas_clasificadas)} página(s) → "
+            f"{len(grupos)} grupo(s) de documento(s). "
+            f"IDs únicos: {list(ids_vistos.keys())}"
+        )
         return grupos
 
     def evaluar_asociacion(self, f_page: Dict[str, Any], b_page: Dict[str, Any]) -> tuple[float, List[str]]:

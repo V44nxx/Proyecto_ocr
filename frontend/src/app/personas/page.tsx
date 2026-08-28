@@ -292,7 +292,7 @@ export default function PersonasPage() {
 
       <main className="ml-64 flex-1 p-8 overflow-x-hidden">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="p-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-400">
@@ -305,9 +305,56 @@ export default function PersonasPage() {
               Haz clic en el ícono <Eye className="inline w-3.5 h-3.5 text-primary-400 mx-1" /> para expandir el documento y los datos OCR de cada persona.
             </p>
           </div>
-          <span className="px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/50 text-xs font-medium text-slate-300">
-            <strong className="text-white font-bold">{personasFiltradas.length}</strong> Registros
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary-500/20 to-blue-500/20 border border-primary-500/30 text-sm font-semibold text-primary-300 shadow-lg shadow-primary-500/5">
+              Total: <strong className="text-white font-extrabold text-base ml-1">{personas.length}</strong> {personas.length === 1 ? "persona" : "personas"}
+            </span>
+          </div>
+        </div>
+
+        {/* Tarjetas de Estadísticas / Conteo Rápido */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* Card 1: Total General */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total en Tabla</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-white">{personas.length}</span>
+                <span className="text-xs text-slate-500">registradas</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center text-primary-400">
+              <Users className="w-6 h-6" />
+            </div>
+          </div>
+
+          {/* Card 2: Válidas */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+            <div>
+              <p className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider">Registros Válidos</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-emerald-400">{personas.filter(p => !p.requiere_revision).length}</span>
+                <span className="text-xs text-slate-500">completas</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <CheckCircle className="w-6 h-6" />
+            </div>
+          </div>
+
+          {/* Card 3: Por Revisar */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+            <div>
+              <p className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-amber-400">{personas.filter(p => p.requiere_revision).length}</span>
+                <span className="text-xs text-slate-500">incompletas</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+          </div>
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
@@ -578,6 +625,33 @@ export default function PersonasPage() {
                   })}
                 </tbody>
               </table>
+
+              {/* Pie de Tabla con Conteo Detallado */}
+              <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 bg-slate-950/70 border-t border-slate-800/80 text-xs text-slate-400 gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded bg-primary-500/10 text-primary-400">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <span>
+                    Total en la tabla: <strong className="text-white font-bold text-sm">{personasFiltradas.length}</strong> {personasFiltradas.length === 1 ? "persona" : "personas"}
+                    {buscar && (
+                      <span className="text-slate-500 ml-1">
+                        (filtradas de un total de <strong className="text-slate-300 font-semibold">{personas.length}</strong>)
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <strong className="text-slate-300 font-semibold">{personas.filter(p => !p.requiere_revision).length}</strong> Válidas
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <strong className="text-slate-300 font-semibold">{personas.filter(p => p.requiere_revision).length}</strong> Por revisar
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>

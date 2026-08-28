@@ -405,8 +405,17 @@ class ExtractorService:
             if not resultado["lugar_expedicion"] and lugar:
                 resultado["lugar_expedicion"] = lugar
 
-        # Si nombres o apellidos no fueron detectados por cajas espaciales o quedaron ruidosos:
+        # ── Estrategia 2b: Cédula Amarilla (sin NUIP ni etiquetas de APELLIDOS/NOMBRES) ─────
+        # Detectar ANTES del fallback posicional para que tenga prioridad
         invalidos_nombre = {"POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}
+        if self._es_cedula_amarilla(texto):
+            nom_am, ape_am = self._extraer_cedula_amarilla(texto, lineas)
+            if ape_am and (not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre):
+                resultado["apellidos"] = ape_am
+            if nom_am and (not resultado["nombres"] or resultado["nombres"] in invalidos_nombre):
+                resultado["nombres"] = nom_am
+
+        # Si nombres o apellidos no fueron detectados por cajas espaciales o quedaron ruidosos:
         if not resultado["nombres"] or resultado["nombres"] in invalidos_nombre or not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre:
             nom_pos, ape_pos = self._extraer_nombres_por_posicion(lineas)
             if nom_pos and (not resultado["nombres"] or resultado["nombres"] in invalidos_nombre):
@@ -928,12 +937,138 @@ class ExtractorService:
                     return nombre_norm
         return None
 
+    # ──────────────────────────────────────────
+    # EXTRACCIÓN ESPECÍFICA: CÉDULA AMARILLA
+    # ──────────────────────────────────────────
+    # La cédula amarilla colombiana (pre-2000) tiene este layout en el FRENTE:
+    #   REPÚBLICA DE COLOMBIA / IDENTIFICACIÓN PERSONAL
+    #   <número con puntos: X.XXX.XXX>
+    #   <APELLIDOS en mayúsculas — SIN etiqueta "APELLIDOS">
+    #   <Nombres en mayúsculas — SIN etiqueta "NOMBRES">
+    #   [Firma del titular]
+    # No tiene NUIP, MRZ ni etiquetas explícitas. El número puede incluir puntos.
+    # ──────────────────────────────────────────
+    _PATRON_CEDULA_AMARILLA_HEADER = re.compile(
+        r"(REPUBLICA|REPÚBLICA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A)",
+        re.IGNORECASE
+    )
+    _PATRON_NUMERO_PUNTOS = re.compile(
+        r"\b([1-9](?:\.?\d){5,11})\b"
+    )
+
+    def _es_cedula_amarilla(self, texto: str) -> bool:
+        """
+        Detecta si el texto corresponde a una cédula amarilla (formato antiguo colombiano).
+        Criterios:
+        - Tiene encabezado de REPÚBLICA DE COLOMBIA / IDENTIFICACIÓN PERSONAL
+        - NO tiene la etiqueta moderna 'NUIP'
+        - NO tiene etiquetas explícitas 'NOMBRES' ni 'APELLIDOS'
+        - Tiene número con puntos (X.XXX.XXX) en el cuerpo
+        """
+        texto_up = texto.upper()
+        tiene_header = bool(self._PATRON_CEDULA_AMARILLA_HEADER.search(texto_up))
+        tiene_numero_puntos = bool(self._PATRON_NUMERO_PUNTOS.search(texto))
+        tiene_nuip = bool(re.search(r"\bNUIP\b", texto_up))
+        tiene_labels_modernos = bool(re.search(r"\b(APELLIDOS|NOMBRES)\b", texto_up))
+        return tiene_header and tiene_numero_puntos and not tiene_nuip and not tiene_labels_modernos
+
+    def _extraer_cedula_amarilla(
+        self, texto: str, lineas: List[str]
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extrae APELLIDOS y NOMBRES de una cédula amarilla.
+
+        Estrategia posicional:
+        1. Localiza el número de cédula (con o sin puntos).
+        2. Si hay texto DESPUÉS del número en la misma línea → esos son los APELLIDOS.
+        3. La siguiente línea de solo-letras es NOMBRES.
+        4. Si el número está solo, las 2 líneas siguientes de solo-letras son APELLIDOS y NOMBRES.
+        """
+        RUIDO = re.compile(
+            r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|IDENTIFICACI[OÓ]N|PERSONAL|"
+            r"C[EÉ]DULA|CIUDADAN[IÍ]A|FIRMA|REGISTRAD|DIGITAL|HUELLA|"
+            r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|FECHA|NACIMIENTO|"
+            r"EXPEDICI[OÓ]N|LUGAR|MINISTERIO|NACIONAL|INDICE|ÍNDICE|DERECHO)\b",
+            re.IGNORECASE
+        )
+
+        def _es_linea_nombre(linea: str) -> Optional[str]:
+            linea = linea.strip()
+            if not linea or re.search(r"\d", linea):
+                return None
+            limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑA-Za-záéíóúüñ\s\-]", "", linea).strip()
+            if RUIDO.search(limpia):
+                return None
+            tokens = [t for t in limpia.split() if len(t) >= 2]
+            if not tokens or len(tokens) > 6:
+                return None
+            res = validador.normalizar_nombre(" ".join(tokens))
+            if not res or len(res) < 3:
+                return None
+            res_up = res.upper()
+            if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+                return None
+            return res
+
+        apellidos: Optional[str] = None
+        nombres: Optional[str] = None
+        idx_numero = -1
+        nombre_en_misma_linea: Optional[str] = None
+
+        for i, linea in enumerate(lineas):
+            m = self._PATRON_NUMERO_PUNTOS.search(linea)
+            if m:
+                numero_raw = m.group(1).replace(".", "")
+                if 6 <= len(numero_raw) <= 10:
+                    idx_numero = i
+                    # ¿Hay texto de nombre DESPUÉS del número en la misma línea?
+                    resto = linea[m.end():].strip()
+                    if resto:
+                        cand = _es_linea_nombre(resto)
+                        if cand:
+                            nombre_en_misma_linea = cand
+                    break
+
+        if idx_numero < 0:
+            return None, None
+
+        if nombre_en_misma_linea:
+            # Apellidos en la misma línea del número
+            apellidos = nombre_en_misma_linea
+            for linea in lineas[idx_numero + 1: idx_numero + 5]:
+                cand = _es_linea_nombre(linea)
+                if cand and cand != apellidos:
+                    nombres = cand
+                    break
+        else:
+            # Apellidos y nombres en líneas inmediatamente posteriores al número
+            candidatos: List[str] = []
+            for linea in lineas[idx_numero + 1: idx_numero + 6]:
+                cand = _es_linea_nombre(linea)
+                if cand:
+                    candidatos.append(cand)
+                elif linea.strip():
+                    # Línea con contenido pero inválida (ej. ruido de firma) → parar
+                    break
+            if len(candidatos) >= 2:
+                apellidos = candidatos[0]
+                nombres = candidatos[1]
+            elif len(candidatos) == 1:
+                apellidos = candidatos[0]
+
+        logger.info(
+            f"[CédulaAmarilla] Apellidos='{apellidos}' | Nombres='{nombres}' "
+            f"(línea número idx={idx_numero})"
+        )
+        return nombres, apellidos
+
     def _extraer_nombres_por_clasificacion(self, lineas: List[str]) -> Tuple[Optional[str], Optional[str]]:
         """
         REGLA DE PRECISIÓN Y CERO INVENCIÓN:
         No se utiliza clasificación por diccionarios de nombres/apellidos.
         La detección se realiza 100% por coordenadas y estructura de Document AI.
         """
+
         return None, None
 
     def _corregir_nombres_apellidos_invertidos(self, resultado: Dict[str, Any]):

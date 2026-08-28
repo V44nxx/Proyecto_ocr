@@ -618,6 +618,9 @@ class OCRService:
                     persona.fecha_expedicion = fecha_exp
                 if (not persona.lugar_expedicion or persona.lugar_expedicion in ["COLOMBIA", "REPUBLICA DE COLOMBIA"]) and datos.get("lugar_expedicion"):
                     persona.lugar_expedicion = datos["lugar_expedicion"]
+
+                if datos.get("tipo_documento") and datos["tipo_documento"] != "CEDULA_CIUDADANIA":
+                    persona.tipo_documento = datos["tipo_documento"]
                 if not persona.sexo and datos.get("sexo"):
                     persona.sexo = str(datos["sexo"])[:10]
 

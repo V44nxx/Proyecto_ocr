@@ -61,41 +61,61 @@ class DocumentSideClassifier:
         score_front_t = 0
         score_back_t = 0
 
-        # 1. Evaluar FRONT Cédula (exclusivos del anverso)
+        es_tarjeta = bool(re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|T\.I\b|T\.I\.)\b", texto_up))
+        es_extranjeria = bool(re.search(r"\b(CEDULA DE EXTRANJERIA|CEDULA EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
+        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
+
+        tipo_doc_base = "TARJETA_IDENTIDAD" if es_tarjeta else ("CEDULA_EXTRANJERIA" if es_extranjeria else ("PASAPORTE" if es_pasaporte else "CEDULA_CIUDADANIA"))
+
+        # 1. Evaluar FRONT Cédula / Tarjeta (exclusivos del anverso)
         for pat in self.PATRONES_FRONT_CEDULA:
             if re.search(pat, texto_up):
                 score_front_c += 2
                 reasons.append(f"Patrón FRENTE detectado: '{pat}'")
 
-        # 2. Evaluar BACK Cédula (exclusivos del reverso)
+        # 2. Evaluar BACK Cédula / Tarjeta (exclusivos del reverso)
         for pat in self.PATRONES_BACK_CEDULA:
             if re.search(pat, texto_up):
                 score_back_c += 3 if "ICCOL" in pat or "REGISTRADOR" in pat or "EXPEDICION" in pat or "INDICE DERECHO" in pat else 2
                 reasons.append(f"Patrón REVERSO detectado: '{pat}'")
 
-        # 3. Evaluar Tarjetas
-        if "TARJETA DE IDENTIDAD" in texto_up or "TARJETA IDENTIDAD" in texto_up:
-            if re.search(r"\bFECHA DE NACIMIENTO\b", texto_up):
-                score_front_t += 4
-            if re.search(r"\bEXPEDICION\b|\bREGISTRADOR\b", texto_up):
-                score_back_t += 4
+        # 3. Evaluar Tarjetas específicamente
+        if es_tarjeta:
+            if re.search(r"\b(FECHA DE NACIMIENTO|NOMBRES?|APELLIDOS?|NACIONALIDAD)\b", texto_up):
+                score_front_t += 5
+            if re.search(r"\b(EXPEDICION|REGISTRADOR|INDICE DERECHO|ÍNDICE DERECHO|HUELLA)\b", texto_up):
+                score_back_t += 5
 
         # Detección estricta de 2 caras en 1 sola página:
-        # Requiere marcadores fuertes de FRENTE (NOMBRES/APELLIDOS/REPUBLICA DE COLOMBIA/IDENTIFICACION PERSONAL)
-        # Y marcadores EXCLUSIVOS de REVERSO (REGISTRADOR NACIONAL/INDICE DERECHO/ESTATURA/RH/MRZ ICCOL)
-        # NOTA: FECHA DE EXPEDICION está en el FRENTE de cédulas digitales, por lo que NO es exclusivo del reverso.
-        tiene_frente_fuerte = bool(re.search(r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|APELLIDOS|NOMBRES)\b", texto_up))
+        # Requiere marcadores fuertes de FRENTE y marcadores EXCLUSIVOS de REVERSO
+        tiene_frente_fuerte = bool(re.search(r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|APELLIDOS|NOMBRES)\b", texto_up))
         tiene_reverso_exclusivo = bool(re.search(r"\b(REGISTRADOR NACIONAL|REGISTRADURIA NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
 
         if tiene_frente_fuerte and tiene_reverso_exclusivo:
             return {
                 "cara": "CEDULA_AMBOS_LADOS",
-                "tipo_documento": "CEDULA_CIUDADANIA",
+                "tipo_documento": tipo_doc_base,
                 "confianza": 0.99,
                 "reasons": reasons + ["Página contiene Frente y Reverso simultáneamente (2 caras en 1 página)"]
             }
 
-        max_score = max(score_front_c, score_back_c, score_front_t, score_back_t)
+        if es_tarjeta:
+            if score_back_t > score_front_t:
+                return {
+                    "cara": "TARJETA_IDENTIDAD_BACK",
+                    "tipo_documento": "TARJETA_IDENTIDAD",
+                    "confianza": 0.95,
+                    "reasons": reasons
+                }
+            else:
+                return {
+                    "cara": "TARJETA_IDENTIDAD_FRONT",
+                    "tipo_documento": "TARJETA_IDENTIDAD",
+                    "confianza": 0.95,
+                    "reasons": reasons
+                }
+
+        max_score = max(score_front_c, score_back_c)
 
         if max_score < 2:
             return {
@@ -108,38 +128,17 @@ class DocumentSideClassifier:
         if score_back_c > score_front_c:
             return {
                 "cara": "CEDULA_BACK",
-                "tipo_documento": "CEDULA_CIUDADANIA",
+                "tipo_documento": tipo_doc_base,
                 "confianza": round(min(0.99, 0.70 + (score_back_c * 0.05)), 2),
                 "reasons": reasons
             }
-        elif score_front_c >= score_back_c:
+        else:
             return {
                 "cara": "CEDULA_FRONT",
-                "tipo_documento": "CEDULA_CIUDADANIA",
+                "tipo_documento": tipo_doc_base,
                 "confianza": round(min(0.99, 0.70 + (score_front_c * 0.05)), 2),
                 "reasons": reasons
             }
-        elif max_score == score_back_t:
-            return {
-                "cara": "TARJETA_IDENTIDAD_BACK",
-                "tipo_documento": "TARJETA_IDENTIDAD",
-                "confianza": 0.90,
-                "reasons": reasons
-            }
-        elif max_score == score_front_t:
-            return {
-                "cara": "TARJETA_IDENTIDAD_FRONT",
-                "tipo_documento": "TARJETA_IDENTIDAD",
-                "confianza": 0.90,
-                "reasons": reasons
-            }
-
-        return {
-            "cara": "UNKNOWN",
-            "tipo_documento": "UNKNOWN",
-            "confianza": 0.40,
-            "reasons": ["Clasificación ambigua"]
-        }
 
 
 document_side_classifier = DocumentSideClassifier()

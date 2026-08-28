@@ -15,6 +15,40 @@ import { apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Persona, PersonaUpdate } from "@/types";
 
+const getTipoDocInfo = (tipo?: string | null) => {
+  const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
+  if (t.includes("TARJETA") || t === "TI") {
+    return {
+      codigo: "TI",
+      label: "Tarjeta de Identidad",
+      badge: "bg-purple-500/20 border-purple-500/40 text-purple-300 font-bold",
+      pill: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+    };
+  }
+  if (t.includes("EXTRANJERIA") || t === "CE") {
+    return {
+      codigo: "CE",
+      label: "Cédula Extranjería",
+      badge: "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold",
+      pill: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+    };
+  }
+  if (t.includes("PASAPORTE")) {
+    return {
+      codigo: "PAS",
+      label: "Pasaporte",
+      badge: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold",
+      pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+    };
+  }
+  return {
+    codigo: "CC",
+    label: "Cédula de Ciudadanía",
+    badge: "bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold",
+    pill: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+  };
+};
+
 export default function PersonasPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -223,12 +257,15 @@ export default function PersonasPage() {
         {/* ── Panel derecho: Datos OCR ── */}
         <div className="lg:w-[52%] flex flex-col">
           {/* Meta info */}
-          <div className="px-4 py-2 border-b border-slate-800/40 bg-slate-900/50">
-            <div className="flex items-center gap-4 text-[10px]">
+          <div className="px-4 py-2 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-[10px]">
+              <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getTipoDocInfo(p.tipo_documento).pill}`}>
+                {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
+              </span>
               <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
               <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
-              {p.grupo_documento_id && <span className="font-mono text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id.slice(0, 14)}…</span>}
             </div>
+            {p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>}
           </div>
 
           {/* Campos */}
@@ -436,7 +473,7 @@ export default function PersonasPage() {
                 <thead>
                   <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     <th className="py-3 px-3 w-10"></th>
-                    <th className="py-3 px-4">Cédula</th>
+                    <th className="py-3 px-4">Documento / ID</th>
                     <th className="py-3 px-4">Nombre Completo</th>
                     <th className="py-3 px-3 text-center">Pág.</th>
                     <th className="py-3 px-4 text-center">Confianza</th>
@@ -450,6 +487,7 @@ export default function PersonasPage() {
                     const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
                     const isExpandida = expandidoId === p.id;
                     const nombreCompleto = [p.nombres, p.apellidos].filter(Boolean).join(" ");
+                    const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
                     return (
                       <>
@@ -468,7 +506,12 @@ export default function PersonasPage() {
                                 </div>
                               </td>
                               <td className="py-2 px-4 font-mono text-primary-400 font-bold text-sm whitespace-nowrap">
-                                {p.numero_identificacion}
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono ${tipoInfo.badge}`}>
+                                    {tipoInfo.codigo}
+                                  </span>
+                                  <span>{p.numero_identificacion}</span>
+                                </div>
                               </td>
                               <td className="py-2 px-4" colSpan={2}>
                                 <div className="flex gap-2">
@@ -540,11 +583,16 @@ export default function PersonasPage() {
                                 </div>
                               </td>
 
-                              {/* Cédula destacada */}
+                              {/* Documento e ID con Badge */}
                               <td className="py-3 px-4 whitespace-nowrap">
-                                <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
-                                  {p.numero_identificacion}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider ${tipoInfo.badge}`} title={tipoInfo.label}>
+                                    {tipoInfo.codigo}
+                                  </span>
+                                  <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
+                                    {p.numero_identificacion}
+                                  </span>
+                                </div>
                               </td>
 
                               {/* Nombre completo */}

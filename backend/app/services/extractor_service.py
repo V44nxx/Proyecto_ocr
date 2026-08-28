@@ -230,13 +230,17 @@ class ExtractorService:
     # MÉTODO PRINCIPAL DE EXTRACCIÓN
     # ──────────────────────────────────────────
     def detectar_tipo_documento(self, texto: str) -> str:
-        """Determina si el texto corresponde a Cédula de Ciudadanía, Tarjeta de Identidad o Desconocido."""
+        """Determina si el texto corresponde a Cédula de Ciudadanía, Tarjeta de Identidad, Cédula de Extranjería o Pasaporte."""
         if not texto:
-            return "UNKNOWN"
+            return "CEDULA_CIUDADANIA"
         texto_up = texto.upper()
-        if re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|T\.I)\b", texto_up):
+        if re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|TARJETA DE IDENTIFICACION|T\.I\b|T\.I\.)\b", texto_up):
             return "TARJETA_IDENTIDAD"
-        elif re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP)\b", texto_up):
+        elif re.search(r"\b(CEDULA DE EXTRANJERIA|CEDULA EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up):
+            return "CEDULA_EXTRANJERIA"
+        elif re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up):
+            return "PASAPORTE"
+        elif re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP|IDENTIFICACION PERSONAL)\b", texto_up):
             return "CEDULA_CIUDADANIA"
         else:
             return "UNKNOWN"
@@ -601,12 +605,22 @@ class ExtractorService:
             return res
 
 
-        # ── Frente + Reverso disponibles: Combinación e Integración Complementaria ──
+        tipo_f = front_data.get("tipo_documento")
+        tipo_b = back_data.get("tipo_documento")
+        if tipo_f == "TARJETA_IDENTIDAD" or tipo_b == "TARJETA_IDENTIDAD":
+            tipo_doc_grupo = "TARJETA_IDENTIDAD"
+        elif tipo_f == "CEDULA_EXTRANJERIA" or tipo_b == "CEDULA_EXTRANJERIA":
+            tipo_doc_grupo = "CEDULA_EXTRANJERIA"
+        elif tipo_f == "PASAPORTE" or tipo_b == "PASAPORTE":
+            tipo_doc_grupo = "PASAPORTE"
+        else:
+            tipo_doc_grupo = tipo_f or tipo_b or getattr(group, "tipo_documento", "CEDULA_CIUDADANIA")
+
         res = {
             "grupo_documento_id": getattr(group, "group_id", "DOC-001"),
             "pagina_frente": getattr(group, "pagina_frente", 1),
             "pagina_reverso": getattr(group, "pagina_reverso", 2),
-            "tipo_documento": front_data.get("tipo_documento", back_data.get("tipo_documento", "CEDULA_CIUDADANIA")),
+            "tipo_documento": tipo_doc_grupo,
             "identificacion": front_data.get("identificacion") or back_data.get("identificacion"),
             "nombres": front_data.get("nombres") or back_data.get("nombres"),
             "apellidos": front_data.get("apellidos") or back_data.get("apellidos"),

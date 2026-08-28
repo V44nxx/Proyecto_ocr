@@ -172,6 +172,24 @@ FECHA DE NACIMIENTO: 2001-10-23
         )
         self.assertTrue(coincide2)
 
+    def test_17_deteccion_tipo_documento_ti_vs_cc(self):
+        # 1. Validar detección en ExtractorService
+        tipo_ti = extractor_service.detectar_tipo_documento("REPUBLICA DE COLOMBIA TARJETA DE IDENTIDAD NUMERO 1006501709")
+        self.assertEqual(tipo_ti, "TARJETA_IDENTIDAD")
+
+        tipo_cc = extractor_service.detectar_tipo_documento("REPUBLICA DE COLOMBIA CEDULA DE CIUDADANIA NUMERO 1006501709")
+        self.assertEqual(tipo_cc, "CEDULA_CIUDADANIA")
+
+        # 2. Validar clasificación en DocumentSideClassifier
+        from app.services.document_side_classifier import document_side_classifier
+        clasif_ti = document_side_classifier.clasificar_cara("REPUBLICA DE COLOMBIA TARJETA DE IDENTIDAD NOMBRES JUAN PABLO")
+        self.assertEqual(clasif_ti["tipo_documento"], "TARJETA_IDENTIDAD")
+        self.assertEqual(clasif_ti["cara"], "TARJETA_IDENTIDAD_FRONT")
+
+        clasif_cc = document_side_classifier.clasificar_cara("REPUBLICA DE COLOMBIA CEDULA DE CIUDADANIA NOMBRES CARLOS ANDRES")
+        self.assertEqual(clasif_cc["tipo_documento"], "CEDULA_CIUDADANIA")
+        self.assertEqual(clasif_cc["cara"], "CEDULA_FRONT")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -95,89 +95,56 @@ class OCRService:
 
             personas_guardadas = []
             confianzas = []
+            paginas_clasificadas = []
 
-            # ── Paso 1: Procesar páginas en paralelo controlado (max 3 simultáneas) ──
-            self._actualizar_progreso(
-                documento_id=documento_id,
-                db=db,
-                progreso=10,
-                paso=f"Iniciando OCR en paralelo ({total_paginas} páginas)...",
-                pagina_actual=0,
-                total_paginas=total_paginas,
-            )
-
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from app.services.document_side_classifier import document_side_classifier
-
-            # Renderizado rápido on-demand a 200 DPI (alta nitidez, 3x más rápido y liviano que 300 DPI)
-            paginas_raw = []
+            # ── Paso 1: Procesar cada página con Document AI y clasificar su cara ──
             for i in range(total_paginas):
+                pagina_num = i + 1
+                progreso_pct = 10 + int((i / max(total_paginas, 1)) * 60)
+                self._actualizar_progreso(
+                    documento_id=documento_id,
+                    db=db,
+                    progreso=progreso_pct,
+                    paso=f"Procesando página {pagina_num} de {total_paginas} con OCR...",
+                    pagina_actual=pagina_num,
+                    total_paginas=total_paginas,
+                )
+
                 pagina = doc[i]
                 texto_nativo = pagina.get_text("text")
-                necesita_ocr = self._necesita_ocr_imagen(texto_nativo)
-                img_np = None
-                if necesita_ocr:
-                    pix = pagina.get_pixmap(dpi=200)
-                    img_np = self.image_processor._pixmap_to_numpy(pix)
-                paginas_raw.append((i + 1, texto_nativo, necesita_ocr, img_np))
 
-            def _procesar_una_pagina(p_num: int, t_nativo: str, n_ocr: bool, i_np: Any) -> Dict[str, Any]:
-                if n_ocr and i_np is not None:
-                    logger.info(f"Página {p_num}/{total_paginas}: Aplicando OCR Dual (200 DPI)")
-                    texto_p, motor_u, layout_e = self._ocr_imagen(
-                        img_np=i_np, pagina_num=p_num
+                if self._necesita_ocr_imagen(texto_nativo):
+                    logger.info(f"Página {pagina_num}/{total_paginas}: Aplicando OCR de imagen (300 DPI)")
+                    pix = pagina.get_pixmap(dpi=300)
+                    img_np = self.image_processor._pixmap_to_numpy(pix)
+                    texto_pagina, motor_usado, layout_estructurado = self._ocr_imagen(
+                        img_np=img_np, pagina_num=pagina_num
                     )
                 else:
-                    texto_p = t_nativo
-                    motor_u = "texto_nativo_pdf"
-                    layout_e = None
+                    texto_pagina = texto_nativo
+                    motor_usado = "texto_nativo_pdf"
+                    layout_estructurado = None
 
                 # Clasificar cara (Frente / Reverso)
-                clasif_c = document_side_classifier.clasificar_cara(
-                    texto_p,
-                    lines=layout_e.pages[0].lines if (layout_e and layout_e.pages) else []
+                from app.services.document_side_classifier import document_side_classifier
+                clasif_cara = document_side_classifier.clasificar_cara(
+                    texto_pagina,
+                    lines=layout_estructurado.pages[0].lines if (layout_estructurado and layout_estructurado.pages) else []
                 )
 
                 # Pre-extraer ID si está presente para ayudar a la agrupación
-                id_p = self.parser._extraer_identificacion(texto_p, texto_p.split("\n"))
+                id_pre = self.parser._extraer_identificacion(texto_pagina, texto_pagina.split("\n"))
 
-                return {
-                    "pagina_numero": p_num,
-                    "texto": texto_p,
-                    "layout": layout_e,
-                    "motor": motor_u,
-                    "cara": clasif_c["cara"],
-                    "tipo_documento": clasif_c["tipo_documento"],
-                    "confianza": clasif_c["confianza"],
-                    "numero_identificacion": id_p
-                }
-
-            paginas_clasificadas = []
-            paginas_completadas = 0
-
-            # Concurrencia controlada (máximo 3 páginas simultáneas para no saturar memoria ni API)
-            max_workers_pdf = min(3, total_paginas) if total_paginas > 0 else 1
-            with ThreadPoolExecutor(max_workers=max_workers_pdf) as executor:
-                futures = [
-                    executor.submit(_procesar_una_pagina, pnum, tnat, nocr, inp)
-                    for (pnum, tnat, nocr, inp) in paginas_raw
-                ]
-                for fut in as_completed(futures):
-                    res_p = fut.result()
-                    paginas_clasificadas.append(res_p)
-                    paginas_completadas += 1
-                    progreso_pct = 10 + int((paginas_completadas / max(total_paginas, 1)) * 60)
-                    self._actualizar_progreso(
-                        documento_id=documento_id,
-                        db=db,
-                        progreso=progreso_pct,
-                        paso=f"Procesando páginas con OCR ({paginas_completadas}/{total_paginas})...",
-                        pagina_actual=paginas_completadas,
-                        total_paginas=total_paginas,
-                    )
-
-            # Reordenar estrictamente por número de página antes de agrupar (1..N)
-            paginas_clasificadas.sort(key=lambda p: p["pagina_numero"])
+                paginas_clasificadas.append({
+                    "pagina_numero": pagina_num,
+                    "texto": texto_pagina,
+                    "layout": layout_estructurado,
+                    "motor": motor_usado,
+                    "cara": clasif_cara["cara"],
+                    "tipo_documento": clasif_cara["tipo_documento"],
+                    "confianza": clasif_cara["confianza"],
+                    "numero_identificacion": id_pre
+                })
 
             # ── Paso 2: Agrupar páginas en documentos físicos (Frente + Reverso) ──
             self._actualizar_progreso(
@@ -329,68 +296,65 @@ class OCRService:
             Tupla (texto: str, motor: str, res_estructurado: Optional[StructuredDocumentAIResult])
         """
         import cv2
-        from concurrent.futures import ThreadPoolExecutor
         from app.services.google_document_ai_service import StructuredDocumentAIResult
 
         texto_docai: str = ""
         res_docai = None
-        texto_rapid: str = ""
-        res_rapid = None
 
-        def _ejecutar_docai() -> tuple:
-            if not google_document_ai_service.disponible:
-                return "", None
+        # ── Paso 1: Google Document AI ────────────────────────────────────
+        if google_document_ai_service.disponible:
             try:
                 success, img_encoded = cv2.imencode(".png", img_np)
                 if not success:
                     raise ValueError("No se pudo codificar la imagen a PNG")
                 img_bytes = img_encoded.tobytes()
 
-                res_d = google_document_ai_service.procesar_documento_estructurado(
+                res_docai = google_document_ai_service.procesar_documento_estructurado(
                     img_bytes, mime_type="image/png", pagina_num_base=pagina_num
                 )
-                t_d = res_d.text or ""
-                if t_d.strip():
-                    palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", t_d)
+                texto_docai = res_docai.text or ""
+
+                if texto_docai.strip():
+                    palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto_docai)
                     logger.info(
                         f"[DocAI] Página {pagina_num}: OK "
-                        f"({len(t_d)} chars, {len(palabras)} palabras, {res_d.tiempo_ms:.1f}ms)"
+                        f"({len(texto_docai)} chars, {len(palabras)} palabras, {res_docai.tiempo_ms:.1f}ms)"
                     )
-                    return t_d, res_d
                 else:
                     logger.warning(f"[DocAI] Página {pagina_num}: texto vacío")
-                    return "", None
+                    res_docai = None
+
             except Exception as e:
                 logger.error(f"[DocAI] Página {pagina_num}: Error ({type(e).__name__}: {e})")
-                return "", None
+                res_docai = None
+        else:
+            logger.info(f"[OCR] Página {pagina_num}: Google Document AI no disponible")
 
-        def _ejecutar_rapid() -> tuple:
-            if not rapid_ocr_service.disponible:
-                return "", None
+        # ── Paso 2: RapidOCR — corre SIEMPRE (no solo como fallback) ─────
+        texto_rapid: str = ""
+        res_rapid = None
+
+        if rapid_ocr_service.disponible:
             try:
-                t_r, conf_r, res_r = rapid_ocr_service.procesar_imagen(
+                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(
                     img_np, pagina_num=pagina_num
                 )
-                t_r = t_r or ""
-                if t_r.strip():
+                texto_rapid = texto_rapid or ""
+                if texto_rapid.strip():
                     logger.info(
                         f"[RapidOCR] Página {pagina_num}: OK "
-                        f"({len(t_r)} chars, confianza={conf_r:.1f}%)"
+                        f"({len(texto_rapid)} chars, confianza={conf_rapid:.1f}%)"
                     )
-                    return t_r, res_r
                 else:
                     logger.warning(f"[RapidOCR] Página {pagina_num}: texto vacío")
-                    return "", None
+                    texto_rapid = ""
+                    res_rapid = None
             except Exception as e:
                 logger.error(f"[RapidOCR] Página {pagina_num}: Error ({type(e).__name__}: {e})")
-                return "", None
-
-        # ── Ejecución Concurrente: DocAI + RapidOCR simultáneos ──────────
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            fut_docai = executor.submit(_ejecutar_docai)
-            fut_rapid = executor.submit(_ejecutar_rapid)
-            texto_docai, res_docai = fut_docai.result()
-            texto_rapid, res_rapid = fut_rapid.result()
+                texto_rapid = ""
+                res_rapid = None
+        else:
+            logger.info(f"[RapidOCR] Página {pagina_num}: motor no disponible")
 
         # ── Paso 3: Fusión inteligente de resultados ─────────────────────
         # Caso A: Ambos motores tienen texto → fusionar

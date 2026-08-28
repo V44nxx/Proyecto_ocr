@@ -551,20 +551,18 @@ class OCRService:
                 .first()
             )
 
-            from app.services.colombia_geo_service import colombia_geo
-
             def _es_nombre_invalido(val: Optional[str]) -> bool:
                 if not val:
                     return True
                 v_up = str(val).strip().upper()
-                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}:
+                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
                     return True
-                if v_up in colombia_geo.DEPARTAMENTOS or v_up in colombia_geo.MUNICIPIOS_SET:
+                if any(hdr in v_up for hdr in ["REPUBLICA DE", "REGISTRADOR", "REGISTRADURIA", "ESTADO CIVIL", "INDICE DERECHO", "FIRMA DEL"]):
                     return True
                 return False
 
-            nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
-            apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
+            nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else (datos.get("nombres") or "POR REVISAR")
+            apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else (datos.get("apellidos") or "POR REVISAR")
 
             if not persona:
                 persona = Persona(

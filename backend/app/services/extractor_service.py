@@ -671,8 +671,26 @@ class ExtractorService:
             f_val = f_det.get(campo, {}).get("valor")
             b_val = b_det.get(campo, {}).get("valor")
 
-            if f_val and b_val and f_val != b_val:
-                # Conflicto entre caras: Marcar REVIEW_REQUIRED sin elegir en silencio
+            es_conflicto_real = False
+            if f_val and b_val and str(f_val).strip() != str(b_val).strip():
+                # Verificar si son fechas o números equivalentes antes de marcar conflicto
+                if "fecha" in campo:
+                    d_f = validador.parsear_fecha(str(f_val))
+                    d_b = validador.parsear_fecha(str(b_val))
+                    es_conflicto_real = bool(d_f and d_b and d_f != d_b)
+                elif campo == "identificacion":
+                    id_f = re.sub(r"\D", "", str(f_val))
+                    id_b = re.sub(r"\D", "", str(b_val))
+                    es_conflicto_real = bool(id_f and id_b and id_f != id_b)
+                elif campo in ["nombres", "apellidos"]:
+                    n_f = str(f_val).strip().upper()
+                    n_b = str(b_val).strip().upper()
+                    es_conflicto_real = not (n_f in n_b or n_b in n_f)
+                else:
+                    es_conflicto_real = str(f_val).strip().upper() != str(b_val).strip().upper()
+
+            if es_conflicto_real:
+                # Conflicto real entre caras
                 res["detalles_campos"][campo] = {
                     "valor": f_val,
                     "value": f_val,
@@ -699,12 +717,27 @@ class ExtractorService:
                     "value": None,
                     "valor_original": None,
                     "confidence": 0.0,
-                    "status": "MISSING_DATA" if campo in ["identificacion", "nombres", "apellidos"] else "REVIEW_REQUIRED",
-                    "page": res["pagina_frente"] or res["pagina_reverso"],
+                    "status": "MISSING",
+                    "page": res["pagina_frente"],
                     "source": ocr_engine,
-                    "reason": f"Sin evidencia suficiente en Frente ni Reverso",
-                    "evidence": ["Evidencia insuficiente"]
+                    "reason": "Campo no detectado en ninguna de las dos caras",
+                    "evidence": []
                 }
+
+        # Evaluación final de requerimiento de revisión para el grupo
+        tiene_datos_completos = bool(
+            res["identificacion"]
+            and not str(res["identificacion"]).startswith("SIN_ID")
+            and res["nombres"] and res["nombres"] != "POR REVISAR"
+            and res["apellidos"] and res["apellidos"] != "POR REVISAR"
+            and (res["fecha_expedicion"] or res["fecha_nacimiento"])
+        )
+        hay_conflicto = any(isinstance(d, dict) and d.get("status") == "REVIEW_REQUIRED" for d in res["detalles_campos"].values())
+        if tiene_datos_completos and not hay_conflicto:
+            res["requiere_revision"] = False
+            res["estado_registro"] = "VALID"
+        else:
+            res["requiere_revision"] = True
 
         res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
         res["campos_encontrados"] = [k for k, v in res.items() if k in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"] and v is not None]
@@ -937,9 +970,9 @@ class ExtractorService:
             return None
         res = " ".join(tokens)
         res_up = res.upper()
-        if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+        if res_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
             return None
-        if any(r in res_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO"]):
+        if any(r in res_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
             return None
         return res if len(res) >= 3 else None
 
@@ -948,7 +981,7 @@ class ExtractorService:
     ) -> Optional[str]:
         """
         Devuelve la primera línea posterior a `desde` que parezca
-        un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas ni nombres de lugares).
+        un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas).
         """
         for linea in lineas[desde + 1 : desde + 5]:
             linea = linea.strip()
@@ -962,9 +995,9 @@ class ExtractorService:
                 nombre_norm = validador.normalizar_nombre(linea)
                 if nombre_norm and len(nombre_norm.split()) <= 5:
                     norm_up = nombre_norm.upper()
-                    if norm_up in colombia_geo.DEPARTAMENTOS or norm_up in colombia_geo.MUNICIPIOS_SET:
+                    if norm_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                         continue
-                    if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO"]):
+                    if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
                         continue
                     return nombre_norm
         return None
@@ -1038,7 +1071,7 @@ class ExtractorService:
             if not res or len(res) < 3:
                 return None
             res_up = res.upper()
-            if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+            if res_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                 return None
             return res
 
@@ -1142,7 +1175,7 @@ class ExtractorService:
             if not res or len(res) < 3:
                 continue
             res_up = res.upper()
-            if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+            if res_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                 continue
             if NO_NOMBRE_HEADER.search(res_up):
                 continue

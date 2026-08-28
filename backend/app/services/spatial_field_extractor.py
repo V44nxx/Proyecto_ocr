@@ -480,16 +480,12 @@ class SpatialFieldExtractor:
                         if not limpio:
                             continue
                         limpio_up = limpio.upper()
-                        # Filtro robusto: sin dígitos, no es ruido, no es departamento/municipio, tiene >=1 palabras de >=3 letras
+                        # Filtro robusto: sin dígitos, no es ruido o cabecera documental, tiene >=1 palabras de >=3 letras
                         palabras_validas = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ]{3,}", limpio)
-                        es_ruido = limpio_up in RUIDO_NOMBRES or any(r in limpio_up for r in ["CEDULA", "COLOMBI", "REPUBLIC", "IDENTIF", "REGISTRAD", "EXPEDIC", "NACIMIENTO"])
-                        es_geo = (
-                            limpio_up in colombia_geo.DEPARTAMENTOS
-                            or limpio_up in colombia_geo.MUNICIPIOS_SET
-                            or any(dep == limpio_up for dep in ["HUILA", "CAQUETA", "CAQUETÁ", "VALLE", "NEIVA", "FLORENCIA", "CARTAGO", "MORELIA", "SOLANO", "PAUJIL", "DONCELLO", "BOGOTA", "MEDELLIN", "CALI"])
-                        )
+                        es_ruido = limpio_up in RUIDO_NOMBRES or any(r in limpio_up for r in ["CEDULA", "REPUBLIC", "IDENTIF", "REGISTRAD", "ESTADO CIVIL", "INDICE DERECHO", "HUELLA", "FIRMA"])
+                        es_geo_compuesto = any(r in limpio_up for r in ["DEPARTAMENTO DE", "MUNICIPIO DE", "LUGAR DE", "ALCALDIA"]) or limpio_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA"}
                         tiene_digito = bool(re.search(r"\d", t_val))
-                        if len(palabras_validas) >= 1 and not es_ruido and not es_geo and not tiene_digito and limpio not in cands_limpios:
+                        if len(palabras_validas) >= 1 and not es_ruido and not es_geo_compuesto and not tiene_digito and limpio not in cands_limpios:
                             cands_limpios.append(limpio)
 
                 if len(cands_limpios) >= 2:

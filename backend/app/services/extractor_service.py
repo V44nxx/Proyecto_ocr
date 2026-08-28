@@ -895,6 +895,11 @@ class ExtractorService:
         if not tokens or len(tokens) > 5:
             return None
         res = " ".join(tokens)
+        res_up = res.upper()
+        if res_up in colombia_geo.DEPARTAMENTOS or res_up in colombia_geo.MUNICIPIOS_SET:
+            return None
+        if any(r in res_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO"]):
+            return None
         return res if len(res) >= 3 else None
 
     def _siguiente_linea_valida(
@@ -902,7 +907,7 @@ class ExtractorService:
     ) -> Optional[str]:
         """
         Devuelve la primera línea posterior a `desde` que parezca
-        un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas como FIRMA).
+        un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas ni nombres de lugares).
         """
         for linea in lineas[desde + 1 : desde + 5]:
             linea = linea.strip()
@@ -915,6 +920,11 @@ class ExtractorService:
             if re.match(r"^[A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]{3,60}$", linea):
                 nombre_norm = validador.normalizar_nombre(linea)
                 if nombre_norm and len(nombre_norm.split()) <= 5:
+                    norm_up = nombre_norm.upper()
+                    if norm_up in colombia_geo.DEPARTAMENTOS or norm_up in colombia_geo.MUNICIPIOS_SET:
+                        continue
+                    if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO"]):
+                        continue
                     return nombre_norm
         return None
 

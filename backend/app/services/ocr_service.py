@@ -482,6 +482,21 @@ class OCRService:
                 .first()
             )
 
+            from app.services.colombia_geo_service import colombia_geo
+
+            def _es_nombre_invalido(val: Optional[str]) -> bool:
+                if not val:
+                    return True
+                v_up = str(val).strip().upper()
+                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}:
+                    return True
+                if v_up in colombia_geo.DEPARTAMENTOS or v_up in colombia_geo.MUNICIPIOS_SET:
+                    return True
+                return False
+
+            nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
+            apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
+
             if not persona:
                 persona = Persona(
                     documento_id=doc_id_val,
@@ -489,8 +504,8 @@ class OCRService:
                     pagina_frente=datos.get("pagina_frente"),
                     pagina_reverso=datos.get("pagina_reverso"),
                     numero_identificacion=str(num_doc),
-                    nombres=datos.get("nombres") or "POR REVISAR",
-                    apellidos=datos.get("apellidos") or "POR REVISAR",
+                    nombres=nombres_final,
+                    apellidos=apellidos_final,
                     fecha_nacimiento=fecha_nac,
                     fecha_expedicion=fecha_exp,
                     lugar_expedicion=datos.get("lugar_expedicion"),
@@ -521,10 +536,10 @@ class OCRService:
                 elif not persona.pagina_reverso and datos.get("pagina_frente") and persona.pagina_frente != datos.get("pagina_frente"):
                     persona.pagina_reverso = datos.get("pagina_frente")
 
-                # Nombres y Apellidos
-                if (not persona.nombres or persona.nombres == "POR REVISAR") and datos.get("nombres") and datos["nombres"] != "POR REVISAR":
+                # Nombres y Apellidos (preservar nombre existente válido y no sobrescribir con departamentos/municipios)
+                if _es_nombre_invalido(persona.nombres) and not _es_nombre_invalido(datos.get("nombres")):
                     persona.nombres = datos["nombres"]
-                if (not persona.apellidos or persona.apellidos == "POR REVISAR") and datos.get("apellidos") and datos["apellidos"] != "POR REVISAR":
+                if _es_nombre_invalido(persona.apellidos) and not _es_nombre_invalido(datos.get("apellidos")):
                     persona.apellidos = datos["apellidos"]
 
                 # Fechas y Lugar

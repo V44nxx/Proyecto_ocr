@@ -458,13 +458,19 @@ class SpatialFieldExtractor:
                         if cand_ape and not resultado_campos["apellidos"]["value"]:
                             resultado_campos["apellidos"] = {"value": " ".join(cand_ape), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS"}
 
-            # Fallback por líneas consecutivas limpias del frente (mejorado: validación de ruido)
+            # Fallback por líneas consecutivas limpias del frente (mejorado: validación de ruido y geografía)
             RUIDO_NOMBRES = {
                 "COLOMBIA", "REPUBLICA", "REPÚBLICA", "DE COLOMBIA", "PERSONAL", "CEDULA",
                 "CIUDADANIA", "CIUDADANÍA", "IDENTIFICACION", "IDENTIFICACIÓN", "NUIP",
-                "NUMERO", "NÚMERO", "CC", "POR REVISAR"
+                "NUMERO", "NÚMERO", "CC", "POR REVISAR", "REGISTRADOR", "REGISTRADURIA",
+                "INDICE", "DERECHO", "ESTATURA", "SEXO", "NACIMIENTO", "EXPEDICION", "EXPEDICIÓN",
+                "LUGAR", "FECHA", "HUELLA", "FIRMA", "DEPARTAMENTO", "MUNICIPIO"
             }
-            if not resultado_campos["apellidos"]["value"] or not resultado_campos["nombres"]["value"]:
+            # Un reverso puro de cédula nunca debe extraer nombres de personas por posición
+            texto_todo = " ".join(getattr(l, "text", "") for l in lines).upper()
+            es_reverso_puro = bool(re.search(r"\b(REGISTRADOR|INDICE DERECHO|ÍNDICE DERECHO|ESTATURA|G\.S\.?\s*RH|LUGAR DE NACIMIENTO)\b", texto_todo)) and not bool(re.search(r"\b(REPUBLICA DE COLOMBIA|IDENTIFICACION PERSONAL|CEDULA DE CIUDADANIA)\b", texto_todo))
+
+            if not es_reverso_puro and (not resultado_campos["apellidos"]["value"] or not resultado_campos["nombres"]["value"]):
                 cands_limpios = []
                 for l in lineas_frente:
                     y_pos = getattr(l, "y", 0.0)
@@ -473,11 +479,17 @@ class SpatialFieldExtractor:
                         limpio = self.limpiar_nombre(t_val)
                         if not limpio:
                             continue
-                        # Filtro robusto: sin dígitos, no es ruido, tiene >=1 palabras de >=3 letras
+                        limpio_up = limpio.upper()
+                        # Filtro robusto: sin dígitos, no es ruido, no es departamento/municipio, tiene >=1 palabras de >=3 letras
                         palabras_validas = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ]{3,}", limpio)
-                        es_ruido = limpio.upper() in RUIDO_NOMBRES or any(r in limpio.upper() for r in ["CEDULA", "COLOMBI", "REPUBLIC", "IDENTIF"])
+                        es_ruido = limpio_up in RUIDO_NOMBRES or any(r in limpio_up for r in ["CEDULA", "COLOMBI", "REPUBLIC", "IDENTIF", "REGISTRAD", "EXPEDIC", "NACIMIENTO"])
+                        es_geo = (
+                            limpio_up in colombia_geo.DEPARTAMENTOS
+                            or limpio_up in colombia_geo.MUNICIPIOS_SET
+                            or any(dep == limpio_up for dep in ["HUILA", "CAQUETA", "CAQUETÁ", "VALLE", "NEIVA", "FLORENCIA", "CARTAGO", "MORELIA", "SOLANO", "PAUJIL", "DONCELLO", "BOGOTA", "MEDELLIN", "CALI"])
+                        )
                         tiene_digito = bool(re.search(r"\d", t_val))
-                        if len(palabras_validas) >= 1 and not es_ruido and not tiene_digito and limpio not in cands_limpios:
+                        if len(palabras_validas) >= 1 and not es_ruido and not es_geo and not tiene_digito and limpio not in cands_limpios:
                             cands_limpios.append(limpio)
 
                 if len(cands_limpios) >= 2:

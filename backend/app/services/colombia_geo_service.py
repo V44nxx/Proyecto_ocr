@@ -241,6 +241,8 @@ class ColombiaGeoService:
         "PUERTO CARREÑO", "LA PRIMAVERA", "SANTA ROSALIA", "CUMARIBO"
     ]
 
+    MUNICIPIOS_SET: Set[str] = set(MUNICIPIOS)
+
     _PATRON_MUNICIPIOS_REGEX = None
 
     def __init__(self):

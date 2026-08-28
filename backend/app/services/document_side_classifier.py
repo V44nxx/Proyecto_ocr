@@ -17,15 +17,17 @@ class DocumentSideClassifier:
         r"\bREPUBLICA DE COLOMBIA\b", r"\bREPÚBLICA DE COLOMBIA\b",
         r"\bCEDULA DE CIUDADANIA\b", r"\bCÉDULA DE CIUDADANÍA\b",
         r"\bIDENTIFICACION PERSONAL\b", r"\bIDENTIFICACIÓN PERSONAL\b",
-        r"\bNOMBRES?\b", r"\bAPELLIDOS?\b", r"\bFECHA DE NACIMIENTO\b", r"\bSEXO\b",
+        r"\bNOMBRES?\b", r"\bAPELLIDOS?\b",
         r"\bNUIP\b"
     ]
 
     PATRONES_BACK_CEDULA = [
         r"\bFECHA Y LUGAR DE EXPEDICION\b", r"\bFECHA DE EXPEDICION\b", r"\bLUGAR DE EXPEDICION\b",
+        r"\bLUGAR DE NACIMIENTO\b",
         r"\bREGISTRADOR NACIONAL\b", r"\bREGISTRADURIA NACIONAL\b",
-        r"\bICCOL[A-Z0-9<]+\b", r"\b[0-9]{6}[0-9][MF][0-9]{6}\b",  # Patrón MRZ línea 2
-        r"\bINDICE DERECHO\b", r"\bÍNDICE DERECHO\b", r"\bESTATURA\b", r"\bG\.S\.?\s*RH\b"
+        r"\bICCOL[A-Z0-9<]+\b", r"\b[0-9]{6}[0-9][MF][0-9]{6}\b", r"\bP[-<][0-9]{7}\b",
+        r"\bINDICE DERECHO\b", r"\bÍNDICE DERECHO\b", r"\bESTATURA\b", r"\bG\.S\.?\s*RH\b",
+        r"\bHUELLA\b"
     ]
 
     PATRONES_FRONT_TARJETA = [
@@ -47,11 +49,11 @@ class DocumentSideClassifier:
                 "cara": "UNKNOWN",
                 "tipo_documento": "UNKNOWN",
                 "confianza": 0.0,
-                "reazons": ["Texto nulo o insuficiente"]
+                "reasons": ["Texto nulo o insuficiente"]
             }
 
         texto_up = texto.upper()
-        reazons = []
+        reasons = []
 
         # Puntuaciones
         score_front_c = 0
@@ -59,17 +61,17 @@ class DocumentSideClassifier:
         score_front_t = 0
         score_back_t = 0
 
-        # 1. Evaluar FRONT Cédula
+        # 1. Evaluar FRONT Cédula (exclusivos del anverso)
         for pat in self.PATRONES_FRONT_CEDULA:
             if re.search(pat, texto_up):
                 score_front_c += 2
-                reazons.append(f"Patrón FRENTE detectado: '{pat}'")
+                reasons.append(f"Patrón FRENTE detectado: '{pat}'")
 
-        # 2. Evaluar BACK Cédula (Especialmente MRZ)
+        # 2. Evaluar BACK Cédula (exclusivos del reverso)
         for pat in self.PATRONES_BACK_CEDULA:
             if re.search(pat, texto_up):
-                score_back_c += 3 if "ICCOL" in pat or "REGISTRADOR" in pat or "EXPEDICION" in pat else 2
-                reazons.append(f"Patrón REVERSO detectado: '{pat}'")
+                score_back_c += 3 if "ICCOL" in pat or "REGISTRADOR" in pat or "EXPEDICION" in pat or "INDICE DERECHO" in pat else 2
+                reasons.append(f"Patrón REVERSO detectado: '{pat}'")
 
         # 3. Evaluar Tarjetas
         if "TARJETA DE IDENTIDAD" in texto_up or "TARJETA IDENTIDAD" in texto_up:
@@ -78,14 +80,18 @@ class DocumentSideClassifier:
             if re.search(r"\bEXPEDICION\b|\bREGISTRADOR\b", texto_up):
                 score_back_t += 4
 
-        # Decisión final
-        # Si la página contiene puntuación alta tanto en FRENTE como en REVERSO, es una página de 2 caras (Frente + Reverso en 1 página)
-        if score_front_c >= 2 and score_back_c >= 2:
+        # Detección estricta de 2 caras en 1 sola página:
+        # Requiere marcadores fuertes de FRENTE (NOMBRES/APELLIDOS/REPUBLICA DE COLOMBIA/IDENTIFICACION PERSONAL)
+        # Y marcadores fuertes de REVERSO (REGISTRADOR/EXPEDICION/INDICE DERECHO/ESTATURA/RH/MRZ)
+        tiene_frente_fuerte = bool(re.search(r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|APELLIDOS|NOMBRES)\b", texto_up))
+        tiene_reverso_fuerte = bool(re.search(r"\b(FECHA Y LUGAR DE EXPEDICION|FECHA DE EXPEDICION|LUGAR DE EXPEDICION|REGISTRADOR NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
+
+        if tiene_frente_fuerte and tiene_reverso_fuerte:
             return {
                 "cara": "CEDULA_AMBOS_LADOS",
                 "tipo_documento": "CEDULA_CIUDADANIA",
                 "confianza": 0.99,
-                "reasons": reazons + ["Página contiene Frente y Reverso simultáneamente (2 caras en 1 página)"]
+                "reasons": reasons + ["Página contiene Frente y Reverso simultáneamente (2 caras en 1 página)"]
             }
 
         max_score = max(score_front_c, score_back_c, score_front_t, score_back_t)
@@ -95,22 +101,22 @@ class DocumentSideClassifier:
                 "cara": "UNKNOWN",
                 "tipo_documento": "UNKNOWN",
                 "confianza": 0.30,
-                "reasons": reazons + ["Sin patrones suficientes para clasificar cara"]
+                "reasons": reasons + ["Sin patrones suficientes para clasificar cara"]
             }
 
-        if max_score == score_back_c and score_back_c > score_front_c:
+        if score_back_c > score_front_c:
             return {
                 "cara": "CEDULA_BACK",
                 "tipo_documento": "CEDULA_CIUDADANIA",
                 "confianza": round(min(0.99, 0.70 + (score_back_c * 0.05)), 2),
-                "reasons": reazons
+                "reasons": reasons
             }
-        elif max_score == score_front_c and score_front_c >= score_back_c:
+        elif score_front_c >= score_back_c:
             return {
                 "cara": "CEDULA_FRONT",
                 "tipo_documento": "CEDULA_CIUDADANIA",
                 "confianza": round(min(0.99, 0.70 + (score_front_c * 0.05)), 2),
-                "reasons": reazons
+                "reasons": reasons
             }
         elif max_score == score_back_t:
             return {

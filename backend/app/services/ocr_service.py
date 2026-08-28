@@ -97,7 +97,19 @@ class OCRService:
             confianzas = []
 
             # ── Paso 1: Procesar páginas en paralelo controlado (max 3 simultáneas) ──
-            # Renderizado rápido de pixmaps en hilo principal (<50ms por página en PyMuPDF)
+            self._actualizar_progreso(
+                documento_id=documento_id,
+                db=db,
+                progreso=10,
+                paso=f"Iniciando OCR en paralelo ({total_paginas} páginas)...",
+                pagina_actual=0,
+                total_paginas=total_paginas,
+            )
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from app.services.document_side_classifier import document_side_classifier
+
+            # Renderizado rápido on-demand a 200 DPI (alta nitidez, 3x más rápido y liviano que 300 DPI)
             paginas_raw = []
             for i in range(total_paginas):
                 pagina = doc[i]
@@ -105,16 +117,13 @@ class OCRService:
                 necesita_ocr = self._necesita_ocr_imagen(texto_nativo)
                 img_np = None
                 if necesita_ocr:
-                    pix = pagina.get_pixmap(dpi=300)
+                    pix = pagina.get_pixmap(dpi=200)
                     img_np = self.image_processor._pixmap_to_numpy(pix)
                 paginas_raw.append((i + 1, texto_nativo, necesita_ocr, img_np))
 
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from app.services.document_side_classifier import document_side_classifier
-
             def _procesar_una_pagina(p_num: int, t_nativo: str, n_ocr: bool, i_np: Any) -> Dict[str, Any]:
                 if n_ocr and i_np is not None:
-                    logger.info(f"Página {p_num}/{total_paginas}: Aplicando OCR Dual (300 DPI)")
+                    logger.info(f"Página {p_num}/{total_paginas}: Aplicando OCR Dual (200 DPI)")
                     texto_p, motor_u, layout_e = self._ocr_imagen(
                         img_np=i_np, pagina_num=p_num
                     )

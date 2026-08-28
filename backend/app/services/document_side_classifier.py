@@ -82,11 +82,12 @@ class DocumentSideClassifier:
 
         # Detección estricta de 2 caras en 1 sola página:
         # Requiere marcadores fuertes de FRENTE (NOMBRES/APELLIDOS/REPUBLICA DE COLOMBIA/IDENTIFICACION PERSONAL)
-        # Y marcadores fuertes de REVERSO (REGISTRADOR/EXPEDICION/INDICE DERECHO/ESTATURA/RH/MRZ)
+        # Y marcadores EXCLUSIVOS de REVERSO (REGISTRADOR NACIONAL/INDICE DERECHO/ESTATURA/RH/MRZ ICCOL)
+        # NOTA: FECHA DE EXPEDICION está en el FRENTE de cédulas digitales, por lo que NO es exclusivo del reverso.
         tiene_frente_fuerte = bool(re.search(r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|APELLIDOS|NOMBRES)\b", texto_up))
-        tiene_reverso_fuerte = bool(re.search(r"\b(FECHA Y LUGAR DE EXPEDICION|FECHA DE EXPEDICION|LUGAR DE EXPEDICION|REGISTRADOR NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
+        tiene_reverso_exclusivo = bool(re.search(r"\b(REGISTRADOR NACIONAL|REGISTRADURIA NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
 
-        if tiene_frente_fuerte and tiene_reverso_fuerte:
+        if tiene_frente_fuerte and tiene_reverso_exclusivo:
             return {
                 "cara": "CEDULA_AMBOS_LADOS",
                 "tipo_documento": "CEDULA_CIUDADANIA",
@@ -123,14 +124,14 @@ class DocumentSideClassifier:
                 "cara": "TARJETA_IDENTIDAD_BACK",
                 "tipo_documento": "TARJETA_IDENTIDAD",
                 "confianza": 0.90,
-                "reasons": reazons
+                "reasons": reasons
             }
         elif max_score == score_front_t:
             return {
                 "cara": "TARJETA_IDENTIDAD_FRONT",
                 "tipo_documento": "TARJETA_IDENTIDAD",
                 "confianza": 0.90,
-                "reasons": reazons
+                "reasons": reasons
             }
 
         return {

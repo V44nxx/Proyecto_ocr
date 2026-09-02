@@ -64,9 +64,11 @@ class DocumentPairingService:
         Agrupa páginas clasificadas en DocumentGroups (un grupo = un documento físico real = una persona).
 
         Garantías:
-        1. Si la página i es FRENTE y la página i+1 es REVERSO (o UNKNOWN contiguo) → Se unifican en 1 solo grupo.
-        2. Si la cédula ya fue vista en cualquier página previa → Se fusiona sin crear duplicado.
-        3. En PDFs multipágina, un reverso o página desconocida huérfana NUNCA crea una persona extra si no tiene un documento independiente real.
+        1. CEDULA_AMBOS_LADOS → Siempre grupo independiente (ya contiene ambas caras en 1 página).
+        2. CEDULA_FRONT seguido de CEDULA_BACK/UNKNOWN consecutivo → Unifican en 1 solo grupo.
+        3. Si el ID ya fue visto → Fusionar sin crear duplicado.
+        4. Segunda pasada: reconciliar grupos huérfanos (BACK sin FRONT, o FRONT sin BACK) con
+           grupos existentes por coincidencia de ID.
         """
         if not paginas_clasificadas:
             return []
@@ -88,97 +90,80 @@ class DocumentPairingService:
             raw_id_actual = p_actual.get("numero_identificacion")
             id_actual = validador.limpiar_identificacion(raw_id_actual)
 
-            # Caso 1: Última página del documento
-            if i == total_pags - 1:
-                # Si su ID ya pertenece a un grupo existente → fusionar
-                if id_actual and id_actual in ids_vistos:
-                    grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_actual]), None)
-                    if grp_existente:
+            # ── Si el ID ya existe en un grupo previo → fusionar sin crear duplicado ──
+            if id_actual and id_actual in ids_vistos:
+                grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_actual]), None)
+                if grp_existente:
+                    if "BACK" in cara_actual and not grp_existente.back_page:
+                        grp_existente.back_page = p_actual
+                        grp_existente.reasons.append(f"Reverso pág {p_actual.get('pagina_numero')} fusionado por ID coincidente")
+                    elif ("FRONT" in cara_actual or cara_actual == "CEDULA_AMBOS_LADOS") and not grp_existente.front_page:
+                        grp_existente.front_page = p_actual
+                        grp_existente.reasons.append(f"Frente pág {p_actual.get('pagina_numero')} fusionado por ID coincidente")
+                    else:
                         grp_existente.other_pages.append(p_actual)
-                        break
+                    i += 1
+                    continue
 
-                # Si es un reverso huérfano sin ID en un PDF multipágina → descartar para no crear persona fantasma
-                if total_pags > 1 and "BACK" in cara_actual and not id_actual:
-                    logger.info(f"[DocumentPairingService] Página final {p_actual.get('pagina_numero')} descartada (reverso sin ID)")
-                    break
-
+            # ── CEDULA_AMBOS_LADOS → Siempre grupo independiente (NO intentar parear con siguiente) ──
+            if cara_actual == "CEDULA_AMBOS_LADOS":
                 grp = DocumentGroup(f"DOC-{counter:03d}")
-                if "BACK" in cara_actual:
-                    grp.back_page = p_actual
-                else:
-                    grp.front_page = p_actual
+                grp.front_page = p_actual  # Representa ambas caras
                 grp.tipo_documento = p_actual.get("tipo_documento", "CEDULA_CIUDADANIA")
                 grp.numero_identificacion = id_actual
-                grp.grouping_confidence = 0.90
-                grp.reasons = ["Documento de una sola página"]
-                grp.status = "VALID" if (id_actual and "UNKNOWN" not in str(grp.tipo_documento)) else "REVIEW_REQUIRED"
+                grp.grouping_confidence = 0.99
+                grp.reasons = [f"Página {p_actual.get('pagina_numero')} contiene ambas caras (AMBOS_LADOS)"]
+                grp.status = "VALID" if id_actual else "REVIEW_REQUIRED"
                 if id_actual:
                     ids_vistos[id_actual] = grp.group_id
                 grupos.append(grp)
                 counter += 1
-                break
-
-            # Caso 2: Hay una página siguiente p_siguiente (i + 1)
-            p_siguiente = paginas[i + 1]
-            cara_sig = p_siguiente.get("cara", "UNKNOWN")
-            raw_id_sig = p_siguiente.get("numero_identificacion")
-            id_sig = validador.limpiar_identificacion(raw_id_sig)
-
-            # ¿Son Frente y Reverso consecutivos de la misma persona?
-            mismo_id = bool(id_actual and id_sig and id_actual == id_sig)
-            ids_contradictorios = bool(id_actual and id_sig and id_actual != id_sig)
-
-            # Se unen en 1 solo grupo si:
-            # a) Tienen el mismo ID explícito
-            # b) p_actual es Frente (o 2 caras) y p_siguiente es Reverso / Desconocido, SIN IDs contradictorios
-            es_par_consecutivo = (
-                mismo_id or
-                (
-                    ("FRONT" in cara_actual or cara_actual == "CEDULA_AMBOS_LADOS") and
-                    ("BACK" in cara_sig or cara_sig == "UNKNOWN") and
-                    not ids_contradictorios
-                )
-            )
-
-            if es_par_consecutivo:
-                id_unificado = id_actual or id_sig
-                # Si el ID ya existe en un grupo previo → fusionar
-                if id_unificado and id_unificado in ids_vistos:
-                    grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_unificado]), None)
-                    if grp_existente:
-                        grp_existente.other_pages.extend([p_actual, p_siguiente])
-                        i += 2
-                        continue
-
-                grp = DocumentGroup(f"DOC-{counter:03d}")
-                grp.front_page = p_actual
-                grp.back_page = p_siguiente
-                grp.tipo_documento = p_actual.get("tipo_documento", "CEDULA_CIUDADANIA")
-                grp.numero_identificacion = id_unificado
-                grp.grouping_confidence = 0.98 if mismo_id else 0.92
-                grp.reasons = [f"Frente (Pág {p_actual.get('pagina_numero')}) + Reverso (Pág {p_siguiente.get('pagina_numero')}) consecutivos unificados"]
-                grp.status = "VALID" if (id_unificado and "UNKNOWN" not in str(grp.tipo_documento)) else "REVIEW_REQUIRED"
-                if id_unificado:
-                    ids_vistos[id_unificado] = grp.group_id
-                grupos.append(grp)
-                counter += 1
-                i += 2  # Consumir ambas páginas (Frente + Reverso)
+                i += 1
                 continue
 
-            # Caso 3: Página individual (1 página = 1 persona)
-            if id_actual and id_actual in ids_vistos:
-                grp_existente = next((g for g in grupos if g.group_id == ids_vistos[id_actual]), None)
-                if grp_existente:
-                    grp_existente.other_pages.append(p_actual)
-                    i += 1
-                    continue
-
-            # Si es un reverso huérfano sin ID en un PDF multipágina → descartar
+            # ── CEDULA_BACK sin ID: descartar si es reverso huérfano sin identificación ──
             if total_pags > 1 and "BACK" in cara_actual and not id_actual:
                 logger.info(f"[DocumentPairingService] Reverso Pág {p_actual.get('pagina_numero')} sin ID descartado")
                 i += 1
                 continue
 
+            # ── Para páginas FRONT: intentar emparejar con la siguiente BACK/UNKNOWN ──
+            if i < total_pags - 1 and ("FRONT" in cara_actual):
+                p_siguiente = paginas[i + 1]
+                cara_sig = p_siguiente.get("cara", "UNKNOWN")
+                raw_id_sig = p_siguiente.get("numero_identificacion")
+                id_sig = validador.limpiar_identificacion(raw_id_sig)
+
+                mismo_id = bool(id_actual and id_sig and id_actual == id_sig)
+                ids_contradictorios = bool(id_actual and id_sig and id_actual != id_sig)
+
+                # Emparejar si: mismo ID, o el siguiente es BACK/UNKNOWN sin IDs contradictorios
+                es_par_consecutivo = (
+                    mismo_id or
+                    (
+                        ("BACK" in cara_sig or cara_sig == "UNKNOWN") and
+                        not ids_contradictorios
+                    )
+                )
+
+                if es_par_consecutivo:
+                    id_unificado = id_actual or id_sig
+                    grp = DocumentGroup(f"DOC-{counter:03d}")
+                    grp.front_page = p_actual
+                    grp.back_page = p_siguiente
+                    grp.tipo_documento = p_actual.get("tipo_documento", "CEDULA_CIUDADANIA")
+                    grp.numero_identificacion = id_unificado
+                    grp.grouping_confidence = 0.98 if mismo_id else 0.92
+                    grp.reasons = [f"Frente (Pág {p_actual.get('pagina_numero')}) + Reverso (Pág {p_siguiente.get('pagina_numero')}) consecutivos"]
+                    grp.status = "VALID" if (id_unificado and "UNKNOWN" not in str(grp.tipo_documento)) else "REVIEW_REQUIRED"
+                    if id_unificado:
+                        ids_vistos[id_unificado] = grp.group_id
+                    grupos.append(grp)
+                    counter += 1
+                    i += 2
+                    continue
+
+            # ── Página individual (1 página = 1 persona) ──
             grp = DocumentGroup(f"DOC-{counter:03d}")
             if "BACK" in cara_actual:
                 grp.back_page = p_actual
@@ -187,7 +172,7 @@ class DocumentPairingService:
             grp.tipo_documento = p_actual.get("tipo_documento", "CEDULA_CIUDADANIA")
             grp.numero_identificacion = id_actual
             grp.grouping_confidence = 0.90
-            grp.reasons = ["Cédula en una sola página"]
+            grp.reasons = [f"Pág {p_actual.get('pagina_numero')} — documento individual ({cara_actual})"]
             grp.status = "VALID" if (id_actual and "UNKNOWN" not in str(grp.tipo_documento)) else "REVIEW_REQUIRED"
             if id_actual:
                 ids_vistos[id_actual] = grp.group_id
@@ -195,10 +180,45 @@ class DocumentPairingService:
             counter += 1
             i += 1
 
+        # ── SEGUNDA PASADA: Reconciliar grupos huérfanos (BACK sin FRONT, FRONT sin BACK) ──
+        # Busca grupos con solo reverso o solo frente y los fusiona con el grupo del mismo ID
+        grupos_huerfanos = [g for g in grupos if (g.back_page and not g.front_page) or (g.front_page and not g.back_page and g.front_page.get("cara") not in ["CEDULA_AMBOS_LADOS", "UNKNOWN"])]
+
+        for h_grp in grupos_huerfanos:
+            h_id = h_grp.numero_identificacion
+            if not h_id:
+                continue
+
+            # Buscar grupo COMPLEMENTARIO (si el huérfano es BACK, buscar FRONT, y viceversa)
+            es_back_huerfano = bool(h_grp.back_page and not h_grp.front_page)
+
+            for otro_grp in grupos:
+                if otro_grp.group_id == h_grp.group_id:
+                    continue
+                otro_id = otro_grp.numero_identificacion
+                if not otro_id or otro_id != h_id:
+                    continue
+
+                # Encontrado grupo complementario con mismo ID
+                if es_back_huerfano and otro_grp.front_page and not otro_grp.back_page:
+                    otro_grp.back_page = h_grp.back_page
+                    otro_grp.reasons.append(f"Reverso fusionado desde {h_grp.group_id} por ID coincidente")
+                    otro_grp.grouping_confidence = min(0.99, otro_grp.grouping_confidence + 0.05)
+                    grupos.remove(h_grp)
+                    logger.info(f"[DocumentPairingService] Fusión 2ª pasada: {h_grp.group_id} (BACK) → {otro_grp.group_id} por ID {h_id}")
+                    break
+                elif not es_back_huerfano and otro_grp.back_page and not otro_grp.front_page:
+                    otro_grp.front_page = h_grp.front_page
+                    otro_grp.reasons.append(f"Frente fusionado desde {h_grp.group_id} por ID coincidente")
+                    otro_grp.grouping_confidence = min(0.99, otro_grp.grouping_confidence + 0.05)
+                    grupos.remove(h_grp)
+                    logger.info(f"[DocumentPairingService] Fusión 2ª pasada: {h_grp.group_id} (FRONT) → {otro_grp.group_id} por ID {h_id}")
+                    break
+
         logger.info(
-            f"[DocumentPairingService] {len(paginas_clasificadas)} página(s) → "
+            f"[DocumentPairingService] {len(paginas_clasificadas)} pagina(s) -> "
             f"{len(grupos)} grupo(s) de persona(s) unificada(s). "
-            f"IDs únicos: {list(ids_vistos.keys())}"
+            f"IDs unicos: {list(ids_vistos.keys())}"
         )
         return grupos
 

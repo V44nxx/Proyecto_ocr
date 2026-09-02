@@ -18,7 +18,12 @@ class DocumentSideClassifier:
         r"\bCEDULA DE CIUDADANIA\b", r"\bCÉDULA DE CIUDADANÍA\b",
         r"\bIDENTIFICACION PERSONAL\b", r"\bIDENTIFICACIÓN PERSONAL\b",
         r"\bNOMBRES?\b", r"\bAPELLIDOS?\b",
-        r"\bNUIP\b"
+        r"\bNUIP\b",
+        # Patrones de texto OCR fusionado sin espacios (errores comunes de scanner)
+        r"REPUBLICADE", r"REPUBLICA\s*DE\s*COLOM", r"REPUPLICADE", r"REPUBLICADECOLOMBIA",
+        r"CEDULADECIUDADANIA", r"CEDULA\s*DE\s*CIUDAD", r"CEDUIA",
+        r"IDENTIFICACIONPERSONAL", r"IDENTIFICACION\s*PERSONAL",
+        r"COLOMBIAIDE", r"COLOMBLA", r"IDENTIFICACIONPERSONAI",
     ]
 
     PATRONES_BACK_CEDULA = [
@@ -88,7 +93,14 @@ class DocumentSideClassifier:
 
         # Detección estricta de 2 caras en 1 sola página:
         # Requiere marcadores fuertes de FRENTE y marcadores EXCLUSIVOS de REVERSO
-        tiene_frente_fuerte = bool(re.search(r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|APELLIDOS|NOMBRES)\b", texto_up))
+        tiene_frente_fuerte = bool(re.search(
+            r"\b(REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|CEDULA DE CIUDADANIA|CÉDULA DE CIUDADANÍA|"
+            r"TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|IDENTIFICACION PERSONAL|IDENTIFICACIÓN PERSONAL|"
+            r"APELLIDOS|NOMBRES)\b"
+            r"|REPUBLICADE|REPUBLICA\s*DE\s*COLOM|CEDULADECIUDADANIA|CEDULA\s*DE\s*CIUDAD"
+            r"|IDENTIFICACIONPERSONAL|IDENTIFICACION\s*PERSONAL|COLOMBLA|COLOMBIAIDE",
+            texto_up
+        ))
         tiene_reverso_exclusivo = bool(re.search(r"\b(REGISTRADOR NACIONAL|REGISTRADURIA NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
 
         if tiene_frente_fuerte and tiene_reverso_exclusivo:

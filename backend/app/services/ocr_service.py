@@ -260,12 +260,29 @@ class OCRService:
         Ahora busca palabras alfanuméricas de ≥ 3 caracteres.
         Si hay menos de 5 palabras útiles o menos de 50 chars,
         se considera página escaneada.
+
+        FIX v2: Aunque el texto nativo tenga ≥5 palabras, si NO contiene
+        ninguna keyword de cédula (NUIP, APELLIDOS, NOMBRES, CEDULA,
+        CIUDADANIA, etc.) se fuerza OCR de imagen ya que el PDF puede
+        tener texto vectorial genérico mezclado con la imagen escaneada.
         """
         if not texto or not texto.strip():
             return True
         texto_limpio = re.sub(r"\s+", " ", texto.strip())
-        palabras_validas = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ0-9]{3,}", texto_limpio)
-        return len(palabras_validas) < 5 or len(texto_limpio) < 50
+        palabras_validas = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{3,}", texto_limpio)
+        if len(palabras_validas) < 5 or len(texto_limpio) < 50:
+            return True
+        # Si hay palabras pero ninguna es keyword de documento de identidad,
+        # probablemente el PDF tiene texto genérico superpuesto a la imagen
+        KEYWORDS_CEDULA = re.compile(
+            r"\b(NUIP|APELLIDOS?|NOMBRES?|CEDULA|CÉDULA|CIUDADAN[IÍ]A|IDENTIF|NUMERO|NÚMERO|"
+            r"EXPEDICI[OÓ]N|NACIMIENTO|REGISTRAD|FIRMA|TARJETA)\b",
+            re.IGNORECASE
+        )
+        if not KEYWORDS_CEDULA.search(texto_limpio):
+            logger.info("[OCR] Texto nativo sin keywords de cédula — forzando OCR de imagen")
+            return True
+        return False
 
     # ──────────────────────────────────────────
     # OCR DE IMAGEN — MODO DUAL (DocAI + RapidOCR) + FALLBACK TESSERACT
@@ -376,6 +393,25 @@ class OCRService:
             else:
                 logger.info(f"[DualOCR] Página {pagina_num}: Ambos motores coincidentes — sin líneas adicionales")
                 res_final = res_docai
+            
+            # FIX: Si DocAI tiene layout con 0 líneas pero RapidOCR si tiene bounding boxes,
+            # usar el layout de RapidOCR como fuente espacial principal
+            docai_lines = []
+            if res_final.pages:
+                docai_lines = getattr(res_final.pages[0], "lines", [])
+            rapid_lines = []
+            if res_rapid and res_rapid.pages:
+                rapid_lines = getattr(res_rapid.pages[0], "lines", [])
+            if len(docai_lines) == 0 and len(rapid_lines) > 0:
+                logger.info(
+                    f"[DualOCR] Página {pagina_num}: Layout DocAI vacío — usando layout de RapidOCR "
+                    f"({len(rapid_lines)} líneas)"
+                )
+                res_final = StructuredDocumentAIResult(
+                    text=texto_fusionado,
+                    tiempo_ms=res_final.tiempo_ms,
+                    pages=res_rapid.pages,
+                )
             return texto_fusionado, motor, res_final
 
         # Caso B: Solo DocAI tiene texto

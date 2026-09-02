@@ -112,14 +112,16 @@ class SpatialFieldExtractor:
     }
 
     # Palabras de ruido/encabezados prohibidas como nombres o apellidos
+    # NOTA: Las partículas DE, LA, EL, LOS, LAS, Y, DEL no se excluyen aquí
+    # porque son válidas en nombres colombianos (ej: DE LA CRUZ, DEL CASTILLO).
+    # Se filtran solo si aparecen como única palabra en limpiar_nombre().
     NO_NOMBRE_HEADER = re.compile(
         r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|FEPUBLICA|REPUTE|COLOMBIA|COLOMB|COL|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
         r"IDENTIFICACIÓN|NUMERO|NÚMERO|NUIP|APELLIDOS?|NOMBRES?|PRIMER|SEGUNDO|FIRMA|FIRMAS|TITULAR|DIGITAL|"
         r"REGISTRAD.*|OISTRAD.*|NATIONAL|NACIONAL.*|NACIONA.*|COLESARIA.*|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
-        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|CS|BOR|BEREN|AMEL|SANZ|TAN|FA|BAR|BER|"
-        r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS\s+ARIEL|"
-        r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
-        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|DE|LA|EL|LOS|LAS|Y|DEL|POR|CON)\b",
+        r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
+        r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
+        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES)\b",
         re.IGNORECASE
     )
 
@@ -133,12 +135,19 @@ class SpatialFieldExtractor:
         re.IGNORECASE
     )
 
+    # Partículas de nombre que son válidas en conjunto pero no como única palabra
+    _PARTICULAS_SOLAS = re.compile(r"^(DE|LA|EL|LOS|LAS|Y|DEL|AL|SAN|SANTA|DOS|DAS|DOS)$", re.IGNORECASE)
+
     def limpiar_nombre(self, texto: str) -> Optional[str]:
         if not texto:
             return None
         t_norm = texto.replace("!", "I").replace("1", "I")
         toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w)]
-        res = " ".join(toks).strip()
+        # Filtrar tokens que sean solo partículas sin palabras propias de nombre
+        toks_propios = [t for t in toks if not self._PARTICULAS_SOLAS.match(t)]
+        if not toks_propios:
+            return None  # Solo partículas sin nombre real → descartar
+        res = " ".join(toks).strip()  # Mantener partículas EN CONTEXTO de un nombre válido
         return validador.normalizar_nombre(res) if len(res) >= 3 else None
 
     def identificar_etiquetas_espaciales(self, lines: List[Any], page_num: int = 1) -> Dict[str, SpatialCandidate]:
@@ -354,11 +363,13 @@ class SpatialFieldExtractor:
                     resultado_campos["fecha_nacimiento"] = {"value": dt.isoformat(), "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
 
         # ── 2. Identificación (NUIP / Cédula) ──
+        # Busca en toda la mitad superior de la página (y<0.55) para cubrir
+        # cédulas rotadas, Tarjetas de Identidad y layouts variables
         if not resultado_campos["identificacion"]["value"]:
             for l in lines:
                 t = getattr(l, "text", "").upper().strip()
                 y_pos = getattr(l, "y", 0.0)
-                if y_pos < 0.35:
+                if y_pos < 0.55:  # Ampliado desde 0.35 para capturar más layouts
                     matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
@@ -475,7 +486,7 @@ class SpatialFieldExtractor:
                 for l in lineas_frente:
                     y_pos = getattr(l, "y", 0.0)
                     t_val = getattr(l, "text", "")
-                    if 0.10 < y_pos < 0.50:
+                    if 0.08 < y_pos < 0.65:  # Ampliado para cubrir cédulas digitales y Tarjetas de Identidad
                         limpio = self.limpiar_nombre(t_val)
                         if not limpio:
                             continue
@@ -707,6 +718,10 @@ class SpatialFieldExtractor:
                 tokens = txt_clean.split()
                 tokens_validos = [t for t in tokens if len(t) >= 2 and not self.NO_NOMBRE_HEADER.search(t) and t not in ["BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA"]]
                 if not tokens_validos:
+                    continue
+                # Verificar que no sean solo partículas (DE, LA, EL, etc.) sin una palabra propia
+                tokens_propios = [t for t in tokens_validos if not self._PARTICULAS_SOLAS.match(t)]
+                if not tokens_propios:
                     continue
                 txt = " ".join(tokens_validos)
                 if len(txt) < 3 or txt in ["BLICA", "PUBLICA", "PÚBLICA", "DE COLOMBIA"]:

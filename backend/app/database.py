@@ -61,11 +61,12 @@ def get_db():
 
 
 def _hash_password(password: str) -> str:
-    """Hash bcrypt usando passlib (mismo motor que auth.py para verificar)"""
+    """Hash bcrypt usando bcrypt directo con fallback a passlib"""
+    pwd_bytes = password.encode("utf-8")[:72]
+    if _BCRYPT_OK:
+        return _bcrypt_raw.hashpw(pwd_bytes, _bcrypt_raw.gensalt(rounds=12)).decode("utf-8")
     if _PASSLIB_OK:
         return _pwd_ctx.hash(password)
-    if _BCRYPT_OK:
-        return _bcrypt_raw.hashpw(password.encode("utf-8"), _bcrypt_raw.gensalt(rounds=12)).decode("utf-8")
     raise RuntimeError("No hay motor de hashing disponible")
 
 

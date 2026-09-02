@@ -46,38 +46,40 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
 # Motor: passlib (bcrypt) con fallback a bcrypt directo
 # ──────────────────────────────────────────
 def crear_hash_password(password: str) -> str:
-    """Genera hash bcrypt de la contraseña usando passlib"""
+    """Genera hash bcrypt de la contraseña usando bcrypt directo"""
+    pwd_bytes = password.encode("utf-8")[:72]
+    if _BCRYPT_OK:
+        return _bcrypt.hashpw(pwd_bytes, _bcrypt.gensalt(rounds=12)).decode("utf-8")
     if _PASSLIB_OK:
         return _pwd_context.hash(password)
-    if _BCRYPT_OK:
-        return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
     raise RuntimeError("No hay motor de hashing disponible (instala passlib o bcrypt)")
 
 
 def verificar_password(password_plano: str, hash_guardado: str) -> bool:
-    """Verifica contraseña con triple fallback: passlib → bcrypt directo"""
+    """Verifica contraseña con triple fallback: bcrypt directo → passlib"""
     if not password_plano or not hash_guardado:
         return False
 
-    # Intento 1: passlib (maneja $2b$, $2a$, $2y$ y cualquier formato bcrypt)
+    pwd_bytes = password_plano.encode("utf-8")[:72]
+
+    # Intento 1: bcrypt directo
+    if _BCRYPT_OK:
+        try:
+            hash_b = hash_guardado.encode("utf-8") if isinstance(hash_guardado, str) else hash_guardado
+            result = _bcrypt.checkpw(pwd_bytes, hash_b)
+            logger.debug(f"[Auth] Verificación bcrypt directo: {result}")
+            return result
+        except Exception as e:
+            logger.warning(f"[Auth] bcrypt.checkpw falló: {e} — probando passlib")
+
+    # Intento 2: passlib (maneja $2b$, $2a$, $2y$ y cualquier formato bcrypt)
     if _PASSLIB_OK:
         try:
             result = _pwd_context.verify(password_plano, hash_guardado)
             logger.debug(f"[Auth] Verificación passlib: {result}")
             return result
         except Exception as e:
-            logger.warning(f"[Auth] passlib.verify falló: {type(e).__name__}: {e} — probando bcrypt directo")
-
-    # Intento 2: bcrypt directo
-    if _BCRYPT_OK:
-        try:
-            pwd_b = password_plano.encode("utf-8")
-            hash_b = hash_guardado.encode("utf-8") if isinstance(hash_guardado, str) else hash_guardado
-            result = _bcrypt.checkpw(pwd_b, hash_b)
-            logger.debug(f"[Auth] Verificación bcrypt directo: {result}")
-            return result
-        except Exception as e:
-            logger.error(f"[Auth] bcrypt.checkpw falló: {type(e).__name__}: {e}")
+            logger.warning(f"[Auth] passlib.verify falló: {type(e).__name__}: {e}")
 
     logger.error("[Auth] Todos los métodos de verificación fallaron")
     return False

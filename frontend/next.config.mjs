@@ -5,7 +5,7 @@ const nextConfig = {
     const backendUrl =
       process.env.INTERNAL_BACKEND_URL ||
       process.env.BACKEND_URL ||
-      "http://ocr-proyecto-fastapi-d5qhym:8000";
+      "https://api.v44nxx.online";
     return [
       {
         source: "/api/:path*",

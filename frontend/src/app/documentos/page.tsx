@@ -298,6 +298,13 @@ export default function DocumentosPage() {
           setProgresoSubida(pct);
           setBytesSubidos(progressEvent.loaded);
           setBytesTotales(progressEvent.total);
+          setDocsEnProceso((prev) =>
+            prev.map((d) => ({
+              ...d,
+              progreso: Math.max(5, Math.min(99, Math.round((pct * 0.9)))), // 5% a 90% durante subida de bytes
+              paso: `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
+            }))
+          );
         }
       });
 

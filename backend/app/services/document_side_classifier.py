@@ -29,10 +29,10 @@ class DocumentSideClassifier:
     PATRONES_BACK_CEDULA = [
         r"\bFECHA Y LUGAR DE EXPEDICION\b", r"\bFECHA DE EXPEDICION\b", r"\bLUGAR DE EXPEDICION\b",
         r"\bLUGAR DE NACIMIENTO\b",
-        r"\bREGISTRADOR NACIONAL\b", r"\bREGISTRADURIA NACIONAL\b",
-        r"\bICCOL[A-Z0-9<]+\b", r"\b[0-9]{6}[0-9][MF][0-9]{6}\b", r"\bP[-<][0-9]{7}\b",
+        r"REGISTRADOR\s*NACIONAL", r"REGISTRADURIA\s*NACIONAL",
+        r"I\s*C+C*[0O]L[A-Z0-9<]*", r"[0-9]{6}[0-9][MF][0-9]{6}", r"\bP[-<][0-9]{7}\b",
         r"\bINDICE DERECHO\b", r"\bÍNDICE DERECHO\b", r"\bESTATURA\b", r"\bG\.S\.?\s*RH\b",
-        r"\bHUELLA\b"
+        r"\bHUELLA\b", r"[A-Z0-9]+-[A-Z0-9]+-[MF]-[0-9]+", r"<{4,}"
     ]
 
     PATRONES_FRONT_TARJETA = [
@@ -69,6 +69,7 @@ class DocumentSideClassifier:
         es_tarjeta = bool(re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|T\.I\b|T\.I\.)\b", texto_up))
         es_extranjeria = bool(re.search(r"\b(CEDULA DE EXTRANJERIA|CEDULA EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
         es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
+        es_cedula_digital = "NUIP" in texto_up
 
         tipo_doc_base = "TARJETA_IDENTIDAD" if es_tarjeta else ("CEDULA_EXTRANJERIA" if es_extranjeria else ("PASAPORTE" if es_pasaporte else "CEDULA_CIUDADANIA"))
 
@@ -81,7 +82,10 @@ class DocumentSideClassifier:
         # 2. Evaluar BACK Cédula / Tarjeta (exclusivos del reverso)
         for pat in self.PATRONES_BACK_CEDULA:
             if re.search(pat, texto_up):
-                score_back_c += 3 if "ICCOL" in pat or "REGISTRADOR" in pat or "EXPEDICION" in pat or "INDICE DERECHO" in pat else 2
+                # En Cédula Digital, Estatura, G.S. y Expedición están en el anverso/frente
+                if es_cedula_digital and any(k in pat for k in ["ESTATURA", "G.S.", "EXPEDICION", "NACIMIENTO"]):
+                    continue
+                score_back_c += 3 if any(k in pat for k in ["C[0O]L", "REGISTRADOR", "INDICE DERECHO", "<{4,}", "[MF]"]) else 2
                 reasons.append(f"Patrón REVERSO detectado: '{pat}'")
 
         # 3. Evaluar Tarjetas específicamente
@@ -101,7 +105,19 @@ class DocumentSideClassifier:
             r"|IDENTIFICACIONPERSONAL|IDENTIFICACION\s*PERSONAL|COLOMBLA|COLOMBIAIDE",
             texto_up
         ))
-        tiene_reverso_exclusivo = bool(re.search(r"\b(REGISTRADOR NACIONAL|REGISTRADURIA NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b", texto_up))
+
+        if es_cedula_digital:
+            # En Cédula Digital, ESTATURA y G.S. están en el FRENTE.
+            # Los marcadores exclusivos de REVERSO son el MRZ (I CC0L / chevrons) y REGISTRADOR NACIONAL
+            tiene_reverso_exclusivo = bool(re.search(
+                r"(REGISTRADOR\s*NACIONAL|REGISTRADURIA\s*NACIONAL|INDICE\s*DERECHO|ÍNDICE\s*DERECHO|HUELLA|I\s*C+C*[0O]L|<{4,})",
+                texto_up
+            ))
+        else:
+            tiene_reverso_exclusivo = bool(re.search(
+                r"\b(REGISTRADOR\s*NACIONAL|REGISTRADURIA\s*NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b|<{4,}|[A-Z0-9]+-[A-Z0-9]+-[MF]-[0-9]+",
+                texto_up
+            ))
 
         if tiene_frente_fuerte and tiene_reverso_exclusivo:
             return {

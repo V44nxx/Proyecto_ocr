@@ -609,12 +609,25 @@ class OCRService:
                 v_up = str(val).strip().upper()
                 if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
                     return True
-                if any(hdr in v_up for hdr in ["REPUBLICA DE", "REGISTRADOR", "REGISTRADURIA", "ESTADO CIVIL", "INDICE DERECHO", "FIRMA DEL"]):
+                if any(hdr in v_up for hdr in [
+                    "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI",
+                    "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER"
+                ]):
                     return True
                 return False
 
-            nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else (datos.get("nombres") or "POR REVISAR")
-            apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else (datos.get("apellidos") or "POR REVISAR")
+            nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
+            apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
+
+            from app.services.spatial_field_extractor import spatial_field_extractor
+
+            # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ")
+            if nombres_final and nombres_final != "POR REVISAR":
+                toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                nombres_final = " ".join(toks).strip() or "POR REVISAR"
+            if apellidos_final and apellidos_final != "POR REVISAR":
+                toks = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                apellidos_final = " ".join(toks).strip() or "POR REVISAR"
 
             if not persona:
                 persona = Persona(

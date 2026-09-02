@@ -23,12 +23,16 @@ from app.services.colombia_geo_service import colombia_geo
 
 
 NO_NOMBRE_HEADER = re.compile(
-    r"\b(REPUBLICA|REPÚBLICA|REDUBLICA|REPUTE|COLOMBIA|COLOMB|COL|BIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|"
-    r"IDENTIFICACIÓN|NUMERO|NÚMERO|NUIP|APELLIDOS?|NOMBRES?|PRIMER|SEGUNDO|FIRMA|FIRMAS|TITULAR|DIGITAL|"
-    r"REGISTRAD.*|OISTRAD.*|NATIONAL|NACIONAL.*|NACIONA.*|COLESARIA.*|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL?|TARJETA|NACIMIENTO|"
+    r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|"
+    r"COLOMB|COLOMS|COL\b|BIA\b|"
+    r"CEDUL|CÉDUL|CEDUU|CEDUA|"
+    r"CIUDAD|CIUDAN|GIUDAD|"
+    r"IDENTIFIC|NUMERO|NÚMERO|NUIP|"
+    r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|TITULAR|DIGITAL|"
+    r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
     r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
     r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
-    r"BLICA|PUBLICA|PÚBLICA)\b",
+    r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L)",
     re.IGNORECASE
 )
 
@@ -85,6 +89,9 @@ class ExtractorService:
     KEYWORDS_NOMBRES = [
         r"NOMBRES",
         r"NOMBRE",
+        r"NOMDRES",
+        r"NOMRRES",
+        r"NOMRES",
         r"PRIMER\s+NOMBRE",
         r"SEGUNDO\s+NOMBRE",
     ]
@@ -92,6 +99,8 @@ class ExtractorService:
     KEYWORDS_APELLIDOS = [
         r"APELLIDOS",
         r"APELLIDO",
+        r"APELLDOS",
+        r"APELIDOS",
         r"PRIMER\s+APELLIDO",
         r"SEGUNDO\s+APELLIDO",
     ]
@@ -375,6 +384,22 @@ class ExtractorService:
         if datos_mrz:
             for k, v in datos_mrz.items():
                 if v:
+                    # Si el campo ya tiene un valor visual completo (ej: VANESSA ALEXANDRA)
+                    # y el MRZ viene truncado por el límite de 30 caracteres de la cédula (ej: VANESSA ALE),
+                    # conservar el nombre visual completo.
+                    if k in ["nombres", "apellidos"] and resultado.get(k):
+                        nom_actual = str(resultado[k]).strip().upper()
+                        nom_mrz = str(v).strip().upper()
+                        nom_act_nospace = nom_actual.replace(" ", "")
+                        nom_mrz_nospace = nom_mrz.replace(" ", "")
+                        if len(nom_act_nospace) > len(nom_mrz_nospace) and (nom_act_nospace.startswith(nom_mrz_nospace) or nom_mrz_nospace in nom_act_nospace):
+                            # Desegmentar usando el token de MRZ si nom_actual venía pegado sin espacios (ej: VANESSAALEXANDRA + VANESSA ALE -> VANESSA ALEXANDRA)
+                            toks_mrz = nom_mrz.split()
+                            if len(toks_mrz) >= 2 and nom_act_nospace.startswith(toks_mrz[0]):
+                                nom_deseg = f"{toks_mrz[0]} {nom_act_nospace[len(toks_mrz[0]):]}"
+                                resultado[k] = validador.normalizar_nombre(nom_deseg) or resultado[k]
+                            logger.info(f"[MRZ] Conservando nombre visual completo '{resultado[k]}' frente a MRZ truncado '{v}'")
+                            continue
                     resultado[k] = v
 
         # Si nombres y apellidos quedaron idénticos erróneamente por proximidad de labels:
@@ -443,7 +468,10 @@ class ExtractorService:
         # ── Estrategia 4: Scan libre de líneas de solo-letras entre encabezado y número ──
         # Ultra-fallback: si aún no hay apellidos, busca líneas de solo-letras en mayúsculas
         # ubicadas entre el encabezado (REPÚBLICA DE COLOMBIA) y el número de cédula.
-        if not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre:
+        # Solo ejecutar en páginas frontales o documentos completos, NUNCA en un reverso puro.
+        texto_todo = " ".join(lineas).upper()
+        es_reverso_puro = bool(re.search(r"\b(REGISTRADOR|INDICE DERECHO|ÍNDICE DERECHO|ESTATURA|G\.S\.?\s*RH|LUGAR DE NACIMIENTO)\b", texto_todo)) and not bool(re.search(r"\b(REPUBLICA DE COLOMBIA|IDENTIFICACION PERSONAL|CEDULA DE CIUDADANIA|NUIP)\b", texto_todo))
+        if not es_reverso_puro and (not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre):
             ape_scan = self._escanear_nombre_libre(lineas, resultado.get("identificacion"))
             if ape_scan and ape_scan not in invalidos_nombre:
                 resultado["apellidos"] = ape_scan
@@ -683,9 +711,15 @@ class ExtractorService:
                     id_b = re.sub(r"\D", "", str(b_val))
                     es_conflicto_real = bool(id_f and id_b and id_f != id_b)
                 elif campo in ["nombres", "apellidos"]:
-                    n_f = str(f_val).strip().upper()
-                    n_b = str(b_val).strip().upper()
-                    es_conflicto_real = not (n_f in n_b or n_b in n_f)
+                    # En reversos sin MRZ (cédula amarilla), el reverso no contiene nombres del ciudadano.
+                    # El frente es la fuente autoritativa de nombres y apellidos.
+                    b_source = b_det.get(campo, {}).get("source", "")
+                    if b_source != "MRZ":
+                        es_conflicto_real = False
+                    else:
+                        n_f = str(f_val).strip().upper()
+                        n_b = str(b_val).strip().upper()
+                        es_conflicto_real = not (n_f in n_b or n_b in n_f)
                 else:
                     es_conflicto_real = str(f_val).strip().upper() != str(b_val).strip().upper()
 
@@ -724,6 +758,12 @@ class ExtractorService:
                     "evidence": []
                 }
 
+        # Recalcular confianza real basada en los campos completados del grupo consolidado
+        campos_con_valor = [d for k, d in res["detalles_campos"].items() if k in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion"] and isinstance(d, dict) and d.get("confidence", 0) > 0]
+        if campos_con_valor:
+            conf_media = sum(d["confidence"] for d in campos_con_valor) / len(campos_con_valor) * 100.0
+            res["confianza_extraccion"] = round(conf_media, 1)
+
         # Evaluación final de requerimiento de revisión para el grupo
         tiene_datos_completos = bool(
             res["identificacion"]
@@ -733,7 +773,7 @@ class ExtractorService:
             and (res["fecha_expedicion"] or res["fecha_nacimiento"])
         )
         hay_conflicto = any(isinstance(d, dict) and d.get("status") == "REVIEW_REQUIRED" for d in res["detalles_campos"].values())
-        if tiene_datos_completos and not hay_conflicto:
+        if tiene_datos_completos and not hay_conflicto and res["confianza_extraccion"] >= 70.0:
             res["requiere_revision"] = False
             res["estado_registro"] = "VALID"
         else:
@@ -802,11 +842,17 @@ class ExtractorService:
         # ── Bloque MRZ nombres: apellidos<<nombres (TD1 de 3 líneas y TD2/TD3 de 2 líneas) ────
         for linea in lineas:
             linea_clean = linea.strip().replace(" ", "")
-            if "<<" in linea_clean:
-                partes = linea_clean.split("<<")
+            # Descartar línea 1 técnica de MRZ (ICC0L... o IDCOL...)
+            if re.match(r"^I[A-Z0-9<]{0,4}C[0O]L", linea_clean):
+                continue
+            # Normalizar separadores deteriorados por OCR (K< -> << y K inter-palabras -> <)
+            linea_mrz_norm = re.sub(r"[Kk]<+|<+[Kk]", "<<", linea_clean)
+            linea_mrz_norm = re.sub(r"([A-ZÁÉÍÓÚÜÑ]{3,})[Kk]([A-ZÁÉÍÓÚÜÑ]{3,})", r"\1<\2", linea_mrz_norm)
+            if "<<" in linea_mrz_norm:
+                partes = [p.replace("<", " ").strip() for p in linea_mrz_norm.split("<<") if p.strip()]
                 if len(partes) >= 2:
-                    p_ape = partes[0].replace("<", " ").strip()
-                    p_nom = partes[1].replace("<", " ").strip()
+                    p_ape = partes[0]
+                    p_nom = partes[1]
                     p_ape_letras = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", p_ape).strip()
                     p_nom_letras = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", p_nom).strip()
                     if p_ape_letras and len(p_ape_letras) >= 2:
@@ -834,6 +880,28 @@ class ExtractorService:
         3. Por líneas que sean solo números
         4. Corrección de errores OCR en candidatos
         """
+        # Estrategia 0: Código de barras / MRZ de reverso de cédula colombiana
+        # Ejemplos reales:
+        # A-4400500-01269103-M-0017660162-20211126 -> 17660162
+        # P-1500150-00284635-F-1010206409-20110317 -> 1010206409
+        # A-4401000-67152491-F-0029436345-20060922 -> 29436345
+        # A1500150-01091310M-0007556032-20190805 -> 7556032
+        # 9512243F3501232C0L1117266865<1 -> 1117266865
+        patrones_barcode_reverso = [
+            r"[A-Z0-9]+-[A-Z0-9]+-[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+            r"[A-Z0-9]+-[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+            r"[A-Z0-9]+[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+            r"[0-9]{6,8}[MF][0-9]{7}C[0O]L0*([1-9][0-9]{5,9})",
+            r"COL0*([1-9][0-9]{5,9})[<0-9]",
+        ]
+        for pat_bar in patrones_barcode_reverso:
+            match_bar = re.search(pat_bar, texto)
+            if match_bar:
+                valido, num_bar = validador.validar_cedula(match_bar.group(1))
+                if valido:
+                    logger.debug(f"Cédula por código de barras reverso: {num_bar}")
+                    return num_bar
+
         # Estrategia 1: Por keyword
         for keyword in self.KEYWORDS_IDENTIFICACION:
             patron = re.compile(

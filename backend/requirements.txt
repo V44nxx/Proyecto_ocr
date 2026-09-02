@@ -50,6 +50,7 @@ xlrd==2.0.1
 
 # Utilidades
 rapidfuzz>=3.8.0
+scipy>=1.13.0
 python-dotenv==1.0.1
 aiofiles==24.1.0
 httpx==0.27.2

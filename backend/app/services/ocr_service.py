@@ -537,16 +537,32 @@ class OCRService:
             apellidos_val = datos.get("apellidos")
             confianza = float(datos.get("confianza_extraccion") or 0.0)
 
-            # Criterio estricto: Una persona válida debe tener Cédula extraída O (Nombres y Apellidos válidos).
+            # Criterio estricto de Entidad Ciudadana:
+            # Una nueva persona se crea si tiene identificación válida O (nombres y apellidos).
+            # Se descartan reversos huérfanos que no tienen cara frontal ni nombres.
             tiene_identificacion = bool(id_limpio and not id_limpio.startswith("SIN_ID"))
             tiene_nombres = bool(nombres_val and str(nombres_val).strip() and nombres_val != "POR REVISAR")
             tiene_apellidos = bool(apellidos_val and str(apellidos_val).strip() and apellidos_val != "POR REVISAR")
-
-            if not tiene_identificacion and not (tiene_nombres and tiene_apellidos):
-                logger.info("Omitiendo guardado: la página/grupo no contiene identificación ni nombres válidos (evita personas fantasma)")
-                return None
+            es_reverso_huerfano = bool(datos.get("pagina_reverso") and not datos.get("pagina_frente") and not (tiene_nombres or tiene_apellidos))
 
             num_doc = id_limpio if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
+
+            # Verificar si ya existe en BD para unificar
+            persona_existente = (
+                db.query(Persona)
+                .filter(Persona.numero_identificacion == str(num_doc))
+                .first()
+                if tiene_identificacion else None
+            )
+
+            # Si es un reverso huérfano sin nombres y no existe en BD, omitir para no crear persona fantasma
+            if es_reverso_huerfano and not persona_existente:
+                logger.info(f"Omitiendo guardado: página/grupo {datos.get('grupo_documento_id')} es reverso huérfano sin nombres (evita personas fantasma)")
+                return None
+
+            if not tiene_identificacion and not (tiene_nombres and tiene_apellidos):
+                logger.info("Omitiendo guardado: sin identificación ni nombres válidos")
+                return None
 
             doc_exists = (
                 db.query(Documento).filter(Documento.id == documento_id).first()

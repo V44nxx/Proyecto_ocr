@@ -141,7 +141,25 @@ def obtener_comparacion(
     comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
-    return ComparacionResponse.model_validate(comparacion)
+
+    res = ComparacionResponse.model_validate(comparacion)
+    try:
+        p_check = Path(comparacion.ruta_archivo) if comparacion.ruta_archivo else None
+        res.archivo_existe = (p_check.exists() if p_check else False)
+        up_dir = settings.upload_path
+        res.archivos_en_uploads = [f.name for f in up_dir.glob("comp_*")] if up_dir.exists() else []
+        if res.archivo_existe and p_check:
+            try:
+                df_test = comparacion_service.cargar_excel(str(p_check))
+                res.error_carga_excel = f"OK: {len(df_test)} filas"
+            except Exception as e_test:
+                res.error_carga_excel = f"Error al cargar: {e_test}"
+        else:
+            res.error_carga_excel = f"Archivo no encontrado en {p_check}"
+    except Exception as e_diag:
+        res.error_carga_excel = f"Diag error: {e_diag}"
+
+    return res
 
 
 @router.get("/{comparacion_id}/diferencias", response_model=List[DiferenciaResponse], summary="Diferencias encontradas")

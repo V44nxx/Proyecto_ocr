@@ -10,6 +10,9 @@ class ComparacionResponse(BaseModel):
     nombre_original: str
     nombre_archivo: Optional[str] = None
     ruta_archivo: Optional[str] = None
+    archivo_existe: Optional[bool] = None
+    archivos_en_uploads: Optional[List[str]] = None
+    error_carga_excel: Optional[str] = None
     estado: str
     total_registros_bd: int
     total_registros_excel: int

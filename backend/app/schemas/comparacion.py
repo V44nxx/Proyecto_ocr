@@ -8,6 +8,8 @@ import uuid
 class ComparacionResponse(BaseModel):
     id: uuid.UUID
     nombre_original: str
+    nombre_archivo: Optional[str] = None
+    ruta_archivo: Optional[str] = None
     estado: str
     total_registros_bd: int
     total_registros_excel: int

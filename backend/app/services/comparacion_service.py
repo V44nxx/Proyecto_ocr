@@ -543,33 +543,131 @@ class ComparacionService:
         if not comparacion:
             raise ValueError("Comparación no encontrada")
 
-        # 1. Cargar datos del Excel original si existe
-        df_excel = pd.DataFrame()
-        excel_map: Dict[str, Dict[str, Any]] = {}
-        if comparacion.ruta_archivo and Path(comparacion.ruta_archivo).exists():
-            try:
-                df_excel = self.cargar_excel(comparacion.ruta_archivo)
-                if not df_excel.empty and "numero_identificacion" in df_excel.columns:
-                    for _, r in df_excel.iterrows():
-                        num_id = str(r["numero_identificacion"]).strip()
-                        if num_id:
-                            excel_map[num_id] = r.to_dict()
-            except Exception as e:
-                logger.warning(f"No se pudo cargar el archivo Excel original: {e}")
-
-        # 2. Cargar personas de la BD
+        # 1. Cargar personas de la BD
         personas_bd = db.query(Persona).all()
         bd_map: Dict[str, Persona] = {
             str(p.numero_identificacion).strip(): p for p in personas_bd if p.numero_identificacion
         }
 
-        # 3. Cargar diferencias calculadas
+        # 2. Cargar diferencias calculadas
         diferencias = db.query(Diferencia).filter(
             Diferencia.comparacion_id == comparacion_id
         ).all()
         difs_por_id: Dict[str, List[Diferencia]] = {}
         for d in diferencias:
             difs_por_id.setdefault(str(d.numero_identificacion).strip(), []).append(d)
+
+        # 3. Localizar y cargar archivo Excel original
+        df_excel = pd.DataFrame()
+        excel_map: Dict[str, Dict[str, Any]] = {}
+
+        rutas_a_probar = []
+        if comparacion.ruta_archivo:
+            r_norm = str(comparacion.ruta_archivo).replace("\\", "/")
+            nom_base = Path(r_norm).name
+            rutas_a_probar.extend([
+                Path(r_norm),
+                settings.upload_path / nom_base,
+                Path("./uploads") / nom_base,
+                Path("/app/uploads") / nom_base,
+                Path("../uploads") / nom_base,
+            ])
+        if getattr(comparacion, "nombre_archivo", None):
+            nom_arch = comparacion.nombre_archivo
+            rutas_a_probar.extend([
+                settings.upload_path / nom_arch,
+                Path("./uploads") / nom_arch,
+                Path("/app/uploads") / nom_arch,
+                Path("../uploads") / nom_arch,
+            ])
+
+        archivo_excel_encontrado: Optional[Path] = None
+        for r_cand in rutas_a_probar:
+            if r_cand and r_cand.exists() and r_cand.is_file():
+                archivo_excel_encontrado = r_cand
+                break
+
+        if archivo_excel_encontrado:
+            try:
+                df_excel = self.cargar_excel(str(archivo_excel_encontrado))
+                if not df_excel.empty and "numero_identificacion" in df_excel.columns:
+                    for _, r in df_excel.iterrows():
+                        num_id = str(r["numero_identificacion"]).strip()
+                        if num_id:
+                            excel_map[num_id] = r.to_dict()
+                logger.info(f"Excel cargado desde {archivo_excel_encontrado}: {len(excel_map)} registros")
+            except Exception as e:
+                logger.warning(f"Error cargando archivo Excel desde {archivo_excel_encontrado}: {e}")
+
+        # 4. Fallback de alta fidelidad: Si el archivo físico fue eliminado/limpiado por reinicio de contenedor,
+        # reconstruir el listado de personas del Excel Oficial a partir de la BD
+        if not excel_map:
+            logger.info("Activando reconstrucción de alta fidelidad de excel_map desde registros de base de datos...")
+            ids_sobrantes = {
+                str(d.numero_identificacion).strip()
+                for d in diferencias
+                if d.tipo_diferencia == "nuevo_bd"
+            }
+
+            def _desempaquetar_texto(val: Any) -> str:
+                if not val: return ""
+                s = str(val).strip()
+                if s.startswith("{") and s.endswith("}"):
+                    try:
+                        import ast
+                        obj = ast.literal_eval(s)
+                        n = f"{obj.get('nombres', '')} {obj.get('apellidos', '')}".strip() or str(obj.get('nombre', '')).strip()
+                        st = f" · {obj.get('estado', '')}" if obj.get('estado') else ""
+                        if n: return f"{n}{st}"
+                    except Exception:
+                        pass
+                return s
+
+            # A. Personas en Excel que no estaban en BD (Faltantes)
+            for d in diferencias:
+                if d.tipo_diferencia == "faltante_bd":
+                    id_num = str(d.numero_identificacion).strip()
+                    nombre_limpio = _desempaquetar_texto(d.valor_excel) or "Inscrito"
+                    excel_map[id_num] = {
+                        "numero_identificacion": id_num,
+                        "nombres": nombre_limpio,
+                        "apellidos": "",
+                        "estado": "Inscrito / Preinscrito"
+                    }
+
+            # B. Personas con diferencias en algún campo
+            for d in diferencias:
+                if d.tipo_diferencia == "diferente":
+                    id_num = str(d.numero_identificacion).strip()
+                    p = bd_map.get(id_num)
+                    if id_num not in excel_map:
+                        excel_map[id_num] = {
+                            "numero_identificacion": id_num,
+                            "nombres": p.nombres if p else "",
+                            "apellidos": p.apellidos if p else "",
+                            "fecha_nacimiento": p.fecha_nacimiento.isoformat() if (p and p.fecha_nacimiento) else "",
+                            "fecha_expedicion": p.fecha_expedicion.isoformat() if (p and p.fecha_expedicion) else "",
+                            "lugar_expedicion": p.lugar_expedicion if p else "",
+                            "sexo": p.sexo if p else "",
+                            "estado": "Inscrito"
+                        }
+                    excel_map[id_num][d.campo] = d.valor_excel
+
+            # C. Personas coincidentes (están en BD y no son sobrantes)
+            for id_num, p in bd_map.items():
+                if id_num not in ids_sobrantes and id_num not in excel_map:
+                    excel_map[id_num] = {
+                        "numero_identificacion": id_num,
+                        "nombres": p.nombres or "",
+                        "apellidos": p.apellidos or "",
+                        "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
+                        "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else "",
+                        "lugar_expedicion": p.lugar_expedicion or "",
+                        "sexo": p.sexo or "",
+                        "estado": "Inscrito"
+                    }
+
+            logger.info(f"Reconstrucción exitosa: {len(excel_map)} personas identificadas en Excel Oficial")
 
         # 4. Construir universo completo de registros
         todos_los_ids = sorted(list(set(excel_map.keys()) | set(bd_map.keys())))

@@ -7,8 +7,9 @@ import toast from "react-hot-toast";
 import {
   GitCompare, Upload, FileSpreadsheet, Download,
   CheckCircle, AlertTriangle, RefreshCw, BarChart3,
-  Plus, Minus, Equal,
+  Plus, Minus, Equal, Search,
 } from "lucide-react";
+
 import Sidebar from "@/components/ui/Sidebar";
 import { apiComparacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -27,9 +28,11 @@ export default function ComparacionPage() {
   const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(null);
   const [diferencias, setDiferencias] = useState<Diferencia[]>([]);
   const [filtroDif, setFiltroDif] = useState<string>("todos");
+  const [busqueda, setBusqueda] = useState<string>("");
   const [subiendo, setSubiendo] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [descargando, setDescargando] = useState(false);
+  const [corrigiendoId, setCorrigiendoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
@@ -50,6 +53,43 @@ export default function ComparacionPage() {
       setDiferencias(data);
     } catch { toast.error("Error cargando diferencias"); }
   };
+
+  const aplicarCorreccion = async (d: Diferencia) => {
+    if (!comparacionActiva || !d.valor_excel || !d.campo) return;
+    setCorrigiendoId(d.id);
+    try {
+      await apiComparacion.corregirCampo(comparacionActiva.id, {
+        numero_identificacion: d.numero_identificacion,
+        campo: d.campo,
+        nuevo_valor: d.valor_excel,
+      });
+      toast.success(`Campo '${d.campo}' actualizado a '${d.valor_excel}' en BD`);
+
+      // Actualizar estado local
+      setDiferencias((prev) =>
+        prev.map((item) =>
+          item.id === d.id
+            ? { ...item, valor_bd: d.valor_excel, tipo_diferencia: "igual" }
+            : item
+        )
+      );
+
+      // Actualizar conteos
+      setComparacionActiva((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          total_diferentes: Math.max(0, prev.total_diferentes - 1),
+          total_coincidentes: prev.total_coincidentes + 1,
+        };
+      });
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Error al actualizar campo"));
+    } finally {
+      setCorrigiendoId(null);
+    }
+  };
+
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -109,9 +149,22 @@ export default function ComparacionPage() {
     finally { setDescargando(false); }
   };
 
-  const difFiltradas = filtroDif === "todos"
-    ? diferencias
-    : diferencias.filter((d) => d.tipo_diferencia === filtroDif);
+  const cantDif = diferencias.filter((d) => d.tipo_diferencia === "diferente").length;
+  const cantFal = diferencias.filter((d) => d.tipo_diferencia === "faltante_bd").length;
+  const cantNue = diferencias.filter((d) => d.tipo_diferencia === "nuevo_bd").length;
+
+  const difFiltradas = diferencias
+    .filter((d) => filtroDif === "todos" || d.tipo_diferencia === filtroDif)
+    .filter((d) => {
+      if (!busqueda) return true;
+      const q = busqueda.toLowerCase();
+      return (
+        d.numero_identificacion.toLowerCase().includes(q) ||
+        (d.campo && d.campo.toLowerCase().includes(q)) ||
+        (d.valor_bd && d.valor_bd.toLowerCase().includes(q)) ||
+        (d.valor_excel && d.valor_excel.toLowerCase().includes(q))
+      );
+    });
 
   return (
     <div className="flex min-h-screen">
@@ -120,11 +173,11 @@ export default function ComparacionPage() {
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">
             <GitCompare className="w-5 h-5 text-primary-400" />
-            <span className="text-primary-400 text-sm font-medium">Análisis</span>
+            <span className="text-primary-400 text-sm font-medium">Análisis y Auditoría</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Comparación de Datos</h1>
           <p className="text-slate-400 mt-1">
-            Compara registros de la BD con archivos Excel externos
+            Coteja los registros extraídos por OCR con planillas oficiales (SENA/SGC), audita discrepancias y descarga el reporte consolidado.
           </p>
         </div>
 
@@ -135,7 +188,7 @@ export default function ComparacionPage() {
             <div className="card page-enter">
               <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
                 <Upload className="w-4 h-4 text-primary-400" />
-                Cargar Excel Externo
+                Cargar Planilla Oficial (Excel)
               </h2>
               <div
                 {...getRootProps()}
@@ -148,21 +201,21 @@ export default function ComparacionPage() {
                   <FileSpreadsheet className="w-10 h-10 text-green-400" />
                 )}
                 <p className="text-sm text-slate-300 text-center">
-                  {subiendo ? "Procesando comparación..." :
+                  {subiendo ? "Procesando cotejo de datos..." :
                    isDragActive ? "Suelta el archivo" :
-                   "Arrastra un .xlsx o haz clic"}
+                   "Arrastra un .xlsx/.xls o haz clic"}
                 </p>
                 <p className="text-xs text-slate-600">XLSX · XLS</p>
               </div>
               <p className="text-xs text-slate-500 mt-3">
-                El Excel debe tener columna: <code className="text-primary-400">identificacion</code> (o cedula, cc)
+                Detecta automáticamente columnas como: <code className="text-primary-400">identificacion</code>, <code className="text-primary-400">nombre</code>, <code className="text-primary-400">apellido</code>, etc.
               </p>
             </div>
 
             {/* Historial */}
             <div className="card page-enter">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold text-white">Historial</h2>
+                <h2 className="text-base font-semibold text-white">Historial de Comparaciones</h2>
                 <button onClick={cargarComparaciones} className="text-slate-500 hover:text-primary-400 transition-colors">
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -192,7 +245,7 @@ export default function ComparacionPage() {
                         </span>
                         {c.estado === "completado" && (
                           <span className="text-[10px] text-slate-500">
-                            {c.total_diferentes} diferencias
+                            {c.total_diferentes} difs · {c.total_coincidentes} OK
                           </span>
                         )}
                       </div>
@@ -209,33 +262,39 @@ export default function ComparacionPage() {
               <>
                 {/* Stats de comparación */}
                 <div className="card page-enter">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-primary-400" />
-                      Resultados: {comparacionActiva.nombre_original}
-                    </h2>
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-primary-400" />
+                        Resultados: {comparacionActiva.nombre_original}
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Auditoría automática de calidad de extracción vs planilla oficial
+                      </p>
+                    </div>
                     <button
                       onClick={descargarReporte}
                       disabled={descargando}
-                      className="btn-success text-sm py-2 px-4"
+                      className="btn-success text-xs py-2 px-3.5 flex items-center gap-2 shadow-lg shadow-green-500/10 hover:shadow-green-500/20 transition-all"
+                      title="Descargar reporte completo en formato Excel con 5 hojas"
                     >
-                      {descargando ? <div className="spinner" /> : <Download className="w-4 h-4" />}
-                      Reporte Excel
+                      {descargando ? <div className="spinner w-4 h-4" /> : <Download className="w-4 h-4" />}
+                      <span>Descargar Auditoría XLSX</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
                     {[
-                      { label: "Total BD", value: comparacionActiva.total_registros_bd, color: "text-blue-400" },
+                      { label: "Total BD (OCR)", value: comparacionActiva.total_registros_bd, color: "text-blue-400" },
                       { label: "Total Excel", value: comparacionActiva.total_registros_excel, color: "text-slate-300" },
                       { label: "Coincidentes", value: comparacionActiva.total_coincidentes, color: "text-green-400" },
-                      { label: "Diferentes", value: comparacionActiva.total_diferentes, color: "text-yellow-400" },
-                      { label: "Faltantes BD", value: comparacionActiva.total_faltantes_bd, color: "text-red-400" },
-                      { label: "Nuevos BD", value: comparacionActiva.total_nuevos_bd, color: "text-purple-400" },
+                      { label: "Con Diferencias", value: comparacionActiva.total_diferentes, color: "text-yellow-400" },
+                      { label: "Faltantes en BD", value: comparacionActiva.total_faltantes_bd, color: "text-red-400" },
+                      { label: "Sobrantes en BD", value: comparacionActiva.total_nuevos_bd, color: "text-purple-400" },
                     ].map((s) => (
-                      <div key={s.label} className="bg-dark-800 rounded-xl p-3 text-center border border-white/[0.05]">
-                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                        <p className="text-slate-500 text-xs mt-0.5">{s.label}</p>
+                      <div key={s.label} className="bg-dark-800 rounded-xl p-2.5 text-center border border-white/[0.05]">
+                        <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                        <p className="text-slate-500 text-[11px] mt-0.5 leading-tight">{s.label}</p>
                       </div>
                     ))}
                   </div>
@@ -243,58 +302,120 @@ export default function ComparacionPage() {
 
                 {/* Tabla de diferencias */}
                 <div className="card page-enter">
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <h3 className="text-base font-semibold text-white">Detalle de Diferencias</h3>
-                    <div className="flex gap-2 ml-auto">
-                      {["todos", "diferente", "faltante_bd", "nuevo_bd"].map((tipo) => (
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { id: "todos", label: "Todos", count: diferencias.length },
+                        { id: "diferente", label: "Diferencias", count: cantDif },
+                        { id: "faltante_bd", label: "Faltantes en BD", count: cantFal },
+                        { id: "nuevo_bd", label: "Sobrantes en BD", count: cantNue },
+                      ].map((tab) => (
                         <button
-                          key={tipo}
-                          onClick={() => setFiltroDif(tipo)}
-                          className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
-                            filtroDif === tipo
-                              ? "bg-primary-500 border-primary-500 text-white"
+                          key={tab.id}
+                          onClick={() => setFiltroDif(tab.id)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                            filtroDif === tab.id
+                              ? "bg-primary-500 border-primary-500 text-white font-medium"
                               : "border-white/10 text-slate-400 hover:border-white/20"
                           }`}
                         >
-                          {tipo === "todos" ? "Todos" :
-                           tipo === "diferente" ? "Diferentes" :
-                           tipo === "faltante_bd" ? "Faltantes" : "Nuevos"}
+                          <span>{tab.label}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                            filtroDif === tab.id ? "bg-white/20 text-white" : "bg-white/5 text-slate-400"
+                          }`}>
+                            {tab.count}
+                          </span>
                         </button>
                       ))}
+                    </div>
+
+                    <div className="relative w-full sm:w-56">
+                      <input
+                        type="text"
+                        placeholder="Buscar por cédula o dato..."
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        className="input-base text-xs py-1.5 pl-8 pr-3 w-full"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     </div>
                   </div>
 
                   {difFiltradas.length === 0 ? (
-                    <div className="text-center py-8">
-                      <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2" />
-                      <p className="text-slate-400">No hay diferencias en este filtro</p>
+                    <div className="text-center py-10">
+                      <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2 opacity-80" />
+                      <p className="text-slate-300 font-medium text-sm">Sin registros en este filtro</p>
+                      <p className="text-slate-500 text-xs mt-0.5">Todos los datos comparados concuerdan o no hay coincidencias con la búsqueda.</p>
                     </div>
                   ) : (
-                    <div className="table-container max-h-96 overflow-y-auto">
+                    <div className="table-container max-h-[460px] overflow-y-auto">
                       <table className="table-base text-xs">
-                        <thead className="sticky top-0">
+                        <thead className="sticky top-0 z-10">
                           <tr>
                             <th>Identificación</th>
                             <th>Campo</th>
-                            <th>Valor en BD</th>
-                            <th>Valor en Excel</th>
+                            <th>Valor en BD (OCR)</th>
+                            <th>Valor Oficial (Excel)</th>
                             <th>Tipo</th>
+                            <th className="text-center">Acción</th>
                           </tr>
                         </thead>
                         <tbody>
                           {difFiltradas.slice(0, 200).map((d) => {
                             const cfg = TIPO_CONFIG[d.tipo_diferencia as keyof typeof TIPO_CONFIG];
+                            const esDiferente = d.tipo_diferencia === "diferente";
                             return (
-                              <tr key={d.id}>
-                                <td className="font-mono text-primary-400">{d.numero_identificacion}</td>
-                                <td className="text-slate-400">{d.campo || "—"}</td>
-                                <td className="max-w-[150px] truncate">{d.valor_bd || <span className="text-slate-600">vacío</span>}</td>
-                                <td className="max-w-[150px] truncate">{d.valor_excel || <span className="text-slate-600">vacío</span>}</td>
+                              <tr key={d.id} className="hover:bg-white/[0.02]">
+                                <td className="font-mono text-primary-400 font-medium">{d.numero_identificacion}</td>
+                                <td className="text-slate-300 font-medium capitalize">
+                                  {d.campo ? d.campo.replace(/_/g, " ") : "—"}
+                                </td>
+                                <td className="max-w-[180px]">
+                                  {d.valor_bd ? (
+                                    <span className={esDiferente ? "text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 inline-block font-mono text-[11px]" : "text-slate-300"}>
+                                      {d.valor_bd}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 italic">vacío / no registrado</span>
+                                  )}
+                                </td>
+                                <td className="max-w-[180px]">
+                                  {d.valor_excel ? (
+                                    <span className={esDiferente ? "text-green-300 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 inline-block font-mono text-[11px]" : "text-slate-300"}>
+                                      {d.valor_excel}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 italic">vacío / no registrado</span>
+                                  )}
+                                </td>
                                 <td>
                                   <span className={`badge ${cfg?.clase || "badge-neutral"} flex items-center gap-1 w-fit`}>
                                     {cfg?.icon}
                                     {cfg?.label}
                                   </span>
+                                </td>
+                                <td className="text-center">
+                                  {esDiferente && d.valor_excel && d.campo !== "registro_completo" ? (
+                                    <button
+                                      onClick={() => aplicarCorreccion(d)}
+                                      disabled={corrigiendoId === d.id}
+                                      className="btn-sm bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/30 text-[11px] py-1 px-2.5 rounded-lg flex items-center gap-1 mx-auto transition-all whitespace-nowrap"
+                                      title="Actualizar valor en la base de datos con el valor del Excel"
+                                    >
+                                      {corrigiendoId === d.id ? (
+                                        <div className="spinner w-3 h-3" />
+                                      ) : (
+                                        <CheckCircle className="w-3 h-3 text-primary-400" />
+                                      )}
+                                      Corregir en BD
+                                    </button>
+                                  ) : d.tipo_diferencia === "igual" ? (
+                                    <span className="text-green-400 text-[11px] font-medium flex items-center justify-center gap-1">
+                                      <CheckCircle className="w-3.5 h-3.5" /> Corregido
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 text-[11px]">—</span>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -303,7 +424,7 @@ export default function ComparacionPage() {
                       </table>
                       {difFiltradas.length > 200 && (
                         <p className="text-center text-slate-500 text-xs py-3">
-                          Mostrando 200 de {difFiltradas.length}. Descarga el reporte para ver todos.
+                          Mostrando 200 de {difFiltradas.length}. Descarga el reporte para ver la auditoría completa.
                         </p>
                       )}
                     </div>
@@ -315,7 +436,7 @@ export default function ComparacionPage() {
                 <GitCompare className="w-16 h-16 text-slate-700 mb-4" />
                 <h3 className="text-white font-semibold text-lg mb-2">Sin comparación activa</h3>
                 <p className="text-slate-400 text-sm max-w-xs">
-                  Sube un archivo Excel externo para comparar con los datos de la base de datos
+                  Sube una planilla Excel oficial para cotejar con las cédulas extraídas por el OCR
                 </p>
               </div>
             )}
@@ -325,3 +446,4 @@ export default function ComparacionPage() {
     </div>
   );
 }
+

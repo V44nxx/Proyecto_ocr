@@ -188,3 +188,89 @@ def descargar_reporte(
         filename=Path(ruta_reporte).name,
         headers={"Content-Disposition": f"attachment; filename={Path(ruta_reporte).name}"}
     )
+
+
+from pydantic import BaseModel
+from datetime import datetime
+from app.utils.validators import validador
+
+
+class CorregirCampoRequest(BaseModel):
+    numero_identificacion: str
+    campo: str
+    nuevo_valor: str
+
+
+@router.post("/{comparacion_id}/corregir-campo", summary="Corregir campo en BD desde la comparación")
+def corregir_campo_desde_comparacion(
+    comparacion_id: str,
+    datos: CorregirCampoRequest,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Aplica una corrección directa a una persona en la BD desde la vista de comparación.
+    Actualiza la persona, marca la diferencia como resuelta y actualiza los contadores.
+    """
+    from app.models.persona import Persona
+    from app.models.diferencia import Diferencia
+
+    num_id = datos.numero_identificacion.strip()
+    persona = db.query(Persona).filter(Persona.numero_identificacion == num_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail=f"Persona con identificación {num_id} no encontrada en la BD")
+
+    campo = datos.campo.strip().lower()
+    campos_validos = ["nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
+    if campo not in campos_validos:
+        raise HTTPException(status_code=400, detail=f"Campo '{campo}' no es válido para actualización")
+
+    valor_a_guardar = datos.nuevo_valor.strip()
+    if campo in ["fecha_nacimiento", "fecha_expedicion"]:
+        if valor_a_guardar:
+            fecha_dt = validador.parsear_fecha(valor_a_guardar)
+            setattr(persona, campo, fecha_dt.date() if fecha_dt else None)
+        else:
+            setattr(persona, campo, None)
+    else:
+        setattr(persona, campo, valor_a_guardar if valor_a_guardar else None)
+
+    # Marcar campo en campos_revisados
+    revisados = list(persona.campos_revisados or [])
+    if campo not in revisados:
+        revisados.append(campo)
+    persona.campos_revisados = revisados
+    persona.fecha_actualizacion = datetime.utcnow()
+
+    # Actualizar la diferencia en la comparación
+    diferencia = db.query(Diferencia).filter(
+        Diferencia.comparacion_id == comparacion_id,
+        Diferencia.numero_identificacion == num_id,
+        Diferencia.campo == campo
+    ).first()
+
+    if diferencia:
+        diferencia.valor_bd = str(getattr(persona, campo) or "")
+        diferencia.tipo_diferencia = "igual"
+
+    # Recalcular métricas de la comparación
+    comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
+    if comparacion:
+        ids_con_dif = db.query(Diferencia.numero_identificacion).filter(
+            Diferencia.comparacion_id == comparacion_id,
+            Diferencia.tipo_diferencia == "diferente"
+        ).distinct().count()
+        comparacion.total_diferentes = ids_con_dif
+        comparacion.total_coincidentes = max(0, (comparacion.total_registros_excel or 0) - (comparacion.total_faltantes_bd or 0) - ids_con_dif)
+
+    db.commit()
+    db.refresh(persona)
+
+    return {
+        "mensaje": f"Campo '{campo}' actualizado exitosamente a '{valor_a_guardar}'",
+        "persona_id": str(persona.id),
+        "numero_identificacion": persona.numero_identificacion,
+        "campo": campo,
+        "nuevo_valor": str(getattr(persona, campo) or ""),
+    }
+

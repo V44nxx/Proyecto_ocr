@@ -360,23 +360,28 @@ class ComparacionService:
                 # Diferencias en registros faltantes en BD
                 for id_faltante in ids_faltantes:
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_faltante].iloc[0]
+                    nom_ex = f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}".strip() or str(row_excel.get('nombre', '')).strip()
+                    est_ex = f" · {row_excel.get('estado', '')}" if row_excel.get('estado') else ""
+                    val_ex = f"{nom_ex}{est_ex}".strip() or "Persona registrada en Excel"
+
                     diferencias_a_guardar.append(Diferencia(
                         comparacion_id=comp_uuid,
                         numero_identificacion=id_faltante,
-                        campo="registro_completo",
+                        campo="persona_faltante",
                         valor_bd=None,
-                        valor_excel=str(row_excel.to_dict()),
+                        valor_excel=val_ex,
                         tipo_diferencia="faltante_bd",
                     ))
 
                 # Registros nuevos en BD
                 for id_nuevo in ids_nuevos:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_nuevo].iloc[0]
+                    nom_bd = f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}".strip() or "Persona detectada por OCR"
                     diferencias_a_guardar.append(Diferencia(
                         comparacion_id=comp_uuid,
                         numero_identificacion=id_nuevo,
-                        campo="registro_completo",
-                        valor_bd=str(row_bd.to_dict()),
+                        campo="persona_sobrante",
+                        valor_bd=nom_bd,
                         valor_excel=None,
                         tipo_diferencia="nuevo_bd",
                     ))
@@ -873,27 +878,213 @@ class ComparacionService:
                         max_len = len(v)
                 ws.column_dimensions[get_column_letter(col_i)].width = min(45, max(max_len + 3, 12))
 
-        # ── HOJA 2: AUDITORÍA GENERAL ──────────────────────────────
-        ws_aud = wb.create_sheet(title="Auditoría General")
-        _escribir_hoja_datos(ws_aud, registros_auditoria)
+        # ── HOJA 2: PERSONAS EN EXCEL OFICIAL ───────────────────────────
+        # Muestra la lista completa de todas las personas de la planilla oficial
+        ws_ex = wb.create_sheet(title="Personas en Excel Oficial")
+        ws_ex.views.sheetView[0].showGridLines = True
 
-        # ── HOJA 3: CAMPOS CON DIFERENCIAS ─────────────────────────
+        headers_excel = [
+            "N° Identificación (Excel)", "Nombres y Apellidos (Excel)", "Estado Matrícula",
+            "¿Detectado por OCR?", "Nombres en BD (OCR)", "Apellidos en BD (OCR)",
+            "Confianza OCR", "Estado OCR", "Diagnóstico / Observaciones de Cotejo"
+        ]
+        for col_idx, h in enumerate(headers_excel, start=1):
+            c = ws_ex.cell(row=1, column=col_idx, value=h)
+            c.font = fuente_header
+            c.fill = relleno_header
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = borde
+        ws_ex.row_dimensions[1].height = 30
+
+        # Escribir filas del Excel
+        row_num = 2
+        for id_num, r_ex in excel_map.items():
+            nom_ex = f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip()
+            est_mat = str(r_ex.get("estado", "") or r_ex.get("tipo_documento", "") or "Inscrito")
+            en_bd = id_num in bd_map
+            p = bd_map.get(id_num)
+            difs = [d for d in difs_por_id.get(id_num, []) if d.tipo_diferencia == "diferente"]
+
+            if en_bd and not difs:
+                st = "SÍ - COINCIDENTE 100%"
+                st_fill = relleno_ok
+                diag = "Cédula y datos cotejados exitosamente con el documento escaneado."
+            elif en_bd and difs:
+                st = "SÍ - CON DIFERENCIAS"
+                st_fill = relleno_dif
+                diag = " | ".join([f"{d.campo.upper()}: OCR='{d.valor_bd}' vs Excel='{d.valor_excel}'" for d in difs])
+            else:
+                st = "NO - FALTANTE EN PDF"
+                st_fill = relleno_fal
+                diag = "El estudiante figura en la lista oficial pero su documento de identidad no fue detectado en el PDF."
+
+            nom_ocr = p.nombres if p and p.nombres else ""
+            ape_ocr = p.apellidos if p and p.apellidos else ""
+            conf_ocr = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
+            est_ocr = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "NO DETECTADO"
+
+            vals = [
+                (id_num, "left", False),
+                (nom_ex, "left", False),
+                (est_mat, "center", False),
+                (st, "center", True),
+                (nom_ocr, "left", any(d.campo == "nombres" for d in difs)),
+                (ape_ocr, "left", any(d.campo == "apellidos" for d in difs)),
+                (conf_ocr, "center", False),
+                (est_ocr, "center", False),
+                (diag, "left", False),
+            ]
+
+            for col_idx, (val, alig, es_status) in enumerate(vals, start=1):
+                c = ws_ex.cell(row=row_num, column=col_idx, value=val)
+                c.alignment = Alignment(horizontal=alig, vertical="center")
+                c.border = borde
+                if es_status:
+                    c.fill = st_fill
+                    c.font = Font(name="Calibri", bold=True, size=9.5)
+                elif (row_num % 2 == 0):
+                    c.fill = relleno_alt
+                    c.font = fuente_datos
+                else:
+                    c.font = fuente_datos
+            ws_ex.row_dimensions[row_num].height = 20
+            row_num += 1
+
+        ws_ex.freeze_panes = "C2"
+        ws_ex.auto_filter.ref = f"A1:{get_column_letter(len(headers_excel))}{row_num - 1}"
+        for col_i, h in enumerate(headers_excel, start=1):
+            max_l = len(h)
+            for r_i in range(2, min(row_num, 60)):
+                v = str(ws_ex.cell(row=r_i, column=col_i).value or "")
+                if len(v) > max_l: max_l = len(v)
+            ws_ex.column_dimensions[get_column_letter(col_i)].width = min(45, max(max_l + 3, 12))
+
+        # ── HOJA 3: PERSONAS EN BASE DE DATOS (OCR) ──────────────────────
+        # Muestra la lista completa de todas las personas registradas en la BD
+        ws_bd = wb.create_sheet(title="Personas en Base de Datos (OCR)")
+        ws_bd.views.sheetView[0].showGridLines = True
+
+        headers_bd = [
+            "N° Identificación (OCR)", "Nombres (OCR)", "Apellidos (OCR)",
+            "Fecha Nacimiento", "Fecha Expedición", "Lugar Expedición", "Sexo",
+            "Confianza OCR", "Estado OCR",
+            "¿Registrado en Planilla Excel?", "Nombre en Planilla Excel", "Diagnóstico de Cotejo"
+        ]
+        for col_idx, h in enumerate(headers_bd, start=1):
+            c = ws_bd.cell(row=1, column=col_idx, value=h)
+            c.font = fuente_header
+            c.fill = relleno_header
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = borde
+        ws_bd.row_dimensions[1].height = 30
+
+        row_num = 2
+        for p in personas_bd:
+            num_id = str(p.numero_identificacion).strip()
+            en_excel = num_id in excel_map
+            r_ex = excel_map.get(num_id, {})
+            difs = [d for d in difs_por_id.get(num_id, []) if d.tipo_diferencia == "diferente"]
+
+            if en_excel and not difs:
+                st = "SÍ - COINCIDENTE 100%"
+                st_fill = relleno_ok
+                diag = "Cotejado y verificado con la planilla oficial."
+            elif en_excel and difs:
+                st = "SÍ - CON DIFERENCIAS"
+                st_fill = relleno_dif
+                diag = " | ".join([f"{d.campo.upper()}: OCR='{d.valor_bd}' vs Excel='{d.valor_excel}'" for d in difs])
+            else:
+                st = "NO - SOBRANTE EN BD"
+                st_fill = relleno_sob
+                diag = "Cédula detectada por OCR pero ausente en la planilla oficial de matrícula."
+
+            nom_ex = f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip() if en_excel else "—"
+
+            f_nac_str = p.fecha_nacimiento.strftime("%d/%m/%Y") if p.fecha_nacimiento else ""
+            f_exp_str = p.fecha_expedicion.strftime("%d/%m/%Y") if p.fecha_expedicion else ""
+            conf_str = f"{float(p.confianza_extraccion or 0):.1f}%"
+            est_str = "REVISAR" if p.requiere_revision else "VÁLIDO"
+
+            vals = [
+                (num_id, "left", False),
+                (p.nombres or "", "left", False),
+                (p.apellidos or "", "left", False),
+                (f_nac_str, "center", False),
+                (f_exp_str, "center", False),
+                (p.lugar_expedicion or "", "left", False),
+                (p.sexo or "", "center", False),
+                (conf_str, "center", False),
+                (est_str, "center", False),
+                (st, "center", True),
+                (nom_ex, "left", False),
+                (diag, "left", False),
+            ]
+
+            for col_idx, (val, alig, es_status) in enumerate(vals, start=1):
+                c = ws_bd.cell(row=row_num, column=col_idx, value=val)
+                c.alignment = Alignment(horizontal=alig, vertical="center")
+                c.border = borde
+                if es_status:
+                    c.fill = st_fill
+                    c.font = Font(name="Calibri", bold=True, size=9.5)
+                elif (row_num % 2 == 0):
+                    c.fill = relleno_alt
+                    c.font = fuente_datos
+                else:
+                    c.font = fuente_datos
+            ws_bd.row_dimensions[row_num].height = 20
+            row_num += 1
+
+        ws_bd.freeze_panes = "C2"
+        ws_bd.auto_filter.ref = f"A1:{get_column_letter(len(headers_bd))}{row_num - 1}"
+        for col_i, h in enumerate(headers_bd, start=1):
+            max_l = len(h)
+            for r_i in range(2, min(row_num, 60)):
+                v = str(ws_bd.cell(row=r_i, column=col_i).value or "")
+                if len(v) > max_l: max_l = len(v)
+            ws_bd.column_dimensions[get_column_letter(col_i)].width = min(45, max(max_l + 3, 12))
+
+        # ── HOJA 4: CAMPOS CON DIFERENCIAS ─────────────────────────
         registros_dif = [r for r in registros_auditoria if r["estado"] == "DIFERENCIA DE DATOS"]
+        ws_dif = wb.create_sheet(title="Campos con Diferencias")
         if registros_dif:
-            ws_dif = wb.create_sheet(title="Campos con Diferencias")
             _escribir_hoja_datos(ws_dif, registros_dif, solo_diferencias=True)
+        else:
+            ws_dif.views.sheetView[0].showGridLines = True
+            ws_dif.merge_cells("A1:E1")
+            ws_dif["A1"] = "No se encontraron discrepancias en los registros comunes. Todos los datos coinciden al 100%."
+            ws_dif["A1"].font = Font(name="Calibri", bold=True, size=11, color="155724")
+            ws_dif["A1"].fill = relleno_ok
+            ws_dif["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws_dif.row_dimensions[1].height = 30
 
-        # ── HOJA 4: FALTANTES EN BD ────────────────────────────────
+        # ── HOJA 5: FALTANTES EN BD ────────────────────────────────
         registros_fal = [r for r in registros_auditoria if r["estado"] == "FALTANTE EN BD"]
+        ws_fal = wb.create_sheet(title="Faltantes en BD")
         if registros_fal:
-            ws_fal = wb.create_sheet(title="Faltantes en BD")
             _escribir_hoja_datos(ws_fal, registros_fal)
+        else:
+            ws_fal.views.sheetView[0].showGridLines = True
+            ws_fal.merge_cells("A1:E1")
+            ws_fal["A1"] = "Todos los registros de la planilla oficial fueron detectados en los documentos PDF."
+            ws_fal["A1"].font = Font(name="Calibri", bold=True, size=11, color="155724")
+            ws_fal["A1"].fill = relleno_ok
+            ws_fal["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws_fal.row_dimensions[1].height = 30
 
-        # ── HOJA 5: SOBRANTES EN BD ────────────────────────────────
+        # ── HOJA 6: SOBRANTES EN BD ────────────────────────────────
         registros_sob = [r for r in registros_auditoria if r["estado"] == "SOBRANTE EN BD"]
+        ws_sob = wb.create_sheet(title="Sobrantes en BD")
         if registros_sob:
-            ws_sob = wb.create_sheet(title="Sobrantes en BD")
             _escribir_hoja_datos(ws_sob, registros_sob)
+        else:
+            ws_sob.views.sheetView[0].showGridLines = True
+            ws_sob.merge_cells("A1:E1")
+            ws_sob["A1"] = "No hay registros sobrantes en la base de datos."
+            ws_sob["A1"].font = Font(name="Calibri", bold=True, size=11, color="155724")
+            ws_sob["A1"].fill = relleno_ok
+            ws_sob["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws_sob.row_dimensions[1].height = 30
 
         # Guardar archivo generado
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

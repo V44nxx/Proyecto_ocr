@@ -122,7 +122,8 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     # Validar estructura y hojas con OpenPyXL
     wb = openpyxl.load_workbook(ruta)
     assert "Resumen Ejecutivo" in wb.sheetnames
-    assert "Auditoría General" in wb.sheetnames
+    assert "Personas en Excel Oficial" in wb.sheetnames
+    assert "Personas en Base de Datos (OCR)" in wb.sheetnames
     assert "Campos con Diferencias" in wb.sheetnames
     assert "Faltantes en BD" in wb.sheetnames
     assert "Sobrantes en BD" in wb.sheetnames
@@ -131,10 +132,15 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     ws_res = wb["Resumen Ejecutivo"]
     assert "SISTEMA OCR - AUDITORÍA Y COMPARACIÓN DE DATOS" in str(ws_res["A1"].value)
 
-    # Validar registros en Auditoría General
-    ws_aud = wb["Auditoría General"]
-    assert ws_aud["A1"].value == "N° Identificación"
-    assert ws_aud["B1"].value == "Estado Auditoría"
+    # Validar hoja Personas en Excel Oficial
+    ws_ex = wb["Personas en Excel Oficial"]
+    assert ws_ex["A1"].value == "N° Identificación (Excel)"
+    assert ws_ex["D1"].value == "¿Detectado por OCR?"
+
+    # Validar hoja Personas en Base de Datos (OCR)
+    ws_bd = wb["Personas en Base de Datos (OCR)"]
+    assert ws_bd["A1"].value == "N° Identificación (OCR)"
+    assert ws_bd["J1"].value == "¿Registrado en Planilla Excel?"
 
     # Validar hoja de diferencias
     ws_dif = wb["Campos con Diferencias"]
@@ -149,4 +155,4 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     assert ws_sob["A2"].value == "9999999999"
 
     wb.close()
-    print("Test passed: 5 hojas generadas con precisión y validadas.")
+    print("Test passed: 6 hojas generadas con precisión y validadas.")

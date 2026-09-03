@@ -22,7 +22,46 @@ const TIPO_CONFIG = {
   igual: { label: "Igual", clase: "badge-success", icon: <Equal className="w-3 h-3" /> },
 };
 
+// Helper para limpiar y formatear datos de personas y evitar mostrar diccionarios JSON en la tabla
+function limpiarValorTexto(val: string | null | undefined): string {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (s.startsWith("{") && s.endsWith("}")) {
+    try {
+      const jsonStr = s
+        .replace(/'/g, '"')
+        .replace(/None/g, "null")
+        .replace(/True/g, "true")
+        .replace(/False/g, "false");
+      const obj = JSON.parse(jsonStr);
+      const nombres = obj.nombres || obj.nombre || "";
+      const apellidos = obj.apellidos || obj.apellido || "";
+      const nc = `${nombres} ${apellidos}`.trim();
+      const st = obj.estado ? ` · ${obj.estado}` : "";
+      if (nc) return `${nc}${st}`;
+    } catch {
+      const mNom = s.match(/['"]nombres?['"]\s*:\s*['"]([^'"]+)['"]/i);
+      const mApe = s.match(/['"]apellidos?['"]\s*:\s*['"]([^'"]+)['"]/i);
+      const nom = mNom ? mNom[1] : "";
+      const ape = mApe ? mApe[1] : "";
+      const res = `${nom} ${ape}`.trim();
+      if (res) return res;
+    }
+  }
+  return s;
+}
+
+function limpiarEtiquetaCampo(campo: string | null | undefined, tipo: string): string {
+  if (!campo || campo === "registro_completo" || campo === "persona_faltante" || campo === "persona_sobrante") {
+    if (tipo === "faltante_bd") return "No encontrada en PDF";
+    if (tipo === "nuevo_bd") return "No en Planilla (Sobrante)";
+    return "Registro Completo";
+  }
+  return campo.replace(/_/g, " ");
+}
+
 export default function ComparacionPage() {
+
   const router = useRouter();
   const [comparaciones, setComparaciones] = useState<Comparacion[]>([]);
   const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(null);
@@ -364,32 +403,49 @@ export default function ComparacionPage() {
                           {difFiltradas.slice(0, 200).map((d) => {
                             const cfg = TIPO_CONFIG[d.tipo_diferencia as keyof typeof TIPO_CONFIG];
                             const esDiferente = d.tipo_diferencia === "diferente";
+                            const esFaltante = d.tipo_diferencia === "faltante_bd";
+                            const esSobrante = d.tipo_diferencia === "nuevo_bd";
+
+                            const valBdLimpio = limpiarValorTexto(d.valor_bd);
+                            const valExLimpio = limpiarValorTexto(d.valor_excel);
+                            const etiquetaCampo = limpiarEtiquetaCampo(d.campo, d.tipo_diferencia);
+
                             return (
-                              <tr key={d.id} className="hover:bg-white/[0.02]">
-                                <td className="font-mono text-primary-400 font-medium">{d.numero_identificacion}</td>
-                                <td className="text-slate-300 font-medium capitalize">
-                                  {d.campo ? d.campo.replace(/_/g, " ") : "—"}
-                                </td>
-                                <td className="max-w-[180px]">
-                                  {d.valor_bd ? (
-                                    <span className={esDiferente ? "text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 inline-block font-mono text-[11px]" : "text-slate-300"}>
-                                      {d.valor_bd}
-                                    </span>
+                              <tr key={d.id} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="font-mono text-primary-400 font-medium text-xs">{d.numero_identificacion}</td>
+                                <td>
+                                  {esFaltante ? (
+                                    <span className="badge badge-danger text-[10px] whitespace-nowrap">Faltante en PDF</span>
+                                  ) : esSobrante ? (
+                                    <span className="badge badge-primary text-[10px] whitespace-nowrap">No en Planilla</span>
                                   ) : (
-                                    <span className="text-slate-600 italic">vacío / no registrado</span>
+                                    <span className="text-slate-300 font-medium capitalize text-xs">{etiquetaCampo}</span>
                                   )}
                                 </td>
-                                <td className="max-w-[180px]">
-                                  {d.valor_excel ? (
-                                    <span className={esDiferente ? "text-green-300 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 inline-block font-mono text-[11px]" : "text-slate-300"}>
-                                      {d.valor_excel}
+                                <td className="max-w-[220px]">
+                                  {esFaltante ? (
+                                    <span className="text-slate-500 italic text-[11px]">No detectada en PDF</span>
+                                  ) : valBdLimpio ? (
+                                    <span className={esDiferente ? "text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
+                                      {valBdLimpio}
                                     </span>
                                   ) : (
-                                    <span className="text-slate-600 italic">vacío / no registrado</span>
+                                    <span className="text-slate-600 italic text-[11px]">vacío / no registrado</span>
+                                  )}
+                                </td>
+                                <td className="max-w-[220px]">
+                                  {esSobrante ? (
+                                    <span className="text-slate-500 italic text-[11px]">No figura en archivo Excel</span>
+                                  ) : valExLimpio ? (
+                                    <span className={esDiferente ? "text-green-300 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
+                                      {valExLimpio}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-600 italic text-[11px]">vacío / no registrado</span>
                                   )}
                                 </td>
                                 <td>
-                                  <span className={`badge ${cfg?.clase || "badge-neutral"} flex items-center gap-1 w-fit`}>
+                                  <span className={`badge ${cfg?.clase || "badge-neutral"} flex items-center gap-1 w-fit text-[10px]`}>
                                     {cfg?.icon}
                                     {cfg?.label}
                                   </span>
@@ -413,6 +469,10 @@ export default function ComparacionPage() {
                                     <span className="text-green-400 text-[11px] font-medium flex items-center justify-center gap-1">
                                       <CheckCircle className="w-3.5 h-3.5" /> Corregido
                                     </span>
+                                  ) : esFaltante ? (
+                                    <span className="text-red-400/80 text-[10px] italic">Escanear documento</span>
+                                  ) : esSobrante ? (
+                                    <span className="text-blue-400/80 text-[10px] italic">Documento anexo</span>
                                   ) : (
                                     <span className="text-slate-600 text-[11px]">—</span>
                                   )}

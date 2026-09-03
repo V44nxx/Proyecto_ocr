@@ -621,12 +621,16 @@ class OCRService:
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 
-            # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ")
+            # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ", "ICA DE ANTONIO JAVIER" -> "ANTONIO JAVIER")
             if nombres_final and nombres_final != "POR REVISAR":
                 toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                    toks.pop(0)
                 nombres_final = " ".join(toks).strip() or "POR REVISAR"
             if apellidos_final and apellidos_final != "POR REVISAR":
                 toks = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                    toks.pop(0)
                 apellidos_final = " ".join(toks).strip() or "POR REVISAR"
 
             if not persona:

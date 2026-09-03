@@ -125,7 +125,8 @@ class SpatialFieldExtractor:
         r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
-        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|ICA\s*DE|CA\s*DE|MEIA|CADE|ICADE)",
+        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
+        r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b)",
         re.IGNORECASE
     )
 
@@ -139,14 +140,16 @@ class SpatialFieldExtractor:
         re.IGNORECASE
     )
 
-    # Partículas de nombre que son válidas en conjunto pero no como única palabra
-    _PARTICULAS_SOLAS = re.compile(r"^(DE|LA|EL|LOS|LAS|Y|DEL|AL|SAN|SANTA|DOS|DAS|DOS)$", re.IGNORECASE)
+    _PARTICULAS_SOLAS = re.compile(r"^(DE|DEL|LA|LAS|LOS|SAN|SANTA|Y|E|DA|DAS|DO|DOS)$", re.IGNORECASE)
 
     def limpiar_nombre(self, texto: str) -> Optional[str]:
         if not texto:
             return None
         t_norm = texto.replace("!", "I").replace("1", "I")
         toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w)]
+        # Remover partículas huérfanas al inicio (ej: "DE" residual de "REPUBLICA DE" o "ICA DE")
+        while toks and self._PARTICULAS_SOLAS.match(toks[0]) and len(toks) > 1:
+            toks.pop(0)
         # Filtrar tokens que sean solo partículas sin palabras propias de nombre
         toks_propios = [t for t in toks if not self._PARTICULAS_SOLAS.match(t)]
         if not toks_propios:

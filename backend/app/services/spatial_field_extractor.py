@@ -125,7 +125,7 @@ class SpatialFieldExtractor:
         r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
-        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L)",
+        r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|ICA\s*DE|CA\s*DE|MEIA|CADE|ICADE)",
         re.IGNORECASE
     )
 
@@ -405,11 +405,22 @@ class SpatialFieldExtractor:
         # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla y Digital) ──
         # Ejecutar siempre para extraer o enriquecer nombres visuales frente a MRZ truncado
         if True:
-            # ZONA AMPLIADA: y < 0.55 sin restricción de X para cubrir layouts comprimidos/rotados
-            lineas_frente = [
-                l for l in lines
-                if getattr(l, "y", 0.0) < 0.55
-            ]
+            # Determinar si es Cédula Digital o Tarjeta de Identidad
+            es_digital_o_ti = any(
+                "NUIP" in getattr(l, "text", "").upper() or
+                any(w in getattr(l, "text", "").upper() for w in ["NACIONALIDAD", "DIGITAL", "CAN "])
+                for l in lines
+            )
+
+            # Filtrado inteligente por layout:
+            # - En Cédula Digital / TI: los textos están en el centro/derecha (y < 0.55).
+            # - En Cédula Amarilla: los nombres están estrictamente en la columna izquierda (x < 0.48 y y < 0.68).
+            #   El área x >= 0.48 contiene la foto del ciudadano y hologramas de fondo ('ICA DE', 'MEIA', 'CADE').
+            if es_digital_o_ti:
+                lineas_frente = [l for l in lines if getattr(l, "y", 0.0) < 0.55]
+            else:
+                lineas_frente = [l for l in lines if getattr(l, "y", 0.0) < 0.68 and getattr(l, "x", 0.0) < 0.48]
+
             # Ordenar por y para garantizar secuencia vertical correcta
             lineas_frente = sorted(lineas_frente, key=lambda l: getattr(l, "y", 0.0))
 
@@ -870,7 +881,7 @@ class SpatialFieldExtractor:
             valor_final = " ".join(toks).strip()
 
         score_final = (0.35 * 1.0) + (0.40 * best["spatial_score"]) + (0.15 * cand_obj.confidence) + (0.10 * 1.0)
-        status_final = "VALID" if score_final >= 0.85 and valor_final else "REVIEW_REQUIRED"
+        status_final = "VALID" if score_final >= 0.70 and valor_final else "REVIEW_REQUIRED"
 
         return {
             "value": valor_final if valor_final else None,

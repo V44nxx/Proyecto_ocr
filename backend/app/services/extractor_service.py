@@ -32,7 +32,7 @@ NO_NOMBRE_HEADER = re.compile(
     r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
     r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
     r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
-    r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L)",
+    r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|ICA\s*DE|CA\s*DE|MEIA|CADE|ICADE)",
     re.IGNORECASE
 )
 
@@ -376,7 +376,7 @@ class ExtractorService:
                 lines_to_process, pagina_num, doc_ai_confidence=0.95
             )
             for campo, info in res_espaciales.items():
-                if info and info.get("value") and info.get("status") == "VALID":
+                if info and info.get("value") and info.get("status") in ["VALID", "REVIEW_REQUIRED"]:
                     resultado[campo] = info["value"]
 
         # ── Estrategia 1: MRZ (Zona Legible por Máquina - Máxima Prioridad) ─────────
@@ -526,7 +526,18 @@ class ExtractorService:
                     status_campo = "VALID" if status_upper in ("VALID", "VALIDO") else status_upper
                 
                 reason_campo = eval_info.get("reason") if eval_info else f"Campo '{campo}' verificado espacialmente"
-                conf_campo = eval_info.get("final_score", round(resultado["confianza_extraccion"] / 100.0, 2)) if eval_info else round(resultado["confianza_extraccion"] / 100.0, 2)
+                if eval_info and eval_info.get("final_score"):
+                    conf_campo = float(eval_info["final_score"])
+                elif "fecha" in campo and val:
+                    conf_campo = 0.90
+                elif campo == "sexo" and val in ["M", "F"]:
+                    conf_campo = 0.95
+                elif campo == "identificacion" and val and not str(val).startswith("SIN_ID"):
+                    conf_campo = 0.95
+                elif campo in ["nombres", "apellidos"] and val and val != "POR REVISAR":
+                    conf_campo = 0.90
+                else:
+                    conf_campo = round(resultado["confianza_extraccion"] / 100.0, 2)
                 sugerencia_val = eval_info.get("suggestion") if eval_info else None
 
                 detalles_campos[campo] = {
@@ -720,6 +731,13 @@ class ExtractorService:
                         n_f = str(f_val).strip().upper()
                         n_b = str(b_val).strip().upper()
                         es_conflicto_real = not (n_f in n_b or n_b in n_f)
+                elif campo == "lugar_expedicion":
+                    # En Cédula Amarilla, el lugar de expedición siempre proviene del reverso.
+                    # El frente no contiene municipio de expedición (a menudo solo tiene el país 'COLOMBIA').
+                    if str(f_val).strip().upper() == "COLOMBIA" or str(b_val).strip().upper() == "COLOMBIA":
+                        es_conflicto_real = False
+                    else:
+                        es_conflicto_real = str(f_val).strip().upper() != str(b_val).strip().upper()
                 else:
                     es_conflicto_real = str(f_val).strip().upper() != str(b_val).strip().upper()
 
@@ -1335,15 +1353,19 @@ class ExtractorService:
 
         # 2. Validación y limpieza de lugar de expedición universal
         lugar_actual = resultado.get("lugar_expedicion")
-        if lugar_actual:
+        if lugar_actual and str(lugar_actual).strip().upper() != "COLOMBIA":
             lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)])
-            if lugar_mun:
+            if lugar_mun and lugar_mun.upper() != "COLOMBIA":
                 resultado["lugar_expedicion"] = lugar_mun
             else:
                 lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
-                resultado["lugar_expedicion"] = lugar_limpio
+                resultado["lugar_expedicion"] = lugar_limpio if lugar_limpio and lugar_limpio.upper() != "COLOMBIA" else None
         else:
-            resultado["lugar_expedicion"] = colombia_geo.extraer_lugar_universal(texto, lineas)
+            lug_univ = colombia_geo.extraer_lugar_universal(texto, lineas)
+            if lug_univ and lug_univ.upper() != "COLOMBIA":
+                resultado["lugar_expedicion"] = lug_univ
+            else:
+                resultado["lugar_expedicion"] = None
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """

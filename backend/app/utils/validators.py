@@ -19,14 +19,14 @@ from app.utils.logger import app_logger as logger
 class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
-    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, registradores)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
-        r"ALMABEATRIZ|RENGIFO|GALINDO|VEGA|SÁNCHEZ|SANCHEZ|TORRES|SCANNED|WITH|PERSONAL|NACIONAL)\b",
+        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL)\b",
         re.IGNORECASE,
     )
 

@@ -343,73 +343,95 @@ class ColombiaGeoService:
         
         return None
 
-    def extraer_lugar_universal(self, texto: str, lineas: List[str]) -> Optional[str]:
+    def extraer_lugar_universal(self, texto: str, lineas: List[str], nombres_excluir: Optional[str] = None) -> Optional[str]:
         """
         Algoritmo Universal de Extracción de Municipios Colombianos:
         1. Formato Nacional Registraduría: 'MUNICIPIO (DEPARTAMENTO)' o 'FECHA MUNICIPIO (DEPARTAMENTO)'
-        2. Búsqueda Espacial y Sintáctica en líneas adyacentes a 'LUGAR', 'EXPEDICION', 'NACIMIENTO'
-        3. Detección en todo el texto con corrección Fuzzy para cualquier municipio del país.
+        2. Búsqueda Espacial y Sintáctica en líneas adyacentes a 'LUGAR', 'EXPEDICION', 'EXPEDIDA', 'NACIMIENTO'
+        3. Detección en texto limpio (excluyendo líneas MRZ, barcodes, registradores y nombres del ciudadano).
         """
         if not texto and not lineas:
             return None
 
+        # Descartar líneas de MRZ, códigos de barras o firmas de registradores
+        lineas_candidatas = []
+        for l in (lineas or []):
+            l_str = str(l).strip()
+            # Ignorar líneas MRZ tipo ICAO TD1 (ej: ALDANA<BOHORQUEZ<<LIDA... o ICCOL...)
+            if "<<" in l_str or re.search(r"\bI[C0O]{2}OL", l_str, re.I):
+                continue
+            # Ignorar códigos de barras tipo A-1905500-...
+            if re.search(r"^[A-Z0-9]+-[A-Z0-9]+-[MF]-", l_str):
+                continue
+            # Ignorar líneas de Registrador Nacional
+            if re.search(r"\b(REGISTRADOR|REGISTRADORA|NACIONAL DEL ESTADO CIVIL)\b", l_str, re.I):
+                continue
+            lineas_candidatas.append(l_str)
+
+        # Palabras de los nombres o apellidos del ciudadano que no deben confundirse con municipios (ej: ALDANA, BOLIVAR, SUAREZ)
+        palabras_persona = set()
+        if nombres_excluir:
+            palabras_persona = {w.upper() for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", nombres_excluir.upper()).split() if len(w) >= 3}
+
         # ── 1. Formato oficial 'MUNICIPIO (DEPARTAMENTO)' en cualquier línea ────────
-        for linea in (lineas or []):
+        for linea in lineas_candidatas:
             linea_up = linea.strip().upper()
             m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,35})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,35})\s*\)", linea_up)
             if m_par:
                 mun_raw = self.limpiar_texto_crudo(m_par.group(1))
-                if mun_raw:
+                if mun_raw and mun_raw not in palabras_persona:
                     # Validar o corregir fuzzy con DANE
                     mun_res = self.resolver_municipio_fuzzy(mun_raw, umbral=78)
-                    if mun_res:
+                    if mun_res and mun_res not in palabras_persona:
                         return mun_res
-                    if mun_raw not in self.DEPARTAMENTOS and len(mun_raw) >= 3:
+                    if mun_raw not in self.DEPARTAMENTOS and len(mun_raw) >= 3 and mun_raw not in palabras_persona:
                         return mun_raw
 
         # ── 2. Búsqueda en líneas adyacentes a etiquetas clave ─────────────────────
-        for idx, linea in enumerate(lineas or []):
+        for idx, linea in enumerate(lineas_candidatas):
             if re.search(r"\b(LUGAR|EXPEDICI[OÓ]N|EXPEDIDA|NACIMIENTO)\b", linea, re.IGNORECASE):
-                subtexto = " ".join(lineas[max(0, idx - 1): min(len(lineas), idx + 3)])
+                subtexto = " ".join(lineas_candidatas[max(0, idx - 1): min(len(lineas_candidatas), idx + 3)])
                 
                 # Revisar si hay formato con paréntesis en subtexto
                 m_par = re.search(r"([A-ZÁÉÍÓÚÜÑ\s]{3,35})\s*\(\s*([A-ZÁÉÍÓÚÜÑ\s]{3,35})\s*\)", subtexto.upper())
                 if m_par:
                     mun_raw = self.limpiar_texto_crudo(m_par.group(1))
-                    mun_res = self.resolver_municipio_fuzzy(mun_raw, umbral=78)
-                    if mun_res:
-                        return mun_res
+                    if mun_raw and mun_raw not in palabras_persona:
+                        mun_res = self.resolver_municipio_fuzzy(mun_raw, umbral=78)
+                        if mun_res and mun_res not in palabras_persona:
+                            return mun_res
 
                 # Buscar coincidencia directa con catálogo
                 if self._PATRON_MUNICIPIOS_REGEX:
                     for match in self._PATRON_MUNICIPIOS_REGEX.finditer(subtexto):
                         cand = match.group(1).upper().strip()
-                        if cand not in self.DEPARTAMENTOS and len(cand) >= 3:
+                        if cand not in self.DEPARTAMENTOS and len(cand) >= 3 and cand not in palabras_persona:
                             return cand
 
                 # Limpiar la línea adyacente y aplicar fuzzy
                 limpia = self.limpiar_texto_crudo(subtexto)
                 if limpia:
                     for token in limpia.split():
-                        if len(token) >= 4 and token not in self.DEPARTAMENTOS:
+                        if len(token) >= 4 and token not in self.DEPARTAMENTOS and token not in palabras_persona:
                             f_res = self.resolver_municipio_fuzzy(token, umbral=84)
-                            if f_res:
+                            if f_res and f_res not in palabras_persona:
                                 return f_res
 
-        # ── 3. Búsqueda global en el texto completo ────────────────────────────────
-        if self._PATRON_MUNICIPIOS_REGEX and texto:
-            for match in self._PATRON_MUNICIPIOS_REGEX.finditer(texto):
+        # ── 3. Búsqueda global en el texto limpio (sin MRZ ni firmas) ────────────────
+        texto_limpio_candidato = " \n ".join(lineas_candidatas) if lineas_candidatas else re.sub(r"[A-Z0-9<]*<<[A-Z0-9<]*", "", texto or "")
+        if self._PATRON_MUNICIPIOS_REGEX and texto_limpio_candidato:
+            for match in self._PATRON_MUNICIPIOS_REGEX.finditer(texto_limpio_candidato):
                 cand = match.group(1).upper().strip()
-                if cand not in self.DEPARTAMENTOS and len(cand) >= 3:
+                if cand not in self.DEPARTAMENTOS and len(cand) >= 3 and cand not in palabras_persona:
                     return cand
 
         # ── 4. Fallback: Limpieza estricta y último intento fuzzy ──────────────────
-        texto_limpio = self.limpiar_texto_crudo(texto)
+        texto_limpio = self.limpiar_texto_crudo(texto_limpio_candidato)
         if texto_limpio:
-            tokens = [t for t in texto_limpio.split() if len(t) >= 4 and t not in self.DEPARTAMENTOS]
+            tokens = [t for t in texto_limpio.split() if len(t) >= 4 and t not in self.DEPARTAMENTOS and t not in palabras_persona]
             for tok in tokens:
                 f_res = self.resolver_municipio_fuzzy(tok, umbral=85)
-                if f_res:
+                if f_res and f_res not in palabras_persona:
                     return f_res
 
         return None

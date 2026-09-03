@@ -656,6 +656,17 @@ class ExtractorService:
         else:
             tipo_doc_grupo = tipo_f or tipo_b or getattr(group, "tipo_documento", "CEDULA_CIUDADANIA")
 
+        es_cedula_digital = (
+            front_data.get("tipo_documento") == "CEDULA_DIGITAL"
+            or back_data.get("tipo_documento") == "CEDULA_DIGITAL"
+            or any("<<" in str(l) for l in back_data.get("lineas", []))
+            or any("<<" in str(l) for l in front_data.get("lineas", []))
+        )
+        if es_cedula_digital:
+            lug_exp_inicial = front_data.get("lugar_expedicion") or back_data.get("lugar_expedicion")
+        else:
+            lug_exp_inicial = back_data.get("lugar_expedicion") or front_data.get("lugar_expedicion")
+
         res = {
             "grupo_documento_id": getattr(group, "group_id", "DOC-001"),
             "pagina_frente": getattr(group, "pagina_frente", 1),
@@ -665,8 +676,8 @@ class ExtractorService:
             "nombres": front_data.get("nombres") or back_data.get("nombres"),
             "apellidos": front_data.get("apellidos") or back_data.get("apellidos"),
             "fecha_nacimiento": front_data.get("fecha_nacimiento") or back_data.get("fecha_nacimiento"),
-            "fecha_expedicion": back_data.get("fecha_expedicion") or front_data.get("fecha_expedicion"),
-            "lugar_expedicion": back_data.get("lugar_expedicion") or front_data.get("lugar_expedicion"),
+            "fecha_expedicion": (front_data.get("fecha_expedicion") if es_cedula_digital else back_data.get("fecha_expedicion")) or front_data.get("fecha_expedicion") or back_data.get("fecha_expedicion"),
+            "lugar_expedicion": lug_exp_inicial,
             "sexo": front_data.get("sexo") or back_data.get("sexo"),
             "confianza_extraccion": round((front_data.get("confianza_extraccion", 70) + back_data.get("confianza_extraccion", 70)) / 2.0, 1),
             "requiere_revision": front_data.get("requiere_revision", False) or back_data.get("requiere_revision", False) or (getattr(group, "status", "") != "VALID"),
@@ -733,9 +744,11 @@ class ExtractorService:
                         n_b = str(b_val).strip().upper()
                         es_conflicto_real = not (n_f in n_b or n_b in n_f)
                 elif campo == "lugar_expedicion":
+                    # En Cédula Digital, el lugar de expedición está impreso en el frente; el reverso no lo contiene.
                     # En Cédula Amarilla, el lugar de expedición siempre proviene del reverso.
-                    # El frente no contiene municipio de expedición (a menudo solo tiene el país 'COLOMBIA').
-                    if str(f_val).strip().upper() == "COLOMBIA" or str(b_val).strip().upper() == "COLOMBIA":
+                    if es_cedula_digital:
+                        es_conflicto_real = False
+                    elif str(f_val).strip().upper() == "COLOMBIA" or str(b_val).strip().upper() == "COLOMBIA":
                         es_conflicto_real = False
                     else:
                         es_conflicto_real = str(f_val).strip().upper() != str(b_val).strip().upper()
@@ -1353,16 +1366,17 @@ class ExtractorService:
             resultado["fecha_expedicion"] = fechas_doc[-1].isoformat()
 
         # 2. Validación y limpieza de lugar de expedición universal
+        nombres_ctx = f"{resultado.get('nombres', '')} {resultado.get('apellidos', '')}"
         lugar_actual = resultado.get("lugar_expedicion")
         if lugar_actual and str(lugar_actual).strip().upper() != "COLOMBIA":
-            lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)])
+            lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)], nombres_excluir=nombres_ctx)
             if lugar_mun and lugar_mun.upper() != "COLOMBIA":
                 resultado["lugar_expedicion"] = lugar_mun
             else:
                 lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
                 resultado["lugar_expedicion"] = lugar_limpio if lugar_limpio and lugar_limpio.upper() != "COLOMBIA" else None
         else:
-            lug_univ = colombia_geo.extraer_lugar_universal(texto, lineas)
+            lug_univ = colombia_geo.extraer_lugar_universal(texto, lineas, nombres_excluir=nombres_ctx)
             if lug_univ and lug_univ.upper() != "COLOMBIA":
                 resultado["lugar_expedicion"] = lug_univ
             else:

@@ -49,6 +49,7 @@ class OCRService:
         ruta_pdf: str,
         documento_id: str,
         db_externa: Session = None,
+        excel_lookup: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Procesa un PDF de 1 o múltiples páginas.
@@ -56,6 +57,10 @@ class OCRService:
         FIX sesión BD: si se provee db_externa, la usa directamente y NO
         la cierra al finalizar (el llamador es responsable). Solo crea una
         sesión interna cuando db_externa es None.
+
+        excel_lookup: diccionario {numero_id: {nombres, apellidos}} cargado
+        desde la planilla oficial. Cuando se provee, los nombres/apellidos
+        se toman de ahi en lugar del OCR.
         """
         from app.database import SessionLocal
 
@@ -176,11 +181,12 @@ class OCRService:
 
                 persona = self._guardar_persona(
                     datos_grupo,
-                    texto_ocr=f"Frente Pág {grp.pagina_frente} | Reverso Pág {grp.pagina_reverso}",
+                    texto_ocr=f"Frente Pag {grp.pagina_frente} | Reverso Pag {grp.pagina_reverso}",
                     documento_id=documento_id,
                     db=db,
                     ocr_engine="google_document_ai",
-                    pagina_num=grp.pagina_frente or grp.pagina_reverso or 1
+                    pagina_num=grp.pagina_frente or grp.pagina_reverso or 1,
+                    excel_lookup=excel_lookup,
                 )
                 if persona:
                     # Usar número de identificación o ID como clave única para evitar duplicados en la respuesta y contador
@@ -519,9 +525,12 @@ class OCRService:
         db: Session,
         ocr_engine: str = "desconocido",
         pagina_num: int = 1,
+        excel_lookup: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Guarda o actualiza la persona en la BD.
+        Si excel_lookup esta disponible, los nombres y apellidos se toman
+        de la planilla oficial usando el numero de identificacion como clave.
         """
         try:
             from app.models.persona import Persona
@@ -618,6 +627,37 @@ class OCRService:
 
             nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
             apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
+
+            # ── Enriquecimiento con planilla oficial Excel ──────────────────────
+            fuente_nombre = "ocr"
+            encontrado_en_excel = False
+            if excel_lookup and id_limpio and not id_limpio.startswith("SIN_ID"):
+                from app.services.excel_lookup_service import excel_lookup_service
+                registro_excel = excel_lookup_service.buscar(id_limpio, excel_lookup)
+                if registro_excel:
+                    encontrado_en_excel = True
+                    fuente_nombre = "excel_oficial"
+                    nom_excel = registro_excel.get("nombres", "").strip()
+                    ape_excel = registro_excel.get("apellidos", "").strip()
+                    if nom_excel:
+                        nombres_final = nom_excel
+                        logger.info(
+                            f"[ExcelLookup] ID {id_limpio}: nombres desde planilla oficial -> '{nom_excel}'"
+                        )
+                    if ape_excel:
+                        apellidos_final = ape_excel
+                        logger.info(
+                            f"[ExcelLookup] ID {id_limpio}: apellidos desde planilla oficial -> '{ape_excel}'"
+                        )
+                else:
+                    logger.warning(
+                        f"[ExcelLookup] ID '{id_limpio}' NO encontrado en la planilla oficial. "
+                        f"Se usaran nombres del OCR y se marca requiere_revision=True."
+                    )
+                    # Forzar revision si hay lookup pero el ID no esta
+                    requiere_revision = True
+                    if estado_reg == "VALID":
+                        estado_reg = "REVIEW_REQUIRED"
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 

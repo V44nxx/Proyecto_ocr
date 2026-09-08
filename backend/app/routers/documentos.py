@@ -44,29 +44,51 @@ def _procesar_ocr_background(
 ):
     """
     Ejecuta OCR en hilo de fondo.
-    Siempre usa su propia sesión para no compartir estado con el hilo principal.
-    Si se proporcionan comparacion_id y excel_path, ejecuta la comparación
-    automáticamente una vez que el OCR finaliza con éxito.
+    Siempre usa su propia sesion para no compartir estado con el hilo principal.
+    Si se proporcionan comparacion_id y excel_path:
+      - Carga el Excel como lookup de nombres oficiales ANTES del OCR.
+      - Al finalizar el OCR, ejecuta la comparacion automatica.
     """
     from app.database import SessionLocal
+    from app.services.excel_lookup_service import excel_lookup_service
+
     db = SessionLocal()
     try:
-        ocr_service.procesar_pdf(str(pdf_path), documento_id, db_externa=db)
+        # ── Cargar lookup de nombres desde Excel (si existe) ──────────────
+        excel_lookup = None
+        if excel_path:
+            try:
+                excel_lookup = excel_lookup_service.cargar_lookup(excel_path)
+                logger.info(
+                    f"[OCR Background] Lookup cargado: {len(excel_lookup)} registros "
+                    f"para enriquecer nombres durante OCR."
+                )
+            except Exception as e_lookup:
+                logger.error(f"[OCR Background] Error cargando lookup Excel: {e_lookup}")
+                excel_lookup = None
 
-        # ── Comparación automática si se adjuntó un Excel ─────────────────
+        # ── Ejecutar OCR (con lookup integrado) ──────────────────────────
+        ocr_service.procesar_pdf(
+            str(pdf_path),
+            documento_id,
+            db_externa=db,
+            excel_lookup=excel_lookup,
+        )
+
+        # ── Comparacion automatica si se adjunto un Excel ─────────────────
         if comparacion_id and excel_path:
             try:
                 from app.services.comparacion_service import comparacion_service
                 logger.info(
-                    f"OCR finalizado. Iniciando comparación automática: {comparacion_id}"
+                    f"OCR finalizado. Iniciando comparacion automatica: {comparacion_id}"
                 )
                 comparacion_service.ejecutar_comparacion(
                     comparacion_id, excel_path, db
                 )
-                logger.info(f"Comparación automática completada: {comparacion_id}")
+                logger.info(f"Comparacion automatica completada: {comparacion_id}")
             except Exception as e_cmp:
                 logger.error(
-                    f"Error en comparación automática {comparacion_id}: {e_cmp}"
+                    f"Error en comparacion automatica {comparacion_id}: {e_cmp}"
                 )
     finally:
         db.close()
@@ -77,23 +99,23 @@ def _procesar_ocr_background(
 # ──────────────────────────────────────────
 @router.post(
     "/upload",
-    summary="Subir PDF(s) para procesamiento OCR (con comparación automática opcional)",
+    summary="Subir PDF(s) para procesamiento OCR con planilla oficial Excel",
     status_code=202
 )
 async def upload_pdf(
     background_tasks: BackgroundTasks,
-    files: Optional[List[UploadFile]] = File(default=None, description="Uno o múltiples archivos PDF"),
+    files: Optional[List[UploadFile]] = File(default=None, description="Uno o multiples archivos PDF"),
     file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
-    excel: Optional[UploadFile] = File(default=None, description="Planilla Excel oficial para comparación automática (.xlsx/.xls)"),
+    excel: UploadFile = File(..., description="Planilla Excel oficial con nombres (.xlsx/.xls) — OBLIGATORIO"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
-    Sube uno o múltiples archivos PDF y los encola para procesamiento OCR.
-    Acepta tanto el parámetro 'files' (múltiple) como 'file' (individual).
-    Si se adjunta un Excel (parámetro 'excel'), la comparación se ejecuta
-    automáticamente al finalizar el OCR, sin necesidad de ir a /comparacion.
-    El procesamiento ocurre en segundo plano.
+    Sube uno o multiples PDF junto con la planilla oficial Excel.
+    El Excel es OBLIGATORIO: los nombres y apellidos de cada persona
+    se toman de la planilla oficial buscando por numero de identificacion.
+    Los demas datos (fechas, lugar, genero) se extraen del PDF via OCR.
+    Al terminar el OCR, la comparacion se ejecuta automaticamente.
     """
     from app.models.comparacion import Comparacion
     from app.config import settings as cfg

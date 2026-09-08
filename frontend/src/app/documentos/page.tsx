@@ -266,6 +266,11 @@ export default function DocumentosPage() {
       return;
     }
 
+    if (!excelSeleccionado) {
+      toast.error("La planilla Excel oficial es obligatoria para poder extraer los nombres correctamente.");
+      return;
+    }
+
     setSubiendo(true);
     setFaseActual("subiendo");
     setProgresoSubida(0);
@@ -447,7 +452,7 @@ export default function DocumentosPage() {
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Documentos PDF</h1>
           <p className="text-slate-400 mt-1">
-            Sube documentos de identidad para extracción automática y precisa con OCR
+            Sube la planilla Excel oficial y el PDF para extraer datos de identidad con OCR
           </p>
         </div>
 
@@ -849,6 +854,85 @@ export default function DocumentosPage() {
             <span className="text-xs text-slate-400">Formato admitido: PDF (Cédulas colombianas)</span>
           </div>
 
+          {/* ── PASO 1: PLANILLA EXCEL OFICIAL (OBLIGATORIO) ────────────────── */}
+          <div className={`mb-6 p-4 rounded-xl border-2 transition-all ${
+            excelSeleccionado
+              ? "border-emerald-500/50 bg-emerald-500/[0.06]"
+              : "border-dashed border-amber-500/40 bg-amber-500/[0.04]"
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-500 text-dark-950">
+                1
+              </div>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-semibold text-white">Planilla Excel Oficial</h3>
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">OBLIGATORIO</span>
+            </div>
+            <p className="text-xs text-slate-400 mb-3 ml-8">
+              Los nombres y apellidos de las personas se extraerán de esta planilla usando el número de cédula/TI como referencia.
+            </p>
+
+            {excelSeleccionado ? (
+              <div className="ml-8 flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-emerald-200 truncate block">{excelSeleccionado.name}</span>
+                    <span className="text-xs text-slate-500 font-mono">{formatSize(excelSeleccionado.size)} · Planilla oficial lista ✓</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExcelSeleccionado(null)}
+                  disabled={subiendo}
+                  className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 flex-shrink-0"
+                  title="Cambiar Excel"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="ml-8 flex items-center gap-3 p-3.5 bg-dark-800/60 border border-dashed border-amber-500/30 rounded-xl cursor-pointer hover:border-amber-500/60 hover:bg-dark-800 transition-all group">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  disabled={subiendo}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const ext = f.name.split(".").pop()?.toLowerCase();
+                    if (!ext || !["xlsx", "xls"].includes(ext)) {
+                      toast.error("Solo se aceptan archivos .xlsx o .xls");
+                      return;
+                    }
+                    setExcelSeleccionado(f);
+                    toast.success(`✅ Planilla oficial cargada: ${f.name}`);
+                  }}
+                />
+                <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+                  <PlusCircle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-300 group-hover:text-amber-200 transition-colors">
+                    Haz clic para seleccionar la planilla Excel
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">.xlsx · .xls · Requerido para extracción correcta de nombres</p>
+                </div>
+              </label>
+            )}
+          </div>
+
+          {/* ── PASO 2: PDF(s) ───────────────────────────────────────── */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary-500 text-dark-950">
+              2
+            </div>
+            <Upload className="w-4 h-4 text-primary-400" />
+            <h3 className="text-sm font-semibold text-white">Documentos PDF (Cédulas)</h3>
+          </div>
+
           <div
             {...getRootProps()}
             className={`dropzone ${isDragActive ? "active" : ""}`}
@@ -926,83 +1010,31 @@ export default function DocumentosPage() {
                 ))}
               </div>
 
-              {/* ── Sección Excel adjunto opcional ─────────────────────────────────── */}
-              <div className="mt-5 p-4 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-500/[0.04] relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                  <h4 className="text-sm font-semibold text-emerald-300">Comparación automática</h4>
-                  <span className="text-[10px] text-slate-500 bg-dark-800 px-2 py-0.5 rounded-full border border-white/[0.06]">Opcional</span>
-                </div>
-                <p className="text-xs text-slate-400 mb-3">
-                  Adjunta la planilla oficial Excel para que la comparación se ejecute automáticamente al finalizar el OCR.
-                  No necesitarás ir a la sección de Comparación por separado.
-                </p>
+              {/* ── Sección Excel adjunto opcional ── ELIMINADA: ahora Excel es Paso 1 ── */}
 
-                {excelSeleccionado ? (
-                  <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-                        <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-emerald-200 truncate block">{excelSeleccionado.name}</span>
-                        <span className="text-xs text-slate-500 font-mono">{formatSize(excelSeleccionado.size)}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExcelSeleccionado(null)}
-                      disabled={subiendo}
-                      className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 flex-shrink-0"
-                      title="Quitar Excel"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex items-center gap-3 p-3 bg-dark-800/60 border border-dashed border-emerald-500/20 rounded-xl cursor-pointer hover:border-emerald-500/40 hover:bg-dark-800 transition-all group">
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                      disabled={subiendo}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        const ext = f.name.split(".").pop()?.toLowerCase();
-                        if (!ext || !["xlsx", "xls"].includes(ext)) {
-                          toast.error("Solo se aceptan archivos .xlsx o .xls");
-                          return;
-                        }
-                        setExcelSeleccionado(f);
-                        toast.success(`Excel adjunto: ${f.name}`);
-                      }}
-                    />
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
-                      <PlusCircle className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Adjuntar planilla Excel</p>
-                      <p className="text-xs text-slate-500">.xlsx · .xls</p>
-                    </div>
-                  </label>
-                )}
-              </div>
-
-              {/* Barra de Acciones del Botón OCR (Espaciado amplio y diseño premium) */}
+              {/* Barra de Acciones del Botón OCR */}
               <div className="mt-6 pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-400 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-primary-400 flex-shrink-0" />
                   <span>
                     {excelSeleccionado
-                      ? "El OCR extraerá personas y luego comparará automáticamente con la planilla adjunta."
-                      : "La extracción procesará automáticamente caras de cédula y estructurará los registros."}
+                      ? "Nombres desde planilla oficial + datos adicionales desde OCR del PDF."
+                      : (
+                        <span className="text-amber-400 font-medium">
+                          ⚠️ Selecciona primero la planilla Excel oficial (Paso 1) para continuar.
+                        </span>
+                      )}
                   </span>
                 </div>
 
                 <button
                   onClick={subirArchivos}
-                  disabled={subiendo}
-                  className="btn-primary w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all transform hover:-translate-y-0.5"
+                  disabled={subiendo || !excelSeleccionado}
+                  className={`w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg transition-all transform ${
+                    excelSeleccionado && !subiendo
+                      ? "btn-primary hover:shadow-primary-500/40 hover:-translate-y-0.5 shadow-primary-500/25"
+                      : "bg-dark-700 text-slate-500 border border-white/[0.06] cursor-not-allowed"
+                  }`}
                 >
                   {subiendo ? (
                     <>
@@ -1016,7 +1048,7 @@ export default function DocumentosPage() {
                   ) : (
                     <>
                       <Sparkles className="w-5 h-5 text-blue-200" />
-                      <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Iniciar Procesamiento OCR"}</span>
+                      <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Selecciona el Excel primero"}</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </>
                   )}

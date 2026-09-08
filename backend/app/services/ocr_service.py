@@ -679,14 +679,9 @@ class OCRService:
                         f"[ExcelLookup] ID {id_limpio}: nombre completo desde planilla oficial -> '{nombre_completo_final}'"
                     )
                 else:
-                    logger.warning(
-                        f"[ExcelLookup] ID '{id_limpio}' NO encontrado en la planilla oficial. "
-                        f"Se usaran nombres del OCR y se marca requiere_revision=True."
+                    logger.info(
+                        f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial (será auditado como Sobrante)."
                     )
-                    # Forzar revision si hay lookup pero el ID no esta
-                    requiere_revision = True
-                    if estado_reg == "VALID":
-                        estado_reg = "REVIEW_REQUIRED"
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 
@@ -709,6 +704,23 @@ class OCRService:
                 apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
                 actual=nombre_completo_final
             )
+
+            # ── Evaluación definitiva de completitud y validez ──
+            tiene_datos_completos = bool(
+                num_doc
+                and not str(num_doc).startswith("SIN_ID")
+                and (nombre_completo_final and nombre_completo_final != "POR REVISAR")
+                and (fecha_exp or fecha_nac)
+                and float(confianza or 0) >= (settings.OCR_CONFIDENCE_THRESHOLD * 100)
+            )
+
+            requiere_revision = not tiene_datos_completos
+            if ocr_engine == "tesseract_fallback":
+                estado_reg = "FALLBACK_TESSERACT"
+            elif tiene_datos_completos:
+                estado_reg = "VALID"
+            else:
+                estado_reg = "REVIEW_REQUIRED"
 
             if not persona:
                 persona = Persona(
@@ -734,7 +746,7 @@ class OCRService:
                     texto_ocr_crudo=(texto_ocr or "")[:5000],
                 )
                 db.add(persona)
-                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo})")
+                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo}) [Estado: {estado_reg}]")
             else:
                 # ── UNIFICACIÓN INTELIGENTE DE HOJAS / PÁGINAS ──
                 # Si la cédula ya existe (ej. repartida en 2 hojas), no duplicar y fusionar datos faltantes

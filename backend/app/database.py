@@ -103,7 +103,7 @@ def create_tables():
     except Exception as mig_err:
         logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
 
-    # ── Saneamiento y deduplicación automática de nombres en BD ─────
+    # ── Saneamiento de nombres y reevaluación de estado de revisión ──
     try:
         from app.models.persona import Persona
         from app.utils.name_cleaner import resolver_nombre_completo
@@ -116,13 +116,29 @@ def create_tables():
                 if nom_limpio and nom_limpio != p.nombre_completo:
                     p.nombre_completo = nom_limpio
                     modificados += 1
+
+                # Reevaluar si es un registro completo y válido
+                tiene_datos = bool(
+                    p.numero_identificacion
+                    and not str(p.numero_identificacion).startswith("SIN_ID")
+                    and (p.nombre_completo and p.nombre_completo != "POR REVISAR")
+                    and (p.fecha_expedicion or p.fecha_nacimiento)
+                    and float(p.confianza_extraccion or 0) >= 70.0
+                )
+                nuevo_req = not tiene_datos
+                nuevo_est = "VALID" if tiene_datos else "REVIEW_REQUIRED"
+                if p.requiere_revision != nuevo_req or p.estado_registro != nuevo_est:
+                    p.requiere_revision = nuevo_req
+                    p.estado_registro = nuevo_est
+                    modificados += 1
+
             if modificados > 0:
                 db_s.commit()
-                logger.info(f"Saneamiento de nombres completado: {modificados} personas actualizadas con nombres deduplicados.")
+                logger.info(f"Saneamiento y reevaluación completada: {modificados} cambios en personas.")
         finally:
             db_s.close()
     except Exception as san_err:
-        logger.warning(f"Aviso saneando nombres en BD: {san_err}")
+        logger.warning(f"Aviso saneando y reevaluando personas en BD: {san_err}")
 
     try:
         from app.models.usuario import Usuario

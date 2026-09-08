@@ -103,6 +103,27 @@ def create_tables():
     except Exception as mig_err:
         logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
 
+    # ── Saneamiento y deduplicación automática de nombres en BD ─────
+    try:
+        from app.models.persona import Persona
+        from app.utils.name_cleaner import resolver_nombre_completo
+        db_s = SessionLocal()
+        try:
+            personas = db_s.query(Persona).all()
+            modificados = 0
+            for p in personas:
+                nom_limpio = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
+                if nom_limpio and nom_limpio != p.nombre_completo:
+                    p.nombre_completo = nom_limpio
+                    modificados += 1
+            if modificados > 0:
+                db_s.commit()
+                logger.info(f"Saneamiento de nombres completado: {modificados} personas actualizadas con nombres deduplicados.")
+        finally:
+            db_s.close()
+    except Exception as san_err:
+        logger.warning(f"Aviso saneando nombres en BD: {san_err}")
+
     try:
         from app.models.usuario import Usuario
         db = SessionLocal()

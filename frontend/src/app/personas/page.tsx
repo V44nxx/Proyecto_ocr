@@ -13,6 +13,7 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import { apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { formatNombreCompleto } from "@/lib/formatters";
 import type { Persona, PersonaUpdate } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
@@ -107,7 +108,7 @@ export default function PersonasPage() {
 
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
-    const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
+    const nomCompleto = formatNombreCompleto(p);
     setEditForm({
       nombre_completo: nomCompleto,
       nombres: p.nombres || "",
@@ -149,7 +150,7 @@ export default function PersonasPage() {
     if (!buscar) return true;
     const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
     const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
-    const nom = String(p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ")).toLowerCase();
+    const nom = formatNombreCompleto(p).toLowerCase();
     return (
       cedula.includes(q) ||
       nom.includes(q)
@@ -161,7 +162,7 @@ export default function PersonasPage() {
     const docId = p.documento_id ? String(p.documento_id) : null;
     const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
 
-    const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
+    const nomCompleto = formatNombreCompleto(p);
     const campos = [
       { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3 h-3" />, valor: p.numero_identificacion },
       { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3 h-3" />, valor: nomCompleto },
@@ -488,7 +489,7 @@ export default function PersonasPage() {
                   {personasFiltradas.map((p) => {
                     const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
                     const isExpandida = expandidoId === p.id;
-                    const nombreCompleto = [p.nombres, p.apellidos].filter(Boolean).join(" ");
+                    const nombreCompleto = formatNombreCompleto(p);
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
                     return (

@@ -61,8 +61,10 @@ class ExportacionService:
 
         # Convertir a DataFrame
         datos = []
+        from app.utils.name_cleaner import resolver_nombre_completo
+
         for p in personas:
-            nom_comp = p.nombre_completo or f"{p.nombres or ''} {p.apellidos or ''}".strip()
+            nom_comp = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
             datos.append({
                 "numero_identificacion": p.numero_identificacion,
                 "nombre_completo": nom_comp,

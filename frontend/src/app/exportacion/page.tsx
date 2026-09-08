@@ -10,6 +10,7 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import { apiExportacion, apiPersonas } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { formatNombreCompleto } from "@/lib/formatters";
 import type { Persona } from "@/types";
 
 export default function ExportacionPage() {
@@ -175,7 +176,7 @@ export default function ExportacionPage() {
                   </thead>
                   <tbody>
                     {personas.slice(0, 8).map((p) => {
-                      const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
+                      const nomCompleto = formatNombreCompleto(p);
                       return (
                         <tr key={p.id}>
                           <td className="font-mono text-primary-400">{p.numero_identificacion}</td>

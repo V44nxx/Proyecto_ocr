@@ -702,9 +702,13 @@ class OCRService:
                     toks.pop(0)
                 apellidos_final = " ".join(toks).strip() or "POR REVISAR"
 
-            if not nombre_completo_final:
-                partes_nom = [p for p in [nombres_final, apellidos_final] if p and p != "POR REVISAR"]
-                nombre_completo_final = " ".join(partes_nom).strip() or "POR REVISAR"
+            from app.utils.name_cleaner import resolver_nombre_completo
+
+            nombre_completo_final = resolver_nombre_completo(
+                nombres=nombres_final if nombres_final != "POR REVISAR" else "",
+                apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
+                actual=nombre_completo_final
+            )
 
             if not persona:
                 persona = Persona(

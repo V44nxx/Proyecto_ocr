@@ -730,9 +730,10 @@ class ComparacionService:
             conf_ocr = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
             estado_ocr = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "NO DETECTADO"
 
+            from app.utils.name_cleaner import resolver_nombre_completo
             nom_c_bd = getattr(p, "nombre_completo", None) if p else None
-            nom_bd = nom_c_bd if (nom_c_bd and isinstance(nom_c_bd, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
-            nom_ex = str(r_ex.get("nombre_completo") or f"{nombres_ex} {apellidos_ex}".strip())
+            nom_bd = resolver_nombre_completo(getattr(p, 'nombres', '') or '', getattr(p, 'apellidos', '') or '', nom_c_bd if isinstance(nom_c_bd, str) else None) if p else ""
+            nom_ex = resolver_nombre_completo(nombres_ex, apellidos_ex, str(r_ex.get("nombre_completo") or ""))
 
             registros_auditoria.append({
                 "identificacion": id_num,
@@ -1019,7 +1020,7 @@ class ComparacionService:
                 diag = "El estudiante figura en la lista oficial pero su documento de identidad no fue detectado en el PDF."
 
             nom_c_ocr = getattr(p, "nombre_completo", None) if p else None
-            nom_ocr = nom_c_ocr if (nom_c_ocr and isinstance(nom_c_ocr, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
+            nom_ocr = resolver_nombre_completo(getattr(p, 'nombres', '') or '', getattr(p, 'apellidos', '') or '', nom_c_ocr if isinstance(nom_c_ocr, str) else None) if p else ""
             conf_ocr = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
             est_ocr = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "NO DETECTADO"
 
@@ -1100,7 +1101,7 @@ class ComparacionService:
             nom_ex = r_ex.get('nombre_completo') or f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip() if en_excel else "—"
 
             nom_c_bd = getattr(p, "nombre_completo", None) if p else None
-            nom_ocr_bd = nom_c_bd if (nom_c_bd and isinstance(nom_c_bd, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
+            nom_ocr_bd = resolver_nombre_completo(getattr(p, 'nombres', '') or '', getattr(p, 'apellidos', '') or '', nom_c_bd if isinstance(nom_c_bd, str) else None) if p else ""
 
             f_nac_str = p.fecha_nacimiento.strftime("%d/%m/%Y") if (p and p.fecha_nacimiento) else ""
             f_exp_str = p.fecha_expedicion.strftime("%d/%m/%Y") if (p and p.fecha_expedicion) else ""

@@ -22,8 +22,7 @@ class ExportacionService:
 
     COLUMNAS = {
         "numero_identificacion": "Número Identificación",
-        "nombres": "Nombres",
-        "apellidos": "Apellidos",
+        "nombre_completo": "Nombre Completo",
         "fecha_nacimiento": "Fecha Nacimiento",
         "fecha_expedicion": "Fecha Expedición",
         "lugar_expedicion": "Lugar Expedición",
@@ -63,10 +62,10 @@ class ExportacionService:
         # Convertir a DataFrame
         datos = []
         for p in personas:
+            nom_comp = p.nombre_completo or f"{p.nombres or ''} {p.apellidos or ''}".strip()
             datos.append({
                 "numero_identificacion": p.numero_identificacion,
-                "nombres": p.nombres or "",
-                "apellidos": p.apellidos or "",
+                "nombre_completo": nom_comp,
                 "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
                 "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else "",
                 "lugar_expedicion": p.lugar_expedicion or "",

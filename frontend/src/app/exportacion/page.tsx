@@ -51,7 +51,7 @@ export default function ExportacionPage() {
     ok: personas.filter((p) => !p.requiere_revision).length,
     revision: personas.filter((p) => p.requiere_revision).length,
     completas: personas.filter(
-      (p) => p.nombres && p.apellidos && p.fecha_nacimiento && p.fecha_expedicion
+      (p) => (p.nombre_completo || (p.nombres && p.apellidos)) && p.fecha_nacimiento && p.fecha_expedicion
     ).length,
   };
 
@@ -169,26 +169,27 @@ export default function ExportacionPage() {
                   <thead>
                     <tr>
                       <th>Cédula</th>
-                      <th>Nombres</th>
-                      <th>Apellidos</th>
+                      <th>Nombre y Apellidos</th>
                       <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {personas.slice(0, 8).map((p) => (
-                      <tr key={p.id}>
-                        <td className="font-mono text-primary-400">{p.numero_identificacion}</td>
-                        <td>{p.nombres || "—"}</td>
-                        <td>{p.apellidos || "—"}</td>
-                        <td>
-                          {p.requiere_revision ? (
-                            <span className="badge badge-warning">Revisión</span>
-                          ) : (
-                            <span className="badge badge-success">OK</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {personas.slice(0, 8).map((p) => {
+                      const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
+                      return (
+                        <tr key={p.id}>
+                          <td className="font-mono text-primary-400">{p.numero_identificacion}</td>
+                          <td>{nomCompleto || "—"}</td>
+                          <td>
+                            {p.requiere_revision ? (
+                              <span className="badge badge-warning">Revisión</span>
+                            ) : (
+                              <span className="badge badge-success">OK</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {personas.length > 8 && (

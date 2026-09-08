@@ -34,12 +34,12 @@ function limpiarValorTexto(val: string | null | undefined): string {
         .replace(/True/g, "true")
         .replace(/False/g, "false");
       const obj = JSON.parse(jsonStr);
-      const nombres = obj.nombres || obj.nombre || "";
-      const apellidos = obj.apellidos || obj.apellido || "";
-      const nc = `${nombres} ${apellidos}`.trim();
+      const nc = obj.nombre_completo || `${obj.nombres || obj.nombre || ""} ${obj.apellidos || obj.apellido || ""}`.trim();
       const st = obj.estado ? ` · ${obj.estado}` : "";
       if (nc) return `${nc}${st}`;
     } catch {
+      const mNomComp = s.match(/['"]nombre_completo['"]\s*:\s*['"]([^'"]+)['"]/i);
+      if (mNomComp) return mNomComp[1];
       const mNom = s.match(/['"]nombres?['"]\s*:\s*['"]([^'"]+)['"]/i);
       const mApe = s.match(/['"]apellidos?['"]\s*:\s*['"]([^'"]+)['"]/i);
       const nom = mNom ? mNom[1] : "";
@@ -57,6 +57,7 @@ function limpiarEtiquetaCampo(campo: string | null | undefined, tipo: string): s
     if (tipo === "nuevo_bd") return "No en Planilla (Sobrante)";
     return "Registro Completo";
   }
+  if (campo === "nombre_completo") return "Nombre y Apellidos";
   return campo.replace(/_/g, " ");
 }
 

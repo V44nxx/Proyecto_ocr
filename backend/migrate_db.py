@@ -22,7 +22,10 @@ def migrar_columnas():
             "ALTER TABLE personas ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50) DEFAULT 'CEDULA_CIUDADANIA';",
             "ALTER TABLE personas ADD COLUMN IF NOT EXISTS estado_registro VARCHAR(30) DEFAULT 'VALID';",
             "ALTER TABLE personas ADD COLUMN IF NOT EXISTS motor_ocr VARCHAR(50) DEFAULT 'google_document_ai';",
-            "ALTER TABLE personas ADD COLUMN IF NOT EXISTS detalles_campos JSONB;"
+            "ALTER TABLE personas ADD COLUMN IF NOT EXISTS detalles_campos JSONB;",
+            "ALTER TABLE personas ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(400);",
+            "CREATE INDEX IF NOT EXISTS ix_personas_nombre_completo ON personas (nombre_completo);",
+            "UPDATE personas SET nombre_completo = TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, ''))) WHERE (nombre_completo IS NULL OR nombre_completo = '') AND (nombres IS NOT NULL OR apellidos IS NOT NULL);"
         ]
         for q in queries:
             db.execute(text(q))

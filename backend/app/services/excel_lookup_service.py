@@ -12,6 +12,7 @@ from app.utils.logger import app_logger as logger
 
 
 _MAPEO_COLUMNAS = {
+    # Identificación
     "identificacion": "numero_identificacion",
     "numero_identificacion": "numero_identificacion",
     "numero_de_identificacion": "numero_identificacion",
@@ -34,13 +35,27 @@ _MAPEO_COLUMNAS = {
     "ti": "numero_identificacion",
     "tarjeta_identidad": "numero_identificacion",
     "id": "numero_identificacion",
+
+    # Nombre completo directo
+    "nombre_completo": "nombre_completo",
+    "nombres_completos": "nombre_completo",
+    "nombre_y_apellidos": "nombre_completo",
+    "nombres_y_apellidos": "nombre_completo",
+    "nombre_y_apellido": "nombre_completo",
+    "apellidos_y_nombres": "nombre_completo",
+    "apellido_y_nombre": "nombre_completo",
+    "aprendiz": "nombre_completo",
+    "estudiante": "nombre_completo",
+    "funcionario": "nombre_completo",
+    "titular": "nombre_completo",
+
+    # Nombres
     "nombre": "nombres",
     "nombres": "nombres",
     "primer_nombre": "primer_nombre",
     "segundo_nombre": "segundo_nombre",
-    "nombre_completo": "nombres",
-    "nombre_y_apellidos": "nombres",
-    "apellido_y_nombre": "nombres",
+
+    # Apellidos
     "apellido": "apellidos",
     "apellidos": "apellidos",
     "primer_apellido": "primer_apellido",
@@ -128,10 +143,16 @@ def _procesar_hoja(df_raw: pd.DataFrame, filepath: str, sheet_name: str) -> Opti
         if "apellidos" not in df.columns or df["apellidos"].isna().all():
             df["apellidos"] = combined
 
+    # Unificar en un único campo nombre_completo
+    if "nombre_completo" not in df.columns or df["nombre_completo"].isna().all():
+        noms = df["nombres"].fillna("").astype(str).str.strip() if "nombres" in df.columns else pd.Series([""] * len(df))
+        apes = df["apellidos"].fillna("").astype(str).str.strip() if "apellidos" in df.columns else pd.Series([""] * len(df))
+        df["nombre_completo"] = (noms + " " + apes).str.strip()
+
     df["numero_identificacion"] = df["numero_identificacion"].apply(_limpiar_id)
     df = df[df["numero_identificacion"].str.len() >= 5]
 
-    for campo in ["nombres", "apellidos"]:
+    for campo in ["nombre_completo", "nombres", "apellidos"]:
         if campo in df.columns:
             df[campo] = df[campo].fillna("").astype(str).apply(_limpiar_texto)
 
@@ -147,7 +168,7 @@ class ExcelLookupService:
     def cargar_lookup(self, filepath: str) -> Dict[str, Dict[str, str]]:
         """
         Carga el Excel y devuelve un diccionario:
-            { "1005123456": {"nombres": "JUAN CARLOS", "apellidos": "LOPEZ GOMEZ"}, ... }
+            { "1005123456": {"nombre_completo": "JUAN CARLOS LOPEZ GOMEZ", "nombres": "...", "apellidos": "..."}, ... }
         Si hay error devuelve {} para no bloquear el OCR.
         """
         lookup: Dict[str, Dict[str, str]] = {}
@@ -172,6 +193,7 @@ class ExcelLookupService:
             df_total = pd.concat(dfs_validos, ignore_index=True)
             df_total = df_total.drop_duplicates(subset=["numero_identificacion"], keep="first")
 
+            nc_col = "nombre_completo" if "nombre_completo" in df_total.columns else None
             nombres_col = "nombres" if "nombres" in df_total.columns else None
             apellidos_col = "apellidos" if "apellidos" in df_total.columns else None
 
@@ -180,10 +202,16 @@ class ExcelLookupService:
                 if not num_id or len(num_id) < 5:
                     continue
                 entry: Dict[str, str] = {}
-                if nombres_col:
-                    entry["nombres"] = _limpiar_texto(row.get(nombres_col, ""))
-                if apellidos_col:
-                    entry["apellidos"] = _limpiar_texto(row.get(apellidos_col, ""))
+                nom_comp = _limpiar_texto(row.get(nc_col, "")) if nc_col else ""
+                nom_part = _limpiar_texto(row.get(nombres_col, "")) if nombres_col else ""
+                ape_part = _limpiar_texto(row.get(apellidos_col, "")) if apellidos_col else ""
+
+                if not nom_comp and (nom_part or ape_part):
+                    nom_comp = f"{nom_part} {ape_part}".strip()
+
+                entry["nombre_completo"] = nom_comp
+                entry["nombres"] = nom_part or nom_comp
+                entry["apellidos"] = ape_part
                 lookup[num_id] = entry
 
             logger.info(f"[ExcelLookup] {len(lookup)} registros cargados de {Path(filepath).name}")

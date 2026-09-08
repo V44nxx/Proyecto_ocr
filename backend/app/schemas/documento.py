@@ -29,6 +29,7 @@ class DocumentoResponse(BaseModel):
 # ──────────────────────────────────────────
 class PersonaBase(BaseModel):
     numero_identificacion: str
+    nombre_completo: Optional[str] = None
     nombres: Optional[str] = None
     apellidos: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
@@ -78,6 +79,7 @@ class PersonaCreate(PersonaBase):
 
 
 class PersonaUpdate(BaseModel):
+    nombre_completo: Optional[str] = None
     nombres: Optional[str] = None
     apellidos: Optional[str] = None
     fecha_nacimiento: Optional[date] = None

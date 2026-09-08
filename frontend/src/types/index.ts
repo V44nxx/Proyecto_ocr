@@ -58,8 +58,9 @@ export interface Persona {
   estado_registro?: string | null;
   motor_ocr?: string | null;
   numero_identificacion: string;
-  nombres: string | null;
-  apellidos: string | null;
+  nombre_completo: string | null;
+  nombres?: string | null;
+  apellidos?: string | null;
   fecha_nacimiento: string | null;
   fecha_expedicion: string | null;
   lugar_expedicion: string | null;
@@ -72,6 +73,7 @@ export interface Persona {
 }
 
 export interface PersonaUpdate {
+  nombre_completo?: string;
   nombres?: string;
   apellidos?: string;
   fecha_nacimiento?: string;

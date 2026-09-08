@@ -35,6 +35,7 @@ def listar_personas(
         buscar_upper = f"%{buscar.upper()}%"
         query = query.filter(
             Persona.numero_identificacion.ilike(f"%{buscar}%") |
+            Persona.nombre_completo.ilike(buscar_upper) |
             Persona.nombres.ilike(buscar_upper) |
             Persona.apellidos.ilike(buscar_upper)
         )
@@ -75,6 +76,12 @@ def actualizar_persona(
     campos_actualizados = []
 
     # Actualizar solo los campos enviados
+    if datos.nombre_completo is not None:
+        persona.nombre_completo = datos.nombre_completo.upper()
+        if "nombre_completo" not in campos_revisados:
+            campos_revisados.append("nombre_completo")
+        campos_actualizados.append("nombre_completo")
+
     if datos.nombres is not None:
         persona.nombres = datos.nombres.upper()
         if "nombres" not in campos_revisados:

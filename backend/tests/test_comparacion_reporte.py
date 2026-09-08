@@ -60,6 +60,7 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     # p1: Coincidente
     mock_p1 = MagicMock()
     mock_p1.numero_identificacion = "1117493336"
+    mock_p1.nombre_completo = "LIDA YASMIN ALDANA BOHORQUEZ"
     mock_p1.nombres = "LIDA YASMIN"
     mock_p1.apellidos = "ALDANA BOHORQUEZ"
     mock_p1.fecha_nacimiento = datetime(1987, 5, 8).date()
@@ -72,6 +73,7 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     # p2: Con diferencia en apellidos
     mock_p2 = MagicMock()
     mock_p2.numero_identificacion = "7556032"
+    mock_p2.nombre_completo = "PABLO RODRIGUEZ"
     mock_p2.nombres = "PABLO"
     mock_p2.apellidos = "RODRIGUEZ"
     mock_p2.fecha_nacimiento = datetime(1969, 1, 2).date()
@@ -84,6 +86,7 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     # p3: Sobrante en BD (no está en el Excel)
     mock_p3 = MagicMock()
     mock_p3.numero_identificacion = "9999999999"
+    mock_p3.nombre_completo = "EXTRA SOBRANTE"
     mock_p3.nombres = "EXTRA"
     mock_p3.apellidos = "SOBRANTE"
     mock_p3.fecha_nacimiento = datetime(2000, 1, 1).date()
@@ -140,7 +143,7 @@ def test_generar_reporte_xlsx_formato(tmp_path):
     # Validar hoja Personas en Base de Datos (OCR)
     ws_bd = wb["Personas en Base de Datos (OCR)"]
     assert ws_bd["A1"].value == "N° Identificación (OCR)"
-    assert ws_bd["J1"].value == "¿Registrado en Planilla Excel?"
+    assert ws_bd["I1"].value == "¿Registrado en Planilla Excel?"
 
     # Validar hoja de diferencias
     ws_dif = wb["Campos con Diferencias"]

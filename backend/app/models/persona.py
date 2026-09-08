@@ -15,6 +15,7 @@ class Persona(Base):
 
     # Datos extraídos
     numero_identificacion = Column(String(20), unique=True, nullable=False, index=True)
+    nombre_completo = Column(String(400), nullable=True, index=True)
     nombres = Column(String(200), nullable=True)
     apellidos = Column(String(200), nullable=True)
     fecha_nacimiento = Column(Date, nullable=True)
@@ -43,13 +44,6 @@ class Persona(Base):
     # Relaciones
     documento = relationship("Documento", back_populates="personas")
 
-    def nombre_completo(self) -> str:
-        partes = []
-        if self.nombres:
-            partes.append(self.nombres)
-        if self.apellidos:
-            partes.append(self.apellidos)
-        return " ".join(partes)
-
     def __repr__(self):
-        return f"<Persona {self.numero_identificacion} - {self.nombre_completo()}>"
+        nom = self.nombre_completo or f"{self.nombres or ''} {self.apellidos or ''}".strip()
+        return f"<Persona {self.numero_identificacion} - {nom}>"

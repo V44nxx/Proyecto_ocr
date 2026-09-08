@@ -30,8 +30,7 @@ class ComparacionService:
     """
 
     CAMPOS_COMPARACION = [
-        "nombres",
-        "apellidos",
+        "nombre_completo",
         "fecha_nacimiento",
         "fecha_expedicion",
         "lugar_expedicion",
@@ -63,12 +62,24 @@ class ComparacionService:
         "tarjeta_identidad": "numero_identificacion",
         "id": "numero_identificacion",
 
+        # Nombre completo directo
+        "nombre_completo": "nombre_completo",
+        "nombres_completos": "nombre_completo",
+        "nombre_y_apellidos": "nombre_completo",
+        "nombres_y_apellidos": "nombre_completo",
+        "nombre_y_apellido": "nombre_completo",
+        "apellidos_y_nombres": "nombre_completo",
+        "apellido_y_nombre": "nombre_completo",
+        "aprendiz": "nombre_completo",
+        "estudiante": "nombre_completo",
+        "funcionario": "nombre_completo",
+        "titular": "nombre_completo",
+
         # Nombres
         "nombre": "nombres",
         "nombres": "nombres",
         "primer_nombre": "primer_nombre",
         "segundo_nombre": "segundo_nombre",
-        "nombre_completo": "nombres",
 
         # Apellidos
         "apellido": "apellidos",
@@ -215,12 +226,18 @@ class ComparacionService:
             if "apellidos" not in df.columns or df["apellidos"].isna().all():
                 df["apellidos"] = apes_combinados
 
+        # Unificar en un único campo nombre_completo
+        if "nombre_completo" not in df.columns or df["nombre_completo"].isna().all():
+            noms = df["nombres"].fillna("").astype(str).str.strip() if "nombres" in df.columns else pd.Series([""] * len(df))
+            apes = df["apellidos"].fillna("").astype(str).str.strip() if "apellidos" in df.columns else pd.Series([""] * len(df))
+            df["nombre_completo"] = (noms + " " + apes).str.strip()
+
         # Limpiar identificaciones (ej. "CC - 1110487315" -> "1110487315")
         df["numero_identificacion"] = df["numero_identificacion"].apply(self._limpiar_numero_id)
         df = df[df["numero_identificacion"].str.len() >= 5]
 
         # Normalizar campos de texto
-        for campo in ["nombres", "apellidos", "lugar_expedicion", "sexo"]:
+        for campo in ["nombre_completo", "nombres", "apellidos", "lugar_expedicion", "sexo"]:
             if campo in df.columns:
                 df[campo] = df[campo].fillna("").astype(str).str.strip().str.upper()
                 df[campo] = df[campo].replace({"NAN": "", "NONE": "", "NULL": ""})
@@ -321,8 +338,9 @@ class ComparacionService:
             personas_bd = db.query(Persona).all()
             df_bd = pd.DataFrame([{
                 "numero_identificacion": self._limpiar_numero_id(p.numero_identificacion),
-                "nombres": p.nombres or "",
-                "apellidos": p.apellidos or "",
+                "nombre_completo": getattr(p, "nombre_completo", None) if isinstance(getattr(p, "nombre_completo", None), str) else f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip(),
+                "nombres": getattr(p, "nombres", "") or "",
+                "apellidos": getattr(p, "apellidos", "") or "",
                 "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
                 "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else "",
                 "lugar_expedicion": p.lugar_expedicion or "",
@@ -360,7 +378,7 @@ class ComparacionService:
                 # Diferencias en registros faltantes en BD
                 for id_faltante in ids_faltantes:
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_faltante].iloc[0]
-                    nom_ex = f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}".strip() or str(row_excel.get('nombre', '')).strip()
+                    nom_ex = row_excel.get('nombre_completo') or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}".strip() or str(row_excel.get('nombre', '')).strip()
                     est_ex = f" · {row_excel.get('estado', '')}" if row_excel.get('estado') else ""
                     val_ex = f"{nom_ex}{est_ex}".strip() or "Persona registrada en Excel"
 
@@ -376,7 +394,7 @@ class ComparacionService:
                 # Registros nuevos en BD
                 for id_nuevo in ids_nuevos:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_nuevo].iloc[0]
-                    nom_bd = f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}".strip() or "Persona detectada por OCR"
+                    nom_bd = row_bd.get('nombre_completo') or f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}".strip() or "Persona detectada por OCR"
                     diferencias_a_guardar.append(Diferencia(
                         comparacion_id=comp_uuid,
                         numero_identificacion=id_nuevo,
@@ -390,55 +408,36 @@ class ComparacionService:
                 total_iguales = 0
                 total_diferentes = 0
 
-                tiene_col_apellidos = "apellidos" in df_excel.columns and not df_excel["apellidos"].isna().all()
-
                 for id_comun in ids_comunes:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_comun].iloc[0]
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_comun].iloc[0]
 
                     tiene_diferencias = False
 
-                    # Comparación especial de Nombres y Apellidos
-                    if "nombres" in row_excel:
-                        if not tiene_col_apellidos:
-                            # Caso SENA / Planilla con una sola columna 'Nombre' que incluye apellidos
-                            noms_coinciden = self._son_nombres_equivalentes(
-                                nombres_bd=str(row_bd.get("nombres") or ""),
-                                apellidos_bd=str(row_bd.get("apellidos") or ""),
-                                nombres_excel=str(row_excel.get("nombres") or ""),
-                                apellidos_excel=""
-                            )
-                            if not noms_coinciden:
-                                tiene_diferencias = True
-                                nombre_bd_completo = f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}".strip()
-                                diferencias_a_guardar.append(Diferencia(
-                                    comparacion_id=comp_uuid,
-                                    numero_identificacion=id_comun,
-                                    campo="nombres",
-                                    valor_bd=nombre_bd_completo,
-                                    valor_excel=str(row_excel.get("nombres") or ""),
-                                    tipo_diferencia="diferente",
-                                ))
-                        else:
-                            # Columnas separadas
-                            val_bd_norm = self._normalizar_para_comparacion(row_bd.get("nombres"), campo="nombres")
-                            val_excel_norm = self._normalizar_para_comparacion(row_excel.get("nombres"), campo="nombres")
-                            if val_bd_norm != val_excel_norm:
-                                tiene_diferencias = True
-                                diferencias_a_guardar.append(Diferencia(
-                                    comparacion_id=comp_uuid,
-                                    numero_identificacion=id_comun,
-                                    campo="nombres",
-                                    valor_bd=str(row_bd.get("nombres") or "") or None,
-                                    valor_excel=str(row_excel.get("nombres") or "") or None,
-                                    tipo_diferencia="diferente",
-                                ))
+                    # Comparación de Nombre Completo unificado
+                    nom_bd = str(row_bd.get("nombre_completo") or f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}").strip()
+                    nom_excel = str(row_excel.get("nombre_completo") or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}").strip()
+
+                    if nom_excel:
+                        noms_coinciden = self._son_nombres_equivalentes(
+                            nombres_bd=nom_bd,
+                            apellidos_bd="",
+                            nombres_excel=nom_excel,
+                            apellidos_excel=""
+                        )
+                        if not noms_coinciden:
+                            tiene_diferencias = True
+                            diferencias_a_guardar.append(Diferencia(
+                                comparacion_id=comp_uuid,
+                                numero_identificacion=id_comun,
+                                campo="nombre_completo",
+                                valor_bd=nom_bd,
+                                valor_excel=nom_excel,
+                                tipo_diferencia="diferente",
+                            ))
 
                     # Comparar los demás campos
-                    campos_resto = ["apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
-                    if not tiene_col_apellidos:
-                        campos_resto.remove("apellidos")
-
+                    campos_resto = ["fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
                     for campo in campos_resto:
                         if campo in row_excel and str(row_excel.get(campo) or "").strip():
                             val_bd_norm = self._normalizar_para_comparacion(row_bd.get(campo), campo=campo)
@@ -731,9 +730,15 @@ class ComparacionService:
             conf_ocr = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
             estado_ocr = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "NO DETECTADO"
 
+            nom_c_bd = getattr(p, "nombre_completo", None) if p else None
+            nom_bd = nom_c_bd if (nom_c_bd and isinstance(nom_c_bd, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
+            nom_ex = str(r_ex.get("nombre_completo") or f"{nombres_ex} {apellidos_ex}".strip())
+
             registros_auditoria.append({
                 "identificacion": id_num,
                 "estado": estado,
+                "nombre_bd": nom_bd,
+                "nombre_excel": nom_ex,
                 "nombres_bd": p.nombres if p and p.nombres else "",
                 "nombres_excel": nombres_ex,
                 "apellidos_bd": p.apellidos if p and p.apellidos else "",
@@ -786,8 +791,7 @@ class ComparacionService:
 
         headers = [
             "N° Identificación", "Estado Auditoría",
-            "Nombres (OCR / BD)", "Nombres (Excel Oficial)",
-            "Apellidos (OCR / BD)", "Apellidos (Excel Oficial)",
+            "Nombre Completo (OCR / BD)", "Nombre Completo (Excel Oficial)",
             "F. Nacimiento (OCR)", "F. Nacimiento (Excel)",
             "F. Expedición (OCR)", "F. Expedición (Excel)",
             "Lugar Expedición (OCR)", "Lugar Expedición (Excel)",
@@ -928,10 +932,8 @@ class ComparacionService:
                 row_vals = [
                     (r["identificacion"], "left", False),
                     (r["estado"], "center", False),
-                    (r["nombres_bd"], "left", "nombres" in difs_c),
-                    (r["nombres_excel"], "left", "nombres" in difs_c),
-                    (r["apellidos_bd"], "left", "apellidos" in difs_c),
-                    (r["apellidos_excel"], "left", "apellidos" in difs_c),
+                    (r["nombre_bd"], "left", any(k in difs_c for k in ["nombre_completo", "nombres", "apellidos"])),
+                    (r["nombre_excel"], "left", any(k in difs_c for k in ["nombre_completo", "nombres", "apellidos"])),
                     (r["f_nac_bd"], "center", "fecha_nacimiento" in difs_c),
                     (r["f_nac_excel"], "center", "fecha_nacimiento" in difs_c),
                     (r["f_exp_bd"], "center", "fecha_expedicion" in difs_c),
@@ -982,8 +984,8 @@ class ComparacionService:
         ws_ex.views.sheetView[0].showGridLines = True
 
         headers_excel = [
-            "N° Identificación (Excel)", "Nombres y Apellidos (Excel)", "Estado Matrícula",
-            "¿Detectado por OCR?", "Nombres en BD (OCR)", "Apellidos en BD (OCR)",
+            "N° Identificación (Excel)", "Nombre y Apellidos (Excel)", "Estado Matrícula",
+            "¿Detectado por OCR?", "Nombre y Apellidos en BD (OCR)",
             "Confianza OCR", "Estado OCR", "Diagnóstico / Observaciones de Cotejo"
         ]
         for col_idx, h in enumerate(headers_excel, start=1):
@@ -997,7 +999,7 @@ class ComparacionService:
         # Escribir filas del Excel
         row_num = 2
         for id_num, r_ex in excel_map.items():
-            nom_ex = f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip()
+            nom_ex = r_ex.get('nombre_completo') or f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip()
             est_mat = str(r_ex.get("estado", "") or r_ex.get("tipo_documento", "") or "Inscrito")
             en_bd = id_num in bd_map
             p = bd_map.get(id_num)
@@ -1016,8 +1018,8 @@ class ComparacionService:
                 st_fill = relleno_fal
                 diag = "El estudiante figura en la lista oficial pero su documento de identidad no fue detectado en el PDF."
 
-            nom_ocr = p.nombres if p and p.nombres else ""
-            ape_ocr = p.apellidos if p and p.apellidos else ""
+            nom_c_ocr = getattr(p, "nombre_completo", None) if p else None
+            nom_ocr = nom_c_ocr if (nom_c_ocr and isinstance(nom_c_ocr, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
             conf_ocr = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
             est_ocr = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "NO DETECTADO"
 
@@ -1026,8 +1028,7 @@ class ComparacionService:
                 (nom_ex, "left", False),
                 (est_mat, "center", False),
                 (st, "center", True),
-                (nom_ocr, "left", any(d.campo == "nombres" for d in difs)),
-                (ape_ocr, "left", any(d.campo == "apellidos" for d in difs)),
+                (nom_ocr, "left", any(d.campo in ["nombre_completo", "nombres", "apellidos"] for d in difs)),
                 (conf_ocr, "center", False),
                 (est_ocr, "center", False),
                 (diag, "left", False),
@@ -1063,7 +1064,7 @@ class ComparacionService:
         ws_bd.views.sheetView[0].showGridLines = True
 
         headers_bd = [
-            "N° Identificación (OCR)", "Nombres (OCR)", "Apellidos (OCR)",
+            "N° Identificación (OCR)", "Nombre y Apellidos (OCR)",
             "Fecha Nacimiento", "Fecha Expedición", "Lugar Expedición", "Sexo",
             "Confianza OCR", "Estado OCR",
             "¿Registrado en Planilla Excel?", "Nombre en Planilla Excel", "Diagnóstico de Cotejo"
@@ -1096,21 +1097,23 @@ class ComparacionService:
                 st_fill = relleno_sob
                 diag = "Cédula detectada por OCR pero ausente en la planilla oficial de matrícula."
 
-            nom_ex = f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip() if en_excel else "—"
+            nom_ex = r_ex.get('nombre_completo') or f"{r_ex.get('nombres', '')} {r_ex.get('apellidos', '')}".strip() or str(r_ex.get('nombre', '')).strip() if en_excel else "—"
 
-            f_nac_str = p.fecha_nacimiento.strftime("%d/%m/%Y") if p.fecha_nacimiento else ""
-            f_exp_str = p.fecha_expedicion.strftime("%d/%m/%Y") if p.fecha_expedicion else ""
-            conf_str = f"{float(p.confianza_extraccion or 0):.1f}%"
-            est_str = "REVISAR" if p.requiere_revision else "VÁLIDO"
+            nom_c_bd = getattr(p, "nombre_completo", None) if p else None
+            nom_ocr_bd = nom_c_bd if (nom_c_bd and isinstance(nom_c_bd, str)) else (f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip() if p else "")
+
+            f_nac_str = p.fecha_nacimiento.strftime("%d/%m/%Y") if (p and p.fecha_nacimiento) else ""
+            f_exp_str = p.fecha_expedicion.strftime("%d/%m/%Y") if (p and p.fecha_expedicion) else ""
+            conf_str = f"{float(p.confianza_extraccion or 0):.1f}%" if p else "—"
+            est_str = ("REVISAR" if p.requiere_revision else "VÁLIDO") if p else "—"
 
             vals = [
                 (num_id, "left", False),
-                (p.nombres or "", "left", False),
-                (p.apellidos or "", "left", False),
+                (nom_ocr_bd, "left", False),
                 (f_nac_str, "center", False),
                 (f_exp_str, "center", False),
-                (p.lugar_expedicion or "", "left", False),
-                (p.sexo or "", "center", False),
+                (p.lugar_expedicion if p and p.lugar_expedicion else "", "left", False),
+                (p.sexo if p and p.sexo else "", "center", False),
                 (conf_str, "center", False),
                 (est_str, "center", False),
                 (st, "center", True),

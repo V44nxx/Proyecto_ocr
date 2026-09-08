@@ -107,7 +107,9 @@ export default function PersonasPage() {
 
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
+    const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
     setEditForm({
+      nombre_completo: nomCompleto,
       nombres: p.nombres || "",
       apellidos: p.apellidos || "",
       fecha_nacimiento: p.fecha_nacimiento || "",
@@ -141,16 +143,16 @@ export default function PersonasPage() {
     }
   };
 
-  // Filtrado local por cédula, nombres o apellidos
+  // Filtrado local por cédula o nombre y apellidos
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
     if (!buscar) return true;
     const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
     const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
+    const nom = String(p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ")).toLowerCase();
     return (
       cedula.includes(q) ||
-      String(p.nombres || "").toLowerCase().includes(q) ||
-      String(p.apellidos || "").toLowerCase().includes(q)
+      nom.includes(q)
     );
   });
 
@@ -159,10 +161,10 @@ export default function PersonasPage() {
     const docId = p.documento_id ? String(p.documento_id) : null;
     const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
 
+    const nomCompleto = p.nombre_completo || [p.nombres, p.apellidos].filter(Boolean).join(" ");
     const campos = [
       { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3 h-3" />, valor: p.numero_identificacion },
-      { key: "nombres", label: "Nombres", icono: <UserCheck className="w-3 h-3" />, valor: p.nombres },
-      { key: "apellidos", label: "Apellidos", icono: <UserCheck className="w-3 h-3" />, valor: p.apellidos },
+      { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3 h-3" />, valor: nomCompleto },
       { key: "fecha_nacimiento", label: "F. Nacimiento", icono: <Calendar className="w-3 h-3" />, valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null },
       { key: "fecha_expedicion", label: "F. Expedición", icono: <Calendar className="w-3 h-3" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
       { key: "lugar_expedicion", label: "Lugar Expedición", icono: <MapPin className="w-3 h-3" />, valor: p.lugar_expedicion },
@@ -406,7 +408,7 @@ export default function PersonasPage() {
               value={buscar}
               onChange={(e) => setBuscar(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
-              placeholder="Buscar por número de cédula, nombres o apellidos..."
+              placeholder="Buscar por número de cédula o nombre y apellidos..."
               className="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/60 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono sm:font-sans"
             />
             {buscar && (
@@ -516,17 +518,10 @@ export default function PersonasPage() {
                               <td className="py-2 px-4" colSpan={2}>
                                 <div className="flex gap-2">
                                   <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-32"
-                                    placeholder="Nombres"
-                                    value={editForm.nombres || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, nombres: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-32"
-                                    placeholder="Apellidos"
-                                    value={editForm.apellidos || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, apellidos: e.target.value })}
+                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-56"
+                                    placeholder="Nombre y Apellidos"
+                                    value={editForm.nombre_completo || ""}
+                                    onChange={(e) => setEditForm({ ...editForm, nombre_completo: e.target.value })}
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                   <input
@@ -598,10 +593,7 @@ export default function PersonasPage() {
                               {/* Nombre completo */}
                               <td className="py-3 px-4 whitespace-nowrap">
                                 {nombreCompleto ? (
-                                  <div>
-                                    <div className="text-sm font-semibold text-slate-100">{p.nombres}</div>
-                                    <div className="text-xs text-slate-400 font-medium">{p.apellidos}</div>
-                                  </div>
+                                  <div className="text-sm font-semibold text-slate-100">{nombreCompleto}</div>
                                 ) : (
                                   <span className="text-slate-600 italic text-xs">Sin nombre</span>
                                 )}

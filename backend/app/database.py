@@ -76,6 +76,33 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas de base de datos creadas/verificadas")
 
+    # ── Migraciones automáticas de esquema (idempotentes) ───────────
+    try:
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            queries = [
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS grupo_documento_id VARCHAR(100);",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS pagina_frente INTEGER;",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS pagina_reverso INTEGER;",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS pagina_numero INTEGER;",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50) DEFAULT 'CEDULA_CIUDADANIA';",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS estado_registro VARCHAR(30) DEFAULT 'VALID';",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS motor_ocr VARCHAR(50) DEFAULT 'google_document_ai';",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS detalles_campos JSONB;",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(400);",
+                "CREATE INDEX IF NOT EXISTS ix_personas_nombre_completo ON personas (nombre_completo);",
+                "UPDATE personas SET nombre_completo = TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, ''))) WHERE (nombre_completo IS NULL OR nombre_completo = '') AND (nombres IS NOT NULL OR apellidos IS NOT NULL);"
+            ]
+            for q in queries:
+                try:
+                    conn.execute(text(q))
+                except Exception as q_err:
+                    logger.warning(f"Aviso en migración de esquema '{q[:40]}...': {q_err}")
+            conn.commit()
+            logger.info("Migraciones automáticas de esquema completadas con éxito.")
+    except Exception as mig_err:
+        logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
+
     try:
         from app.models.usuario import Usuario
         db = SessionLocal()

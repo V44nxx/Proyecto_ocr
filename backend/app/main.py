@@ -115,6 +115,19 @@ async def log_requests(request, call_next):
     return response
 
 
+# Exception handler global para asegurar que los errores 500 incluyan headers CORS y detalle legible
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Excepción no controlada en {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Error interno del servidor: {str(exc)}"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
 # ──────────────────────────────────────────
 # Routers
 # ──────────────────────────────────────────
@@ -148,3 +161,18 @@ def health_check():
         "database": "conectada" if db_ok else "sin conexión",
         "version": settings.APP_VERSION,
     }
+
+
+@app.api_route("/api/sistema/migrar-db", methods=["GET", "POST"], tags=["Sistema"])
+def migrar_base_datos():
+    """Ejecuta migraciones de esquema idempotentes en PostgreSQL"""
+    try:
+        create_tables()
+        return {"status": "ok", "message": "Migración de esquema ejecutada exitosamente."}
+    except Exception as e:
+        logger.error(f"Error en /api/sistema/migrar-db: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )

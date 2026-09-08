@@ -36,16 +36,38 @@ def _validar_pdf(file: UploadFile):
         )
 
 
-def _procesar_ocr_background(pdf_path: str, documento_id: str):
+def _procesar_ocr_background(
+    pdf_path: str,
+    documento_id: str,
+    comparacion_id: Optional[str] = None,
+    excel_path: Optional[str] = None,
+):
     """
     Ejecuta OCR en hilo de fondo.
-    Siempre usa su propia sesión (db_externa=None) para no compartir
-    estado con el hilo principal.
+    Siempre usa su propia sesión para no compartir estado con el hilo principal.
+    Si se proporcionan comparacion_id y excel_path, ejecuta la comparación
+    automáticamente una vez que el OCR finaliza con éxito.
     """
     from app.database import SessionLocal
     db = SessionLocal()
     try:
         ocr_service.procesar_pdf(str(pdf_path), documento_id, db_externa=db)
+
+        # ── Comparación automática si se adjuntó un Excel ─────────────────
+        if comparacion_id and excel_path:
+            try:
+                from app.services.comparacion_service import comparacion_service
+                logger.info(
+                    f"OCR finalizado. Iniciando comparación automática: {comparacion_id}"
+                )
+                comparacion_service.ejecutar_comparacion(
+                    comparacion_id, excel_path, db
+                )
+                logger.info(f"Comparación automática completada: {comparacion_id}")
+            except Exception as e_cmp:
+                logger.error(
+                    f"Error en comparación automática {comparacion_id}: {e_cmp}"
+                )
     finally:
         db.close()
 
@@ -55,21 +77,27 @@ def _procesar_ocr_background(pdf_path: str, documento_id: str):
 # ──────────────────────────────────────────
 @router.post(
     "/upload",
-    summary="Subir PDF(s) para procesamiento OCR",
+    summary="Subir PDF(s) para procesamiento OCR (con comparación automática opcional)",
     status_code=202
 )
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     files: Optional[List[UploadFile]] = File(default=None, description="Uno o múltiples archivos PDF"),
     file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
+    excel: Optional[UploadFile] = File(default=None, description="Planilla Excel oficial para comparación automática (.xlsx/.xls)"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
     Sube uno o múltiples archivos PDF y los encola para procesamiento OCR.
     Acepta tanto el parámetro 'files' (múltiple) como 'file' (individual).
+    Si se adjunta un Excel (parámetro 'excel'), la comparación se ejecuta
+    automáticamente al finalizar el OCR, sin necesidad de ir a /comparacion.
     El procesamiento ocurre en segundo plano.
     """
+    from app.models.comparacion import Comparacion
+    from app.config import settings as cfg
+
     archivos_recibidos: List[UploadFile] = []
     if files:
         archivos_recibidos.extend([f for f in files if f and f.filename])
@@ -79,23 +107,55 @@ async def upload_pdf(
     if not archivos_recibidos:
         raise HTTPException(status_code=400, detail="No se enviaron archivos PDF válidos")
 
+    # ── Procesar Excel adjunto (si existe) ────────────────────────────────
+    comparacion_id: Optional[str] = None
+    excel_path_str: Optional[str] = None
+
+    if excel and excel.filename:
+        ext = Path(excel.filename).suffix.lower()
+        if ext not in (".xlsx", ".xls"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"El archivo Excel debe tener extensión .xlsx o .xls. Recibido: {ext}"
+            )
+        excel_content = await excel.read()
+        nombre_excel = f"comp_{uuid.uuid4()}{ext}"
+        ruta_excel = settings.upload_path / nombre_excel
+        ruta_excel.write_bytes(excel_content)
+
+        comparacion = Comparacion(
+            usuario_id=usuario.id,
+            nombre_archivo=nombre_excel,
+            nombre_original=excel.filename,
+            ruta_archivo=str(ruta_excel),
+            estado="pendiente",
+        )
+        db.add(comparacion)
+        db.commit()
+        db.refresh(comparacion)
+
+        comparacion_id = str(comparacion.id)
+        excel_path_str = str(ruta_excel)
+        logger.info(
+            f"Excel adjunto guardado para comparación automática: {excel.filename} (Comparacion ID: {comparacion_id})"
+        )
+
+    # ── Procesar cada PDF ─────────────────────────────────────────────────
     resultados = []
 
-    for file in archivos_recibidos:
-        _validar_pdf(file)
+    for pdf_file in archivos_recibidos:
+        _validar_pdf(pdf_file)
 
-        # Guardar archivo con nombre único
-        nombre_unico = f"{uuid.uuid4()}_{file.filename}"
+        nombre_unico = f"{uuid.uuid4()}_{pdf_file.filename}"
         ruta_archivo = settings.upload_path / nombre_unico
 
-        content = await file.read()
+        content = await pdf_file.read()
         ruta_archivo.write_bytes(content)
 
-        # Crear registro en BD
         documento = Documento(
             usuario_id=usuario.id,
             nombre_archivo=nombre_unico,
-            nombre_original=file.filename,
+            nombre_original=pdf_file.filename,
             ruta_archivo=str(ruta_archivo),
             tamano_bytes=len(content),
             estado="procesando",
@@ -104,16 +164,18 @@ async def upload_pdf(
         db.commit()
         db.refresh(documento)
 
-        # ── Encolar OCR en segundo plano ──────────────────────────────────
-        # Evita timeout de HTTP cuando el PDF tiene decenas de páginas (ej. 42 págs)
+        # Encolar OCR (+ comparación automática si hay Excel)
         background_tasks.add_task(
             _procesar_ocr_background,
             str(ruta_archivo),
             str(documento.id),
+            comparacion_id,
+            excel_path_str,
         )
 
         logger.info(
-            f"PDF encolado en segundo plano: {file.filename} (ID: {documento.id})"
+            f"PDF encolado en segundo plano: {pdf_file.filename} (ID: {documento.id})"
+            + (f" | Comparación automática: {comparacion_id}" if comparacion_id else "")
         )
 
         resultados.append({
@@ -126,6 +188,8 @@ async def upload_pdf(
     return {
         "total": len(resultados),
         "documentos": resultados,
+        "comparacion_id": comparacion_id,
+        "comparacion_automatica": comparacion_id is not None,
     }
 
 

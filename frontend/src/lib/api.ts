@@ -129,12 +129,16 @@ export const apiAuth = {
 export const apiDocumentos = {
   upload: (
     files: File[],
-    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
+    excelFile?: File | null,
   ) => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append("files", file, file.name);
     });
+    if (excelFile) {
+      formData.append("excel", excelFile, excelFile.name);
+    }
     return apiClient.post("/api/documentos/upload", formData, {
       onUploadProgress,
     });

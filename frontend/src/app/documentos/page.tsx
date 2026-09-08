@@ -8,7 +8,8 @@ import {
   Clock, Trash2, RefreshCw, Eye, Sparkles,
   ArrowRight, Users, CheckCircle2, ChevronRight,
   Layers, Timer, X, AlertCircle, Cpu, FileCheck2,
-  Hourglass, ArrowUpCircle, Check
+  Hourglass, ArrowUpCircle, Check, FileSpreadsheet,
+  BarChart2, PlusCircle
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
@@ -43,6 +44,9 @@ export default function DocumentosPage() {
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [subiendo, setSubiendo] = useState(false);
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([]);
+  const [excelSeleccionado, setExcelSeleccionado] = useState<File | null>(null);
+  const [comparacionId, setComparacionId] = useState<string | null>(null);
+  const [comparacionEnProgreso, setComparacionEnProgreso] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   // Estado para el seguimiento de subida y extracción OCR en vivo
@@ -270,6 +274,8 @@ export default function DocumentosPage() {
     canceladoRedireccionRef.current = false;
     redireccionIniciadaRef.current = false;
     uploadStartTimeRef.current = Date.now();
+    setComparacionId(null);
+    setComparacionEnProgreso(false);
 
     const totalBytes = archivosSeleccionados.reduce((acc, f) => acc + f.size, 0);
     setBytesTotales(totalBytes);
@@ -301,15 +307,22 @@ export default function DocumentosPage() {
           setDocsEnProceso((prev) =>
             prev.map((d) => ({
               ...d,
-              progreso: Math.max(5, Math.min(99, Math.round((pct * 0.9)))), // 5% a 90% durante subida de bytes
+              progreso: Math.max(5, Math.min(99, Math.round((pct * 0.9)))),
               paso: `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
             }))
           );
         }
-      });
+      }, excelSeleccionado);
 
       setFaseActual("procesando");
       const docsResp = res.data?.documentos || [];
+
+      // Si se adjuntó Excel y el backend devolvió comparacion_id
+      if (res.data?.comparacion_id) {
+        setComparacionId(res.data.comparacion_id);
+        setComparacionEnProgreso(true);
+        toast.success("📊 Excel adjunto recibido. La comparación iniciará al terminar el OCR.");
+      }
 
       const trackingEncolado: DocTracking[] = (docsResp.length > 0
         ? docsResp
@@ -332,6 +345,7 @@ export default function DocumentosPage() {
 
       setDocsEnProceso(trackingEncolado);
       setArchivosSeleccionados([]);
+      setExcelSeleccionado(null);
       cargarDocumentos();
 
       toast.success("Documento(s) recibido(s). Iniciando extracción OCR...");
@@ -531,7 +545,7 @@ export default function DocumentosPage() {
             </div>
 
             {/* Banner de Redirección Automática si el proceso finalizó */}
-            {procesoFinalizado && cuentaAtrasRedireccion !== null && (
+            {procesoFinalizado && cuentaAtrasRedireccion !== null && !comparacionId && (
               <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs">
@@ -559,6 +573,49 @@ export default function DocumentosPage() {
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Banner de Comparación Automática en Progreso */}
+            {comparacionEnProgreso && !procesoFinalizado && (
+              <div className="mt-4 p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-3 text-sm text-blue-200 relative z-10 animate-in fade-in duration-300">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-blue-100 text-xs">Comparación automática adjunta</p>
+                  <p className="text-xs text-blue-300 mt-0.5">Al terminar el OCR, la planilla Excel se comparará automáticamente con los datos extraídos.</p>
+                </div>
+                <div className="ml-auto flex-shrink-0">
+                  <div className="flex gap-1">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{animationDelay: `${i * 0.15}s`}} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Banner de Comparación Automática Completada */}
+            {comparacionId && procesoFinalizado && (
+              <div className="mt-4 p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-indigo-200 relative z-10 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                    <BarChart2 className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-indigo-100 text-xs">¡Comparación automática lista!</p>
+                    <p className="text-xs text-indigo-300 mt-0.5">Los resultados de auditoría ya están disponibles para revisión.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => router.push(`/comparacion`)}
+                  className="text-xs bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md flex-shrink-0"
+                >
+                  <BarChart2 className="w-3.5 h-3.5" />
+                  <span>Ver Resultados</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 
@@ -764,6 +821,16 @@ export default function DocumentosPage() {
                     <span>Ver Personas Extraídas</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
+                  {comparacionId && (
+                    <button
+                      onClick={() => router.push("/comparacion")}
+                      className="text-sm py-2.5 px-5 flex-1 md:flex-initial flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-500/25 transition-all"
+                    >
+                      <BarChart2 className="w-4 h-4" />
+                      <span>Ver Comparación</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -859,12 +926,76 @@ export default function DocumentosPage() {
                 ))}
               </div>
 
+              {/* ── Sección Excel adjunto opcional ─────────────────────────────────── */}
+              <div className="mt-5 p-4 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-500/[0.04] relative">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-sm font-semibold text-emerald-300">Comparación automática</h4>
+                  <span className="text-[10px] text-slate-500 bg-dark-800 px-2 py-0.5 rounded-full border border-white/[0.06]">Opcional</span>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  Adjunta la planilla oficial Excel para que la comparación se ejecute automáticamente al finalizar el OCR.
+                  No necesitarás ir a la sección de Comparación por separado.
+                </p>
+
+                {excelSeleccionado ? (
+                  <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-emerald-200 truncate block">{excelSeleccionado.name}</span>
+                        <span className="text-xs text-slate-500 font-mono">{formatSize(excelSeleccionado.size)}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExcelSeleccionado(null)}
+                      disabled={subiendo}
+                      className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 flex-shrink-0"
+                      title="Quitar Excel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-3 p-3 bg-dark-800/60 border border-dashed border-emerald-500/20 rounded-xl cursor-pointer hover:border-emerald-500/40 hover:bg-dark-800 transition-all group">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      disabled={subiendo}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const ext = f.name.split(".").pop()?.toLowerCase();
+                        if (!ext || !["xlsx", "xls"].includes(ext)) {
+                          toast.error("Solo se aceptan archivos .xlsx o .xls");
+                          return;
+                        }
+                        setExcelSeleccionado(f);
+                        toast.success(`Excel adjunto: ${f.name}`);
+                      }}
+                    />
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                      <PlusCircle className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Adjuntar planilla Excel</p>
+                      <p className="text-xs text-slate-500">.xlsx · .xls</p>
+                    </div>
+                  </label>
+                )}
+              </div>
+
               {/* Barra de Acciones del Botón OCR (Espaciado amplio y diseño premium) */}
               <div className="mt-6 pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-400 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-primary-400 flex-shrink-0" />
                   <span>
-                    La extracción procesará automáticamente caras de cédula y estructurará los registros.
+                    {excelSeleccionado
+                      ? "El OCR extraerá personas y luego comparará automáticamente con la planilla adjunta."
+                      : "La extracción procesará automáticamente caras de cédula y estructurará los registros."}
                   </span>
                 </div>
 
@@ -885,7 +1016,7 @@ export default function DocumentosPage() {
                   ) : (
                     <>
                       <Sparkles className="w-5 h-5 text-blue-200" />
-                      <span>Iniciar Procesamiento OCR</span>
+                      <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Iniciar Procesamiento OCR"}</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </>
                   )}

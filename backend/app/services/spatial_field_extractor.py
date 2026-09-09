@@ -126,7 +126,7 @@ class SpatialFieldExtractor:
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
         r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
-        r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b)",
+        r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b)",
         re.IGNORECASE
     )
 
@@ -145,7 +145,7 @@ class SpatialFieldExtractor:
     def limpiar_nombre(self, texto: str) -> Optional[str]:
         if not texto:
             return None
-        t_norm = texto.replace("!", "I").replace("1", "I")
+        t_norm = str(texto).translate(validador.HOMOGLYPHS).replace("!", "I").replace("1", "I")
         toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w)]
         # Remover partículas huérfanas al inicio (ej: "DE" residual de "REPUBLICA DE" o "ICA DE")
         while toks and self._PARTICULAS_SOLAS.match(toks[0]) and len(toks) > 1:
@@ -435,9 +435,9 @@ class SpatialFieldExtractor:
                 t = getattr(l, "text", "").upper().strip()
                 if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP)\b", t) or re.search(r"\b\d{7,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
                     idx_num = idx
-                if re.search(r"\b(APELLIDOS?|APELLIDORAJONAL)\b", t) and idx_ape == -1:
+                if re.search(r"\bAPELL[I10]*D", t) and idx_ape == -1:
                     idx_ape = idx
-                if re.search(r"\b(NOMBRES?|MOUSEES)\b", t) and idx_nom == -1:
+                if re.search(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", t) and idx_nom == -1:
                     idx_nom = idx
 
             if idx_ape != -1 and idx_nom != -1:
@@ -450,7 +450,7 @@ class SpatialFieldExtractor:
                     # Layout Cédula Digital / Tarjeta Identidad:
                     # APELLIDOS_LABEL -> APELLIDOS_VAL -> NOMBRES_LABEL -> NOMBRES_VAL
                     # 1. Apellidos: después de APELLIDOS_LABEL y antes de NOMBRES_LABEL
-                    inline_ape = self.limpiar_nombre(re.sub(r"\b(APELL[I10]*D[O0]?S?|APELLIDORAJONAL)\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\bAPELL[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
@@ -494,7 +494,7 @@ class SpatialFieldExtractor:
                     # Layout Cédula Amarilla:
                     # NUMERO -> APELLIDOS_VAL -> APELLIDOS_LABEL -> NOMBRES_VAL -> NOMBRES_LABEL
                     # 1. Verificar si hay valor inline en la misma línea de APELLIDOS
-                    inline_ape = self.limpiar_nombre(re.sub(r"\b(APELL[I10]*D[O0]?S?|APELLIDORAJONAL)\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\bAPELL[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
@@ -564,6 +564,12 @@ class SpatialFieldExtractor:
                     y_pos = getattr(l, "y", 0.0)
                     t_val = getattr(l, "text", "")
                     if 0.08 < y_pos < 0.65:  # Ampliado para cubrir cédulas digitales y Tarjetas de Identidad
+                        # En Cédula Amarilla, los nombres están estrictamente por encima de la etiqueta NOMBRES (y < y_nom).
+                        # Todo lo que esté por debajo de NOMBRES es el área de firma/rúbrica del ciudadano (ej: DR CDI).
+                        if not es_digital_o_ti and idx_nom != -1:
+                            y_limite_nom = getattr(lineas_frente[idx_nom], "y", 0.35)
+                            if y_pos >= y_limite_nom:
+                                continue
                         limpio = self.limpiar_nombre(t_val)
                         if not limpio:
                             continue

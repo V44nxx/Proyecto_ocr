@@ -19,6 +19,18 @@ from app.utils.logger import app_logger as logger
 class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
+    # Diccionario de homóglifos (caracteres griegos/cirílicos visualmente idénticos a letras latinas)
+    HOMOGLYPHS = str.maketrans({
+        # Letras griegas a latinas
+        'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I', 'Κ': 'K', 'Μ': 'M',
+        'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X',
+        'α': 'a', 'β': 'b', 'ε': 'e', 'ι': 'i', 'κ': 'k', 'ν': 'n', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'υ': 'y', 'χ': 'x',
+        # Letras cirílicas a latinas
+        'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P',
+        'С': 'C', 'Т': 'T', 'Х': 'X',
+        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
+    })
+
     # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
@@ -26,7 +38,7 @@ class ValidadorColombia:
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
-        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA)\b",
+        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|DR|CDI|AAAS|AAS)\b",
         re.IGNORECASE,
     )
 
@@ -109,7 +121,8 @@ class ValidadorColombia:
         """Corrije errores tipográficos típicos de OCR en nombres y apellidos."""
         if not texto:
             return ""
-        txt = str(texto).upper()
+        # Traducir homóglifos griegos/cirílicos generados por motores OCR
+        txt = str(texto).translate(cls.HOMOGLYPHS).upper()
         # Trailing ! / 1 / | / ] en palabras (ej. SAB! -> SABI)
         txt = re.sub(r"([A-ZÁÉÍÓÚÜÑ]{2,})[!1|\]]", r"\1I", txt)
         # 0 o 1 intercalados en palabras (ej. G0MEZ -> GOMEZ, MART1NEZ -> MARTINEZ)
@@ -128,14 +141,11 @@ class ValidadorColombia:
           - Mayúsculas
           - Elimina espacios múltiples
           - Limita a 5 palabras (evita capturar párrafos)
-
-        FIX: sin límite de palabras, el regex anterior capturaba
-        frases enteras del documento como nombre.
         """
         if not texto:
             return None
 
-        # Corregir sustituciones OCR habituales (ej. SAB! -> SABI)
+        # Corregir sustituciones OCR habituales (ej. SAB! -> SABI, homóglifos griegos)
         texto = cls.corregir_errores_ocr_nombre(texto)
 
         # Solo letras y espacios (incluyendo caracteres latinos)
@@ -147,11 +157,23 @@ class ValidadorColombia:
         if not texto:
             return None
 
-        # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR)
-        palabras_filtradas = [
-            p for p in texto.split()
-            if not cls._PALABRAS_NO_NOMBRE.match(p) and len(p) > 1
-        ]
+        # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR, DR, CDI)
+        palabras_filtradas = []
+        for p in texto.split():
+            if cls._PALABRAS_NO_NOMBRE.match(p) or len(p) <= 1:
+                continue
+            # Si p es un fragmento de una palabra ya admitida, ignorar
+            if any(p in ya for ya in palabras_filtradas):
+                continue
+            # Si una palabra ya admitida es un fragmento de p, reemplazarla por la palabra más completa (ej: NTONI -> ANTONIO)
+            reemplazada = False
+            for idx_ya, ya in enumerate(palabras_filtradas):
+                if ya in p and len(p) > len(ya):
+                    palabras_filtradas[idx_ya] = p
+                    reemplazada = True
+                    break
+            if not reemplazada:
+                palabras_filtradas.append(p)
 
         if not palabras_filtradas:
             return None

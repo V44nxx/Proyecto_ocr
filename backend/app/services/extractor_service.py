@@ -33,7 +33,7 @@ NO_NOMBRE_HEADER = re.compile(
     r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
     r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
     r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
-    r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b)",
+    r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b)",
     re.IGNORECASE
 )
 
@@ -1663,8 +1663,12 @@ class ExtractorService:
 
         # Score OCR (si se provee)
         if scores_ocr:
-            promedio_ocr = sum(scores_ocr) / len(scores_ocr)
-            puntos += promedio_ocr * PESOS["ocr"]
+            valid_scores = [float(s) for s in scores_ocr if isinstance(s, (int, float)) or (isinstance(s, str) and s.replace('.', '', 1).isdigit())]
+            if valid_scores:
+                promedio_ocr = sum(valid_scores) / len(valid_scores)
+                puntos += promedio_ocr * PESOS["ocr"]
+            else:
+                puntos += PESOS["ocr"] * 0.7
         else:
             puntos += PESOS["ocr"] * 0.7  # default si no hay scores
 

@@ -73,6 +73,8 @@ export interface Persona {
 }
 
 export interface PersonaUpdate {
+  numero_identificacion?: string;
+  tipo_documento?: string;
   nombre_completo?: string;
   nombres?: string;
   apellidos?: string;

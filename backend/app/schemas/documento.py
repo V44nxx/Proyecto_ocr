@@ -79,6 +79,8 @@ class PersonaCreate(PersonaBase):
 
 
 class PersonaUpdate(BaseModel):
+    numero_identificacion: Optional[str] = None
+    tipo_documento: Optional[str] = None
     nombre_completo: Optional[str] = None
     nombres: Optional[str] = None
     apellidos: Optional[str] = None

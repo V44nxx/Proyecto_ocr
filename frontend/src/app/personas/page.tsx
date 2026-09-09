@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -18,6 +18,14 @@ import type { Persona, PersonaUpdate } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
   const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
+  if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
+    return {
+      codigo: "CT",
+      label: "Contraseña",
+      badge: "bg-teal-500/20 border-teal-500/40 text-teal-300 font-bold",
+      pill: "bg-teal-500/20 text-teal-300 border-teal-500/40",
+    };
+  }
   if (t.includes("TARJETA") || t === "TI") {
     return {
       codigo: "TI",
@@ -34,7 +42,7 @@ const getTipoDocInfo = (tipo?: string | null) => {
       pill: "bg-amber-500/20 text-amber-300 border-amber-500/40",
     };
   }
-  if (t.includes("PASAPORTE")) {
+  if (t.includes("PASAPORTE") || t === "PAS") {
     return {
       codigo: "PAS",
       label: "Pasaporte",
@@ -120,8 +128,10 @@ export default function PersonasPage() {
   const toggleExpandir = (p: Persona) => {
     if (expandidoId === p.id) {
       setExpandidoId(null);
+      setEditando(null);
     } else {
       setExpandidoId(p.id);
+      setEditando(null);
       const paginaInicial = p.pagina_frente || p.pagina_numero || 1;
       setPaginaPrevia(paginaInicial);
       setImgCargando(true);
@@ -132,23 +142,37 @@ export default function PersonasPage() {
 
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
+    if (expandidoId !== p.id) {
+      setExpandidoId(p.id);
+      const paginaInicial = p.pagina_frente || p.pagina_numero || 1;
+      setPaginaPrevia(paginaInicial);
+      setImgCargando(true);
+      setImgError(false);
+      setZoom(1);
+    }
     const nomCompleto = formatNombreCompleto(p);
     setEditForm({
+      numero_identificacion: p.numero_identificacion || "",
+      tipo_documento: p.tipo_documento || "CEDULA_CIUDADANIA",
       nombre_completo: nomCompleto,
       nombres: p.nombres || "",
       apellidos: p.apellidos || "",
-      fecha_nacimiento: p.fecha_nacimiento || "",
-      fecha_expedicion: p.fecha_expedicion || "",
+      fecha_nacimiento: p.fecha_nacimiento ? String(p.fecha_nacimiento) : "",
+      fecha_expedicion: p.fecha_expedicion ? String(p.fecha_expedicion) : "",
       lugar_expedicion: p.lugar_expedicion || "",
       sexo: p.sexo || "",
-      requiere_revision: p.requiere_revision,
+      requiere_revision: undefined,
     });
   };
 
-  const guardarEdicion = async (id: string) => {
+  const guardarEdicion = async (id: string, forzarAprobado = false) => {
     try {
-      await apiPersonas.actualizar(id, editForm);
-      toast.success("Datos actualizados correctamente");
+      const payload: PersonaUpdate = {
+        ...editForm,
+        ...(forzarAprobado ? { requiere_revision: false } : {}),
+      };
+      await apiPersonas.actualizar(id, payload);
+      toast.success(forzarAprobado ? "Datos guardados y persona validada" : "Datos actualizados correctamente");
       setEditando(null);
       cargarPersonas(true);
     } catch {
@@ -200,15 +224,16 @@ export default function PersonasPage() {
   const PanelDetalle = ({ p }: { p: Persona }) => {
     const docId = p.documento_id ? String(p.documento_id) : null;
     const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
+    const estaEditando = editando === p.id;
 
     const nomCompleto = formatNombreCompleto(p);
     const campos = [
-      { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3 h-3" />, valor: p.numero_identificacion },
-      { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3 h-3" />, valor: nomCompleto },
-      { key: "fecha_nacimiento", label: "F. Nacimiento", icono: <Calendar className="w-3 h-3" />, valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null },
-      { key: "fecha_expedicion", label: "F. Expedición", icono: <Calendar className="w-3 h-3" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
-      { key: "lugar_expedicion", label: "Lugar Expedición", icono: <MapPin className="w-3 h-3" />, valor: p.lugar_expedicion },
-      { key: "sexo", label: "Sexo", icono: <Users className="w-3 h-3" />, valor: p.sexo },
+      { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
+      { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
+      { key: "fecha_nacimiento", label: "F. Nacimiento", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null },
+      { key: "fecha_expedicion", label: "F. Expedición", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
+      { key: "lugar_expedicion", label: "Lugar Expedición", icono: <MapPin className="w-3.5 h-3.5" />, valor: p.lugar_expedicion },
+      { key: "sexo", label: "Sexo", icono: <Users className="w-3.5 h-3.5" />, valor: p.sexo },
     ];
 
     const conf = (key: string): number => {
@@ -226,13 +251,13 @@ export default function PersonasPage() {
     return (
       <div className="flex flex-col lg:flex-row gap-0 bg-slate-950/70 border-t border-slate-800/60">
 
-        {/* ── Panel izquierdo: PDF ── */}
-        <div className="lg:w-[48%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/50 min-h-[280px]">
+        {/* ── Panel izquierdo: PDF / Documento ── */}
+        <div className="lg:w-[48%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/50 min-h-[320px]">
           {/* Toolbar PDF */}
           <div className="flex items-center justify-between px-4 py-2 bg-slate-900/70 border-b border-slate-800/40">
             <div className="flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-primary-400" />
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Vista PDF</span>
+              <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Vista Documento</span>
               {tieneDosLados && (
                 <div className="flex items-center gap-1 ml-2">
                   <button
@@ -250,19 +275,19 @@ export default function PersonasPage() {
                 </div>
               )}
               {!tieneDosLados && (
-                <span className="text-[10px] text-slate-600 ml-1">pág. {paginaPrevia}</span>
+                <span className="text-[10px] text-slate-500 ml-1">pág. {paginaPrevia}</span>
               )}
             </div>
             <div className="flex items-center gap-0.5">
               <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors" title="Alejar"><ZoomOut className="w-3 h-3" /></button>
-              <span className="text-[10px] font-mono text-slate-500 w-8 text-center">{Math.round(zoom * 100)}%</span>
+              <span className="text-[10px] font-mono text-slate-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors" title="Acercar"><ZoomIn className="w-3 h-3" /></button>
               <button onClick={() => setZoom(1)} className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors" title="Restablecer"><RotateCw className="w-3 h-3" /></button>
             </div>
           </div>
 
           {/* Imagen */}
-          <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-950/50 min-h-[240px]">
+          <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-950/50 min-h-[280px]">
             {!docId ? (
               <div className="flex flex-col items-center justify-center gap-2 h-full w-full py-8">
                 <ImageOff className="w-8 h-8 text-slate-700" />
@@ -296,100 +321,304 @@ export default function PersonasPage() {
           </div>
         </div>
 
-        {/* ── Panel derecho: Datos OCR ── */}
-        <div className="lg:w-[52%] flex flex-col">
-          {/* Meta info */}
-          <div className="px-4 py-2 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between">
-            <div className="flex items-center gap-3 text-[10px]">
-              <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getTipoDocInfo(p.tipo_documento).pill}`}>
-                {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
-              </span>
-              <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
-              <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
-            </div>
-            {p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>}
-          </div>
-
-          {/* Motivos de Revisión / Alerta para Asistente */}
-          {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-            <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
-              <div className="flex items-center gap-2 mb-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                  Pendiente de Revisión por Asistente
+        {/* ── Panel derecho: Datos OCR o Modo Edición ── */}
+        <div className="lg:w-[52%] flex flex-col justify-between">
+          <div>
+            {/* Meta info */}
+            <div className="px-4 py-2.5 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between">
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getTipoDocInfo(p.tipo_documento).pill}`}>
+                  {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
                 </span>
+                <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
+                <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
               </div>
-              {Array.isArray((p.detalles_campos as any)?.motivos_revision) && (p.detalles_campos as any).motivos_revision.length > 0 ? (
-                <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
-                  {(p.detalles_campos as any).motivos_revision.map((m: string, i: number) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ul>
+              {estaEditando ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <Edit3 className="w-3 h-3" /> Modo Edición
+                </span>
               ) : (
-                <p className="text-xs text-amber-200/90 ml-6">
-                  Uno o más datos no fueron reconocidos con certeza suficiente por el OCR. Por favor complete los datos faltantes o verifique en el PDF.
-                </p>
+                p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>
               )}
             </div>
-          )}
 
-          {/* Campos */}
-          <div className="flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {campos.map(({ key, label, icono, valor }) => {
-              const c = conf(key);
-              const col = color(valor ? c : 0);
-              return (
-                <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 overflow-hidden hover:border-slate-700/80 transition-colors">
-                  <div className="flex items-center justify-between px-3 pt-2 pb-1">
-                    <div className="flex items-center gap-1.5 text-slate-500">
-                      {icono}
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-                    </div>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
-                      {valor ? `${c}%` : "N/D"}
-                    </span>
-                  </div>
-                  <div className="px-3 pb-1.5">
-                    {valor
-                      ? <span className="text-xs font-semibold text-white">{valor}</span>
-                      : <span className="text-[11px] italic text-rose-400/80 font-medium">No detectado por OCR</span>
-                    }
-                  </div>
-                  {valor && (
-                    <div className="px-3 pb-2">
-                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full bg-gradient-to-r ${col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
-                      </div>
-                    </div>
-                  )}
+            {/* Motivos de Revisión / Alerta para Asistente */}
+            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+              <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                    Pendiente de Revisión por Asistente
+                  </span>
                 </div>
-              );
-            })}
+                {Array.isArray((p.detalles_campos as any)?.motivos_revision) && (p.detalles_campos as any).motivos_revision.length > 0 ? (
+                  <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
+                    {(p.detalles_campos as any).motivos_revision.map((m: string, i: number) => (
+                      <li key={i}>{m}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-amber-200/90 ml-6">
+                    Uno o más datos no fueron reconocidos con certeza suficiente por el OCR. Por favor complete los datos faltantes o verifique en el documento.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Contenido: Si está editando muestra el formulario integrado; si no, las tarjetas compactas */}
+            {estaEditando ? (
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Tipo de Documento */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Tipo de Documento
+                    </label>
+                    <select
+                      value={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, tipo_documento: e.target.value }))}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
+                    >
+                      <option value="CEDULA_CIUDADANIA">Cédula de Ciudadanía (CC)</option>
+                      <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad (TI)</option>
+                      <option value="CEDULA_EXTRANJERIA">Cédula de Extranjería (CE)</option>
+                      <option value="CONTRASENA">Contraseña / Trámite (CT)</option>
+                      <option value="PASAPORTE">Pasaporte (PAS)</option>
+                    </select>
+                  </div>
+
+                  {/* Número de Cédula */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Número de Identificación
+                    </label>
+                    <div className="relative">
+                      <Hash className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={editForm.numero_identificacion || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
+                        placeholder="Ej: 1117513499"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs font-mono font-bold text-primary-300 focus:outline-none focus:border-primary-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Nombres */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Nombres
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.nombres || ""}
+                      onChange={(e) => {
+                        const n = e.target.value;
+                        setEditForm(prev => ({
+                          ...prev,
+                          nombres: n,
+                          nombre_completo: `${n} ${prev.apellidos || ""}`.trim()
+                        }));
+                      }}
+                      placeholder="Ej: YHORLAN ERLENDY"
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
+                    />
+                  </div>
+
+                  {/* Apellidos */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Apellidos
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.apellidos || ""}
+                      onChange={(e) => {
+                        const a = e.target.value;
+                        setEditForm(prev => ({
+                          ...prev,
+                          apellidos: a,
+                          nombre_completo: `${prev.nombres || ""} ${a}`.trim()
+                        }));
+                      }}
+                      placeholder="Ej: ESCOBAR MURIEL"
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
+                    />
+                  </div>
+
+                  {/* Fecha de Nacimiento */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      F. Nacimiento (AAAA-MM-DD)
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={editForm.fecha_nacimiento || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                        placeholder="AAAA-MM-DD"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fecha de Expedición */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      F. Expedición (AAAA-MM-DD)
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={editForm.fecha_expedicion || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_expedicion: e.target.value }))}
+                        placeholder="AAAA-MM-DD"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Lugar de Expedición */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Lugar de Expedición
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={editForm.lugar_expedicion || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, lugar_expedicion: e.target.value }))}
+                        placeholder="Ej: FLORENCIA"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sexo (Botones interactivos M / F) */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Sexo
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditForm(prev => ({ ...prev, sexo: "M" }))}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${
+                          editForm.sexo === "M" || editForm.sexo === "MASCULINO"
+                            ? "bg-blue-600/30 border-blue-500 text-blue-300 shadow-sm"
+                            : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                        }`}
+                      >
+                        <span className="font-bold">M</span> Masculino
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm(prev => ({ ...prev, sexo: "F" }))}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${
+                          editForm.sexo === "F" || editForm.sexo === "FEMENINO"
+                            ? "bg-pink-600/30 border-pink-500 text-pink-300 shadow-sm"
+                            : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                        }`}
+                      >
+                        <span className="font-bold">F</span> Femenino
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Vista de Tarjetas (Compactas con content-start para evitar que se alarguen) */
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 content-start">
+                {campos.map(({ key, label, icono, valor }) => {
+                  const c = conf(key);
+                  const col = color(valor ? c : 0);
+                  return (
+                    <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2.5 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[72px]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                          {icono}
+                          <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
+                          {valor ? `${c}%` : "N/D"}
+                        </span>
+                      </div>
+                      <div className="my-1">
+                        {valor
+                          ? <span className="text-xs font-semibold text-white truncate block">{valor}</span>
+                          : <span className="text-[11px] italic text-rose-400/80 font-medium block">No detectado por OCR</span>
+                        }
+                      </div>
+                      {valor ? (
+                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div className={`h-full bg-gradient-to-r ${col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
+                        </div>
+                      ) : (
+                        <div className="h-1 bg-rose-950/30 rounded-full overflow-hidden">
+                          <div className="h-full bg-rose-500/40 rounded-full w-full" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Acciones */}
-          <div className="px-4 py-3 border-t border-slate-800/40 bg-slate-900/50 flex items-center gap-2">
-            <button
-              onClick={() => { setExpandidoId(null); iniciarEdicion(p); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-200 text-xs font-semibold transition-all"
-            >
-              <Edit3 className="w-3.5 h-3.5" /> Editar Datos
-            </button>
-            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-              <button
-                onClick={(e) => aprobarRevision(p.id, e)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
-                title="Aprobar datos y marcar como válido"
-              >
-                <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
-              </button>
+          {/* Acciones del Panel */}
+          <div className="px-4 py-3 border-t border-slate-800/40 bg-slate-900/50 flex items-center gap-2 mt-auto">
+            {estaEditando ? (
+              <>
+                <button
+                  onClick={() => guardarEdicion(p.id, false)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold shadow-lg shadow-primary-500/20 transition-all"
+                >
+                  <Save className="w-3.5 h-3.5" /> Guardar Cambios
+                </button>
+                {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                  <button
+                    onClick={() => guardarEdicion(p.id, true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
+                    title="Guardar datos y aprobar directamente"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" /> Guardar y Aprobar
+                  </button>
+                )}
+                <button
+                  onClick={() => setEditando(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold transition-all ml-auto"
+                >
+                  <X className="w-3.5 h-3.5" /> Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => iniciarEdicion(p)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 text-xs font-semibold transition-all"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Editar Datos
+                </button>
+                {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                  <button
+                    onClick={(e) => aprobarRevision(p.id, e)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
+                    title="Aprobar datos y marcar como válido"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
+                  </button>
+                )}
+                <button
+                  onClick={() => setExpandidoId(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all ml-auto"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" /> Colapsar
+                </button>
+              </>
             )}
-            <button
-              onClick={() => setExpandidoId(null)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all ml-auto"
-            >
-              <ChevronUp className="w-3.5 h-3.5" /> Colapsar
-            </button>
           </div>
         </div>
       </div>
@@ -585,175 +814,114 @@ export default function PersonasPage() {
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
                     return (
-                      <>
+                      <Fragment key={p.id}>
                         {/* ── Fila principal ── */}
                         <tr
-                          key={p.id}
                           className={`border-b border-slate-800/30 transition-colors cursor-pointer ${isExpandida ? "bg-slate-800/40 border-primary-500/20" : "hover:bg-slate-800/20"}`}
-                          onClick={() => { if (editando !== p.id) toggleExpandir(p); }}
+                          onClick={() => toggleExpandir(p)}
                         >
-                          {editando === p.id ? (
-                            <>
-                              {/* Fila en modo edición */}
-                              <td className="py-2 px-3">
-                                <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </div>
-                              </td>
-                              <td className="py-2 px-4 font-mono text-primary-400 font-bold text-sm whitespace-nowrap">
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono ${tipoInfo.badge}`}>
-                                    {tipoInfo.codigo}
-                                  </span>
-                                  <span>{p.numero_identificacion}</span>
-                                </div>
-                              </td>
-                              <td className="py-2 px-4" colSpan={2}>
-                                <div className="flex gap-2">
-                                  <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-56"
-                                    placeholder="Nombre y Apellidos"
-                                    value={editForm.nombre_completo || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, nombre_completo: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-28"
-                                    placeholder="F.Nac YYYY-MM-DD"
-                                    value={editForm.fecha_nacimiento || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-28"
-                                    placeholder="F.Exp YYYY-MM-DD"
-                                    value={editForm.fecha_expedicion || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, fecha_expedicion: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <input
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-32"
-                                    placeholder="Lugar Exp."
-                                    value={editForm.lugar_expedicion || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, lugar_expedicion: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <select
-                                    className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 w-24"
-                                    value={editForm.sexo || ""}
-                                    onChange={(e) => setEditForm({ ...editForm, sexo: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <option value="">Sexo</option>
-                                    <option value="MASCULINO">MASCULINO</option>
-                                    <option value="FEMENINO">FEMENINO</option>
-                                  </select>
-                                </div>
-                              </td>
-                              <td colSpan={2} />
-                              <td className="py-2 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button onClick={() => guardarEdicion(p.id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors">
-                                    <Save className="w-4 h-4" />
-                                  </button>
-                                  <button onClick={() => setEditando(null)} className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              {/* Fila normal — toggle expandir */}
-                              <td className="py-3 px-3">
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
-                                  {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                </div>
-                              </td>
+                          {/* Toggle expandir */}
+                          <td className="py-3 px-3">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
+                              {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </div>
+                          </td>
 
-                              {/* Documento e ID con Badge */}
-                              <td className="py-3 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider ${tipoInfo.badge}`} title={tipoInfo.label}>
-                                    {tipoInfo.codigo}
-                                  </span>
-                                  <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
-                                    {p.numero_identificacion}
-                                  </span>
+                          {/* Documento e ID con Badge */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider ${tipoInfo.badge}`} title={tipoInfo.label}>
+                                {tipoInfo.codigo}
+                              </span>
+                              <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
+                                {p.numero_identificacion}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Nombre completo */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {nombreCompleto ? (
+                              <div className="text-sm font-semibold text-slate-100">{nombreCompleto}</div>
+                            ) : (
+                              <span className="text-slate-600 italic text-xs">Sin nombre</span>
+                            )}
+                          </td>
+
+                          {/* Página */}
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || 1)}
+                            </span>
+                          </td>
+
+                          {/* Confianza */}
+                          <td className="py-3 px-4 text-center">
+                            {p.confianza_extraccion != null ? (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
                                 </div>
-                              </td>
+                                <span className="text-xs text-slate-400">{Math.round(Number(p.confianza_extraccion))}%</span>
+                              </div>
+                            ) : <span className="text-slate-600 text-xs">—</span>}
+                          </td>
 
-                              {/* Nombre completo */}
-                              <td className="py-3 px-4 whitespace-nowrap">
-                                {nombreCompleto ? (
-                                  <div className="text-sm font-semibold text-slate-100">{nombreCompleto}</div>
-                                ) : (
-                                  <span className="text-slate-600 italic text-xs">Sin nombre</span>
-                                )}
-                              </td>
+                          {/* Estado */}
+                          <td className="py-3 px-4 text-center">
+                            {estadoStr === "VALID" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                                <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
+                              </span>
+                            ) : estadoStr === "FALLBACK_TESSERACT" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                                <AlertTriangle className="w-2.5 h-2.5" /> TESSERACT
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+                                <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
+                              </span>
+                            )}
+                          </td>
 
-                              {/* Página */}
-                              <td className="py-3 px-3 text-center">
-                                <span className="text-[11px] font-mono text-slate-500">
-                                  {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || 1)}
-                                </span>
-                              </td>
-
-                              {/* Confianza */}
-                              <td className="py-3 px-4 text-center">
-                                {p.confianza_extraccion != null ? (
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
-                                    </div>
-                                    <span className="text-xs text-slate-400">{Math.round(Number(p.confianza_extraccion))}%</span>
-                                  </div>
-                                ) : <span className="text-slate-600 text-xs">—</span>}
-                              </td>
-
-                              {/* Estado */}
-                              <td className="py-3 px-4 text-center">
-                                {estadoStr === "VALID" ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                                    <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
-                                  </span>
-                                ) : estadoStr === "FALLBACK_TESSERACT" ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
-                                    <AlertTriangle className="w-2.5 h-2.5" /> TESSERACT
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
-                                    <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Acciones */}
-                              <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-1">
-                                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-                                    <button
-                                      onClick={(e) => aprobarRevision(p.id, e)}
-                                      title="Aprobar revisión manual"
-                                      className="p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
-                                    >
-                                      <CheckCircle className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  <button onClick={() => iniciarEdicion(p)} title="Editar" className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          )}
+                          {/* Acciones */}
+                          <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                                <button
+                                  onClick={(e) => aprobarRevision(p.id, e)}
+                                  title="Aprobar revisión manual"
+                                  className="p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  if (isExpandida && editando === p.id) {
+                                    setEditando(null);
+                                  } else {
+                                    iniciarEdicion(p);
+                                  }
+                                }}
+                                title={isExpandida && editando === p.id ? "Cancelar edición" : "Editar datos"}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isExpandida && editando === p.id
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                                }`}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
 
-                        {/* ── Fila expandida (acordeón) ── */}
-                        {isExpandida && editando !== p.id && (
+                        {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
+                        {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
                             <td colSpan={7} className="p-0">
                               <div className="border-t border-primary-500/20 animate-slideDown">
@@ -762,7 +930,7 @@ export default function PersonasPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>

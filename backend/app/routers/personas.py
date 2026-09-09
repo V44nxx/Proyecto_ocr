@@ -85,6 +85,16 @@ def actualizar_persona(
     campos_actualizados = []
 
     # Actualizar solo los campos enviados
+    if datos.numero_identificacion is not None:
+        persona.numero_identificacion = str(datos.numero_identificacion).strip()
+        if "numero_identificacion" not in campos_revisados:
+            campos_revisados.append("numero_identificacion")
+        campos_actualizados.append("numero_identificacion")
+
+    if datos.tipo_documento is not None:
+        persona.tipo_documento = str(datos.tipo_documento).strip()
+        campos_actualizados.append("tipo_documento")
+
     if datos.nombre_completo is not None:
         persona.nombre_completo = datos.nombre_completo.upper()
         if "nombre_completo" not in campos_revisados:

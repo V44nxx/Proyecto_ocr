@@ -340,9 +340,14 @@ export default function PersonasPage() {
         <div className="lg:w-[48%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/50 min-h-[320px]">
           {/* Toolbar PDF */}
           <div className="flex items-center justify-between px-4 py-2 bg-slate-900/70 border-b border-slate-800/40">
-            <div className="flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-primary-400" />
-              <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Vista Documento</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <FileText className="w-3.5 h-3.5 text-primary-400 shrink-0" />
+              <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider shrink-0">Vista Documento</span>
+              {p.nombre_documento && (
+                <span className="text-[10px] font-mono text-slate-300 truncate max-w-[200px] bg-slate-800 px-2 py-0.5 rounded border border-slate-700 ml-1.5" title={`Archivo origen: ${p.nombre_documento}`}>
+                  {p.nombre_documento}
+                </span>
+              )}
               {tieneDosLados && (
                 <div className="flex items-center gap-1 ml-2">
                   <button
@@ -410,11 +415,18 @@ export default function PersonasPage() {
         <div className="lg:w-[52%] flex flex-col justify-between">
           <div>
             {/* Meta info */}
-            <div className="px-4 py-2.5 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between">
-              <div className="flex items-center gap-3 text-[10px]">
+            <div className="px-4 py-2.5 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5 text-[10px] flex-wrap">
                 <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getTipoDocInfo(p.tipo_documento).pill}`}>
                   {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
                 </span>
+                {p.nombre_documento && (
+                  <span className="flex items-center gap-1 text-slate-300 font-mono text-[10px] bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded" title={`Archivo PDF origen: ${p.nombre_documento}`}>
+                    <FileText className="w-3 h-3 text-primary-400 shrink-0" />
+                    <span className="text-primary-400 font-semibold">PDF:</span>
+                    <span className="truncate max-w-[200px]">{p.nombre_documento}</span>
+                  </span>
+                )}
                 <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
                 <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
               </div>
@@ -596,7 +608,20 @@ export default function PersonasPage() {
               </div>
             ) : (
               /* Vista de Tarjetas (Compactas con content-start para evitar que se alarguen) */
-              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 content-start">
+              <div className="p-3 space-y-2.5">
+                {p.nombre_documento && (
+                  <div className="px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-3.5 h-3.5 text-primary-400 shrink-0" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Documento PDF:</span>
+                      <span className="font-mono text-xs text-slate-200 truncate" title={p.nombre_documento}>{p.nombre_documento}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-2">
+                      {p.pagina_frente ? `Pág. ${p.pagina_frente}${p.pagina_reverso ? ` / ${p.pagina_reverso}` : ""}` : ""}
+                    </span>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 content-start">
                 {campos.map(({ key, label, icono, valor }) => {
                   const c = conf(key);
                   const col = color(valor ? c : 0);
@@ -629,6 +654,7 @@ export default function PersonasPage() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
@@ -952,7 +978,6 @@ export default function PersonasPage() {
                     <th className="py-3 px-4">Documento / ID</th>
                     <th className="py-3 px-4">Nombre Completo</th>
                     <th className="py-3 px-3 text-center">Pág.</th>
-                    <th className="py-3 px-3">Documento PDF</th>
                     <th className="py-3 px-4 text-center">Confianza</th>
                     <th className="py-3 px-4 text-center">Estado</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
@@ -1025,13 +1050,6 @@ export default function PersonasPage() {
                             </span>
                           </td>
 
-                          {/* Documento PDF Origen */}
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span className="text-[11px] font-mono text-slate-400 truncate max-w-[140px] block" title={p.nombre_documento || "Sin documento"}>
-                              {p.nombre_documento || "—"}
-                            </span>
-                          </td>
-
                           {/* Confianza */}
                           <td className="py-3 px-4 text-center">
                             {p.confianza_extraccion != null ? (
@@ -1100,7 +1118,7 @@ export default function PersonasPage() {
                         {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
-                            <td colSpan={9} className="p-0">
+                            <td colSpan={8} className="p-0">
                               <div className="border-t border-primary-500/20 animate-slideDown">
                                 <PanelDetalle p={p} />
                               </div>

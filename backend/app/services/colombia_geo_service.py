@@ -5,7 +5,7 @@ Proporciona extracción, desambiguación Municipio vs Departamento y corrección
 """
 import re
 import unicodedata
-from typing import Optional, Tuple, Set, Dict, List
+from typing import Optional, Tuple, Set, Dict, List, Any
 from rapidfuzz import process, fuzz
 
 from app.utils.logger import app_logger as logger
@@ -433,6 +433,115 @@ class ColombiaGeoService:
                 f_res = self.resolver_municipio_fuzzy(tok, umbral=85)
                 if f_res and f_res not in palabras_persona:
                     return f_res
+
+        return None
+
+    def extraer_lugar_expedicion(
+        self,
+        lineas: List[Any],
+        fecha_expedicion_iso: Optional[str] = None,
+        nombres_excluir: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Extrae el lugar de expedición con máxima prioridad en la MISMA LÍNEA o MISMA FILA Y
+        que la fecha de expedición (diseño oficial de la Registraduría Nacional).
+        Evita categóricamente confundir con el lugar de nacimiento, registradores o firmas.
+        """
+        if not lineas:
+            return None
+
+        from app.utils.validators import validador
+
+        # ── 1. Estrategia Principal: Misma Línea que la Fecha de Expedición ──
+        candidatos_linea = []
+        for l in lineas:
+            t = getattr(l, "text", str(l)).strip()
+            if not t:
+                continue
+            # Descartar líneas de registradores, marcas de agua y firmas
+            if any(r in t.upper() for r in ["REGISTRADOR", "NACIONAL DEL ESTADO CIVIL", "INDICE DERECHO", "FIRMA"]):
+                continue
+            # Buscar fechas en la línea
+            m_fechas = list(re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", t))
+            for mf in m_fechas:
+                dt_l = validador.parsear_fecha(mf.group(1))
+                if dt_l:
+                    # Remover la fecha del texto de la línea
+                    resto = t[:mf.start()] + " " + t[mf.end():]
+                    resto_limpio = re.sub(r"\b(FECHA|Y|LUGAR|DE|EXPEDICION|EXPEDICI[OÓ]N|EXP|NACIMIENTO)\b", " ", resto, flags=re.I)
+                    resto_limpio = " ".join(resto_limpio.split())
+                    if len(resto_limpio) >= 3:
+                        candidatos_linea.append({
+                            "line": l,
+                            "date": dt_l,
+                            "date_iso": dt_l.isoformat(),
+                            "resto": resto_limpio,
+                            "y": getattr(l, "y", 0.0)
+                        })
+
+        # 1.1 Si tenemos fecha_expedicion_iso, buscar coincidencia exacta de fecha
+        if fecha_expedicion_iso and candidatos_linea:
+            for c in candidatos_linea:
+                if c["date_iso"] == fecha_expedicion_iso:
+                    mun = self.extraer_lugar_universal(c["resto"], [c["resto"]], nombres_excluir=nombres_excluir)
+                    if mun and mun not in self.DEPARTAMENTOS:
+                        logger.info(f"[ColombiaGeo] Lugar de expedición '{mun}' extraído de la misma línea de fecha ({c['date_iso']})")
+                        return mun
+
+        # 1.2 Si no coincidió fecha exacta o no venía fecha_expedicion_iso:
+        # Tomar la fecha más reciente (la expedición es siempre posterior al nacimiento)
+        if candidatos_linea:
+            candidatos_linea.sort(key=lambda x: x["date"])
+            mejor = candidatos_linea[-1]
+            mun = self.extraer_lugar_universal(mejor["resto"], [mejor["resto"]], nombres_excluir=nombres_excluir)
+            if mun and mun not in self.DEPARTAMENTOS:
+                logger.info(f"[ColombiaGeo] Lugar de expedición '{mun}' extraído de la línea de fecha más reciente ({mejor['date_iso']})")
+                return mun
+
+        # ── 2. Estrategia Misma Fila Y (horizontal) que la fecha de expedición ──
+        linea_fecha_exp = None
+        if fecha_expedicion_iso:
+            for l in lineas:
+                t = getattr(l, "text", str(l)).strip()
+                m_fechas = list(re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", t))
+                for mf in m_fechas:
+                    dt = validador.parsear_fecha(mf.group(1))
+                    if dt and dt.isoformat() == fecha_expedicion_iso:
+                        linea_fecha_exp = l
+                        break
+                if linea_fecha_exp:
+                    break
+
+        if linea_fecha_exp:
+            y_exp = getattr(linea_fecha_exp, "y", 0.0)
+            for l in lineas:
+                if l is linea_fecha_exp:
+                    continue
+                y_l = getattr(l, "y", 0.0)
+                if abs(y_l - y_exp) <= 0.035:
+                    t_l = getattr(l, "text", str(l)).strip()
+                    if any(r in t_l.upper() for r in ["REGISTRADOR", "NACIONAL", "CIVIL", "NACIMIENTO", "HUELLA", "FIRMA"]):
+                        continue
+                    mun = self.extraer_lugar_universal(t_l, [t_l], nombres_excluir=nombres_excluir)
+                    if mun and mun not in self.DEPARTAMENTOS:
+                        logger.info(f"[ColombiaGeo] Lugar de expedición '{mun}' extraído en la misma fila Y que la fecha")
+                        return mun
+
+        # ── 3. Estrategia Adyacente a la Etiqueta 'FECHA Y LUGAR DE EXPEDICION' ──
+        for idx, l in enumerate(lineas):
+            t = getattr(l, "text", str(l)).strip()
+            if re.search(r"\b(EXPEDIC|EXPEDICI|EXPEDIDA)\b", t, re.I) and not re.search(r"\bNACIMIENTO\b", t, re.I):
+                for sub_i in (idx - 1, idx + 1):
+                    if 0 <= sub_i < len(lineas):
+                        cand_txt = getattr(lineas[sub_i], "text", str(lineas[sub_i])).strip()
+                        if any(r in cand_txt.upper() for r in ["REGISTRADOR", "CARLOS", "ARIEL", "SANCHEZ", "TORRES", "ESTADO CIVIL", "NACIMIENTO"]):
+                            continue
+                        cand_limpio = re.sub(r"\b\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}\b", " ", cand_txt)
+                        cand_limpio = " ".join(cand_limpio.split())
+                        mun = self.extraer_lugar_universal(cand_limpio, [cand_limpio], nombres_excluir=nombres_excluir)
+                        if mun and mun not in self.DEPARTAMENTOS:
+                            logger.info(f"[ColombiaGeo] Lugar de expedición '{mun}' extraído adyacente a etiqueta de expedición")
+                            return mun
 
         return None
 

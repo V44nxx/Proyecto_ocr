@@ -1375,20 +1375,29 @@ class ExtractorService:
 
         # 2. Validación y limpieza de lugar de expedición universal
         nombres_ctx = f"{resultado.get('nombres', '')} {resultado.get('apellidos', '')}"
-        lugar_actual = resultado.get("lugar_expedicion")
-        if lugar_actual and str(lugar_actual).strip().upper() != "COLOMBIA":
-            lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)], nombres_excluir=nombres_ctx)
-            if lugar_mun and lugar_mun.upper() != "COLOMBIA":
-                resultado["lugar_expedicion"] = lugar_mun
-            else:
-                lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
-                resultado["lugar_expedicion"] = lugar_limpio if lugar_limpio and lugar_limpio.upper() != "COLOMBIA" else None
+        f_exp_iso = resultado.get("fecha_expedicion")
+        lugar_linea = colombia_geo.extraer_lugar_expedicion(
+            lineas=lineas,
+            fecha_expedicion_iso=f_exp_iso,
+            nombres_excluir=nombres_ctx
+        )
+        if lugar_linea and lugar_linea.upper() != "COLOMBIA":
+            resultado["lugar_expedicion"] = lugar_linea
         else:
-            lug_univ = colombia_geo.extraer_lugar_universal(texto, lineas, nombres_excluir=nombres_ctx)
-            if lug_univ and lug_univ.upper() != "COLOMBIA":
-                resultado["lugar_expedicion"] = lug_univ
+            lugar_actual = resultado.get("lugar_expedicion")
+            if lugar_actual and str(lugar_actual).strip().upper() != "COLOMBIA":
+                lugar_mun = colombia_geo.extraer_lugar_universal(str(lugar_actual), [str(lugar_actual)], nombres_excluir=nombres_ctx)
+                if lugar_mun and lugar_mun.upper() != "COLOMBIA":
+                    resultado["lugar_expedicion"] = lugar_mun
+                else:
+                    lugar_limpio = validador.normalizar_lugar(str(lugar_actual))
+                    resultado["lugar_expedicion"] = lugar_limpio if lugar_limpio and lugar_limpio.upper() != "COLOMBIA" else None
             else:
-                resultado["lugar_expedicion"] = None
+                lug_univ = colombia_geo.extraer_lugar_universal(texto, lineas, nombres_excluir=nombres_ctx)
+                if lug_univ and lug_univ.upper() != "COLOMBIA":
+                    resultado["lugar_expedicion"] = lug_univ
+                else:
+                    resultado["lugar_expedicion"] = None
 
     def _parsear_fecha_ddmmmyyyy(self, texto: str):
         """
@@ -1493,38 +1502,42 @@ class ExtractorService:
         fecha_exp = None
         lugar_exp = None
 
-        patron_linea_exp = re.compile(
-            r"^(?:(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\s*,?\s*)([A-ZÁÉÍÓÚÜÑ\s]{3,40})$",
-            re.IGNORECASE
-        )
-
+        # 1. Buscar en líneas adyacentes a la etiqueta EXPEDICIÓN o FECHA Y LUGAR
         for idx, linea in enumerate(lineas):
-            if re.search(r"\b(EXPEDICI[OÓ]N|EXPEDIDA|FECHA\s+Y\s+LUGAR)\b", linea, re.IGNORECASE):
-                # Revisar la misma línea y las 3 adyacentes (anterior y siguientes)
+            if re.search(r"\b(EXPEDICI[OÓ]N|EXPEDIDA|FECHA\s+Y\s+LUGAR)\b", linea, re.IGNORECASE) and not re.search(r"\bNACIMIENTO\b", linea, re.IGNORECASE):
                 rango = lineas[max(0, idx - 2) : min(len(lineas), idx + 4)]
                 for candidata in rango:
                     cand_clean = candidata.strip()
-                    m = patron_linea_exp.match(cand_clean)
-                    if m:
-                        f_raw, l_raw = m.groups()
-                        f_obj = validador.parsear_fecha(f_raw)
-                        if f_obj:
+                    if any(r in cand_clean.upper() for r in ["REGISTRADOR", "NACIONAL DEL ESTADO CIVIL", "NACIMIENTO"]):
+                        continue
+                    m_f = re.search(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", cand_clean)
+                    if m_f:
+                        f_obj = validador.parsear_fecha(m_f.group(1))
+                        resto = cand_clean[:m_f.start()] + " " + cand_clean[m_f.end():]
+                        resto_limpio = re.sub(r"\b(FECHA|Y|LUGAR|DE|EXPEDICION|EXPEDICI[OÓ]N|EXP|NACIMIENTO)\b", " ", resto, flags=re.I)
+                        l_mun = colombia_geo.extraer_lugar_universal(resto_limpio, [resto_limpio])
+                        if f_obj and l_mun:
+                            return f_obj.isoformat(), l_mun
+                        elif f_obj and not fecha_exp:
                             fecha_exp = f_obj.isoformat()
-                        l_mun = colombia_geo.extraer_lugar_universal(l_raw, [l_raw])
-                        if l_mun:
-                            lugar_exp = l_mun
-                        if fecha_exp and lugar_exp:
-                            return fecha_exp, lugar_exp
 
-        # Fallback: buscar en cualquier línea del texto
+        # 2. Buscar en cualquier línea que combine fecha y municipio
         for linea in lineas:
-            m = patron_linea_exp.match(linea.strip())
-            if m:
-                f_raw, l_raw = m.groups()
-                f_obj = validador.parsear_fecha(f_raw)
-                l_mun = colombia_geo.extraer_lugar_universal(l_raw, [l_raw])
+            cand_clean = linea.strip()
+            if any(r in cand_clean.upper() for r in ["REGISTRADOR", "NACIONAL DEL ESTADO CIVIL", "NACIMIENTO"]):
+                continue
+            m_f = re.search(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", cand_clean)
+            if m_f:
+                f_obj = validador.parsear_fecha(m_f.group(1))
+                resto = cand_clean[:m_f.start()] + " " + cand_clean[m_f.end():]
+                resto_limpio = re.sub(r"\b(FECHA|Y|LUGAR|DE|EXPEDICION|EXPEDICI[OÓ]N|EXP|NACIMIENTO)\b", " ", resto, flags=re.I)
+                l_mun = colombia_geo.extraer_lugar_universal(resto_limpio, [resto_limpio])
                 if f_obj and l_mun:
                     return f_obj.isoformat(), l_mun
+
+        # 3. Si no se encontró lugar pero sí fecha, usar extraer_lugar_expedicion
+        if not lugar_exp:
+            lugar_exp = colombia_geo.extraer_lugar_expedicion(lineas, fecha_expedicion_iso=fecha_exp)
 
         return fecha_exp, lugar_exp
 

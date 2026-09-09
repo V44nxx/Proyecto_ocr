@@ -629,27 +629,23 @@ class SpatialFieldExtractor:
                 resultado_campos["fecha_expedicion"] = {"value": dt_u.isoformat(), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Fecha única detectada"}
 
         # ── 5. Lugar de Expedición (Universal DANE) ──
-        for idx, l in enumerate(lines):
-            t = getattr(l, "text", "").strip()
-            if re.search(r"\b(EXPEDIC|EXPED|EXPEDICI)", t, re.I):
-                for sub_i in range(max(0, idx - 2), min(len(lines), idx + 2)):
-                    cand_txt = getattr(lines[sub_i], "text", "")
-                    lugar_res = colombia_geo.extraer_lugar_universal(cand_txt, [cand_txt])
-                    if lugar_res and lugar_res not in colombia_geo.DEPARTAMENTOS:
-                        resultado_campos["lugar_expedicion"] = {"value": lugar_res, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído junto a etiqueta de expedición"}
-                        break
-                if resultado_campos["lugar_expedicion"]["value"]:
-                    break
-
-        if not resultado_campos["lugar_expedicion"]["value"]:
-            for l in lines:
-                y_pos = getattr(l, "y", 0.0)
-                t_val = getattr(l, "text", "")
-                if y_pos > 0.28:
-                    lugar_res = colombia_geo.extraer_lugar_universal(t_val, [t_val])
-                    if lugar_res and lugar_res not in colombia_geo.DEPARTAMENTOS:
-                        resultado_campos["lugar_expedicion"] = {"value": lugar_res, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de franja geográfica"}
-                        break
+        # La fecha y el lugar de expedición están en la misma línea en documentos colombianos
+        f_exp_iso = resultado_campos["fecha_expedicion"]["value"]
+        nombres_ctx = f"{resultado_campos['nombres']['value'] or ''} {resultado_campos['apellidos']['value'] or ''}"
+        lugar_exp_res = colombia_geo.extraer_lugar_expedicion(
+            lineas=lines,
+            fecha_expedicion_iso=f_exp_iso,
+            nombres_excluir=nombres_ctx
+        )
+        if lugar_exp_res:
+            resultado_campos["lugar_expedicion"] = {
+                "value": lugar_exp_res,
+                "confidence": doc_ai_confidence,
+                "status": "VALID",
+                "page": page_num,
+                "source": "universal_parser",
+                "reason": "Extraído de la misma línea/etiqueta de fecha de expedición"
+            }
 
         # ── 6. Sexo ──
         for idx_l, l in enumerate(lines):
@@ -828,7 +824,11 @@ class SpatialFieldExtractor:
                         dt_p = validador.parsear_fecha(m_f.group(0))
                         sub_txt = dt_p.isoformat() if dt_p else m_f.group(0)
                 elif campo == "lugar_expedicion":
-                    lugar_res = colombia_geo.extraer_lugar_universal(sub_txt, [sub_txt])
+                    if any(r in sub_txt.upper() for r in ["NACIMIENTO", "REGISTRADOR", "ESTADO CIVIL"]):
+                        continue
+                    sub_limpio = re.sub(r"\b\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}\b|\b\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\b", " ", sub_txt)
+                    sub_limpio = " ".join(sub_limpio.split())
+                    lugar_res = colombia_geo.extraer_lugar_universal(sub_limpio, [sub_limpio])
                     if not lugar_res:
                         continue
                     sub_txt = lugar_res
@@ -877,7 +877,11 @@ class SpatialFieldExtractor:
                     txt = dt_p.isoformat() if dt_p else m_f.group(0)
 
             if campo == "lugar_expedicion":
-                lugar_res = colombia_geo.extraer_lugar_universal(txt, [txt])
+                if any(r in txt.upper() for r in ["NACIMIENTO", "REGISTRADOR", "ESTADO CIVIL"]):
+                    continue
+                txt_limpio = re.sub(r"\b\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}\b|\b\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2}\b", " ", txt)
+                txt_limpio = " ".join(txt_limpio.split())
+                lugar_res = colombia_geo.extraer_lugar_universal(txt_limpio, [txt_limpio])
                 if not lugar_res:
                     continue
                 txt = lugar_res

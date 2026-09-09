@@ -22,10 +22,13 @@ const TIPO_CONFIG = {
   igual: { label: "Igual", clase: "badge-success", icon: <Equal className="w-3 h-3" /> },
 };
 
-// Helper para limpiar y formatear datos de personas y evitar mostrar diccionarios JSON en la tabla
+// Helper para limpiar y formatear datos de personas y evitar mostrar diccionarios JSON o sufijos de estado en la tabla
 function limpiarValorTexto(val: string | null | undefined): string {
   if (!val) return "";
-  const s = String(val).trim();
+  let s = String(val).trim();
+  // Quitar cualquier sufijo residual de estado como ' · Preinscrito', ' - Preinscrito', ' · Inscrito'
+  s = s.replace(/\s*[·\-\–]\s*(Preinscrito|Inscrito|Matriculado|Cancelado)\b/gi, "").trim();
+
   if (s.startsWith("{") && s.endsWith("}")) {
     try {
       const jsonStr = s
@@ -35,17 +38,16 @@ function limpiarValorTexto(val: string | null | undefined): string {
         .replace(/False/g, "false");
       const obj = JSON.parse(jsonStr);
       const nc = obj.nombre_completo || `${obj.nombres || obj.nombre || ""} ${obj.apellidos || obj.apellido || ""}`.trim();
-      const st = obj.estado ? ` · ${obj.estado}` : "";
-      if (nc) return `${nc}${st}`;
+      if (nc) return String(nc).replace(/\s*[·\-\–]\s*(Preinscrito|Inscrito|Matriculado|Cancelado)\b/gi, "").trim();
     } catch {
       const mNomComp = s.match(/['"]nombre_completo['"]\s*:\s*['"]([^'"]+)['"]/i);
-      if (mNomComp) return mNomComp[1];
+      if (mNomComp) return mNomComp[1].replace(/\s*[·\-\–]\s*(Preinscrito|Inscrito|Matriculado|Cancelado)\b/gi, "").trim();
       const mNom = s.match(/['"]nombres?['"]\s*:\s*['"]([^'"]+)['"]/i);
       const mApe = s.match(/['"]apellidos?['"]\s*:\s*['"]([^'"]+)['"]/i);
       const nom = mNom ? mNom[1] : "";
       const ape = mApe ? mApe[1] : "";
       const res = `${nom} ${ape}`.trim();
-      if (res) return res;
+      if (res) return res.replace(/\s*[·\-\–]\s*(Preinscrito|Inscrito|Matriculado|Cancelado)\b/gi, "").trim();
     }
   }
   return s;
@@ -58,6 +60,7 @@ function limpiarEtiquetaCampo(campo: string | null | undefined, tipo: string): s
     return "Registro Completo";
   }
   if (campo === "nombre_completo") return "Nombre y Apellidos";
+  if (campo === "numero_identificacion") return "Número de Cédula/ID";
   return campo.replace(/_/g, " ");
 }
 

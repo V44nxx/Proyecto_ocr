@@ -7,7 +7,7 @@ identificada por su numero de cedula/TI/contrasena.
 import re
 import pandas as pd
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
 from app.utils.logger import app_logger as logger
 
 
@@ -229,6 +229,27 @@ class ExcelLookupService:
             return None
         id_limpio = _limpiar_id(numero_id)
         return lookup.get(id_limpio)
+
+    def buscar_por_nombre(
+        self,
+        nombre: str,
+        lookup: Dict[str, Dict[str, str]]
+    ) -> Optional[Tuple[str, Dict[str, str]]]:
+        """
+        Busca por coincidencia de nombre completo oficial en el lookup.
+        Devuelve (numero_identificacion, entry) o None si no coincide.
+        """
+        if not nombre or not lookup:
+            return None
+        from app.services.comparacion_service import comparacion_service
+        nom_clean = _limpiar_texto(nombre)
+        for num_id, entry in lookup.items():
+            nom_comp_excel = entry.get("nombre_completo", "")
+            if nom_comp_excel and comparacion_service._son_nombres_equivalentes(
+                nombres_bd=nom_clean, apellidos_bd="", nombres_excel=nom_comp_excel, apellidos_excel=""
+            ):
+                return num_id, entry
+        return None
 
 
 excel_lookup_service = ExcelLookupService()

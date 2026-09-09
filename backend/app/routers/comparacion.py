@@ -221,7 +221,7 @@ def corregir_campo_desde_comparacion(
         raise HTTPException(status_code=404, detail=f"Persona con identificación {num_id} no encontrada en la BD")
 
     campo = datos.campo.strip().lower()
-    campos_validos = ["nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
+    campos_validos = ["nombres", "apellidos", "nombre_completo", "numero_identificacion", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
     if campo not in campos_validos:
         raise HTTPException(status_code=400, detail=f"Campo '{campo}' no es válido para actualización")
 
@@ -232,6 +232,8 @@ def corregir_campo_desde_comparacion(
             setattr(persona, campo, fecha_dt.date() if fecha_dt else None)
         else:
             setattr(persona, campo, None)
+    elif campo == "numero_identificacion":
+        setattr(persona, "numero_identificacion", valor_a_guardar)
     else:
         setattr(persona, campo, valor_a_guardar if valor_a_guardar else None)
 
@@ -245,13 +247,19 @@ def corregir_campo_desde_comparacion(
     # Actualizar la diferencia en la comparación
     diferencia = db.query(Diferencia).filter(
         Diferencia.comparacion_id == comparacion_id,
-        Diferencia.numero_identificacion == num_id,
+        (Diferencia.numero_identificacion == num_id) | (Diferencia.numero_identificacion == valor_a_guardar),
         Diferencia.campo == campo
     ).first()
 
     if diferencia:
         diferencia.valor_bd = str(getattr(persona, campo) or "")
         diferencia.tipo_diferencia = "igual"
+
+    if campo == "numero_identificacion":
+        db.query(Diferencia).filter(
+            Diferencia.comparacion_id == comparacion_id,
+            Diferencia.numero_identificacion == num_id
+        ).update({"numero_identificacion": valor_a_guardar})
 
     # Recalcular métricas de la comparación
     comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()

@@ -368,19 +368,46 @@ class ComparacionService:
                 ids_bd = set(df_bd["numero_identificacion"].tolist())
                 ids_excel = set(df_excel["numero_identificacion"].tolist())
 
-                ids_faltantes = ids_excel - ids_bd      # En Excel, no en BD
-                ids_nuevos = ids_bd - ids_excel          # En BD, no en Excel
-                ids_comunes = ids_bd & ids_excel         # En ambos
+                ids_faltantes = set(ids_excel - ids_bd)      # En Excel, no en BD
+                ids_nuevos = set(ids_bd - ids_excel)          # En BD, no en Excel
+                ids_comunes = set(ids_bd & ids_excel)         # En ambos
+
+                # ── Reconciliación Inteligente por Nombre Completo ──
+                # Si una persona fue detectada por OCR pero su número de identificación tiene una ligera discrepancia
+                # o truncamiento respecto al Excel, correlacionarla como la misma persona con diferencia en número_identificacion.
+                parejas_reconciliadas = []
+                for id_faltante in list(ids_faltantes):
+                    row_excel = df_excel[df_excel["numero_identificacion"] == id_faltante].iloc[0]
+                    nom_ex = str(row_excel.get('nombre_completo') or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}").strip()
+                    if not nom_ex:
+                        continue
+
+                    mejor_id_nuevo = None
+                    for id_nuevo in list(ids_nuevos):
+                        row_bd = df_bd[df_bd["numero_identificacion"] == id_nuevo].iloc[0]
+                        nom_bd = str(row_bd.get('nombre_completo') or f"{row_bd.get('nombres', '')} {row_bd.get('apellidos', '')}").strip()
+                        if not nom_bd:
+                            continue
+
+                        # Coincidencia de nombres (mismo titular)
+                        if self._son_nombres_equivalentes(nombres_bd=nom_bd, apellidos_bd="", nombres_excel=nom_ex, apellidos_excel=""):
+                            mejor_id_nuevo = id_nuevo
+                            break
+
+                    if mejor_id_nuevo:
+                        ids_faltantes.remove(id_faltante)
+                        ids_nuevos.remove(mejor_id_nuevo)
+                        parejas_reconciliadas.append((mejor_id_nuevo, id_faltante))
+                        logger.info(f"[Comparacion] Reconciliación exitosa por nombre: '{nom_ex}' (BD ID: {mejor_id_nuevo} <-> Excel ID: {id_faltante})")
 
                 resultado["total_faltantes_bd"] = len(ids_faltantes)
                 resultado["total_nuevos_bd"] = len(ids_nuevos)
 
-                # Diferencias en registros faltantes en BD
+                # Diferencias en registros faltantes en BD (únicamente el nombre oficial, sin sufijos de estado)
                 for id_faltante in ids_faltantes:
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_faltante].iloc[0]
                     nom_ex = row_excel.get('nombre_completo') or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}".strip() or str(row_excel.get('nombre', '')).strip()
-                    est_ex = f" · {row_excel.get('estado', '')}" if row_excel.get('estado') else ""
-                    val_ex = f"{nom_ex}{est_ex}".strip() or "Persona registrada en Excel"
+                    val_ex = nom_ex.strip() or "Persona registrada en Excel"
 
                     diferencias_a_guardar.append(Diferencia(
                         comparacion_id=comp_uuid,
@@ -407,6 +434,39 @@ class ComparacionService:
                 # Comparar campos de registros comunes con normalización inteligente
                 total_iguales = 0
                 total_diferentes = 0
+
+                # Procesar personas reconciliadas por nombre (tienen diferencia en número_identificacion)
+                for id_bd_rec, id_ex_rec in parejas_reconciliadas:
+                    row_bd = df_bd[df_bd["numero_identificacion"] == id_bd_rec].iloc[0]
+                    row_excel = df_excel[df_excel["numero_identificacion"] == id_ex_rec].iloc[0]
+
+                    # Diferencia en número de identificación
+                    diferencias_a_guardar.append(Diferencia(
+                        comparacion_id=comp_uuid,
+                        numero_identificacion=id_bd_rec,
+                        campo="numero_identificacion",
+                        valor_bd=id_bd_rec,
+                        valor_excel=id_ex_rec,
+                        tipo_diferencia="diferente",
+                    ))
+                    total_diferentes += 1
+
+                    # Comparar los demás campos si vienen en el Excel
+                    campos_resto = ["fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
+                    for campo in campos_resto:
+                        if campo in row_excel and str(row_excel.get(campo) or "").strip():
+                            val_bd_norm = self._normalizar_para_comparacion(row_bd.get(campo), campo=campo)
+                            val_excel_norm = self._normalizar_para_comparacion(row_excel.get(campo), campo=campo)
+
+                            if val_bd_norm != val_excel_norm:
+                                diferencias_a_guardar.append(Diferencia(
+                                    comparacion_id=comp_uuid,
+                                    numero_identificacion=id_bd_rec,
+                                    campo=campo,
+                                    valor_bd=str(row_bd.get(campo) or "") or None,
+                                    valor_excel=str(row_excel.get(campo) or "") or None,
+                                    tipo_diferencia="diferente",
+                                ))
 
                 for id_comun in ids_comunes:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_comun].iloc[0]
@@ -616,10 +676,11 @@ class ComparacionService:
                         import ast
                         obj = ast.literal_eval(s)
                         n = f"{obj.get('nombres', '')} {obj.get('apellidos', '')}".strip() or str(obj.get('nombre', '')).strip()
-                        st = f" · {obj.get('estado', '')}" if obj.get('estado') else ""
-                        if n: return f"{n}{st}"
+                        if n: return n
                     except Exception:
                         pass
+                # Quitar cualquier sufijo residual de estado
+                s = re.sub(r"\s*[·\-\–]\s*(Preinscrito|Inscrito|Matriculado|Cancelado)\b", "", s, flags=re.I).strip()
                 return s
 
             # A. Personas en Excel que no estaban en BD (Faltantes)
@@ -631,7 +692,7 @@ class ComparacionService:
                         "numero_identificacion": id_num,
                         "nombres": nombre_limpio,
                         "apellidos": "",
-                        "estado": "Inscrito / Preinscrito"
+                        "estado": "Inscrito"
                     }
 
             # B. Personas con diferencias en algún campo

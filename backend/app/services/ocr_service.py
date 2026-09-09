@@ -720,8 +720,36 @@ class OCRService:
                     )
                 else:
                     logger.info(
-                        f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial (será auditado como Sobrante)."
+                        f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial por ID exacto."
                     )
+
+            # Fallback de búsqueda por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
+            if excel_lookup and not encontrado_en_excel:
+                from app.services.excel_lookup_service import excel_lookup_service
+                nom_buscar = f"{nombres_final or ''} {apellidos_final or ''}".strip()
+                if nom_buscar and "POR REVISAR" not in nom_buscar:
+                    match_nombre = excel_lookup_service.buscar_por_nombre(nom_buscar, excel_lookup)
+                    if match_nombre:
+                        id_ofic, reg_ofic = match_nombre
+                        # Validar que no contradiga completamente el ID (ej. es prefijo o ID ausente)
+                        if not id_limpio or id_limpio.startswith("SIN_ID") or id_ofic.startswith(id_limpio) or id_limpio.startswith(id_ofic):
+                            logger.info(
+                                f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
+                                f"'{id_limpio}' -> '{id_ofic}'"
+                            )
+                            id_limpio = id_ofic
+                            num_doc = id_ofic
+                            encontrado_en_excel = True
+                            fuente_nombre = "excel_oficial"
+                            nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
+                            nom_excel = reg_ofic.get("nombres", "").strip()
+                            ape_excel = reg_ofic.get("apellidos", "").strip()
+                            if nom_comp_excel:
+                                nombre_completo_final = nom_comp_excel
+                            elif nom_excel or ape_excel:
+                                nombre_completo_final = f"{nom_excel} {ape_excel}".strip()
+                            nombres_final = nom_excel or nombre_completo_final
+                            apellidos_final = ape_excel or ""
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 

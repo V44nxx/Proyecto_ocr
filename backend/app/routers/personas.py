@@ -4,7 +4,7 @@ Endpoints: Listar, detalle, actualizar (corrección manual), eliminar
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.persona import Persona
@@ -22,11 +22,15 @@ def listar_personas(
     limit: int = 100,
     requiere_revision: Optional[bool] = Query(None),
     buscar: Optional[str] = Query(None, description="Buscar por nombre, apellido o cédula"),
+    documento_id: Optional[str] = Query(None, description="Filtrar por ID de documento PDF"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Lista todas las personas registradas con filtros opcionales"""
-    query = db.query(Persona)
+    query = db.query(Persona).options(joinedload(Persona.documento))
+
+    if documento_id:
+        query = query.filter(Persona.documento_id == documento_id)
 
     if requiere_revision is True:
         query = query.filter(
@@ -60,7 +64,7 @@ def obtener_persona(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Obtiene el detalle completo de una persona"""
-    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
     return PersonaResponse.model_validate(persona)
@@ -199,7 +203,7 @@ def buscar_por_cedula(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Busca una persona por número de identificación exacto"""
-    persona = db.query(Persona).filter(
+    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(
         Persona.numero_identificacion == cedula.strip()
     ).first()
 

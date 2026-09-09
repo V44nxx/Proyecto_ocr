@@ -2,6 +2,7 @@
 Servicio de exportación a Excel (XLSX)
 Usa Pandas + OpenPyXL para generar reportes formateados
 """
+import re
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import (
@@ -11,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.utils.logger import app_logger as logger
 from app.config import settings
@@ -29,6 +30,7 @@ class ExportacionService:
         "sexo": "Sexo",
         "confianza_extraccion": "Confianza OCR (%)",
         "requiere_revision": "Requiere Revisión",
+        "documento_origen": "Documento PDF Origen",
         "fecha_registro": "Fecha Registro",
     }
 
@@ -41,18 +43,39 @@ class ExportacionService:
 
     def exportar_personas(self, db: Session, filtros: Optional[dict] = None) -> str:
         """
-        Exporta todas las personas de la BD a un archivo XLSX formateado.
+        Exporta las personas seleccionadas o filtradas de la BD a un archivo XLSX formateado.
         
+        Args:
+            db: Sesión de base de datos
+            filtros: Diccionario con filtros opcionales:
+                - documento_id: ID del documento PDF específico
+                - persona_ids: Lista de IDs específicos de personas
+                - requiere_revision: booleano para filtrar por estado de revisión
+
         Returns:
             Ruta del archivo generado
         """
         logger.info("Iniciando exportación de personas a XLSX")
 
         from app.models.persona import Persona
+        from app.models.documento import Documento
 
-        # Consulta con filtros opcionales
-        query = db.query(Persona)
+        # Consulta con filtros opcionales y carga ansiosa de relación documento
+        query = db.query(Persona).options(joinedload(Persona.documento))
+        nombre_doc_especifico = None
+
         if filtros:
+            if filtros.get("documento_id"):
+                doc_id = filtros["documento_id"]
+                query = query.filter(Persona.documento_id == doc_id)
+                doc = db.query(Documento).filter(Documento.id == doc_id).first()
+                if doc:
+                    nombre_doc_especifico = doc.nombre_original
+
+            if filtros.get("persona_ids"):
+                p_ids = filtros["persona_ids"]
+                query = query.filter(Persona.id.in_(p_ids))
+
             if filtros.get("requiere_revision") is not None:
                 if filtros["requiere_revision"] is True:
                     query = query.filter(
@@ -75,6 +98,7 @@ class ExportacionService:
 
         for p in personas:
             nom_comp = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
+            doc_nombre = p.documento.nombre_original if p.documento else "Sin documento"
             datos.append({
                 "numero_identificacion": p.numero_identificacion,
                 "nombre_completo": nom_comp,
@@ -84,6 +108,7 @@ class ExportacionService:
                 "sexo": p.sexo or "",
                 "confianza_extraccion": float(p.confianza_extraccion or 0),
                 "requiere_revision": "SÍ" if p.requiere_revision else "NO",
+                "documento_origen": doc_nombre,
                 "fecha_registro": p.fecha_registro.strftime("%d/%m/%Y %H:%M") if p.fecha_registro else "",
             })
 
@@ -92,7 +117,12 @@ class ExportacionService:
 
         # Generar nombre de archivo
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"personas_ocr_{timestamp}.xlsx"
+        if nombre_doc_especifico:
+            doc_seguro = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', Path(nombre_doc_especifico).stem)
+            nombre_archivo = f"personas_{doc_seguro}_{timestamp}.xlsx"
+        else:
+            nombre_archivo = f"personas_ocr_{timestamp}.xlsx"
+
         ruta_archivo = settings.export_path / nombre_archivo
 
         # Guardar con Pandas primero
@@ -179,14 +209,17 @@ class ExportacionService:
         ws.row_dimensions[3].height = 30
 
         # Ajustar ancho de columnas y formatear datos
-        anchos = [20, 25, 25, 18, 18, 25, 10, 16, 18, 20]
+        anchos = [20, 28, 18, 18, 25, 10, 16, 18, 28, 20]
         for i, ancho in enumerate(anchos, start=1):
-            ws.column_dimensions[get_column_letter(i)].width = ancho
+            if i <= len(self.COLUMNAS):
+                ws.column_dimensions[get_column_letter(i)].width = ancho
+
+        col_revision_idx = list(self.COLUMNAS.keys()).index("requiere_revision") + 1
 
         # Formatear filas de datos
         for row_num in range(4, total_filas + 4):
             es_altrow = (row_num % 2 == 0)
-            requiere_revision = ws.cell(row=row_num, column=9).value == "SÍ"
+            requiere_revision = ws.cell(row=row_num, column=col_revision_idx).value == "SÍ"
 
             for col_num in range(1, len(self.COLUMNAS) + 1):
                 cell = ws.cell(row=row_num, column=col_num)

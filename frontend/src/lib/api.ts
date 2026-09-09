@@ -181,6 +181,7 @@ export const apiPersonas = {
     limit?: number;
     requiere_revision?: boolean;
     buscar?: string;
+    documento_id?: string;
   }) => apiClient.get<Persona[] | PaginatedResponse<Persona>>("/api/personas", { params }),
 
   detalle: (id: string) =>
@@ -199,18 +200,63 @@ export const apiPersonas = {
 // ──────────────────────────────────────────
 // EXPORTACIÓN
 // ──────────────────────────────────────────
+export interface DescargarXlsxOptions {
+  requiereRevision?: boolean;
+  documentoId?: string;
+  personaIds?: string[];
+  nombreArchivo?: string;
+}
+
 export const apiExportacion = {
-  descargarXlsx: async (requiereRevision?: boolean) => {
-    const params = requiereRevision !== undefined ? { requiere_revision: requiereRevision } : {};
-    const response = await apiClient.get("/api/exportacion/xlsx", {
-      params,
-      responseType: "blob",
-    });
+  descargarXlsx: async (opciones?: DescargarXlsxOptions | boolean) => {
+    const opts: DescargarXlsxOptions =
+      typeof opciones === "boolean"
+        ? { requiereRevision: opciones }
+        : opciones || {};
+
+    let response;
+    if (opts.personaIds && opts.personaIds.length > 0) {
+      response = await apiClient.post(
+        "/api/exportacion/xlsx",
+        {
+          requiere_revision: opts.requiereRevision,
+          documento_id: opts.documentoId,
+          persona_ids: opts.personaIds,
+        },
+        { responseType: "blob" }
+      );
+    } else {
+      const params: Record<string, any> = {};
+      if (opts.requiereRevision !== undefined) {
+        params.requiere_revision = opts.requiereRevision;
+      }
+      if (opts.documentoId) {
+        params.documento_id = opts.documentoId;
+      }
+      response = await apiClient.get("/api/exportacion/xlsx", {
+        params,
+        responseType: "blob",
+      });
+    }
+
+    let nombreFinal = opts.nombreArchivo;
+    if (!nombreFinal) {
+      const disposition = response.headers?.["content-disposition"];
+      if (disposition && typeof disposition === "string") {
+        const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          nombreFinal = match[1].replace(/['"]/g, "").trim();
+        }
+      }
+    }
+    if (!nombreFinal) {
+      nombreFinal = `personas_ocr_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    }
+
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement("a");
     link.href = url;
-    const nombre = `personas_ocr_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    link.setAttribute("download", nombre);
+    link.setAttribute("download", nombreFinal);
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -50,6 +50,7 @@ export interface DocumentoEstadoResponse {
 export interface Persona {
   id: string;
   documento_id: string | null;
+  nombre_documento?: string | null;
   grupo_documento_id?: string | null;
   pagina_frente?: number | null;
   pagina_reverso?: number | null;

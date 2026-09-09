@@ -44,6 +44,13 @@ class Persona(Base):
     # Relaciones
     documento = relationship("Documento", back_populates="personas")
 
+    @property
+    def nombre_documento(self):
+        if self.documento:
+            return self.documento.nombre_original
+        return None
+
     def __repr__(self):
         nom = self.nombre_completo or f"{self.nombres or ''} {self.apellidos or ''}".strip()
         return f"<Persona {self.numero_identificacion} - {nom}>"
+

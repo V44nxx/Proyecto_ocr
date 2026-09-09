@@ -8,13 +8,13 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Download, CheckSquare, Square
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiPersonas, apiDocumentos } from "@/lib/api";
+import { apiPersonas, apiDocumentos, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto } from "@/lib/formatters";
-import type { Persona, PersonaUpdate } from "@/types";
+import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
   const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
@@ -62,6 +62,10 @@ export default function PersonasPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [filtroDocumento, setFiltroDocumento] = useState<string>("todos");
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [exportando, setExportando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [buscar, setBuscar] = useState("");
   const [soloRevision, setSoloRevision] = useState(false);
@@ -78,10 +82,20 @@ export default function PersonasPage() {
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
+    cargarDocumentos();
     cargarPersonas(true);
     const interval = setInterval(() => cargarPersonas(false), 4000);
     return () => clearInterval(interval);
-  }, [pathname, soloRevision]);
+  }, [pathname, soloRevision, filtroDocumento]);
+
+  const cargarDocumentos = async () => {
+    try {
+      const res = await apiDocumentos.listar({ limit: 100 });
+      setDocumentos(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      // Ignorar
+    }
+  };
 
   const cargarPersonas = async (mostrarSpinner = false, revOnly?: boolean) => {
     if (mostrarSpinner) setCargando(true);
@@ -92,6 +106,7 @@ export default function PersonasPage() {
           limit: 100,
           requiere_revision: isRev ? true : undefined,
           buscar: buscar || undefined,
+          documento_id: filtroDocumento !== "todos" ? filtroDocumento : undefined,
         }),
         apiDocumentos.estadisticas().catch(() => null),
       ]);
@@ -219,6 +234,76 @@ export default function PersonasPage() {
       nom.includes(q)
     );
   });
+
+  // Manejo de selección múltiple
+  const toggleSeleccionarTodasVisibles = () => {
+    const todosVisiblesSeleccionados =
+      personasFiltradas.length > 0 &&
+      personasFiltradas.every((p) => seleccionados.has(p.id));
+
+    if (todosVisiblesSeleccionados) {
+      setSeleccionados((prev) => {
+        const next = new Set(prev);
+        personasFiltradas.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSeleccionados((prev) => {
+        const next = new Set(prev);
+        personasFiltradas.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSeleccionPersona = (id: string) => {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const exportarSeleccion = async () => {
+    if (seleccionados.size === 0) {
+      toast.error("Selecciona al menos una persona para exportar");
+      return;
+    }
+    setExportando(true);
+    try {
+      const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
+      await apiExportacion.descargarXlsx({
+        documentoId: docId,
+        personaIds: Array.from(seleccionados),
+        requiereRevision: soloRevision ? true : undefined,
+      });
+      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`);
+    } catch {
+      toast.error("Error al exportar personas a Excel");
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const exportarVistaActual = async () => {
+    setExportando(true);
+    try {
+      const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
+      await apiExportacion.descargarXlsx({
+        documentoId: docId,
+        requiereRevision: soloRevision ? true : undefined,
+      });
+      toast.success("Archivo Excel descargado correctamente");
+    } catch {
+      toast.error("Error al exportar a Excel");
+    } finally {
+      setExportando(false);
+    }
+  };
 
   // ─── Panel de detalle inline (acordeón) ───────────────────────────────────
   const PanelDetalle = ({ p }: { p: Persona }) => {
@@ -626,6 +711,15 @@ export default function PersonasPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={exportarVistaActual}
+              disabled={exportando || personas.length === 0}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-bold text-emerald-300 transition-all shadow-lg shadow-emerald-500/5 disabled:opacity-50 cursor-pointer"
+              title="Exportar registros a Excel (.xlsx)"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Exportar a Excel</span>
+            </button>
             <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary-500/20 to-blue-500/20 border border-primary-500/30 text-sm font-semibold text-primary-300 shadow-lg shadow-primary-500/5">
               Total: <strong className="text-white font-extrabold text-base ml-1">{personas.length}</strong> {personas.length === 1 ? "persona" : "personas"}
             </span>
@@ -697,9 +791,9 @@ export default function PersonasPage() {
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
           {/* Búsqueda unificada por cédula, nombres o apellidos */}
-          <div className="md:col-span-8 relative">
+          <div className="md:col-span-5 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               id="buscar-persona"
@@ -722,7 +816,29 @@ export default function PersonasPage() {
             )}
           </div>
 
-          <div className="md:col-span-3 flex items-center">
+          {/* Selector de Documento PDF */}
+          <div className="md:col-span-4 relative">
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 pointer-events-none" />
+            <select
+              value={filtroDocumento}
+              onChange={(e) => {
+                setFiltroDocumento(e.target.value);
+                setSeleccionados(new Set());
+              }}
+              className="w-full pl-9 pr-3 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-primary-500/60 font-medium truncate cursor-pointer shadow-sm"
+              title="Filtrar por archivo PDF de origen"
+            >
+              <option value="todos">📄 Todos los PDFs ({documentos.length})</option>
+              {documentos.map((d) => (
+                <option key={d.id} value={d.id}>
+                  📄 {d.nombre_original}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Solo revisión */}
+          <div className="md:col-span-2 flex items-center">
             <label className={`flex items-center gap-2 cursor-pointer w-full py-2.5 px-3 rounded-xl border transition-all ${soloRevision ? "bg-amber-500/15 border-amber-500/40 shadow-sm shadow-amber-500/10" : "bg-slate-900/90 border-slate-800 hover:bg-slate-800/50"}`}>
               <input
                 type="checkbox"
@@ -731,12 +847,13 @@ export default function PersonasPage() {
                 className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500/40"
               />
               <AlertTriangle className={`w-3.5 h-3.5 ${soloRevision ? "text-amber-400" : "text-slate-400"}`} />
-              <span className={`text-xs font-medium ${soloRevision ? "text-amber-200 font-bold" : "text-slate-300"}`}>
-                Solo revisión {stats.revision > 0 ? `(${stats.revision})` : ""}
+              <span className={`text-xs font-medium truncate ${soloRevision ? "text-amber-200 font-bold" : "text-slate-300"}`}>
+                Revisión {stats.revision > 0 ? `(${stats.revision})` : ""}
               </span>
             </label>
           </div>
 
+          {/* Recargar */}
           <div className="md:col-span-1 flex justify-end">
             <button
               onClick={() => cargarPersonas(true)}
@@ -747,6 +864,52 @@ export default function PersonasPage() {
             </button>
           </div>
         </div>
+
+        {/* Barra Flotante de Selección y Exportación Múltiple */}
+        {seleccionados.size > 0 && (
+          <div className="mb-4 p-3.5 bg-gradient-to-r from-primary-950/90 via-slate-900 to-primary-950/90 border border-primary-500/40 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 rounded-lg bg-primary-500/20 text-primary-300">
+                <CheckSquare className="w-4 h-4" />
+              </span>
+              <span className="text-sm font-bold text-white">
+                {seleccionados.size} {seleccionados.size === 1 ? "persona seleccionada" : "personas seleccionadas"}
+              </span>
+              {filtroDocumento !== "todos" && (
+                <span className="text-xs text-primary-300/80 bg-primary-500/10 px-2 py-0.5 rounded border border-primary-500/20 font-medium">
+                  Filtro PDF activo
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportarSeleccion}
+                disabled={exportando}
+                className="btn-primary text-xs py-2 px-4 flex items-center gap-2 shadow-lg shadow-primary-500/20 font-bold"
+              >
+                {exportando ? (
+                  <>
+                    <div className="spinner w-3.5 h-3.5" />
+                    <span>Generando Excel...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Exportar selección (.xlsx)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setSeleccionados(new Set())}
+                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700/60 transition-colors"
+              >
+                Limpiar selección
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tabla */}
         <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
@@ -776,10 +939,20 @@ export default function PersonasPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-3 px-3 w-10"></th>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
+                        onChange={toggleSeleccionarTodasVisibles}
+                        className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
+                        title="Seleccionar / Deseleccionar todas las personas mostradas"
+                      />
+                    </th>
+                    <th className="py-3 px-2 w-8"></th>
                     <th className="py-3 px-4">Documento / ID</th>
                     <th className="py-3 px-4">Nombre Completo</th>
                     <th className="py-3 px-3 text-center">Pág.</th>
+                    <th className="py-3 px-3">Documento PDF</th>
                     <th className="py-3 px-4 text-center">Confianza</th>
                     <th className="py-3 px-4 text-center">Estado</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
@@ -790,6 +963,7 @@ export default function PersonasPage() {
                   {personasFiltradas.map((p) => {
                     const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
                     const isExpandida = expandidoId === p.id;
+                    const isSeleccionada = seleccionados.has(p.id);
                     const nombreCompleto = formatNombreCompleto(p);
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
@@ -797,11 +971,27 @@ export default function PersonasPage() {
                       <Fragment key={p.id}>
                         {/* ── Fila principal ── */}
                         <tr
-                          className={`border-b border-slate-800/30 transition-colors cursor-pointer ${isExpandida ? "bg-slate-800/40 border-primary-500/20" : "hover:bg-slate-800/20"}`}
+                          className={`border-b border-slate-800/30 transition-colors cursor-pointer ${
+                            isExpandida
+                              ? "bg-slate-800/40 border-primary-500/20"
+                              : isSeleccionada
+                              ? "bg-primary-500/10 hover:bg-primary-500/15"
+                              : "hover:bg-slate-800/20"
+                          }`}
                           onClick={() => toggleExpandir(p)}
                         >
+                          {/* Checkbox de selección */}
+                          <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSeleccionada}
+                              onChange={() => toggleSeleccionPersona(p.id)}
+                              className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
+                            />
+                          </td>
+
                           {/* Toggle expandir */}
-                          <td className="py-3 px-3">
+                          <td className="py-3 px-2">
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
                               {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </div>
@@ -832,6 +1022,13 @@ export default function PersonasPage() {
                           <td className="py-3 px-3 text-center">
                             <span className="text-[11px] font-mono text-slate-500">
                               {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || 1)}
+                            </span>
+                          </td>
+
+                          {/* Documento PDF Origen */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="text-[11px] font-mono text-slate-400 truncate max-w-[140px] block" title={p.nombre_documento || "Sin documento"}>
+                              {p.nombre_documento || "—"}
                             </span>
                           </td>
 
@@ -903,7 +1100,7 @@ export default function PersonasPage() {
                         {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
-                            <td colSpan={7} className="p-0">
+                            <td colSpan={9} className="p-0">
                               <div className="border-t border-primary-500/20 animate-slideDown">
                                 <PanelDetalle p={p} />
                               </div>

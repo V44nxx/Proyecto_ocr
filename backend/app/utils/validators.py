@@ -12,7 +12,7 @@ CAMBIOS v2 (optimización precisión):
 """
 import re
 from datetime import date, datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict, Any
 from app.utils.logger import app_logger as logger
 
 
@@ -21,12 +21,12 @@ class ValidadorColombia:
 
     # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
     _PALABRAS_NO_NOMBRE = re.compile(
-        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|"
+        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
-        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|GERENTE|MINISTERIO|"
+        r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
-        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL)\b",
+        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA)\b",
         re.IGNORECASE,
     )
 
@@ -291,12 +291,21 @@ class ValidadorColombia:
         if not texto:
             return None
 
-        texto_up = texto.upper().strip()
+        txt = re.sub(r"^(?:SEXO|G[EÉ]NERO|SEX)\s*:?\s*", "", str(texto).strip(), flags=re.IGNORECASE).strip().upper()
 
-        if texto_up in ("M", "MASCULINO", "HOMBRE", "MALE", "MASC"):
+        if txt in ("M", "MASCULINO", "HOMBRE", "MALE", "MASC") or txt.startswith("MASC"):
             return "M"
-        if texto_up in ("F", "FEMENINO", "MUJER", "FEMALE", "FEM"):
+        if txt in ("F", "FEMENINO", "MUJER", "FEMALE", "FEM") or txt.startswith("FEM"):
             return "F"
+
+        m = re.search(r"\b(MASCULINO|FEMENINO|HOMBRE|MUJER)\b", str(texto).upper())
+        if m:
+            val = m.group(1)
+            return "M" if val in ("MASCULINO", "HOMBRE") else "F"
+
+        m_mf = re.search(r"\b([MF])\b", txt)
+        if m_mf:
+            return m_mf.group(1)
 
         return None
 
@@ -344,6 +353,110 @@ class ValidadorColombia:
             return None
 
         return texto_limpio
+
+    # ──────────────────────────────────────────
+    # EVALUACIÓN DE COMPLETITUD Y REVISIÓN
+    # ──────────────────────────────────────────
+    @classmethod
+    def evaluar_persona_completa(
+        cls,
+        numero_identificacion: Optional[str] = None,
+        nombres: Optional[str] = None,
+        apellidos: Optional[str] = None,
+        nombre_completo: Optional[str] = None,
+        fecha_nacimiento: Optional[Any] = None,
+        fecha_expedicion: Optional[Any] = None,
+        lugar_expedicion: Optional[str] = None,
+        sexo: Optional[str] = None,
+        confianza: float = 100.0,
+        detalles_campos: Optional[Dict[str, Any]] = None,
+        motor_ocr: Optional[str] = None,
+    ) -> Tuple[bool, List[str]]:
+        """
+        Evalúa de forma estricta si una persona tiene todos sus datos reconocidos
+        satisfactoriamente por el OCR. Si falta cualquier dato o hay ruido/conflicto,
+        retorna (False, [motivos]) para que sea revisado por un asistente.
+        """
+        motivos: List[str] = []
+
+        # 1. Identificación
+        id_limpio = cls.limpiar_identificacion(str(numero_identificacion or ""))
+        if not id_limpio or id_limpio.startswith("SIN_ID"):
+            motivos.append("Número de identificación no reconocido o ausente")
+        else:
+            valida, msg_ced = cls.validar_cedula(id_limpio)
+            if not valida:
+                motivos.append(f"Número de identificación dudoso ({id_limpio}): {msg_ced}")
+
+        # 2. Nombres
+        nom_str = str(nombres or "").strip()
+        nom_norm = cls.normalizar_nombre(nom_str) if nom_str else None
+        if not nom_norm or nom_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(nom_str):
+            motivos.append("Nombres no reconocidos o no detectados por OCR")
+
+        # 3. Apellidos
+        ape_str = str(apellidos or "").strip()
+        ape_norm = cls.normalizar_nombre(ape_str) if ape_str else None
+        if not ape_norm or ape_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(ape_str) or ape_str.upper() in {"NACIONA", "NACIONAL", "COLOMBIA", "REGISTRADURIA", "REGISTRADOR", "PUBLICA", "REPUBLICA", "BLICA"}:
+            motivos.append("Apellidos no reconocidos o no detectados por OCR")
+
+        # 4. Nombre completo integrado
+        nom_c_str = str(nombre_completo or "").strip()
+        if not nom_c_str or nom_c_str == "POR REVISAR":
+            if "Nombres no reconocidos o no detectados por OCR" not in motivos and "Apellidos no reconocidos o no detectados por OCR" not in motivos:
+                motivos.append("Nombre completo no consolidado")
+
+        # 5. Fecha de nacimiento
+        if not fecha_nacimiento:
+            motivos.append("Fecha de nacimiento no reconocida por OCR")
+
+        # 6. Fecha de expedición
+        if not fecha_expedicion:
+            motivos.append("Fecha de expedición no reconocida por OCR")
+
+        # 7. Lugar de expedición
+        lug_str = str(lugar_expedicion or "").strip()
+        lug_norm = cls.normalizar_lugar(lug_str) if lug_str else None
+        if not lug_norm or lug_norm in {"COLOMBIA", "REPUBLICA DE COLOMBIA", "REPÚBLICA DE COLOMBIA"}:
+            motivos.append("Lugar de expedición no reconocido o genérico")
+
+        # 8. Sexo
+        sex_str = str(sexo or "").strip()
+        sex_norm = cls.normalizar_sexo(sex_str) if sex_str else None
+        if not sex_norm:
+            motivos.append("Sexo no detectado o no reconocido por OCR")
+
+        # 9. Confianza general
+        try:
+            conf_num = float(confianza or 0)
+            if conf_num < 70.0:
+                motivos.append(f"Confianza general OCR baja ({conf_num:.1f}%)")
+        except (ValueError, TypeError):
+            pass
+
+        # 10. Conflictos o estatus de campos
+        if detalles_campos and isinstance(detalles_campos, dict):
+            for campo, info in detalles_campos.items():
+                if campo in ("grouping", "motivos_revision"):
+                    continue
+                if isinstance(info, dict):
+                    st = info.get("status")
+                    if st in ("MISSING", "MISSING_DATA"):
+                        mot = f"Campo '{campo}' marcado como faltante en el documento"
+                        if mot not in motivos:
+                            motivos.append(mot)
+                    elif st in ("REVIEW_REQUIRED", "CONFLICT", "INVALID"):
+                        reason = info.get("reason") or "requiere revisión manual"
+                        mot = f"Conflicto en campo '{campo}': {reason}"
+                        if mot not in motivos:
+                            motivos.append(mot)
+
+        # 11. Fallback de OCR secundario
+        if motor_ocr == "tesseract_fallback":
+            motivos.append("Procesado con motor fallback secundario (Tesseract)")
+
+        es_completo = (len(motivos) == 0)
+        return es_completo, motivos
 
 
 validador = ValidadorColombia()

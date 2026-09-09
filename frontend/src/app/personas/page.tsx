@@ -59,6 +59,7 @@ export default function PersonasPage() {
   const [soloRevision, setSoloRevision] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PersonaUpdate>({});
+  const [stats, setStats] = useState({ total: 0, validas: 0, revision: 0 });
 
   // Acordeón: solo una fila expandida a la vez
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
@@ -77,13 +78,36 @@ export default function PersonasPage() {
   const cargarPersonas = async (mostrarSpinner = false, revOnly?: boolean) => {
     if (mostrarSpinner) setCargando(true);
     try {
-      const { data } = await apiPersonas.listar({
-        limit: 100,
-        requiere_revision: (revOnly ?? soloRevision) || undefined,
-        buscar: buscar || undefined,
-      });
-      const items = Array.isArray(data) ? data : ((data as any)?.items || []);
+      const isRev = revOnly !== undefined ? revOnly : soloRevision;
+      const [resPersonas, resStats] = await Promise.all([
+        apiPersonas.listar({
+          limit: 100,
+          requiere_revision: isRev ? true : undefined,
+          buscar: buscar || undefined,
+        }),
+        apiDocumentos.estadisticas().catch(() => null),
+      ]);
+
+      const items = Array.isArray(resPersonas.data) ? resPersonas.data : ((resPersonas.data as any)?.items || []);
       setPersonas(items);
+
+      if (resStats?.data) {
+        const tot = resStats.data.total_personas || 0;
+        const rev = resStats.data.personas_en_revision || 0;
+        setStats({
+          total: tot,
+          revision: rev,
+          validas: Math.max(0, tot - rev),
+        });
+      } else {
+        const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
+        setStats({
+          total: items.length,
+          revision: revCount,
+          validas: Math.max(0, items.length - revCount),
+        });
+      }
+
       if (mostrarSpinner) toast.success(`${items.length} persona(s) sincronizada(s)`);
     } catch (err) {
       console.error("Error al cargar personas:", err);
@@ -144,9 +168,24 @@ export default function PersonasPage() {
     }
   };
 
+  const aprobarRevision = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await apiPersonas.actualizar(id, { requiere_revision: false });
+      toast.success("Persona aprobada como válida");
+      cargarPersonas(true);
+    } catch {
+      toast.error("Error al aprobar persona");
+    }
+  };
+
   // Filtrado local por cédula o nombre y apellidos
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
+    if (soloRevision) {
+      const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
+      if (!esRev) return false;
+    }
     if (!buscar) return true;
     const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
     const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
@@ -271,6 +310,29 @@ export default function PersonasPage() {
             {p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>}
           </div>
 
+          {/* Motivos de Revisión / Alerta para Asistente */}
+          {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+            <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <div className="flex items-center gap-2 mb-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                  Pendiente de Revisión por Asistente
+                </span>
+              </div>
+              {Array.isArray((p.detalles_campos as any)?.motivos_revision) && (p.detalles_campos as any).motivos_revision.length > 0 ? (
+                <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
+                  {(p.detalles_campos as any).motivos_revision.map((m: string, i: number) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-amber-200/90 ml-6">
+                  Uno o más datos no fueron reconocidos con certeza suficiente por el OCR. Por favor complete los datos faltantes o verifique en el PDF.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Campos */}
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {campos.map(({ key, label, icono, valor }) => {
@@ -290,7 +352,7 @@ export default function PersonasPage() {
                   <div className="px-3 pb-1.5">
                     {valor
                       ? <span className="text-xs font-semibold text-white">{valor}</span>
-                      : <span className="text-[11px] italic text-slate-600">No detectado</span>
+                      : <span className="text-[11px] italic text-rose-400/80 font-medium">No detectado por OCR</span>
                     }
                   </div>
                   {valor && (
@@ -311,8 +373,17 @@ export default function PersonasPage() {
               onClick={() => { setExpandidoId(null); iniciarEdicion(p); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-200 text-xs font-semibold transition-all"
             >
-              <Edit3 className="w-3.5 h-3.5" /> Editar
+              <Edit3 className="w-3.5 h-3.5" /> Editar Datos
             </button>
+            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+              <button
+                onClick={(e) => aprobarRevision(p.id, e)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
+                title="Aprobar datos y marcar como válido"
+              >
+                <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
+              </button>
+            )}
             <button
               onClick={() => setExpandidoId(null)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all ml-auto"
@@ -352,14 +423,18 @@ export default function PersonasPage() {
           </div>
         </div>
 
-        {/* Tarjetas de Estadísticas / Conteo Rápido */}
+        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {/* Card 1: Total General */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+          <div
+            onClick={() => setSoloRevision(false)}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${!soloRevision ? "border-primary-500/50 ring-1 ring-primary-500/30" : "border-slate-800/80 hover:border-slate-700"}`}
+            title="Mostrar todas las personas registradas"
+          >
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total en Tabla</p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total en Base de Datos</p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-white">{personas.length}</span>
+                <span className="text-2xl font-black text-white">{stats.total || personas.length}</span>
                 <span className="text-xs text-slate-500">registradas</span>
               </div>
             </div>
@@ -369,11 +444,15 @@ export default function PersonasPage() {
           </div>
 
           {/* Card 2: Válidas */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+          <div
+            onClick={() => setSoloRevision(false)}
+            className="cursor-pointer bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all"
+            title="Ver registros completos y válidos"
+          >
             <div>
               <p className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider">Registros Válidos</p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-emerald-400">{personas.filter(p => !p.requiere_revision).length}</span>
+                <span className="text-2xl font-black text-emerald-400">{stats.validas}</span>
                 <span className="text-xs text-slate-500">completas</span>
               </div>
             </div>
@@ -383,11 +462,22 @@ export default function PersonasPage() {
           </div>
 
           {/* Card 3: Por Revisar */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg">
+          <div
+            onClick={() => setSoloRevision(!soloRevision)}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${soloRevision ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-500/10" : "border-slate-800/80 hover:border-amber-500/40"}`}
+            title="Clic para alternar filtro de Solo Revisión"
+          >
             <div>
-              <p className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
+                {soloRevision && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                    Filtrando
+                  </span>
+                )}
+              </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-amber-400">{personas.filter(p => p.requiere_revision).length}</span>
+                <span className="text-2xl font-black text-amber-400">{stats.revision}</span>
                 <span className="text-xs text-slate-500">incompletas</span>
               </div>
             </div>
@@ -424,15 +514,17 @@ export default function PersonasPage() {
           </div>
 
           <div className="md:col-span-3 flex items-center">
-            <label className="flex items-center gap-2 cursor-pointer w-full py-2.5 px-3 bg-slate-900/90 border border-slate-800 rounded-xl hover:bg-slate-800/50 transition-colors">
+            <label className={`flex items-center gap-2 cursor-pointer w-full py-2.5 px-3 rounded-xl border transition-all ${soloRevision ? "bg-amber-500/15 border-amber-500/40 shadow-sm shadow-amber-500/10" : "bg-slate-900/90 border-slate-800 hover:bg-slate-800/50"}`}>
               <input
                 type="checkbox"
                 checked={soloRevision}
                 onChange={(e) => setSoloRevision(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40"
+                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500/40"
               />
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-medium text-slate-300">Solo revisión</span>
+              <AlertTriangle className={`w-3.5 h-3.5 ${soloRevision ? "text-amber-400" : "text-slate-400"}`} />
+              <span className={`text-xs font-medium ${soloRevision ? "text-amber-200 font-bold" : "text-slate-300"}`}>
+                Solo revisión {stats.revision > 0 ? `(${stats.revision})` : ""}
+              </span>
             </label>
           </div>
 
@@ -639,6 +731,15 @@ export default function PersonasPage() {
                               {/* Acciones */}
                               <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1">
+                                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                                    <button
+                                      onClick={(e) => aprobarRevision(p.id, e)}
+                                      title="Aprobar revisión manual"
+                                      className="p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   <button onClick={() => iniciarEdicion(p)} title="Editar" className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
                                     <Edit3 className="w-3.5 h-3.5" />
                                   </button>

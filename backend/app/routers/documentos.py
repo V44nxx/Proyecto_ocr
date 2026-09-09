@@ -348,7 +348,11 @@ def estadisticas_dashboard(
     en_proceso = db.query(Documento).filter(Documento.estado == "procesando").count()
     errores = db.query(Documento).filter(Documento.estado == "error").count()
     total_personas = db.query(Persona).count()
-    revision = db.query(Persona).filter(Persona.requiere_revision == True).count()
+    revision = db.query(Persona).filter(
+        (Persona.requiere_revision == True) |
+        (Persona.estado_registro.in_(["REVIEW_REQUIRED", "FALLBACK_TESSERACT"])) |
+        (Persona.estado_registro != "VALID")
+    ).count()
 
     from app.models.comparacion import Comparacion
     total_comparaciones = db.query(Comparacion).count()

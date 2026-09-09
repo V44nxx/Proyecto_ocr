@@ -706,12 +706,19 @@ class OCRService:
             )
 
             # ── Evaluación definitiva de completitud y validez ──
-            tiene_datos_completos = bool(
-                num_doc
-                and not str(num_doc).startswith("SIN_ID")
-                and (nombre_completo_final and nombre_completo_final != "POR REVISAR")
-                and (fecha_exp or fecha_nac)
-                and float(confianza or 0) >= (settings.OCR_CONFIDENCE_THRESHOLD * 100)
+            detalles_payload = dict(datos.get("detalles_campos") or {})
+            tiene_datos_completos, motivos_rev = validador.evaluar_persona_completa(
+                numero_identificacion=str(num_doc),
+                nombres=nombres_final,
+                apellidos=apellidos_final,
+                nombre_completo=nombre_completo_final,
+                fecha_nacimiento=fecha_nac,
+                fecha_expedicion=fecha_exp,
+                lugar_expedicion=datos.get("lugar_expedicion"),
+                sexo=(datos.get("sexo") or "")[:10] if datos.get("sexo") else None,
+                confianza=confianza,
+                detalles_campos=detalles_payload,
+                motor_ocr=ocr_engine,
             )
 
             requiere_revision = not tiene_datos_completos
@@ -721,6 +728,9 @@ class OCRService:
                 estado_reg = "VALID"
             else:
                 estado_reg = "REVIEW_REQUIRED"
+
+            if motivos_rev:
+                detalles_payload["motivos_revision"] = motivos_rev
 
             if not persona:
                 persona = Persona(
@@ -742,11 +752,11 @@ class OCRService:
                     motor_ocr=ocr_engine,
                     confianza_extraccion=confianza,
                     requiere_revision=requiere_revision,
-                    detalles_campos=datos.get("detalles_campos"),
+                    detalles_campos=detalles_payload,
                     texto_ocr_crudo=(texto_ocr or "")[:5000],
                 )
                 db.add(persona)
-                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo}) [Estado: {estado_reg}]")
+                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo}) [Estado: {estado_reg}] (Revisión: {requiere_revision})")
             else:
                 # ── UNIFICACIÓN INTELIGENTE DE HOJAS / PÁGINAS ──
                 # Si la cédula ya existe (ej. repartida en 2 hojas), no duplicar y fusionar datos faltantes
@@ -802,21 +812,31 @@ class OCRService:
                     persona.motor_ocr = ocr_engine
 
                 # Reevaluar si ya no requiere revisión tras la unificación de ambas hojas
-                tiene_datos_completos = bool(
-                    persona.numero_identificacion
-                    and not str(persona.numero_identificacion).startswith("SIN_ID")
-                    and (persona.nombre_completo and persona.nombre_completo != "POR REVISAR")
-                    and (persona.fecha_expedicion or persona.fecha_nacimiento)
-                    and float(persona.confianza_extraccion or 0) >= (settings.OCR_CONFIDENCE_THRESHOLD * 100)
+                detalles_existentes = dict(persona.detalles_campos or {})
+                tiene_datos_completos, motivos_rev = validador.evaluar_persona_completa(
+                    numero_identificacion=persona.numero_identificacion,
+                    nombres=persona.nombres,
+                    apellidos=persona.apellidos,
+                    nombre_completo=persona.nombre_completo,
+                    fecha_nacimiento=persona.fecha_nacimiento,
+                    fecha_expedicion=persona.fecha_expedicion,
+                    lugar_expedicion=persona.lugar_expedicion,
+                    sexo=persona.sexo,
+                    confianza=float(persona.confianza_extraccion or 0),
+                    detalles_campos=detalles_existentes,
+                    motor_ocr=persona.motor_ocr,
                 )
 
                 if tiene_datos_completos:
                     persona.requiere_revision = False
                     persona.estado_registro = "VALID"
+                    detalles_existentes.pop("motivos_revision", None)
                 else:
-                    persona.requiere_revision = requiere_revision
-                    persona.estado_registro = estado_reg
+                    persona.requiere_revision = True
+                    persona.estado_registro = "FALLBACK_TESSERACT" if persona.motor_ocr == "tesseract_fallback" else "REVIEW_REQUIRED"
+                    detalles_existentes["motivos_revision"] = motivos_rev
 
+                persona.detalles_campos = detalles_existentes
                 persona.fecha_actualizacion = datetime.utcnow()
 
             db.commit()

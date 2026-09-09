@@ -54,7 +54,17 @@ class ExportacionService:
         query = db.query(Persona)
         if filtros:
             if filtros.get("requiere_revision") is not None:
-                query = query.filter(Persona.requiere_revision == filtros["requiere_revision"])
+                if filtros["requiere_revision"] is True:
+                    query = query.filter(
+                        (Persona.requiere_revision == True) |
+                        (Persona.estado_registro.in_(["REVIEW_REQUIRED", "FALLBACK_TESSERACT"])) |
+                        (Persona.estado_registro != "VALID")
+                    )
+                elif filtros["requiere_revision"] is False:
+                    query = query.filter(
+                        (Persona.requiere_revision == False) &
+                        ((Persona.estado_registro == "VALID") | (Persona.estado_registro.is_(None)))
+                    )
 
         personas = query.order_by(Persona.fecha_registro.desc()).all()
         logger.info(f"Exportando {len(personas)} registros")

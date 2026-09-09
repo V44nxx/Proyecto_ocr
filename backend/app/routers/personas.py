@@ -28,8 +28,17 @@ def listar_personas(
     """Lista todas las personas registradas con filtros opcionales"""
     query = db.query(Persona)
 
-    if requiere_revision is not None:
-        query = query.filter(Persona.requiere_revision == requiere_revision)
+    if requiere_revision is True:
+        query = query.filter(
+            (Persona.requiere_revision == True) |
+            (Persona.estado_registro.in_(["REVIEW_REQUIRED", "FALLBACK_TESSERACT"])) |
+            (Persona.estado_registro != "VALID")
+        )
+    elif requiere_revision is False:
+        query = query.filter(
+            (Persona.requiere_revision == False) &
+            ((Persona.estado_registro == "VALID") | (Persona.estado_registro.is_(None)))
+        )
 
     if buscar:
         buscar_upper = f"%{buscar.upper()}%"
@@ -110,12 +119,45 @@ def actualizar_persona(
         persona.sexo = datos.sexo.upper()
         campos_actualizados.append("sexo")
 
+    from app.utils.validators import validador
+    from datetime import datetime
+
     if datos.requiere_revision is not None:
         persona.requiere_revision = datos.requiere_revision
+        det = dict(persona.detalles_campos or {})
+        if not datos.requiere_revision:
+            persona.estado_registro = "VALID"
+            det.pop("motivos_revision", None)
+        else:
+            persona.estado_registro = "REVIEW_REQUIRED"
+        persona.detalles_campos = det
+    else:
+        # Reevaluar si con los datos guardados ya no requiere revisión
+        tiene_datos, motivos_rev = validador.evaluar_persona_completa(
+            numero_identificacion=persona.numero_identificacion,
+            nombres=persona.nombres,
+            apellidos=persona.apellidos,
+            nombre_completo=persona.nombre_completo,
+            fecha_nacimiento=persona.fecha_nacimiento,
+            fecha_expedicion=persona.fecha_expedicion,
+            lugar_expedicion=persona.lugar_expedicion,
+            sexo=persona.sexo,
+            confianza=float(persona.confianza_extraccion or 0),
+            detalles_campos=persona.detalles_campos,
+            motor_ocr=persona.motor_ocr,
+        )
+        det = dict(persona.detalles_campos or {})
+        if tiene_datos:
+            persona.requiere_revision = False
+            persona.estado_registro = "VALID"
+            det.pop("motivos_revision", None)
+        else:
+            persona.requiere_revision = True
+            persona.estado_registro = "REVIEW_REQUIRED"
+            det["motivos_revision"] = motivos_rev
+        persona.detalles_campos = det
 
     persona.campos_revisados = campos_revisados
-
-    from datetime import datetime
     persona.fecha_actualizacion = datetime.utcnow()
     db.commit()
     db.refresh(persona)

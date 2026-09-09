@@ -117,7 +117,6 @@ class ExtractorService:
     KEYWORDS_FECHA_EXP = [
         r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N",  # cédula nueva
         r"FECHA\s+DE\s+EXPEDICI[OÓ]N",
-        r"FECHA\s+DE\s+EXPIRACI[OÓ]N",              # cédula nueva (expiración ≠ expedición)
         r"EXPEDICI[OÓ]N",
         r"EXPEDIDA",
         r"FECHA\s+EXP",
@@ -797,19 +796,28 @@ class ExtractorService:
             res["confianza_extraccion"] = round(conf_media, 1)
 
         # Evaluación final de requerimiento de revisión para el grupo
-        tiene_datos_completos = bool(
-            res["identificacion"]
-            and not str(res["identificacion"]).startswith("SIN_ID")
-            and res["nombres"] and res["nombres"] != "POR REVISAR"
-            and res["apellidos"] and res["apellidos"] != "POR REVISAR"
-            and (res["fecha_expedicion"] or res["fecha_nacimiento"])
+        tiene_datos_completos, motivos_rev = validador.evaluar_persona_completa(
+            numero_identificacion=res.get("identificacion"),
+            nombres=res.get("nombres"),
+            apellidos=res.get("apellidos"),
+            nombre_completo=res.get("nombre_completo"),
+            fecha_nacimiento=res.get("fecha_nacimiento"),
+            fecha_expedicion=res.get("fecha_expedicion"),
+            lugar_expedicion=res.get("lugar_expedicion"),
+            sexo=res.get("sexo"),
+            confianza=float(res.get("confianza_extraccion") or 0),
+            detalles_campos=res.get("detalles_campos"),
+            motor_ocr=ocr_engine,
         )
-        hay_conflicto = any(isinstance(d, dict) and d.get("status") == "REVIEW_REQUIRED" for d in res["detalles_campos"].values())
-        if tiene_datos_completos and not hay_conflicto and res["confianza_extraccion"] >= 70.0:
+
+        if tiene_datos_completos:
             res["requiere_revision"] = False
             res["estado_registro"] = "VALID"
         else:
             res["requiere_revision"] = True
+            res["estado_registro"] = "FALLBACK_TESSERACT" if ocr_engine == "tesseract_fallback" else "REVIEW_REQUIRED"
+            if motivos_rev:
+                res["detalles_campos"]["motivos_revision"] = motivos_rev
 
         res["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
         res["campos_encontrados"] = [k for k, v in res.items() if k in ["identificacion", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"] and v is not None]
@@ -1587,6 +1595,16 @@ class ExtractorService:
                     m_sub = re.search(r"\b([MF])\b", sub_clean)
                     if m_sub:
                         return m_sub.group(1)
+
+        # Fallback 3: Detección global de MASCULINO o FEMENINO en cualquier línea del documento
+        for linea in lineas:
+            l_up = linea.strip().upper()
+            if "MASCULINO" in l_up:
+                return "M"
+            if "FEMENINO" in l_up:
+                return "F"
+
+        return None
 
     def _sanitizar_y_corregir_fechas_y_lugares(self, resultado: Dict[str, Any], texto: str, lineas: List[str]):
         """Garantiza coherencia cronológica y limpieza de nombres/lugares."""

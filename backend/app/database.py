@@ -107,6 +107,7 @@ def create_tables():
     try:
         from app.models.persona import Persona
         from app.utils.name_cleaner import resolver_nombre_completo
+        from app.utils.validators import validador
         db_s = SessionLocal()
         try:
             personas = db_s.query(Persona).all()
@@ -117,16 +118,30 @@ def create_tables():
                     p.nombre_completo = nom_limpio
                     modificados += 1
 
-                # Reevaluar si es un registro completo y válido
-                tiene_datos = bool(
-                    p.numero_identificacion
-                    and not str(p.numero_identificacion).startswith("SIN_ID")
-                    and (p.nombre_completo and p.nombre_completo != "POR REVISAR")
-                    and (p.fecha_expedicion or p.fecha_nacimiento)
-                    and float(p.confianza_extraccion or 0) >= 70.0
+                # Reevaluar con criterio estricto de completitud OCR
+                tiene_datos, motivos_rev = validador.evaluar_persona_completa(
+                    numero_identificacion=p.numero_identificacion,
+                    nombres=p.nombres,
+                    apellidos=p.apellidos,
+                    nombre_completo=p.nombre_completo,
+                    fecha_nacimiento=p.fecha_nacimiento,
+                    fecha_expedicion=p.fecha_expedicion,
+                    lugar_expedicion=p.lugar_expedicion,
+                    sexo=p.sexo,
+                    confianza=float(p.confianza_extraccion or 0),
+                    detalles_campos=p.detalles_campos,
+                    motor_ocr=p.motor_ocr,
                 )
                 nuevo_req = not tiene_datos
-                nuevo_est = "VALID" if tiene_datos else "REVIEW_REQUIRED"
+                nuevo_est = "VALID" if tiene_datos else ("FALLBACK_TESSERACT" if p.motor_ocr == "tesseract_fallback" else "REVIEW_REQUIRED")
+                
+                det = dict(p.detalles_campos or {})
+                if motivos_rev:
+                    det["motivos_revision"] = motivos_rev
+                else:
+                    det.pop("motivos_revision", None)
+                p.detalles_campos = det
+
                 if p.requiere_revision != nuevo_req or p.estado_registro != nuevo_est:
                     p.requiere_revision = nuevo_req
                     p.estado_registro = nuevo_est

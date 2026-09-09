@@ -88,6 +88,14 @@ class PersonaUpdate(BaseModel):
     sexo: Optional[str] = None
     requiere_revision: Optional[bool] = None
 
+    @field_validator("sexo")
+    @classmethod
+    def normalizar_sexo_update(cls, v):
+        if v is None:
+            return v
+        from app.utils.validators import validador
+        return validador.normalizar_sexo(v)
+
 
 class PersonaResponse(PersonaBase):
     id: uuid.UUID

@@ -290,7 +290,7 @@ class SpatialFieldExtractor:
         dist_h = abs(cb.x - eb.x)
 
         # Candidato ubicado inmediatamente debajo (Misma columna X, Y más abajo)
-        es_debajo = dist_v > 0.0 and dist_v <= 0.15 and abs(cb.cx - eb.cx) <= (eb.w * 3.5)
+        es_debajo = dist_v > 0.0 and dist_v <= 0.15 and abs(cb.cx - eb.cx) <= max(eb.w * 3.5, 0.18)
 
         # Candidato ubicado inmediatamente a la derecha (Misma fila Y, X más a la derecha)
         es_al_lado = abs(cb.y - eb.y) <= (eb.h * 1.8) and cb.x >= eb.x + (eb.w * 0.1)
@@ -646,17 +646,72 @@ class SpatialFieldExtractor:
                         break
 
         # ── 6. Sexo ──
-        for l in lines:
+        for idx_l, l in enumerate(lines):
             t = getattr(l, "text", "").upper().strip()
             y_pos = getattr(l, "y", 0.0)
             x_pos = getattr(l, "x", 0.0)
-            if t in ["M", "F"] and y_pos > 0.20 and x_pos > 0.45:
-                resultado_campos["sexo"] = {"value": t, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de indicador de sexo"}
+
+            # 6.1 Detección explícita de Masculino / Femenino en la línea (o con prefijo SEXO/GÉNERO)
+            norm_sex = validador.normalizar_sexo(t)
+            if norm_sex and ("MASCUL" in t or "FEMEN" in t or "HOMBRE" in t or "MUJER" in t):
+                resultado_campos["sexo"] = {
+                    "value": norm_sex,
+                    "confidence": doc_ai_confidence,
+                    "status": "VALID",
+                    "page": page_num,
+                    "source": "universal_parser",
+                    "reason": "Extraído de indicador de sexo explícito (Masculino/Femenino)"
+                }
+                break
+
+            # 6.2 Si la línea es etiqueta SEXO y la siguiente línea contiene el valor (ej: Contraseñas)
+            if re.search(r"\b(?:SEX[O0]?|G[EÉ]NER[O0]?)\b", t) and idx_l + 1 < len(lines):
+                next_t = getattr(lines[idx_l + 1], "text", "").upper().strip()
+                norm_next = validador.normalizar_sexo(next_t)
+                if norm_next:
+                    resultado_campos["sexo"] = {
+                        "value": norm_next,
+                        "confidence": doc_ai_confidence,
+                        "status": "VALID",
+                        "page": page_num,
+                        "source": "universal_parser",
+                        "reason": "Extraído de valor adyacente a etiqueta SEXO"
+                    }
+                    break
+
+            # 6.3 Indicador M o F aislado en cuerpo del documento
+            if t in ["M", "F"] and y_pos > 0.15:
+                resultado_campos["sexo"] = {
+                    "value": t,
+                    "confidence": doc_ai_confidence,
+                    "status": "VALID",
+                    "page": page_num,
+                    "source": "universal_parser",
+                    "reason": "Extraído de indicador de sexo"
+                }
+
+            # 6.4 Junto a estatura o RH (ej: 1.75 M o O+ M)
             elif re.search(r"\b(?:1\.\d{2}|[ABO][+-])\s+([MF])\b", t):
-                resultado_campos["sexo"] = {"value": re.search(r"\b(?:1\.\d{2}|[ABO][+-])\s+([MF])\b", t).group(1), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído junto a estatura/RH"}
+                resultado_campos["sexo"] = {
+                    "value": re.search(r"\b(?:1\.\d{2}|[ABO][+-])\s+([MF])\b", t).group(1),
+                    "confidence": doc_ai_confidence,
+                    "status": "VALID",
+                    "page": page_num,
+                    "source": "universal_parser",
+                    "reason": "Extraído junto a estatura/RH"
+                }
+
+            # 6.5 Código de barras reverso
             m_bc_sex = re.search(r"-[0-9]+-([MF])-[0-9]{7,10}-", t)
             if m_bc_sex and not resultado_campos["sexo"]["value"]:
-                resultado_campos["sexo"] = {"value": m_bc_sex.group(1), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de código de barras"}
+                resultado_campos["sexo"] = {
+                    "value": m_bc_sex.group(1),
+                    "confidence": doc_ai_confidence,
+                    "status": "VALID",
+                    "page": page_num,
+                    "source": "universal_parser",
+                    "reason": "Extraído de código de barras"
+                }
 
         return resultado_campos
 
@@ -749,7 +804,7 @@ class SpatialFieldExtractor:
 
             # Si el valor está en la misma línea inmediatamente después de la etiqueta (ej: "NOMBRES JUAN CARLOS")
             if idx == etiqueta.line_index:
-                patron_et = r"\b(FECHA|LUGAR|EXPEDICION|EXPEDICIÓN|APELLIDOS?|NOMBRES?|NUMERO|NÚMERO|IDENTIFICACION|IDENTIFICACIÓN|CEDULA|CÉDULA|NUIP)\b[\s:]*"
+                patron_et = r"\b(FECHA|LUGAR|EXPEDICION|EXPEDICIÓN|APELLIDOS?|NOMBRES?|NUMERO|NÚMERO|IDENTIFICACION|IDENTIFICACIÓN|CEDULA|CÉDULA|NUIP|SEXO|G[EÉ]NERO|GENERO)\b[\s:]*"
                 sub_txt = re.sub(patron_et, "", txt, flags=re.IGNORECASE).strip()
                 if campo in ["nombres", "apellidos"]:
                     sub_txt = re.sub(r"\b\d+\b", "", sub_txt).strip()

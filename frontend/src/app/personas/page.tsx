@@ -404,45 +404,25 @@ export default function PersonasPage() {
                     </div>
                   </div>
 
-                  {/* Nombres */}
-                  <div>
+                  {/* Nombre Completo */}
+                  <div className="sm:col-span-2">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Nombres
+                      Nombre Completo (Nombres y Apellidos)
                     </label>
                     <input
                       type="text"
-                      value={editForm.nombres || ""}
+                      value={editForm.nombre_completo || ""}
                       onChange={(e) => {
-                        const n = e.target.value;
+                        const val = e.target.value;
                         setEditForm(prev => ({
                           ...prev,
-                          nombres: n,
-                          nombre_completo: `${n} ${prev.apellidos || ""}`.trim()
+                          nombre_completo: val,
+                          nombres: val,
+                          apellidos: ""
                         }));
                       }}
-                      placeholder="Ej: YHORLAN ERLENDY"
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
-                    />
-                  </div>
-
-                  {/* Apellidos */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Apellidos
-                    </label>
-                    <input
-                      type="text"
-                      value={editForm.apellidos || ""}
-                      onChange={(e) => {
-                        const a = e.target.value;
-                        setEditForm(prev => ({
-                          ...prev,
-                          apellidos: a,
-                          nombre_completo: `${prev.nombres || ""} ${a}`.trim()
-                        }));
-                      }}
-                      placeholder="Ej: ESCOBAR MURIEL"
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
+                      placeholder="Ej: VALENCIA VILLEGAS ANTONIO"
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase font-medium"
                     />
                   </div>
 

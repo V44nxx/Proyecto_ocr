@@ -68,6 +68,38 @@ class OCRService:
         _owns_session = db_externa is None
         db = SessionLocal() if _owns_session else db_externa
 
+        # ── Auto-resolución de lookup Excel si no fue provisto explícitamente ──
+        if excel_lookup is None:
+            try:
+                from app.services.excel_lookup_service import excel_lookup_service
+                from app.models.comparacion import Comparacion
+                from app.config import settings
+
+                comp = (
+                    db.query(Comparacion)
+                    .filter(Comparacion.ruta_archivo.isnot(None))
+                    .order_by(Comparacion.fecha_carga.desc())
+                    .first()
+                )
+                if comp and comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
+                    excel_lookup = excel_lookup_service.cargar_lookup(comp.ruta_archivo)
+                    logger.info(
+                        f"[OCR] Lookup Excel cargado automáticamente desde Comparación '{comp.nombre_original}' ({len(excel_lookup)} personas)"
+                    )
+                else:
+                    archivos_excel = sorted(
+                        [p for p in settings.upload_path.glob("*.xls*") if not p.name.startswith("reporte_")],
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True,
+                    )
+                    if archivos_excel:
+                        excel_lookup = excel_lookup_service.cargar_lookup(str(archivos_excel[0]))
+                        logger.info(
+                            f"[OCR] Lookup Excel cargado automáticamente desde '{archivos_excel[0].name}' ({len(excel_lookup)} personas)"
+                        )
+            except Exception as e_auto:
+                logger.warning(f"[OCR] No se pudo cargar Excel automático: {e_auto}")
+
         inicio = time.time()
         logger.info(f"Iniciando OCR para documento {documento_id}: {ruta_pdf}")
 
@@ -656,6 +688,16 @@ class OCRService:
             encontrado_en_excel = False
             nombre_completo_final = None
 
+            if not excel_lookup:
+                try:
+                    from app.services.excel_lookup_service import excel_lookup_service
+                    from app.models.comparacion import Comparacion
+                    comp = db.query(Comparacion).filter(Comparacion.ruta_archivo.isnot(None)).order_by(Comparacion.fecha_carga.desc()).first()
+                    if comp and comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
+                        excel_lookup = excel_lookup_service.cargar_lookup(comp.ruta_archivo)
+                except Exception:
+                    pass
+
             if excel_lookup and id_limpio and not id_limpio.startswith("SIN_ID"):
                 from app.services.excel_lookup_service import excel_lookup_service
                 registro_excel = excel_lookup_service.buscar(id_limpio, excel_lookup)
@@ -670,10 +712,8 @@ class OCRService:
                     elif nom_excel or ape_excel:
                         nombre_completo_final = f"{nom_excel} {ape_excel}".strip()
 
-                    if nom_excel:
-                        nombres_final = nom_excel
-                    if ape_excel:
-                        apellidos_final = ape_excel
+                    nombres_final = nom_excel or nombre_completo_final
+                    apellidos_final = ape_excel or ""
 
                     logger.info(
                         f"[ExcelLookup] ID {id_limpio}: nombre completo desde planilla oficial -> '{nombre_completo_final}'"
@@ -707,6 +747,33 @@ class OCRService:
 
             # ── Evaluación definitiva de completitud y validez ──
             detalles_payload = dict(datos.get("detalles_campos") or {})
+
+            if encontrado_en_excel and nombre_completo_final:
+                detalles_payload["nombre_completo"] = {
+                    "valor": nombre_completo_final,
+                    "value": nombre_completo_final,
+                    "confidence": 1.0,
+                    "status": "VALID",
+                    "source": "excel_oficial",
+                    "reason": "Nombre oficial extraído de la planilla Excel"
+                }
+                if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
+                    detalles_payload["nombres"]["status"] = "VALID"
+                if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
+                    detalles_payload["apellidos"]["status"] = "VALID"
+            elif nombre_completo_final and nombre_completo_final != "POR REVISAR":
+                detalles_payload["nombre_completo"] = {
+                    "valor": nombre_completo_final,
+                    "value": nombre_completo_final,
+                    "confidence": round(confianza / 100.0, 2),
+                    "status": "VALID",
+                    "source": ocr_engine,
+                    "reason": "Nombre completo extraído y consolidado"
+                }
+                if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
+                    detalles_payload["nombres"]["status"] = "VALID"
+                if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
+                    detalles_payload["apellidos"]["status"] = "VALID"
             tiene_datos_completos, motivos_rev = validador.evaluar_persona_completa(
                 numero_identificacion=str(num_doc),
                 nombres=nombres_final,
@@ -773,7 +840,11 @@ class OCRService:
                     persona.pagina_reverso = datos.get("pagina_frente")
 
                 # Nombre Completo, Nombres y Apellidos
-                if (not persona.nombre_completo or persona.nombre_completo == "POR REVISAR") and nombre_completo_final != "POR REVISAR":
+                if fuente_nombre == "excel_oficial" and nombre_completo_final:
+                    persona.nombre_completo = nombre_completo_final
+                    persona.nombres = nombres_final
+                    persona.apellidos = apellidos_final
+                elif (not persona.nombre_completo or persona.nombre_completo == "POR REVISAR") and nombre_completo_final != "POR REVISAR":
                     persona.nombre_completo = nombre_completo_final
 
                 if _es_nombre_invalido(persona.nombres) and not _es_nombre_invalido(datos.get("nombres")):

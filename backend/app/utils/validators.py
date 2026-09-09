@@ -410,23 +410,22 @@ class ValidadorColombia:
             if not valida:
                 motivos.append(f"Número de identificación dudoso ({id_limpio}): {msg_ced}")
 
-        # 2. Nombres
-        nom_str = str(nombres or "").strip()
-        nom_norm = cls.normalizar_nombre(nom_str) if nom_str else None
-        if not nom_norm or nom_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(nom_str):
-            motivos.append("Nombres no reconocidos o no detectados por OCR")
-
-        # 3. Apellidos
-        ape_str = str(apellidos or "").strip()
-        ape_norm = cls.normalizar_nombre(ape_str) if ape_str else None
-        if not ape_norm or ape_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(ape_str) or ape_str.upper() in {"NACIONA", "NACIONAL", "COLOMBIA", "REGISTRADURIA", "REGISTRADOR", "PUBLICA", "REPUBLICA", "BLICA"}:
-            motivos.append("Apellidos no reconocidos o no detectados por OCR")
-
-        # 4. Nombre completo integrado
+        # 2. Nombre Completo Unificado
+        # Los nombres se manejan completos y unificados (nombre_completo);
+        # ya no se exigen de forma separada "nombres" y "apellidos" para evitar
+        # falsos requerimientos de revisión cuando el nombre ya está completo o viene del Excel.
         nom_c_str = str(nombre_completo or "").strip()
         if not nom_c_str or nom_c_str == "POR REVISAR":
-            if "Nombres no reconocidos o no detectados por OCR" not in motivos and "Apellidos no reconocidos o no detectados por OCR" not in motivos:
-                motivos.append("Nombre completo no consolidado")
+            partes = []
+            if nombres and str(nombres).strip() != "POR REVISAR":
+                partes.append(str(nombres).strip())
+            if apellidos and str(apellidos).strip() != "POR REVISAR":
+                partes.append(str(apellidos).strip())
+            nom_c_str = " ".join(partes).strip()
+
+        nom_c_norm = cls.normalizar_nombre(nom_c_str) if nom_c_str else None
+        if not nom_c_norm or nom_c_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(nom_c_str) or any(r in nom_c_str.upper() for r in ["NACIONA", "COLOMBIA", "REGISTRADURIA", "REPUBLICA"]):
+            motivos.append("Nombre completo no reconocido o ausente")
 
         # 5. Fecha de nacimiento
         if not fecha_nacimiento:

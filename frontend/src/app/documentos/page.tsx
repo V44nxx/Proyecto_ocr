@@ -218,16 +218,12 @@ export default function DocumentosPage() {
     }
   }, [procesoFinalizado, docsCompletadosCount]);
 
-  // Manejador del temporizador de redirección
+  // Manejador del temporizador de redirección: siempre redirige a /personas
   useEffect(() => {
     if (cuentaAtrasRedireccion === null) return;
 
     if (cuentaAtrasRedireccion <= 0) {
-      if (comparacionId) {
-        router.push(`/comparacion?id=${comparacionId}`);
-      } else {
-        router.push("/personas");
-      }
+      router.push("/personas");
       return;
     }
 
@@ -236,7 +232,7 @@ export default function DocumentosPage() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [cuentaAtrasRedireccion, router, comparacionId]);
+  }, [cuentaAtrasRedireccion, router]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles || acceptedFiles.length === 0) return;
@@ -578,38 +574,6 @@ export default function DocumentosPage() {
               </div>
             </div>
 
-            {/* Banner de Redirección Automática sin Comparación */}
-            {procesoFinalizado && cuentaAtrasRedireccion !== null && !comparacionId && (
-              <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs">
-                    {cuentaAtrasRedireccion}
-                  </div>
-                  <span>
-                    Las personas ya están listas en el sistema. <strong>Redirigiendo a la tabla de personas en {cuentaAtrasRedireccion}s...</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  <button
-                    onClick={() => {
-                      canceladoRedireccionRef.current = true;
-                      setCuentaAtrasRedireccion(null);
-                    }}
-                    className="text-xs text-slate-300 hover:text-white underline px-2 py-1"
-                  >
-                    Permanecer aquí
-                  </button>
-                  <button
-                    onClick={() => router.push("/personas")}
-                    className="text-xs bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md hover:shadow-emerald-500/30"
-                  >
-                    <span>Ir a Personas</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Banner de Comparación Automática en Progreso */}
             {comparacionEnProgreso && !procesoFinalizado && (
               <div className="mt-4 p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-3 text-sm text-blue-200 relative z-10 animate-in fade-in duration-300">
@@ -630,28 +594,31 @@ export default function DocumentosPage() {
               </div>
             )}
 
-            {/* Banner de Comparación Automática Lista y Redirección */}
-            {comparacionId && procesoFinalizado && (
-              <div className="mt-4 p-3.5 bg-gradient-to-r from-indigo-500/20 via-purple-500/15 to-emerald-500/15 border border-indigo-500/40 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-indigo-100 relative z-10 animate-in fade-in duration-300 shadow-lg shadow-indigo-950/30">
+            {/* Banner de Proceso Finalizado con Redirección a la Tabla de Personas */}
+            {procesoFinalizado && (
+              <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
                 <div className="flex items-center gap-3">
                   {cuentaAtrasRedireccion !== null ? (
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/30 border border-indigo-400/50 flex items-center justify-center font-bold text-indigo-300 font-mono text-sm flex-shrink-0 animate-pulse">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs flex-shrink-0 animate-pulse">
                       {cuentaAtrasRedireccion}
                     </div>
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/25 border border-indigo-500/40 flex items-center justify-center flex-shrink-0">
-                      <BarChart2 className="w-4 h-4 text-indigo-300" />
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 flex-shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
                     </div>
                   )}
                   <div>
-                    <p className="font-semibold text-white text-xs sm:text-sm">
-                      ¡OCR completado y planilla enviada a Comparación automáticamente!
-                    </p>
-                    <p className="text-xs text-indigo-200/90 mt-0.5">
+                    <span className="font-semibold text-white">
+                      Extracción completada. {totalPersonasDetectadas} persona(s) listas en el sistema.
+                    </span>
+                    <p className="text-xs text-emerald-300/90 mt-0.5">
                       {cuentaAtrasRedireccion !== null ? (
-                        <>Redirigiendo a la auditoría de comparación en <strong>{cuentaAtrasRedireccion}s</strong>...</>
+                        <>Redirigiendo a la tabla de personas en <strong>{cuentaAtrasRedireccion}s</strong>...</>
                       ) : (
-                        <>La comparación ya está lista para su revisión.</>
+                        <>Las personas ya están registradas en la tabla.</>
+                      )}
+                      {comparacionId && (
+                        <span className="text-indigo-300 ml-1.5 font-medium">· Planilla cargada en Comparación.</span>
                       )}
                     </p>
                   </div>
@@ -669,13 +636,22 @@ export default function DocumentosPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => router.push(`/comparacion?id=${comparacionId}`)}
-                    className="text-xs bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-indigo-500/30"
+                    onClick={() => router.push("/personas")}
+                    className="text-xs bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md hover:shadow-emerald-500/30"
                   >
-                    <BarChart2 className="w-3.5 h-3.5" />
-                    <span>Ver Comparación</span>
+                    <span>Ir a Personas</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
+                  {comparacionId && (
+                    <button
+                      onClick={() => router.push(`/comparacion?id=${comparacionId}`)}
+                      className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-indigo-500/25"
+                      title="Ver auditoría en el módulo de Comparación"
+                    >
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      <span>Ver Comparación</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

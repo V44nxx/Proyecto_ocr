@@ -499,7 +499,7 @@ export default function PersonasPage() {
                 <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
                 {edadCalculada !== null && (
                   <span className="flex items-center gap-1 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-semibold" title={`Edad: ${edadCalculada} años cumplidos`}>
-                    <span>🎂 {edadCalculada} años</span>
+                    <span> {edadCalculada} años</span>
                   </span>
                 )}
               </div>
@@ -656,22 +656,20 @@ export default function PersonasPage() {
                       <button
                         type="button"
                         onClick={() => setEditForm(prev => ({ ...prev, sexo: "M" }))}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${
-                          editForm.sexo === "M" || editForm.sexo === "MASCULINO"
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${editForm.sexo === "M" || editForm.sexo === "MASCULINO"
                             ? "bg-blue-600/30 border-blue-500 text-blue-300 shadow-sm"
                             : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                        }`}
+                          }`}
                       >
                         <span className="font-bold">M</span> Masculino
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditForm(prev => ({ ...prev, sexo: "F" }))}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${
-                          editForm.sexo === "F" || editForm.sexo === "FEMENINO"
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${editForm.sexo === "F" || editForm.sexo === "FEMENINO"
                             ? "bg-pink-600/30 border-pink-500 text-pink-300 shadow-sm"
                             : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                        }`}
+                          }`}
                       >
                         <span className="font-bold">F</span> Femenino
                       </button>
@@ -695,38 +693,38 @@ export default function PersonasPage() {
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 content-start">
-                {campos.map(({ key, label, icono, valor }) => {
-                  const c = conf(key);
-                  const col = color(valor ? c : 0);
-                  return (
-                    <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2.5 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[72px]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-slate-500">
-                          {icono}
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+                  {campos.map(({ key, label, icono, valor }) => {
+                    const c = conf(key);
+                    const col = color(valor ? c : 0);
+                    return (
+                      <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2.5 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[72px]">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            {icono}
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+                          </div>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
+                            {valor ? `${c}%` : "N/D"}
+                          </span>
                         </div>
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
-                          {valor ? `${c}%` : "N/D"}
-                        </span>
+                        <div className="my-1">
+                          {valor
+                            ? <span className="text-xs font-semibold text-white truncate block">{valor}</span>
+                            : <span className="text-[11px] italic text-rose-400/80 font-medium block">No detectado por OCR</span>
+                          }
+                        </div>
+                        {valor ? (
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className={`h-full bg-gradient-to-r ${col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
+                          </div>
+                        ) : (
+                          <div className="h-1 bg-rose-950/30 rounded-full overflow-hidden">
+                            <div className="h-full bg-rose-500/40 rounded-full w-full" />
+                          </div>
+                        )}
                       </div>
-                      <div className="my-1">
-                        {valor
-                          ? <span className="text-xs font-semibold text-white truncate block">{valor}</span>
-                          : <span className="text-[11px] italic text-rose-400/80 font-medium block">No detectado por OCR</span>
-                        }
-                      </div>
-                      {valor ? (
-                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                          <div className={`h-full bg-gradient-to-r ${col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
-                        </div>
-                      ) : (
-                        <div className="h-1 bg-rose-950/30 rounded-full overflow-hidden">
-                          <div className="h-full bg-rose-500/40 rounded-full w-full" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1083,13 +1081,12 @@ export default function PersonasPage() {
                       <Fragment key={p.id}>
                         {/* ── Fila principal ── */}
                         <tr
-                          className={`border-b border-slate-800/30 transition-colors cursor-pointer ${
-                            isExpandida
+                          className={`border-b border-slate-800/30 transition-colors cursor-pointer ${isExpandida
                               ? "bg-slate-800/40 border-primary-500/20"
                               : isSeleccionada
-                              ? "bg-primary-500/10 hover:bg-primary-500/15"
-                              : "hover:bg-slate-800/20"
-                          }`}
+                                ? "bg-primary-500/10 hover:bg-primary-500/15"
+                                : "hover:bg-slate-800/20"
+                            }`}
                           onClick={() => toggleExpandir(p)}
                         >
                           {/* Checkbox de selección */}
@@ -1206,11 +1203,10 @@ export default function PersonasPage() {
                                   }
                                 }}
                                 title={isExpandida && editando === p.id ? "Cancelar edición" : "Editar datos"}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  isExpandida && editando === p.id
+                                className={`p-1.5 rounded-lg transition-colors ${isExpandida && editando === p.id
                                     ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                                     : "text-slate-400 hover:text-white hover:bg-slate-800"
-                                }`}
+                                  }`}
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>

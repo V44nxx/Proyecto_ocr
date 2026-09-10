@@ -13,7 +13,7 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
@@ -361,10 +361,16 @@ export default function PersonasPage() {
     const estaEditando = editando === p.id;
 
     const nomCompleto = formatNombreCompleto(p);
+    const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
     const campos = [
       { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
       { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
-      { key: "fecha_nacimiento", label: "F. Nacimiento", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null },
+      {
+        key: "fecha_nacimiento",
+        label: "F. Nacimiento",
+        icono: <Calendar className="w-3.5 h-3.5" />,
+        valor: p.fecha_nacimiento ? `${p.fecha_nacimiento}${edadCalculada !== null ? ` (${edadCalculada} años)` : ""}` : null
+      },
       { key: "fecha_expedicion", label: "F. Expedición", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
       { key: "lugar_expedicion", label: "Lugar Expedición", icono: <MapPin className="w-3.5 h-3.5" />, valor: p.lugar_expedicion },
       { key: "sexo", label: "Sexo", icono: <Users className="w-3.5 h-3.5" />, valor: p.sexo },
@@ -491,6 +497,11 @@ export default function PersonasPage() {
                 )}
                 <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
                 <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
+                {edadCalculada !== null && (
+                  <span className="flex items-center gap-1 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-semibold" title={`Edad: ${edadCalculada} años cumplidos`}>
+                    <span>🎂 {edadCalculada} años</span>
+                  </span>
+                )}
               </div>
               {estaEditando ? (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
@@ -1065,6 +1076,7 @@ export default function PersonasPage() {
                     const isExpandida = expandidoId === p.id;
                     const isSeleccionada = seleccionados.has(p.id);
                     const nombreCompleto = formatNombreCompleto(p);
+                    const edadRow = p.edad ?? calcularEdad(p.fecha_nacimiento);
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
                     return (
@@ -1112,7 +1124,14 @@ export default function PersonasPage() {
                           {/* Nombre completo */}
                           <td className="py-3 px-4 whitespace-nowrap">
                             {nombreCompleto ? (
-                              <div className="text-sm font-semibold text-slate-100">{nombreCompleto}</div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-slate-100">{nombreCompleto}</span>
+                                {edadRow !== null && (
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-300 font-medium" title={`Edad: ${edadRow} años (F. Nacimiento: ${p.fecha_nacimiento})`}>
+                                    {edadRow} años
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-slate-600 italic text-xs">Sin nombre</span>
                             )}

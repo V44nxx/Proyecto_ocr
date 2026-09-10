@@ -77,3 +77,68 @@ export function formatNombreCompleto(p: Partial<Persona> | null | undefined): st
 
   return words.join(" ").trim();
 }
+
+/**
+ * Calcula la edad exacta en años cumplidos a partir de una fecha de nacimiento.
+ * Acepta strings en formato ISO (YYYY-MM-DD), formato latino (DD/MM/YYYY) o instancias Date.
+ */
+export function calcularEdad(fechaNacimiento: string | Date | null | undefined): number | null {
+  if (!fechaNacimiento) return null;
+  let anio: number, mes: number, dia: number;
+
+  if (fechaNacimiento instanceof Date) {
+    if (isNaN(fechaNacimiento.getTime())) return null;
+    anio = fechaNacimiento.getFullYear();
+    mes = fechaNacimiento.getMonth() + 1;
+    dia = fechaNacimiento.getDate();
+  } else {
+    const s = String(fechaNacimiento).trim();
+    if (!s) return null;
+    if (s.includes("-")) {
+      const parts = s.split("-");
+      if (parts.length >= 3) {
+        anio = parseInt(parts[0], 10);
+        mes = parseInt(parts[1], 10);
+        dia = parseInt(parts[2], 10);
+      } else {
+        return null;
+      }
+    } else if (s.includes("/")) {
+      const parts = s.split("/");
+      if (parts.length >= 3) {
+        if (parts[0].length === 4) {
+          anio = parseInt(parts[0], 10);
+          mes = parseInt(parts[1], 10);
+          dia = parseInt(parts[2], 10);
+        } else {
+          dia = parseInt(parts[0], 10);
+          mes = parseInt(parts[1], 10);
+          anio = parseInt(parts[2], 10);
+        }
+      } else {
+        return null;
+      }
+    } else {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return null;
+      anio = d.getFullYear();
+      mes = d.getMonth() + 1;
+      dia = d.getDate();
+    }
+  }
+
+  if (!anio || !mes || !dia || isNaN(anio) || isNaN(mes) || isNaN(dia)) return null;
+
+  const hoy = new Date();
+  const hoyAnio = hoy.getFullYear();
+  const hoyMes = hoy.getMonth() + 1;
+  const hoyDia = hoy.getDate();
+
+  let edad = hoyAnio - anio;
+  if (hoyMes < mes || (hoyMes === mes && hoyDia < dia)) {
+    edad--;
+  }
+
+  return edad >= 0 && edad <= 125 ? edad : null;
+}
+

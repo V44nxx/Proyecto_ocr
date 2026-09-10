@@ -1,6 +1,7 @@
 """Modelo SQLAlchemy: Persona"""
 import uuid
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import Column, String, Date, DateTime, Numeric, Boolean, Text, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -49,6 +50,19 @@ class Persona(Base):
         if self.documento:
             return self.documento.nombre_original
         return None
+
+    @property
+    def edad(self) -> Optional[int]:
+        """Calcula la edad exacta en años cumplidos basado en la fecha de nacimiento"""
+        if not self.fecha_nacimiento:
+            return None
+        try:
+            from datetime import date
+            hoy = date.today()
+            fn = self.fecha_nacimiento
+            return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        except Exception:
+            return None
 
     def __repr__(self):
         nom = self.nombre_completo or f"{self.nombres or ''} {self.apellidos or ''}".strip()

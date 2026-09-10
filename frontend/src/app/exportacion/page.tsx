@@ -10,7 +10,7 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
 import type { Persona, Documento } from "@/types";
 
 export default function ExportacionPage() {
@@ -411,6 +411,7 @@ export default function ExportacionPage() {
                         </th>
                         <th>Cédula</th>
                         <th>Nombre y Apellidos</th>
+                        <th>Edad</th>
                         <th>Documento PDF</th>
                         <th>Estado</th>
                       </tr>
@@ -444,6 +445,9 @@ export default function ExportacionPage() {
                             </td>
                             <td className="font-medium text-slate-200">
                               {nomCompleto || "—"}
+                            </td>
+                            <td className="text-slate-300 font-mono text-[11px] whitespace-nowrap">
+                              {p.edad ? `${p.edad} años` : (calcularEdad(p.fecha_nacimiento) ? `${calcularEdad(p.fecha_nacimiento)} años` : "—")}
                             </td>
                             <td className="text-slate-400 font-mono text-[11px] max-w-[150px] truncate" title={p.nombre_documento || "—"}>
                               {p.nombre_documento || "—"}

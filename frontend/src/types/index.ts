@@ -63,6 +63,7 @@ export interface Persona {
   nombres?: string | null;
   apellidos?: string | null;
   fecha_nacimiento: string | null;
+  edad?: number | null;
   fecha_expedicion: string | null;
   lugar_expedicion: string | null;
   sexo: string | null;

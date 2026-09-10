@@ -100,6 +100,7 @@ export interface Comparacion {
   fecha_carga: string;
   fecha_ejecucion: string | null;
   tiempo_procesamiento_ms: number | null;
+  mensaje_error?: string | null;
 }
 
 export interface Diferencia {

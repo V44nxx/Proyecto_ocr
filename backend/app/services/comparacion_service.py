@@ -364,6 +364,12 @@ class ComparacionService:
             diferencias_a_guardar = []
             comp_uuid = uuid_pkg.UUID(str(comparacion_id))
 
+            # Marcar estado en progreso en la base de datos
+            comparacion_actual = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
+            if comparacion_actual:
+                comparacion_actual.estado = "procesando"
+                db.commit()
+
             if len(df_bd) > 0:
                 ids_bd = set(df_bd["numero_identificacion"].tolist())
                 ids_excel = set(df_excel["numero_identificacion"].tolist())
@@ -537,6 +543,10 @@ class ComparacionService:
 
 
             # 4. Guardar diferencias en BD (por lotes)
+            # Limpiar diferencias anteriores si existieran para evitar duplicados al reprocesar
+            db.query(Diferencia).filter(Diferencia.comparacion_id == comp_uuid).delete()
+            db.commit()
+
             BATCH_SIZE = 500
             for i in range(0, len(diferencias_a_guardar), BATCH_SIZE):
                 lote = diferencias_a_guardar[i:i + BATCH_SIZE]
@@ -571,7 +581,7 @@ class ComparacionService:
         except Exception as e:
             logger.error(f"Error en comparación: {e}")
             try:
-                comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
+                comparacion = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
                 if comparacion:
                     comparacion.estado = "error"
                     comparacion.mensaje_error = str(e)[:500]

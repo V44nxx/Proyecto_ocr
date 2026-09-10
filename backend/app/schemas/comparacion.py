@@ -20,6 +20,7 @@ class ComparacionResponse(BaseModel):
     fecha_carga: datetime
     fecha_ejecucion: Optional[datetime]
     tiempo_procesamiento_ms: Optional[int]
+    mensaje_error: Optional[str] = None
 
     class Config:
         from_attributes = True

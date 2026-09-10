@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -77,25 +77,87 @@ export default function ComparacionPage() {
   const [descargando, setDescargando] = useState(false);
   const [corrigiendoId, setCorrigiendoId] = useState<string | null>(null);
   const [agregandoId, setAgregandoId] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
-    cargarComparaciones();
+    const idParam = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("id")
+      : null;
+    cargarComparaciones(idParam || undefined);
   }, []);
 
-  const cargarComparaciones = async () => {
-    try {
-      const { data } = await apiComparacion.listar();
-      setComparaciones(data);
-    } catch { } finally { setCargando(false); }
+  const iniciarPolling = (comp: Comparacion) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const { data: updated } = await apiComparacion.detalle(comp.id);
+        setComparacionActiva(updated);
+        setComparaciones((prev) =>
+          prev.map((c) => (c.id === updated.id ? updated : c))
+        );
+
+        if (updated.estado === "completado" || updated.estado === "error") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          if (updated.estado === "completado") {
+            toast.success("¡Comparación completada con éxito!");
+            try {
+              const { data: difs } = await apiComparacion.diferencias(updated.id);
+              setDiferencias(difs);
+            } catch {
+              toast.error("Error cargando diferencias");
+            }
+          } else {
+            toast.error(updated.mensaje_error || "Error en la comparación");
+          }
+        }
+      } catch {
+        // Reintentar en siguiente ciclo
+      }
+    }, 1500);
   };
 
   const verDiferencias = async (comp: Comparacion) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
     setComparacionActiva(comp);
+    if (comp.estado === "completado") {
+      try {
+        const { data } = await apiComparacion.diferencias(comp.id);
+        setDiferencias(data);
+      } catch {
+        toast.error("Error cargando diferencias");
+      }
+    } else if (comp.estado === "procesando" || comp.estado === "pendiente") {
+      setDiferencias([]);
+      iniciarPolling(comp);
+    }
+  };
+
+  const cargarComparaciones = async (idASeleccionar?: string) => {
     try {
-      const { data } = await apiComparacion.diferencias(comp.id);
-      setDiferencias(data);
-    } catch { toast.error("Error cargando diferencias"); }
+      const { data } = await apiComparacion.listar();
+      setComparaciones(data);
+
+      if (data && data.length > 0) {
+        const objetivo = (idASeleccionar ? data.find((c) => c.id === idASeleccionar) : null)
+          || (comparacionActiva ? data.find((c) => c.id === comparacionActiva.id) : null)
+          || data[0];
+
+        if (objetivo) {
+          verDiferencias(objetivo);
+        }
+      }
+    } catch {
+    } finally {
+      setCargando(false);
+    }
   };
 
   const aplicarCorreccion = async (d: Diferencia) => {
@@ -187,29 +249,13 @@ export default function ComparacionPage() {
     try {
       const { data } = await apiComparacion.uploadExcel(file, true);
       toast.success(`Comparación iniciada: ${file.name}`);
-      cargarComparaciones();
-
-      // Polling hasta que complete
-      const polling = setInterval(async () => {
-        try {
-          const { data: updated } = await apiComparacion.detalle(data.id);
-          if (updated.estado === "completado" || updated.estado === "error") {
-            clearInterval(polling);
-            cargarComparaciones();
-            if (updated.estado === "completado") {
-              toast.success("Comparación completada");
-              setComparacionActiva(updated);
-              const { data: difs } = await apiComparacion.diferencias(updated.id);
-              setDiferencias(difs);
-            } else {
-              toast.error("Error en la comparación");
-            }
-          }
-        } catch { clearInterval(polling); }
-      }, 3000);
+      setComparaciones((prev) => [data, ...prev.filter((c) => c.id !== data.id)]);
+      verDiferencias(data);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "Error subiendo archivo"));
-    } finally { setSubiendo(false); }
+    } finally {
+      setSubiendo(false);
+    }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -268,10 +314,16 @@ export default function ComparacionPage() {
           <div className="space-y-6">
             {/* Upload */}
             <div className="card page-enter">
-              <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+              <h2 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
                 <Upload className="w-4 h-4 text-primary-400" />
                 Cargar Planilla Oficial (Excel)
               </h2>
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-start gap-2.5">
+                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" />
+                <span className="leading-relaxed">
+                  <strong>Carga automática:</strong> Las planillas subidas al presionar <em>Iniciar OCR</em> en <strong>Documentos</strong> se cotejan aquí automáticamente sin tener que volver a subirlas.
+                </span>
+              </div>
               <div
                 {...getRootProps()}
                 className={`dropzone py-8 ${isDragActive ? "active" : ""} ${subiendo ? "pointer-events-none opacity-50" : ""}`}
@@ -298,7 +350,7 @@ export default function ComparacionPage() {
             <div className="card page-enter">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-semibold text-white">Historial de Comparaciones</h2>
-                <button onClick={cargarComparaciones} className="text-slate-500 hover:text-primary-400 transition-colors">
+                <button onClick={() => cargarComparaciones()} className="text-slate-500 hover:text-primary-400 transition-colors" title="Actualizar historial">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
@@ -546,12 +598,54 @@ export default function ComparacionPage() {
                   )}
                 </div>
               </>
+            ) : comparacionActiva && (comparacionActiva.estado === "procesando" || comparacionActiva.estado === "pendiente") ? (
+              <div className="card flex flex-col items-center justify-center py-20 text-center page-enter border border-primary-500/30 bg-dark-900/60 shadow-xl">
+                <div className="relative mb-6">
+                  <div className="w-20 h-20 rounded-3xl bg-primary-500/10 border border-primary-500/30 flex items-center justify-center shadow-lg shadow-primary-500/20">
+                    <RefreshCw className="w-9 h-9 text-primary-400 animate-spin" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 border-2 border-dark-900 flex items-center justify-center">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+                  </div>
+                </div>
+                <h3 className="text-white font-bold text-xl mb-2">
+                  Auditoría y Comparación en Proceso
+                </h3>
+                <p className="text-slate-300 text-sm max-w-md mb-2 font-medium">
+                  Cotejando registros con la planilla oficial:
+                </p>
+                <div className="px-3.5 py-1.5 rounded-lg bg-dark-800 border border-white/10 text-primary-300 font-mono text-xs mb-5 max-w-sm truncate">
+                  📄 {comparacionActiva.nombre_original}
+                </div>
+                <p className="text-slate-400 text-xs max-w-md mb-6 leading-relaxed">
+                  El sistema está cruzando los números de documento, nombres y datos del OCR contra la planilla de referencia. Esta vista se actualizará automáticamente en unos segundos.
+                </p>
+                <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-primary-500/15 border border-primary-500/30 text-primary-300 text-xs font-semibold animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-primary-400 animate-ping" />
+                  <span>Procesando auditoría en tiempo real...</span>
+                </div>
+              </div>
+            ) : comparacionActiva && comparacionActiva.estado === "error" ? (
+              <div className="card flex flex-col items-center justify-center py-20 text-center page-enter border border-red-500/30">
+                <AlertTriangle className="w-14 h-14 text-red-400 mb-3" />
+                <h3 className="text-white font-bold text-lg mb-1">Error en la Comparación</h3>
+                <p className="text-red-300/90 text-xs max-w-md mb-4 font-mono">
+                  {comparacionActiva.mensaje_error || "Ocurrió un problema durante el procesamiento de la planilla."}
+                </p>
+                <button
+                  onClick={() => verDiferencias(comparacionActiva)}
+                  className="btn-secondary text-xs py-2 px-4 flex items-center gap-2"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reintentar</span>
+                </button>
+              </div>
             ) : (
               <div className="card flex flex-col items-center justify-center py-24 text-center page-enter">
                 <GitCompare className="w-16 h-16 text-slate-700 mb-4" />
-                <h3 className="text-white font-semibold text-lg mb-2">Sin comparación activa</h3>
+                <h3 className="text-white font-semibold text-lg mb-2">Sin comparaciones registradas</h3>
                 <p className="text-slate-400 text-sm max-w-xs">
-                  Sube una planilla Excel oficial para cotejar con las cédulas extraídas por el OCR
+                  Sube una planilla Excel oficial aquí o inicia el OCR con planilla en el módulo de Documentos.
                 </p>
               </div>
             )}

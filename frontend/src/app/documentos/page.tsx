@@ -210,7 +210,11 @@ export default function DocumentosPage() {
     if (cuentaAtrasRedireccion === null) return;
 
     if (cuentaAtrasRedireccion <= 0) {
-      router.push("/personas");
+      if (comparacionId) {
+        router.push(`/comparacion?id=${comparacionId}`);
+      } else {
+        router.push("/personas");
+      }
       return;
     }
 
@@ -219,7 +223,7 @@ export default function DocumentosPage() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [cuentaAtrasRedireccion, router]);
+  }, [cuentaAtrasRedireccion, router, comparacionId]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles || acceptedFiles.length === 0) return;
@@ -549,7 +553,7 @@ export default function DocumentosPage() {
               </div>
             </div>
 
-            {/* Banner de Redirección Automática si el proceso finalizó */}
+            {/* Banner de Redirección Automática sin Comparación */}
             {procesoFinalizado && cuentaAtrasRedireccion !== null && !comparacionId && (
               <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
                 <div className="flex items-center gap-2.5">
@@ -588,8 +592,8 @@ export default function DocumentosPage() {
                   <FileSpreadsheet className="w-4 h-4 text-blue-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-blue-100 text-xs">Comparación automática adjunta</p>
-                  <p className="text-xs text-blue-300 mt-0.5">Al terminar el OCR, la planilla Excel se comparará automáticamente con los datos extraídos.</p>
+                  <p className="font-semibold text-blue-100 text-xs">Planilla cargada para Comparación automática</p>
+                  <p className="text-xs text-blue-300 mt-0.5">Al terminar el OCR, la planilla se cotejará automáticamente en el módulo de Comparación.</p>
                 </div>
                 <div className="ml-auto flex-shrink-0">
                   <div className="flex gap-1">
@@ -601,26 +605,53 @@ export default function DocumentosPage() {
               </div>
             )}
 
-            {/* Banner de Comparación Automática Completada */}
+            {/* Banner de Comparación Automática Lista y Redirección */}
             {comparacionId && procesoFinalizado && (
-              <div className="mt-4 p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-indigo-200 relative z-10 animate-in fade-in duration-300">
+              <div className="mt-4 p-3.5 bg-gradient-to-r from-indigo-500/20 via-purple-500/15 to-emerald-500/15 border border-indigo-500/40 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-indigo-100 relative z-10 animate-in fade-in duration-300 shadow-lg shadow-indigo-950/30">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
-                    <BarChart2 className="w-4 h-4 text-indigo-400" />
-                  </div>
+                  {cuentaAtrasRedireccion !== null ? (
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/30 border border-indigo-400/50 flex items-center justify-center font-bold text-indigo-300 font-mono text-sm flex-shrink-0 animate-pulse">
+                      {cuentaAtrasRedireccion}
+                    </div>
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/25 border border-indigo-500/40 flex items-center justify-center flex-shrink-0">
+                      <BarChart2 className="w-4 h-4 text-indigo-300" />
+                    </div>
+                  )}
                   <div>
-                    <p className="font-semibold text-indigo-100 text-xs">¡Comparación automática lista!</p>
-                    <p className="text-xs text-indigo-300 mt-0.5">Los resultados de auditoría ya están disponibles para revisión.</p>
+                    <p className="font-semibold text-white text-xs sm:text-sm">
+                      ¡OCR completado y planilla enviada a Comparación automáticamente!
+                    </p>
+                    <p className="text-xs text-indigo-200/90 mt-0.5">
+                      {cuentaAtrasRedireccion !== null ? (
+                        <>Redirigiendo a la auditoría de comparación en <strong>{cuentaAtrasRedireccion}s</strong>...</>
+                      ) : (
+                        <>La comparación ya está lista para su revisión.</>
+                      )}
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => router.push(`/comparacion`)}
-                  className="text-xs bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-md flex-shrink-0"
-                >
-                  <BarChart2 className="w-3.5 h-3.5" />
-                  <span>Ver Resultados</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
+                  {cuentaAtrasRedireccion !== null && (
+                    <button
+                      onClick={() => {
+                        canceladoRedireccionRef.current = true;
+                        setCuentaAtrasRedireccion(null);
+                      }}
+                      className="text-xs text-slate-300 hover:text-white underline px-2 py-1"
+                    >
+                      Permanecer aquí
+                    </button>
+                  )}
+                  <button
+                    onClick={() => router.push(`/comparacion?id=${comparacionId}`)}
+                    className="text-xs bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-indigo-500/30"
+                  >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    <span>Ver Comparación</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -828,7 +859,7 @@ export default function DocumentosPage() {
                   </button>
                   {comparacionId && (
                     <button
-                      onClick={() => router.push("/comparacion")}
+                      onClick={() => router.push(`/comparacion?id=${comparacionId}`)}
                       className="text-sm py-2.5 px-5 flex-1 md:flex-initial flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-500/25 transition-all"
                     >
                       <BarChart2 className="w-4 h-4" />
@@ -1018,7 +1049,7 @@ export default function DocumentosPage() {
                   <Sparkles className="w-4 h-4 text-primary-400 flex-shrink-0" />
                   <span>
                     {excelSeleccionado
-                      ? "Nombres desde planilla oficial + datos adicionales desde OCR del PDF."
+                      ? "Planilla lista: los nombres oficiales se integran al OCR y se carga automáticamente en Comparación."
                       : (
                         <span className="text-amber-400 font-medium">
                           ⚠️ Selecciona primero la planilla Excel oficial (Paso 1) para continuar.

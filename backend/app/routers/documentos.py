@@ -36,21 +36,21 @@ def _validar_pdf(file: UploadFile):
         )
 
 
-def _procesar_ocr_background(
-    pdf_path: str,
-    documento_id: str,
+def _procesar_batch_ocr_y_comparacion(
+    items: List[dict],
     comparacion_id: Optional[str] = None,
     excel_path: Optional[str] = None,
 ):
     """
-    Ejecuta OCR en hilo de fondo.
-    Siempre usa su propia sesion para no compartir estado con el hilo principal.
-    Si se proporcionan comparacion_id y excel_path:
-      - Carga el Excel como lookup de nombres oficiales ANTES del OCR.
-      - Al finalizar el OCR, ejecuta la comparacion automatica.
+    Tarea en segundo plano que procesa el OCR de un lote de documentos secuencialmente.
+    - Carga la planilla Excel para enriquecer nombres oficiales de las personas durante OCR.
+    - Procesa cada documento PDF del lote.
+    - Al finalizar el OCR de todos los documentos del lote, ejecuta la comparacion automatica
+      en el módulo de Comparación una sola vez con todos los datos consolidados.
     """
     from app.database import SessionLocal
     from app.services.excel_lookup_service import excel_lookup_service
+    from app.services.ocr_service import ocr_service
 
     db = SessionLocal()
     try:
@@ -60,35 +60,43 @@ def _procesar_ocr_background(
             try:
                 excel_lookup = excel_lookup_service.cargar_lookup(excel_path)
                 logger.info(
-                    f"[OCR Background] Lookup cargado: {len(excel_lookup)} registros "
+                    f"[OCR Batch Background] Lookup cargado: {len(excel_lookup)} registros "
                     f"para enriquecer nombres durante OCR."
                 )
             except Exception as e_lookup:
-                logger.error(f"[OCR Background] Error cargando lookup Excel: {e_lookup}")
+                logger.error(f"[OCR Batch Background] Error cargando lookup Excel: {e_lookup}")
                 excel_lookup = None
 
-        # ── Ejecutar OCR (con lookup integrado) ──────────────────────────
-        ocr_service.procesar_pdf(
-            str(pdf_path),
-            documento_id,
-            db_externa=db,
-            excel_lookup=excel_lookup,
-        )
+        # ── Procesar cada PDF del lote con OCR ───────────────────────────
+        for item in items:
+            pdf_path = item["pdf_path"]
+            doc_id = item["documento_id"]
+            try:
+                logger.info(f"[OCR Batch Background] Procesando PDF: {pdf_path} (Doc ID: {doc_id})")
+                ocr_service.procesar_pdf(
+                    str(pdf_path),
+                    doc_id,
+                    db_externa=db,
+                    excel_lookup=excel_lookup,
+                )
+                logger.info(f"[OCR Batch Background] OCR completado para Doc ID: {doc_id}")
+            except Exception as e_ocr:
+                logger.error(f"[OCR Batch Background] Error procesando OCR Doc ID {doc_id}: {e_ocr}")
 
-        # ── Comparacion automatica si se adjunto un Excel ─────────────────
+        # ── Ejecutar comparación automática si se adjuntó planilla Excel ─
         if comparacion_id and excel_path:
             try:
                 from app.services.comparacion_service import comparacion_service
                 logger.info(
-                    f"OCR finalizado. Iniciando comparacion automatica: {comparacion_id}"
+                    f"OCR finalizado para todos los {len(items)} documento(s). Iniciando comparación automática: {comparacion_id}"
                 )
                 comparacion_service.ejecutar_comparacion(
                     comparacion_id, excel_path, db
                 )
-                logger.info(f"Comparacion automatica completada: {comparacion_id}")
+                logger.info(f"Comparación automática completada con éxito: {comparacion_id}")
             except Exception as e_cmp:
                 logger.error(
-                    f"Error en comparacion automatica {comparacion_id}: {e_cmp}"
+                    f"Error en comparación automática {comparacion_id}: {e_cmp}"
                 )
     finally:
         db.close()
@@ -164,6 +172,7 @@ async def upload_pdf(
 
     # ── Procesar cada PDF ─────────────────────────────────────────────────
     resultados = []
+    items_para_procesar = []
 
     for pdf_file in archivos_recibidos:
         _validar_pdf(pdf_file)
@@ -186,18 +195,13 @@ async def upload_pdf(
         db.commit()
         db.refresh(documento)
 
-        # Encolar OCR (+ comparación automática si hay Excel)
-        background_tasks.add_task(
-            _procesar_ocr_background,
-            str(ruta_archivo),
-            str(documento.id),
-            comparacion_id,
-            excel_path_str,
-        )
+        items_para_procesar.append({
+            "pdf_path": str(ruta_archivo),
+            "documento_id": str(documento.id),
+        })
 
         logger.info(
-            f"PDF encolado en segundo plano: {pdf_file.filename} (ID: {documento.id})"
-            + (f" | Comparación automática: {comparacion_id}" if comparacion_id else "")
+            f"PDF guardado y encolado: {pdf_file.filename} (ID: {documento.id})"
         )
 
         resultados.append({
@@ -206,6 +210,19 @@ async def upload_pdf(
             "estado": "procesando",
             "mensaje": "Archivo recibido. Procesando páginas en segundo plano con Google Document AI.",
         })
+
+    # Encolar procesamiento en batch para todos los PDFs
+    background_tasks.add_task(
+        _procesar_batch_ocr_y_comparacion,
+        items_para_procesar,
+        comparacion_id,
+        excel_path_str,
+    )
+
+    logger.info(
+        f"Lote de {len(items_para_procesar)} PDF(s) encolado para procesamiento OCR"
+        + (f" y comparación automática en Comparación ({comparacion_id})" if comparacion_id else "")
+    )
 
     return {
         "total": len(resultados),

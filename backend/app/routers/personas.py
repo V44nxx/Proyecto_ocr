@@ -3,7 +3,7 @@ Router de Personas
 Endpoints: Listar, detalle, actualizar (corrección manual), eliminar
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -211,3 +211,157 @@ def buscar_por_cedula(
         raise HTTPException(status_code=404, detail=f"No se encontró persona con cédula {cedula}")
 
     return PersonaResponse.model_validate(persona)
+
+
+@router.post("/{persona_id}/subir-pdf", response_model=PersonaResponse, summary="Subir PDF de la cédula para una persona")
+async def subir_pdf_persona(
+    persona_id: str,
+    file: UploadFile = File(..., description="Archivo PDF de la cédula de ciudadanía"),
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Recibe un archivo PDF de la cédula para una persona específica.
+    Ejecuta el proceso de OCR, unifica y completa los datos de la persona
+    (fechas, lugar de expedición, sexo, nombres/apellidos, fotos/páginas de la cédula)
+    y reevalúa el estado de revisión.
+    """
+    import uuid
+    from datetime import datetime
+    from pathlib import Path
+    from app.config import settings
+    from app.models.documento import Documento
+    from app.services.ocr_service import ocr_service
+    from app.utils.validators import validador
+
+    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+    extension = Path(file.filename).suffix.lower()
+    if extension != ".pdf":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo se aceptan archivos PDF. Recibido: {extension}"
+        )
+
+    # Guardar archivo PDF en la carpeta de subidas
+    nombre_guardado = f"cedula_{persona.numero_identificacion}_{uuid.uuid4().hex[:8]}.pdf"
+    ruta_guardada = settings.upload_path / nombre_guardado
+    content = await file.read()
+    ruta_guardada.write_bytes(content)
+
+    # Crear registro de documento
+    doc = Documento(
+        usuario_id=usuario.id,
+        nombre_archivo=nombre_guardado,
+        nombre_original=file.filename,
+        ruta_archivo=str(ruta_guardada),
+        tipo_documento=persona.tipo_documento or "CEDULA_CIUDADANIA",
+        estado="procesando",
+        tamano_bytes=len(content),
+        mime_type="application/pdf",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    try:
+        # Ejecutar OCR usando la misma sesión de BD
+        ocr_service.procesar_pdf(str(ruta_guardada), str(doc.id), db_externa=db)
+
+        # Si el OCR creó un nuevo registro de persona porque detectó otro ID o SIN_ID,
+        # unificar sus datos en nuestra persona objetivo y eliminar el registro temporal
+        otras_personas = (
+            db.query(Persona)
+            .filter(Persona.documento_id == str(doc.id), Persona.id != persona.id)
+            .all()
+        )
+        for otra in otras_personas:
+            if otra.fecha_nacimiento and not persona.fecha_nacimiento:
+                persona.fecha_nacimiento = otra.fecha_nacimiento
+            if otra.fecha_expedicion and not persona.fecha_expedicion:
+                persona.fecha_expedicion = otra.fecha_expedicion
+            if otra.lugar_expedicion and (not persona.lugar_expedicion or persona.lugar_expedicion in ["COLOMBIA", "REPUBLICA DE COLOMBIA"]):
+                persona.lugar_expedicion = otra.lugar_expedicion
+            if otra.sexo and not persona.sexo:
+                persona.sexo = otra.sexo
+            if otra.pagina_frente and not persona.pagina_frente:
+                persona.pagina_frente = otra.pagina_frente
+            if otra.pagina_reverso and not persona.pagina_reverso:
+                persona.pagina_reverso = otra.pagina_reverso
+            if otra.nombres and (not persona.nombres or persona.nombres == "POR REVISAR"):
+                persona.nombres = otra.nombres
+            if otra.apellidos and (not persona.apellidos or persona.apellidos == "POR REVISAR"):
+                persona.apellidos = otra.apellidos
+            if otra.nombre_completo and (not persona.nombre_completo or persona.nombre_completo == "POR REVISAR"):
+                persona.nombre_completo = otra.nombre_completo
+            if (otra.confianza_extraccion or 0) > (persona.confianza_extraccion or 0):
+                persona.confianza_extraccion = otra.confianza_extraccion
+                persona.motor_ocr = otra.motor_ocr
+
+            # Unificar detalles
+            det_existente = dict(persona.detalles_campos or {})
+            det_otro = dict(otra.detalles_campos or {})
+            for k, v in det_otro.items():
+                if k not in det_existente or not det_existente[k].get("valor"):
+                    det_existente[k] = v
+            persona.detalles_campos = det_existente
+
+            # Eliminar la persona duplicada que creó el OCR
+            db.delete(otra)
+
+        # Asociar explícitamente el documento a la persona
+        persona.documento_id = str(doc.id)
+
+        # Reevaluar completitud
+        det = dict(persona.detalles_campos or {})
+        # Quitar motivo de "Registro creado desde Excel (pendiente de cargar documento PDF)"
+        motivos_anteriores = det.get("motivos_revision") or []
+        if isinstance(motivos_anteriores, list):
+            motivos_anteriores = [m for m in motivos_anteriores if "pendiente de cargar documento" not in m]
+            det["motivos_revision"] = motivos_anteriores
+
+        tiene_datos, motivos_rev = validador.evaluar_persona_completa(
+            numero_identificacion=persona.numero_identificacion,
+            nombres=persona.nombres,
+            apellidos=persona.apellidos,
+            nombre_completo=persona.nombre_completo,
+            fecha_nacimiento=persona.fecha_nacimiento,
+            fecha_expedicion=persona.fecha_expedicion,
+            lugar_expedicion=persona.lugar_expedicion,
+            sexo=persona.sexo,
+            confianza=float(persona.confianza_extraccion or 0),
+            detalles_campos=det,
+            motor_ocr=persona.motor_ocr,
+        )
+
+        if tiene_datos:
+            persona.requiere_revision = False
+            persona.estado_registro = "VALID"
+            det.pop("motivos_revision", None)
+        else:
+            persona.requiere_revision = True
+            persona.estado_registro = "REVIEW_REQUIRED"
+            det["motivos_revision"] = motivos_rev
+        persona.detalles_campos = det
+        persona.fecha_actualizacion = datetime.utcnow()
+
+        doc.estado = "completado"
+        db.commit()
+        db.refresh(persona)
+        logger.info(f"PDF procesado para persona {persona.numero_identificacion} (ID: {persona.id}). Estado: {persona.estado_registro}")
+        return PersonaResponse.model_validate(persona)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error procesando PDF para persona {persona.id}: {e}")
+        doc.estado = "error"
+        doc.mensaje_error = str(e)
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar el archivo PDF con OCR: {str(e)}"
+        )
+

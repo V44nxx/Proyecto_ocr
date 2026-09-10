@@ -702,22 +702,27 @@ class OCRService:
                 from app.services.excel_lookup_service import excel_lookup_service
                 registro_excel = excel_lookup_service.buscar(id_limpio, excel_lookup)
                 if registro_excel:
-                    encontrado_en_excel = True
-                    fuente_nombre = "excel_oficial"
                     nom_comp_excel = registro_excel.get("nombre_completo", "").strip()
                     nom_excel = registro_excel.get("nombres", "").strip()
                     ape_excel = registro_excel.get("apellidos", "").strip()
-                    if nom_comp_excel:
-                        nombre_completo_final = nom_comp_excel
-                    elif nom_excel or ape_excel:
-                        nombre_completo_final = f"{nom_excel} {ape_excel}".strip()
+                    nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
 
-                    nombres_final = nom_excel or nombre_completo_final
-                    apellidos_final = ape_excel or ""
+                    # Solo reemplazar nombre si el Excel realmente provee un nombre válido
+                    if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
+                        encontrado_en_excel = True
+                        fuente_nombre = "excel_oficial"
+                        nombre_completo_final = nombre_excel_candidato
+                        nombres_final = nom_excel or nombre_completo_final
+                        apellidos_final = ape_excel or ""
 
-                    logger.info(
-                        f"[ExcelLookup] ID {id_limpio}: nombre completo desde planilla oficial -> '{nombre_completo_final}'"
-                    )
+                        logger.info(
+                            f"[ExcelLookup] ID {id_limpio}: nombre completo desde planilla oficial -> '{nombre_completo_final}'"
+                        )
+                    else:
+                        logger.info(
+                            f"[ExcelLookup] ID {id_limpio} encontrado en planilla oficial pero sin nombre válido. "
+                            f"Conservando nombre detectado por OCR del PDF: '{nombres_final} {apellidos_final}'"
+                        )
                 else:
                     logger.info(
                         f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial por ID exacto."
@@ -739,17 +744,16 @@ class OCRService:
                             )
                             id_limpio = id_ofic
                             num_doc = id_ofic
-                            encontrado_en_excel = True
-                            fuente_nombre = "excel_oficial"
                             nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
                             nom_excel = reg_ofic.get("nombres", "").strip()
                             ape_excel = reg_ofic.get("apellidos", "").strip()
-                            if nom_comp_excel:
-                                nombre_completo_final = nom_comp_excel
-                            elif nom_excel or ape_excel:
-                                nombre_completo_final = f"{nom_excel} {ape_excel}".strip()
-                            nombres_final = nom_excel or nombre_completo_final
-                            apellidos_final = ape_excel or ""
+                            nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
+                            if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
+                                encontrado_en_excel = True
+                                fuente_nombre = "excel_oficial"
+                                nombre_completo_final = nombre_excel_candidato
+                                nombres_final = nom_excel or nombre_completo_final
+                                apellidos_final = ape_excel or ""
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 

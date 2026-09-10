@@ -5,7 +5,7 @@ Endpoints: Upload Excel, ejecutar comparación, reporte
 import uuid
 import threading
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import FileResponse
@@ -281,4 +281,115 @@ def corregir_campo_desde_comparacion(
         "campo": campo,
         "nuevo_valor": str(getattr(persona, campo) or ""),
     }
+
+
+class AgregarPersonaBdRequest(BaseModel):
+    numero_identificacion: str
+    nombre_completo: Optional[str] = None
+
+
+@router.post("/{comparacion_id}/agregar-persona-bd", summary="Agregar persona faltante a la BD desde la comparación")
+def agregar_persona_bd_desde_comparacion(
+    comparacion_id: str,
+    datos: AgregarPersonaBdRequest,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Agrega una persona faltante en la BD desde la comparación oficial de Excel.
+    Crea el registro con estado REVIEW_REQUIRED indicando que está pendiente de subir el documento PDF de la cédula.
+    """
+    import os
+    from app.models.persona import Persona
+    from app.models.diferencia import Diferencia
+    from app.services.excel_lookup_service import excel_lookup_service
+
+    comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
+    if not comparacion:
+        raise HTTPException(status_code=404, detail="Comparación no encontrada")
+
+    num_id = datos.numero_identificacion.strip()
+    if not num_id:
+        raise HTTPException(status_code=400, detail="El número de identificación es obligatorio")
+
+    persona = db.query(Persona).filter(Persona.numero_identificacion == num_id).first()
+
+    # Extraer datos si están en el Excel de la comparación
+    nom_completo = (datos.nombre_completo or "").strip()
+    nombres = None
+    apellidos = None
+
+    if comparacion.ruta_archivo and os.path.exists(comparacion.ruta_archivo):
+        try:
+            lookup = excel_lookup_service.cargar_lookup(comparacion.ruta_archivo)
+            reg = excel_lookup_service.buscar(num_id, lookup)
+            if reg:
+                if not nom_completo:
+                    nom_completo = reg.get("nombre_completo", "").strip()
+                nombres = reg.get("nombres", "").strip() or None
+                apellidos = reg.get("apellidos", "").strip() or None
+        except Exception as e:
+            logger.warning(f"Error consultando Excel para agregar persona {num_id}: {e}")
+
+    if not nom_completo and not persona:
+        nom_completo = None
+
+    if not persona:
+        persona = Persona(
+            numero_identificacion=num_id,
+            nombre_completo=nom_completo,
+            nombres=nombres or nom_completo,
+            apellidos=apellidos or "",
+            tipo_documento="CEDULA_CIUDADANIA",
+            requiere_revision=True,
+            estado_registro="REVIEW_REQUIRED",
+            confianza_extraccion=100.0,
+            motor_ocr="manual",
+            detalles_campos={
+                "motivos_revision": [
+                    "Registro creado desde Excel (pendiente de cargar documento PDF de la cédula)"
+                ]
+            },
+            campos_revisados=["numero_identificacion"] + (["nombre_completo"] if nom_completo else []),
+        )
+        db.add(persona)
+        db.flush()
+    else:
+        # Ya existía, actualizar nombre si no lo tenía
+        if nom_completo and not persona.nombre_completo:
+            persona.nombre_completo = nom_completo
+
+    # Actualizar la diferencia en la comparación
+    diferencia = db.query(Diferencia).filter(
+        Diferencia.comparacion_id == comparacion_id,
+        Diferencia.numero_identificacion == num_id,
+        Diferencia.tipo_diferencia == "faltante_bd"
+    ).first()
+
+    if diferencia:
+        diferencia.valor_bd = persona.nombre_completo or num_id
+        diferencia.tipo_diferencia = "igual"
+
+    # Actualizar métricas de la comparación
+    total_faltantes = db.query(Diferencia).filter(
+        Diferencia.comparacion_id == comparacion_id,
+        Diferencia.tipo_diferencia == "faltante_bd"
+    ).count()
+    comparacion.total_faltantes_bd = total_faltantes
+    ids_con_dif = db.query(Diferencia.numero_identificacion).filter(
+        Diferencia.comparacion_id == comparacion_id,
+        Diferencia.tipo_diferencia == "diferente"
+    ).distinct().count()
+    comparacion.total_coincidentes = max(0, (comparacion.total_registros_excel or 0) - total_faltantes - ids_con_dif)
+
+    db.commit()
+    db.refresh(persona)
+
+    return {
+        "mensaje": f"Persona con identificación {num_id} agregada exitosamente a la base de datos.",
+        "persona_id": str(persona.id),
+        "numero_identificacion": persona.numero_identificacion,
+        "nombre_completo": persona.nombre_completo,
+    }
+
 

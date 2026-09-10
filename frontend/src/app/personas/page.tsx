@@ -8,10 +8,10 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp, Download, CheckSquare, Square
+  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiPersonas, apiDocumentos, apiExportacion } from "@/lib/api";
+import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
@@ -79,6 +79,9 @@ export default function PersonasPage() {
   const [imgCargando, setImgCargando] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [subiendoPdfId, setSubiendoPdfId] = useState<string | null>(null);
+  const [personaParaPdf, setPersonaParaPdf] = useState<Persona | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
@@ -137,6 +140,52 @@ export default function PersonasPage() {
       if (mostrarSpinner) toast.error("Error al cargar la lista de personas");
     } finally {
       if (mostrarSpinner) setCargando(false);
+    }
+  };
+
+  const abrirSubirPdf = (p: Persona) => {
+    setPersonaParaPdf(p);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const manejarArchivoPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !personaParaPdf) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Solo se permiten archivos en formato PDF.");
+      return;
+    }
+
+    const targetPersona = personaParaPdf;
+    setSubiendoPdfId(targetPersona.id);
+    const toastId = toast.loading(`Procesando PDF con OCR para ${targetPersona.numero_identificacion}...`);
+
+    try {
+      const res = await apiPersonas.subirPdfCedula(targetPersona.id, file);
+      const personaActualizada = res.data;
+      setPersonas((prev) =>
+        prev.map((p) => (p.id === personaActualizada.id ? personaActualizada : p))
+      );
+      toast.success(
+        `¡Datos extraídos exitosamente para ${personaActualizada.numero_identificacion}!`,
+        { id: toastId }
+      );
+
+      if (expandidoId === targetPersona.id) {
+        setPaginaPrevia(personaActualizada.pagina_frente || 1);
+        setImgCargando(true);
+        setImgError(false);
+      }
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error al procesar el PDF de la cédula");
+      toast.error(msg, { id: toastId });
+    } finally {
+      setSubiendoPdfId(null);
+      setPersonaParaPdf(null);
     }
   };
 
@@ -379,9 +428,22 @@ export default function PersonasPage() {
           {/* Imagen */}
           <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-950/50 min-h-[280px]">
             {!docId ? (
-              <div className="flex flex-col items-center justify-center gap-2 h-full w-full py-8">
+              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center">
                 <ImageOff className="w-8 h-8 text-slate-700" />
                 <p className="text-xs text-slate-500">Sin documento PDF asociado</p>
+                <button
+                  onClick={() => abrirSubirPdf(p)}
+                  disabled={subiendoPdfId === p.id}
+                  className="px-3 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  title="Subir documento PDF de la cédula para extraer datos automáticamente"
+                >
+                  {subiendoPdfId === p.id ? (
+                    <div className="spinner w-3.5 h-3.5" />
+                  ) : (
+                    <UploadCloud className="w-3.5 h-3.5 text-primary-400" />
+                  )}
+                  Subir PDF de Cédula
+                </button>
               </div>
             ) : imgError ? (
               <div className="flex flex-col items-center justify-center gap-2 h-full w-full py-8">
@@ -692,6 +754,19 @@ export default function PersonasPage() {
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 text-xs font-semibold transition-all"
                 >
                   <Edit3 className="w-3.5 h-3.5" /> Editar Datos
+                </button>
+                <button
+                  onClick={() => abrirSubirPdf(p)}
+                  disabled={subiendoPdfId === p.id}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition-all"
+                  title="Subir documento PDF de la cédula para extraer datos automáticamente con OCR"
+                >
+                  {subiendoPdfId === p.id ? (
+                    <div className="spinner w-3.5 h-3.5" />
+                  ) : (
+                    <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
+                  )}
+                  Subir PDF Cédula
                 </button>
                 {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
                   <button
@@ -1082,6 +1157,18 @@ export default function PersonasPage() {
                           {/* Acciones */}
                           <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => abrirSubirPdf(p)}
+                                disabled={subiendoPdfId === p.id}
+                                title="Subir PDF de la cédula para extraer datos con OCR"
+                                className="p-1.5 rounded-lg text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 border border-primary-500/30 transition-colors"
+                              >
+                                {subiendoPdfId === p.id ? (
+                                  <div className="spinner w-3.5 h-3.5" />
+                                ) : (
+                                  <UploadCloud className="w-3.5 h-3.5" />
+                                )}
+                              </button>
                               {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
                                 <button
                                   onClick={(e) => aprobarRevision(p.id, e)}
@@ -1160,6 +1247,15 @@ export default function PersonasPage() {
             </div>
           )}
         </div>
+
+        {/* Input oculto para subir PDF de la cédula para una persona */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={manejarArchivoPdf}
+          accept="application/pdf,.pdf"
+          className="hidden"
+        />
       </main>
     </div>
   );

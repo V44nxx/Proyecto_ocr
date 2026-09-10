@@ -195,6 +195,12 @@ export const apiPersonas = {
 
   buscarCedula: (cedula: string) =>
     apiClient.get<Persona>(`/api/personas/buscar/cedula/${cedula}`),
+
+  subirPdfCedula: (personaId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.post<Persona>(`/api/personas/${personaId}/subir-pdf`, formData);
+  },
 };
 
 // ──────────────────────────────────────────
@@ -307,6 +313,15 @@ export const apiComparacion = {
 
   corregirCampo: (comparacionId: string, data: { numero_identificacion: string; campo: string; nuevo_valor: string }) =>
     apiClient.post(`/api/comparacion/${comparacionId}/corregir-campo`, data),
+
+  agregarPersonaBd: (
+    comparacionId: string,
+    data: { numero_identificacion: string; nombre_completo?: string }
+  ) =>
+    apiClient.post<{ mensaje: string; persona_id: string; numero_identificacion: string; nombre_completo?: string }>(
+      `/api/comparacion/${comparacionId}/agregar-persona-bd`,
+      data
+    ),
 };
 
 export default apiClient;

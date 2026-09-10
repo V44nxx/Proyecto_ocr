@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import {
   GitCompare, Upload, FileSpreadsheet, Download,
   CheckCircle, AlertTriangle, RefreshCw, BarChart3,
-  Plus, Minus, Equal, Search,
+  Plus, Minus, Equal, Search, UserPlus,
 } from "lucide-react";
 
 import Sidebar from "@/components/ui/Sidebar";
@@ -76,6 +76,7 @@ export default function ComparacionPage() {
   const [cargando, setCargando] = useState(true);
   const [descargando, setDescargando] = useState(false);
   const [corrigiendoId, setCorrigiendoId] = useState<string | null>(null);
+  const [agregandoId, setAgregandoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
@@ -130,6 +131,44 @@ export default function ComparacionPage() {
       toast.error(getErrorMessage(err, "Error al actualizar campo"));
     } finally {
       setCorrigiendoId(null);
+    }
+  };
+
+  const agregarPersonaABd = async (d: Diferencia) => {
+    if (!comparacionActiva) return;
+    setAgregandoId(d.id);
+    try {
+      const nombreLimpio = limpiarValorTexto(d.valor_excel);
+      await apiComparacion.agregarPersonaBd(comparacionActiva.id, {
+        numero_identificacion: d.numero_identificacion,
+        nombre_completo: nombreLimpio || undefined,
+      });
+      toast.success(
+        `Persona ${d.numero_identificacion} agregada a la BD. Ahora puedes subir su cédula en Personas.`
+      );
+
+      // Actualizar estado local
+      setDiferencias((prev) =>
+        prev.map((item) =>
+          item.id === d.id
+            ? { ...item, valor_bd: nombreLimpio || item.numero_identificacion, tipo_diferencia: "igual" }
+            : item
+        )
+      );
+
+      // Actualizar conteos
+      setComparacionActiva((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          total_faltantes_bd: Math.max(0, (prev.total_faltantes_bd || 1) - 1),
+          total_coincidentes: (prev.total_coincidentes || 0) + 1,
+        };
+      });
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Error al agregar persona a la BD"));
+    } finally {
+      setAgregandoId(null);
     }
   };
 
@@ -471,10 +510,22 @@ export default function ComparacionPage() {
                                     </button>
                                   ) : d.tipo_diferencia === "igual" ? (
                                     <span className="text-green-400 text-[11px] font-medium flex items-center justify-center gap-1">
-                                      <CheckCircle className="w-3.5 h-3.5" /> Corregido
+                                      <CheckCircle className="w-3.5 h-3.5" /> {esFaltante ? "Agregado a BD" : "Corregido"}
                                     </span>
                                   ) : esFaltante ? (
-                                    <span className="text-red-400/80 text-[10px] italic">Escanear documento</span>
+                                    <button
+                                      onClick={() => agregarPersonaABd(d)}
+                                      disabled={agregandoId === d.id}
+                                      className="btn-sm bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] py-1 px-2.5 rounded-lg flex items-center gap-1 mx-auto transition-all whitespace-nowrap"
+                                      title="Agregar persona a la Base de Datos para luego subir su cédula"
+                                    >
+                                      {agregandoId === d.id ? (
+                                        <div className="spinner w-3 h-3" />
+                                      ) : (
+                                        <UserPlus className="w-3 h-3 text-emerald-400" />
+                                      )}
+                                      + Agregar a BD
+                                    </button>
                                   ) : esSobrante ? (
                                     <span className="text-blue-400/80 text-[10px] italic">Documento anexo</span>
                                   ) : (

@@ -59,6 +59,7 @@ export default function DocumentosPage() {
   const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const uploadStartTimeRef = useRef<number>(0);
+  const panelProgresoRef = useRef<HTMLDivElement | null>(null);
 
   // Redirección automática a la tabla de personas al finalizar
   const [cuentaAtrasRedireccion, setCuentaAtrasRedireccion] = useState<number | null>(null);
@@ -175,6 +176,18 @@ export default function DocumentosPage() {
 
     return () => clearInterval(interval);
   }, [faseActual, docsEnProceso]);
+
+  // Auto-scroll hacia la parte superior (tarjeta de progreso) al iniciar la subida o procesamiento
+  useEffect(() => {
+    if (mostrandoProgreso && (faseActual === "subiendo" || faseActual === "procesando")) {
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      setTimeout(() => {
+        panelProgresoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  }, [mostrandoProgreso, faseActual]);
 
   const totalDocsTracking = docsEnProceso.length;
   const docsCompletadosCount = docsEnProceso.filter((d) => d.estado === "completado").length;
@@ -305,6 +318,14 @@ export default function DocumentosPage() {
 
     setDocsEnProceso(initialTracking);
     setMostrandoProgreso(true);
+
+    // Scroll automático suave hacia arriba donde se muestra la tarjeta de progreso en vivo
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    setTimeout(() => {
+      panelProgresoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
 
     try {
       const res = await apiDocumentos.upload(archivosSeleccionados, (progressEvent) => {
@@ -464,7 +485,11 @@ export default function DocumentosPage() {
             MODAL / TARJETA DE PROGRESO DE SUBIDA Y EXTRACCIÓN OCR EN VIVO
            ───────────────────────────────────────────────────────────── */}
         {mostrandoProgreso && docsEnProceso.length > 0 && (
-          <div className="mb-8 p-6 sm:p-7 rounded-2xl bg-dark-900/95 border border-primary-500/30 shadow-2xl shadow-primary-950/40 relative overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+          <div
+            ref={panelProgresoRef}
+            id="panel-progreso-ocr"
+            className="mb-8 p-6 sm:p-7 rounded-2xl bg-dark-900/95 border border-primary-500/30 shadow-2xl shadow-primary-950/40 relative overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 scroll-mt-6"
+          >
             {/* Resplandor ambiental de fondo */}
             <div className="absolute -right-20 -top-20 w-72 h-72 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />

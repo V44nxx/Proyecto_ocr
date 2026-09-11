@@ -298,11 +298,13 @@ async def subir_pdf_persona(
                 persona.confianza_extraccion = otra.confianza_extraccion
                 persona.motor_ocr = otra.motor_ocr
 
-            # Unificar detalles
+            # Unificar detalles (con seguridad para valores que son listas o None)
             det_existente = dict(persona.detalles_campos or {})
             det_otro = dict(otra.detalles_campos or {})
             for k, v in det_otro.items():
-                if k not in det_existente or not det_existente[k].get("valor"):
+                existing = det_existente.get(k)
+                # Solo sobreescribir si no existe o si el campo existente es un dict sin "valor"
+                if existing is None or (isinstance(existing, dict) and not existing.get("valor")):
                     det_existente[k] = v
             persona.detalles_campos = det_existente
 

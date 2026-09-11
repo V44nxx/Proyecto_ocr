@@ -1183,25 +1183,9 @@ export default function PersonasPage() {
                             )}
                           </td>
 
-                          {/* Acciones (solo editar y eliminar) */}
+                          {/* Acciones — solo eliminar */}
                           <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => {
-                                  if (isExpandida && editando === p.id) {
-                                    setEditando(null);
-                                  } else {
-                                    iniciarEdicion(p);
-                                  }
-                                }}
-                                title={isExpandida && editando === p.id ? "Cancelar edición" : "Editar datos"}
-                                className={`p-1.5 rounded-lg transition-colors ${isExpandida && editando === p.id
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                                  }`}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
                               <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

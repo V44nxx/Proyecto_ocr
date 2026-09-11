@@ -257,10 +257,8 @@ async def subir_pdf_persona(
         nombre_archivo=nombre_guardado,
         nombre_original=file.filename,
         ruta_archivo=str(ruta_guardada),
-        tipo_documento=persona.tipo_documento or "CEDULA_CIUDADANIA",
         estado="procesando",
         tamano_bytes=len(content),
-        mime_type="application/pdf",
     )
     db.add(doc)
     db.commit()

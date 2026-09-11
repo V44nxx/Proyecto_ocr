@@ -7,7 +7,7 @@ import uuid
 
 class UsuarioBase(BaseModel):
     email: EmailStr
-    nombre: str
+    nombre: Optional[str] = ""
 
 
 class UsuarioCreate(UsuarioBase):

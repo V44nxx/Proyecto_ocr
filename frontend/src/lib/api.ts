@@ -1,6 +1,7 @@
 import axios, { type AxiosProgressEvent } from "axios";
 import { auth } from "./auth";
 import type {
+  Usuario,
   TokenResponse,
   Documento,
   DocumentoEstadoResponse,
@@ -117,10 +118,32 @@ export const apiAuth = {
   login: (email: string, password: string) =>
     apiClient.post<TokenResponse>("/api/auth/login", { email, password }),
 
-  register: (email: string, nombre: string, password: string) =>
-    apiClient.post("/api/auth/register", { email, nombre, password }),
+  register: (
+    data: { email: string; password: string; nombre?: string; rol?: string } | string,
+    nombreOrPassword?: string,
+    password?: string
+  ) => {
+    if (typeof data === "object") {
+      return apiClient.post<Usuario>("/api/auth/register", {
+        email: data.email.trim(),
+        password: data.password,
+        nombre: data.nombre?.trim() || data.email.split("@")[0].replace(".", " "),
+        rol: data.rol || "usuario",
+      });
+    }
+    return apiClient.post<Usuario>("/api/auth/register", {
+      email: data.trim(),
+      nombre: nombreOrPassword?.trim() || data.split("@")[0],
+      password: password,
+      rol: "usuario",
+    });
+  },
 
-  perfil: () => apiClient.get("/api/auth/me"),
+  getUsuarios: () => apiClient.get<Usuario[]>("/api/auth/users"),
+
+  eliminarUsuario: (userId: string) => apiClient.delete<{ message: string }>(`/api/auth/users/${userId}`),
+
+  perfil: () => apiClient.get<Usuario>("/api/auth/me"),
 };
 
 // ──────────────────────────────────────────

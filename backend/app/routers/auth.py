@@ -3,7 +3,7 @@ Router de Autenticación
 Endpoints: Login, Registro, Perfil
 """
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -231,9 +231,15 @@ def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
             detail="El email ya está registrado"
         )
 
+    nombre_final = (
+        request.nombre.strip()
+        if request.nombre and request.nombre.strip()
+        else request.email.split("@")[0].replace(".", " ").title()
+    )
+
     usuario = Usuario(
         email=request.email.strip().lower(),
-        nombre=request.nombre,
+        nombre=nombre_final,
         password_hash=crear_hash_password(request.password),
         rol=request.rol,
     )
@@ -243,6 +249,38 @@ def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
     logger.info(f"Usuario registrado: {usuario.email}")
 
     return UsuarioResponse.model_validate(usuario)
+
+
+@router.get("/users", response_model=List[UsuarioResponse], summary="Listar usuarios")
+def listar_usuarios(
+    usuario_actual: Usuario = Depends(get_admin_actual),
+    db: Session = Depends(get_db)
+):
+    """Listar todos los usuarios registrados (solo admin)"""
+    return db.query(Usuario).order_by(Usuario.fecha_creacion.desc()).all()
+
+
+@router.delete("/users/{user_id}", summary="Eliminar usuario")
+def eliminar_usuario(
+    user_id: str,
+    usuario_actual: Usuario = Depends(get_admin_actual),
+    db: Session = Depends(get_db)
+):
+    """Eliminar usuario por ID (solo admin)"""
+    if str(usuario_actual.id) == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes eliminar tu propia cuenta de usuario"
+        )
+    u = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not u:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    db.delete(u)
+    db.commit()
+    return {"message": "Usuario eliminado exitosamente"}
 
 
 @router.get("/me", response_model=UsuarioResponse, summary="Perfil actual")

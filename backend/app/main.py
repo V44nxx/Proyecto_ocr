@@ -72,10 +72,6 @@ desde documentos PDF mediante OCR con PaddleOCR.
 
 ### Flujo de procesamiento:
 1. Subir PDF → 2. OCR automático → 3. Extracción de campos → 4. Validación → 5. Almacenamiento
-
-### Credenciales por defecto:
-- **Email**: admin@ocr.com
-- **Password**: Admin123!
     """,
     version=settings.APP_VERSION,
     docs_url="/docs",

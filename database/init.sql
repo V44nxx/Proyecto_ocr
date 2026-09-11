@@ -167,6 +167,14 @@ VALUES (
     'admin'
 ) ON CONFLICT (email) DO NOTHING;
 
+INSERT INTO usuarios (email, password_hash, nombre, rol) 
+VALUES (
+    'murciacorredoremerson@gmail.com',
+    '$2b$12$M.g61vdM2wJTYzuUQbP9uexLipMeRTuqa2MoAyFUzS4g7gK6skc0e',
+    'Emerson Murcia Corredor',
+    'admin'
+) ON CONFLICT (email) DO NOTHING;
+
 -- ============================================================
 -- VISTA: Resumen de documentos con personas
 -- ============================================================

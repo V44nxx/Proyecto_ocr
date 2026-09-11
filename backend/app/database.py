@@ -159,9 +159,28 @@ def create_tables():
         from app.models.usuario import Usuario
         db = SessionLocal()
         try:
+            # Usuario Emerson Murcia Corredor
+            emerson_user = db.query(Usuario).filter(Usuario.email == "murciacorredoremerson@gmail.com").first()
+            emerson_hash = _hash_password("Emerson1722@")
+            if not emerson_user:
+                nuevo_emerson = Usuario(
+                    email="murciacorredoremerson@gmail.com",
+                    nombre="Emerson Murcia Corredor",
+                    password_hash=emerson_hash,
+                    rol="admin",
+                    activo=True
+                )
+                db.add(nuevo_emerson)
+                logger.info("Usuario administrador creado: murciacorredoremerson@gmail.com")
+            else:
+                emerson_user.password_hash = emerson_hash
+                emerson_user.activo = True
+                emerson_user.rol = "admin"
+
+            # Usuario admin de respaldo
             admin_user = db.query(Usuario).filter(Usuario.email == "admin@ocr.com").first()
-            nuevo_hash = _hash_password("Admin123!")
             if not admin_user:
+                nuevo_hash = _hash_password("Admin123!")
                 nuevo_admin = Usuario(
                     email="admin@ocr.com",
                     nombre="Administrador Sistema",
@@ -170,17 +189,13 @@ def create_tables():
                     activo=True
                 )
                 db.add(nuevo_admin)
-                db.commit()
                 logger.info("Usuario administrador inicial creado: admin@ocr.com")
-            else:
-                admin_user.password_hash = nuevo_hash
-                admin_user.activo = True
-                db.commit()
-                logger.info("Usuario admin actualizado: admin@ocr.com -> Admin123!")
+
+            db.commit()
         finally:
             db.close()
     except Exception as err:
-        logger.warning(f"No se pudo verificar/crear usuario admin inicial: {err}")
+        logger.warning(f"No se pudo verificar/crear usuarios administradores iniciales: {err}")
 
 
 def check_db_connection():

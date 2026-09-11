@@ -82,7 +82,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@ocr.com"
+                  placeholder="correo@ejemplo.com"
                   className="input-field pl-10"
                   autoComplete="email"
                   disabled={cargando}
@@ -136,21 +136,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Credenciales por defecto */}
-          <div className="mt-6 p-4 rounded-xl bg-primary-500/5 border border-primary-500/15">
-            <p className="text-xs text-slate-500 mb-2 font-medium">
-              Credenciales por defecto:
-            </p>
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => { setEmail("admin@ocr.com"); setPassword("Admin123!"); }}
-                className="text-left text-xs text-primary-400 hover:text-primary-300 transition-colors"
-              >
-                📧 admin@ocr.com | 🔑 Admin123!
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Features */}

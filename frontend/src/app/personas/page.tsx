@@ -452,9 +452,22 @@ export default function PersonasPage() {
                 </button>
               </div>
             ) : imgError ? (
-              <div className="flex flex-col items-center justify-center gap-2 h-full w-full py-8">
+              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center">
                 <ImageOff className="w-8 h-8 text-slate-700" />
-                <p className="text-xs text-slate-500">Archivo PDF no disponible en el servidor</p>
+                <p className="text-xs text-slate-500">PDF no disponible para vista previa</p>
+                <button
+                  onClick={() => abrirSubirPdf(p)}
+                  disabled={subiendoPdfId === p.id}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  title="Subir nuevo PDF de la cédula"
+                >
+                  {subiendoPdfId === p.id ? (
+                    <div className="spinner w-3.5 h-3.5" />
+                  ) : (
+                    <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
+                  )}
+                  Subir nuevo PDF
+                </button>
               </div>
             ) : (
               <div style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}>
@@ -731,7 +744,7 @@ export default function PersonasPage() {
           </div>
 
           {/* Acciones del Panel */}
-          <div className="px-4 py-3 border-t border-slate-800/40 bg-slate-900/50 flex items-center gap-2 mt-auto">
+          <div className="px-4 py-3 border-t border-slate-800/40 bg-slate-900/50 flex flex-wrap items-center gap-2 mt-auto">
             {estaEditando ? (
               <>
                 <button
@@ -1170,30 +1183,9 @@ export default function PersonasPage() {
                             )}
                           </td>
 
-                          {/* Acciones */}
+                          {/* Acciones (solo editar y eliminar) */}
                           <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => abrirSubirPdf(p)}
-                                disabled={subiendoPdfId === p.id}
-                                title="Subir PDF de la cédula para extraer datos con OCR"
-                                className="p-1.5 rounded-lg text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 border border-primary-500/30 transition-colors"
-                              >
-                                {subiendoPdfId === p.id ? (
-                                  <div className="spinner w-3.5 h-3.5" />
-                                ) : (
-                                  <UploadCloud className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                              {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-                                <button
-                                  onClick={(e) => aprobarRevision(p.id, e)}
-                                  title="Aprobar revisión manual"
-                                  className="p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
-                                >
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                </button>
-                              )}
                               <button
                                 onClick={() => {
                                   if (isExpandida && editando === p.id) {

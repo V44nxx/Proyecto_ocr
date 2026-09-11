@@ -240,10 +240,8 @@ def listar_documentos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista todos los documentos subidos por el usuario (o todos si es admin)"""
+    """Lista todos los documentos subidos (todos los usuarios pueden ver todos)"""
     query = db.query(Documento)
-    if usuario.rol != "admin":
-        query = query.filter(Documento.usuario_id == usuario.id)
 
     if estado:
         query = query.filter(Documento.estado == estado)
@@ -421,11 +419,8 @@ def preview_pagina_pdf(
     y la devuelve como imagen PNG. Permite al frontend mostrar una vista
     previa de la página exacta donde se detectó la persona.
     """
-    # 1. Obtener el documento
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if usuario.rol != "admin":
-        query = query.filter(Documento.usuario_id == usuario.id)
-    documento = query.first()
+    # 1. Obtener el documento (accesible por cualquier usuario autenticado)
+    documento = db.query(Documento).filter(Documento.id == documento_id).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")

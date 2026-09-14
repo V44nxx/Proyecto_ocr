@@ -29,68 +29,156 @@ def _filtrar_persona_por_usuario(query, usuario: Usuario):
     )
 
 
-def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[set, bool]:
-    """Obtiene el conjunto de números de identificación presentes en las comparaciones Excel del usuario"""
+import os
+import re
+from typing import Dict, Tuple, Set
+
+_CACHE_IDS_EXCEL: Dict[str, Tuple[float, Set[str]]] = {}
+
+
+def _extraer_ids_de_archivo_excel(ruta_archivo: str) -> Set[str]:
+    """Extrae con precisión matemática el conjunto de cédulas/identificaciones de un archivo Excel físico"""
+    if not ruta_archivo or not os.path.exists(ruta_archivo):
+        return set()
+
     try:
-        from app.models.diferencia import Diferencia
+        mtime = os.path.getmtime(ruta_archivo)
+        if ruta_archivo in _CACHE_IDS_EXCEL:
+            cached_mtime, cached_ids = _CACHE_IDS_EXCEL[ruta_archivo]
+            if cached_mtime == mtime:
+                return cached_ids
+
+        ids_encontrados: Set[str] = set()
+
+        # 1. Intentar con comparacion_service.cargar_excel (soporta multi-hoja, encabezados con offset y limpieza id)
+        try:
+            from app.services.comparacion_service import comparacion_service
+            df = comparacion_service.cargar_excel(ruta_archivo)
+            if df is not None and "numero_identificacion" in df.columns:
+                for val in df["numero_identificacion"].dropna():
+                    s = str(val).strip()
+                    limpio = re.sub(r"[^\d]", "", s)
+                    if limpio and len(limpio) >= 5:
+                        ids_encontrados.add(limpio)
+                    if s and len(s) >= 5:
+                        ids_encontrados.add(s)
+        except Exception as e_comp:
+            logger.warning(f"Fallback a excel_lookup_service para {ruta_archivo}: {e_comp}")
+
+        # 2. Si quedó vacío, intentar con excel_lookup_service
+        if not ids_encontrados:
+            try:
+                from app.services.excel_lookup_service import excel_lookup_service
+                lookup = excel_lookup_service.cargar_lookup(ruta_archivo)
+                for k in lookup.keys():
+                    s = str(k).strip()
+                    limpio = re.sub(r"[^\d]", "", s)
+                    if limpio and len(limpio) >= 5:
+                        ids_encontrados.add(limpio)
+                    if s and len(s) >= 5:
+                        ids_encontrados.add(s)
+            except Exception as e_look:
+                logger.warning(f"Error en excel_lookup_service para {ruta_archivo}: {e_look}")
+
+        _CACHE_IDS_EXCEL[ruta_archivo] = (mtime, ids_encontrados)
+        logger.info(f"[ExcelIDs] Archivo '{os.path.basename(ruta_archivo)}': {len(ids_encontrados)} identificaciones cargadas")
+        return ids_encontrados
+    except Exception as e:
+        logger.error(f"Error extrayendo IDs de Excel '{ruta_archivo}': {e}")
+        return set()
+
+
+def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
+    """
+    Obtiene el conjunto de números de identificación presentes en las planillas Excel
+    de comparación del usuario con máxima confiabilidad leyendo directamente los archivos.
+    """
+    try:
         from app.models.comparacion import Comparacion
-        from pathlib import Path
+        from app.models.diferencia import Diferencia
 
-        comp_query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario_id)
-        comp_ids = [c.id for c in comp_query.all()]
-
-        ids_en_excel = set()
-        hay_excel = False
-
-        if comp_ids:
-            # Solo los que realmente están en el Excel: 'igual', 'diferente', 'faltante_bd'
-            # ('nuevo_bd' significa que está en BD pero NO en Excel)
-            rows = (
-                db.query(Diferencia.numero_identificacion)
-                .filter(
-                    Diferencia.comparacion_id.in_(comp_ids),
-                    Diferencia.tipo_diferencia.in_(["igual", "diferente", "faltante_bd"])
-                )
-                .distinct()
+        # 1. Buscar comparaciones del usuario
+        comp_query = (
+            db.query(Comparacion)
+            .filter(Comparacion.usuario_id == usuario_id)
+            .order_by(Comparacion.fecha_carga.desc())
+        )
+        comparaciones = comp_query.all()
+        if not comparaciones:
+            # Fallback a comparaciones legacy sin usuario_id
+            comparaciones = (
+                db.query(Comparacion)
+                .filter(Comparacion.usuario_id.is_(None))
+                .order_by(Comparacion.fecha_carga.desc())
                 .all()
             )
-            ids_en_excel = set(str(r[0]).strip() for r in rows)
-            hay_excel = True
 
-        if not ids_en_excel:
-            ult_comp = (
-                comp_query.filter(Comparacion.ruta_archivo.isnot(None))
-                .order_by(Comparacion.fecha_carga.desc())
-                .first()
+        if not comparaciones:
+            return set(), False
+
+        ids_totales: Set[str] = set()
+        hay_archivo = False
+
+        # 2. Extraer los IDs directamente de los archivos Excel físicos
+        for comp in comparaciones:
+            if comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
+                ids_archivo = _extraer_ids_de_archivo_excel(comp.ruta_archivo)
+                if ids_archivo:
+                    ids_totales.update(ids_archivo)
+                    hay_archivo = True
+
+        if hay_archivo:
+            return ids_totales, True
+
+        # 3. Fallback solo si el archivo físico en disco no existiera:
+        # En la tabla Diferencia, los registros en Excel son 'faltante_bd' y 'diferente'.
+        # NOTA: 'nuevo_bd' son personas que están en BD pero NO en Excel, JAMÁS incluirlas.
+        comp_ids = [c.id for c in comparaciones]
+        rows = (
+            db.query(Diferencia.numero_identificacion)
+            .filter(
+                Diferencia.comparacion_id.in_(comp_ids),
+                Diferencia.tipo_diferencia.in_(["faltante_bd", "diferente", "igual"])
             )
-            if ult_comp and ult_comp.ruta_archivo and Path(ult_comp.ruta_archivo).exists():
-                try:
-                    from app.services.excel_lookup_service import excel_lookup_service
-                    lookup = excel_lookup_service.cargar_lookup(ult_comp.ruta_archivo)
-                    ids_en_excel = set(str(k).strip() for k in lookup.keys())
-                    hay_excel = True
-                except Exception:
-                    pass
-        return ids_en_excel, hay_excel
+            .distinct()
+            .all()
+        )
+        fallback_ids = set()
+        for r in rows:
+            if r[0]:
+                s = str(r[0]).strip()
+                limpio = re.sub(r"[^\d]", "", s)
+                if limpio:
+                    fallback_ids.add(limpio)
+                fallback_ids.add(s)
+
+        return fallback_ids, bool(comparaciones)
+
     except Exception as e:
-        logger.warning(f"Error determinando presencia en Excel: {e}")
+        logger.error(f"Error determinando presencia en Excel: {e}")
         return set(), False
 
 
-def _enriquecer_persona_response(p: Persona, ids_en_excel: set, hay_excel: bool) -> PersonaResponse:
-    """Enriquece PersonaResponse con los flags precisos en_pdf y en_excel"""
+def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: bool) -> PersonaResponse:
+    """
+    Enriquece PersonaResponse con flags 100% precisos de presencia en PDF y en Excel.
+    """
     r = PersonaResponse.model_validate(p)
     r.en_pdf = p.documento_id is not None
-    fue_creada_excel = (
-        p.motor_ocr == "manual" or 
-        "Registro creado desde Excel" in str((p.detalles_campos or {}).get("motivos_revision", ""))
-    )
-    if fue_creada_excel:
-        r.en_excel = True
-    elif hay_excel:
-        r.en_excel = str(p.numero_identificacion).strip() in ids_en_excel
+
+    if hay_excel:
+        id_crudo = str(p.numero_identificacion or "").strip()
+        id_limpio = re.sub(r"[^\d]", "", id_crudo)
+
+        esta_en_excel = bool(
+            (id_limpio and id_limpio in ids_en_excel) or
+            (id_crudo and id_crudo in ids_en_excel)
+        )
+        r.en_excel = esta_en_excel
     else:
+        # No se ha subido ninguna planilla Excel para contrastar
         r.en_excel = None
+
     return r
 
 
@@ -261,7 +349,8 @@ def actualizar_persona(
     db.refresh(persona)
 
     logger.info(f"Persona {persona.numero_identificacion} actualizada. Campos: {campos_actualizados}")
-    return PersonaResponse.model_validate(persona)
+    ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+    return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
 
 @router.delete("/{persona_id}", status_code=204, summary="Eliminar persona")
@@ -439,7 +528,8 @@ async def subir_pdf_persona(
         db.commit()
         db.refresh(persona)
         logger.info(f"PDF procesado para persona {persona.numero_identificacion} (ID: {persona.id}). Estado: {persona.estado_registro}")
-        return PersonaResponse.model_validate(persona)
+        ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+        return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
     except HTTPException:
         raise

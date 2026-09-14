@@ -375,7 +375,7 @@ export default function PersonasPage() {
   };
 
   // ─── Panel de detalle inline (acordeón) ───────────────────────────────────
-  const PanelDetalle = ({ p }: { p: Persona }) => {
+  const renderPanelDetalle = (p: Persona) => {
     const docId = p.documento_id ? String(p.documento_id) : null;
     const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
     const estaEditando = editando === p.id;
@@ -1333,8 +1333,8 @@ export default function PersonasPage() {
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
                             <td colSpan={9} className="p-0">
-                              <div className="border-t border-primary-500/20 animate-slideDown w-full min-w-0 overflow-hidden">
-                                <PanelDetalle p={p} />
+                              <div className="border-t border-primary-500/20 animate-slideDown w-full min-w-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                {renderPanelDetalle(p)}
                               </div>
                             </td>
                           </tr>

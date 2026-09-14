@@ -412,22 +412,22 @@ export default function PersonasPage() {
     };
 
     return (
-      <div className="flex flex-col lg:flex-row gap-0 bg-slate-950/70 border-t border-slate-800/60">
+      <div className="flex flex-col lg:flex-row gap-0 bg-slate-950/70 border-t border-slate-800/60 w-full min-w-0 overflow-hidden">
 
         {/* ── Panel izquierdo: PDF / Documento ── */}
-        <div className="lg:w-[48%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/50 min-h-[320px]">
+        <div className="lg:w-[44%] w-full flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/50 min-h-[300px] min-w-0 overflow-hidden">
           {/* Toolbar PDF */}
-          <div className="flex items-center justify-between px-4 py-2 bg-slate-900/70 border-b border-slate-800/40">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/70 border-b border-slate-800/40 min-w-0 gap-1">
             <div className="flex items-center gap-1.5 min-w-0">
               <FileText className="w-3.5 h-3.5 text-primary-400 shrink-0" />
               <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider shrink-0">Vista Documento</span>
               {p.nombre_documento && (
-                <span className="text-[10px] font-mono text-slate-300 truncate max-w-[200px] bg-slate-800 px-2 py-0.5 rounded border border-slate-700 ml-1.5" title={`Archivo origen: ${p.nombre_documento}`}>
+                <span className="text-[10px] font-mono text-slate-300 truncate max-w-[130px] bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 ml-1 shrink" title={`Archivo origen: ${p.nombre_documento}`}>
                   {p.nombre_documento}
                 </span>
               )}
               {tieneDosLados && (
-                <div className="flex items-center gap-1 ml-2">
+                <div className="flex items-center gap-1 ml-1.5 shrink-0">
                   <button
                     onClick={() => { setPaginaPrevia(p.pagina_frente!); setImgCargando(true); setImgError(false); }}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${paginaPrevia === p.pagina_frente ? "bg-primary-500/25 border border-primary-500/40 text-primary-300" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-white"}`}
@@ -443,10 +443,10 @@ export default function PersonasPage() {
                 </div>
               )}
               {!tieneDosLados && (
-                <span className="text-[10px] text-slate-500 ml-1">pág. {paginaPrevia}</span>
+                <span className="text-[10px] text-slate-500 ml-1 shrink-0">pág. {paginaPrevia}</span>
               )}
             </div>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 shrink-0">
               <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors" title="Alejar"><ZoomOut className="w-3 h-3" /></button>
               <span className="text-[10px] font-mono text-slate-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors" title="Acercar"><ZoomIn className="w-3 h-3" /></button>
@@ -455,7 +455,7 @@ export default function PersonasPage() {
           </div>
 
           {/* Imagen */}
-          <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-950/50 min-h-[280px]">
+          <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-950/50 min-h-[260px] max-h-[480px]">
             {!docId ? (
               <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center">
                 <ImageOff className="w-8 h-8 text-slate-700" />
@@ -516,48 +516,48 @@ export default function PersonasPage() {
         </div>
 
         {/* ── Panel derecho: Datos OCR o Modo Edición ── */}
-        <div className="lg:w-[52%] flex flex-col justify-between">
+        <div className="lg:w-[56%] w-full flex flex-col justify-between min-w-0 overflow-hidden">
           <div>
             {/* Meta info */}
-            <div className="px-4 py-2.5 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2.5 text-[10px] flex-wrap">
-                <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getTipoDocInfo(p.tipo_documento).pill}`}>
+            <div className="px-3 py-2 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between flex-wrap gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 text-[10px] flex-wrap min-w-0">
+                <span className={`px-2 py-0.5 rounded text-[10px] border font-bold shrink-0 ${getTipoDocInfo(p.tipo_documento).pill}`}>
                   {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
                 </span>
                 {p.nombre_documento && (
-                  <span className="flex items-center gap-1 text-slate-300 font-mono text-[10px] bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded" title={`Archivo PDF origen: ${p.nombre_documento}`}>
+                  <span className="flex items-center gap-1 text-slate-300 font-mono text-[10px] bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink" title={`Archivo PDF origen: ${p.nombre_documento}`}>
                     <FileText className="w-3 h-3 text-primary-400 shrink-0" />
-                    <span className="text-primary-400 font-semibold">PDF:</span>
-                    <span className="truncate max-w-[200px]">{p.nombre_documento}</span>
+                    <span className="text-primary-400 font-semibold shrink-0">PDF:</span>
+                    <span className="truncate">{p.nombre_documento}</span>
                   </span>
                 )}
-                <span className="flex items-center gap-1 text-slate-500"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
-                <span className="flex items-center gap-1 text-slate-500"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
+                <span className="flex items-center gap-1 text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
+                <span className="flex items-center gap-1 text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
                 {edadCalculada !== null && (
-                  <span className="flex items-center gap-1 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-semibold" title={`Edad: ${edadCalculada} años cumplidos`}>
+                  <span className="flex items-center gap-1 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-semibold shrink-0" title={`Edad: ${edadCalculada} años cumplidos`}>
                     <span> {edadCalculada} años</span>
                   </span>
                 )}
               </div>
               {estaEditando ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0">
                   <Edit3 className="w-3 h-3" /> Modo Edición
                 </span>
               ) : (
-                p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>
+                p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[90px] shrink-0">{p.grupo_documento_id}</span>
               )}
             </div>
 
             {/* Alerta: Falta en Planilla Excel */}
             {p.en_excel === false && (
-              <div className="m-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300">
-                <div className="flex items-center gap-2 mb-1.5">
+              <div className="m-2.5 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
                   <FileSpreadsheet className="w-4 h-4 text-purple-400 shrink-0" />
                   <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
                     Alerta: No se encuentra en la Planilla Excel
                   </span>
                 </div>
-                <p className="text-xs text-purple-200/90 ml-6">
+                <p className="text-xs text-purple-200/90 ml-6 break-words">
                   El número de identificación <strong className="font-mono text-white">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
                 </p>
               </div>
@@ -565,14 +565,14 @@ export default function PersonasPage() {
 
             {/* Alerta: Sin Documento PDF */}
             {(!p.documento_id || p.en_pdf === false) && (
-              <div className="m-3 p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300">
-                <div className="flex items-center gap-2 mb-1.5">
+              <div className="m-2.5 p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
                   <FileText className="w-4 h-4 text-sky-400 shrink-0" />
                   <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
                     Alerta: Sin Documento PDF Asociado
                   </span>
                 </div>
-                <p className="text-xs text-sky-200/90 ml-6">
+                <p className="text-xs text-sky-200/90 ml-6 break-words">
                   Este registro fue creado manualmente o desde Excel y no cuenta con un archivo PDF vinculado. Puede subirlo con el botón &quot;Subir PDF Cédula&quot;.
                 </p>
               </div>
@@ -589,8 +589,8 @@ export default function PersonasPage() {
               });
               if (motivosFiltrados.length === 0 && !p.requiere_revision) return null;
               return (
-                <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                  <div className="flex items-center gap-2 mb-1.5">
+                <div className="m-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
                       Pendiente de Revisión por Asistente
@@ -603,7 +603,7 @@ export default function PersonasPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-amber-200/90 ml-6">
+                    <p className="text-xs text-amber-200/90 ml-6 break-words">
                       Uno o más datos esenciales (número de identificación, nombre o fecha de nacimiento) requieren verificación.
                     </p>
                   )}
@@ -613,8 +613,8 @@ export default function PersonasPage() {
 
             {/* Contenido: Si está editando muestra el formulario integrado; si no, las tarjetas compactas */}
             {estaEditando ? (
-              <div className="p-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 space-y-2.5 min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
                   {/* Tipo de Documento */}
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
@@ -623,7 +623,7 @@ export default function PersonasPage() {
                     <select
                       value={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
                       onChange={(e) => setEditForm(prev => ({ ...prev, tipo_documento: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
                     >
                       <option value="CEDULA_CIUDADANIA">Cédula de Ciudadanía (CC)</option>
                       <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad (TI)</option>
@@ -639,13 +639,13 @@ export default function PersonasPage() {
                       Número de Identificación
                     </label>
                     <div className="relative">
-                      <Hash className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <Hash className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
                       <input
                         type="text"
                         value={editForm.numero_identificacion || ""}
                         onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
                         placeholder="Ej: 1117513499"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs font-mono font-bold text-primary-300 focus:outline-none focus:border-primary-500 transition-colors"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono font-bold text-primary-300 focus:outline-none focus:border-primary-500 transition-colors"
                       />
                     </div>
                   </div>
@@ -668,7 +668,7 @@ export default function PersonasPage() {
                         }));
                       }}
                       placeholder="Ej: VALENCIA VILLEGAS ANTONIO"
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase font-medium"
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase font-medium"
                     />
                   </div>
 
@@ -678,13 +678,13 @@ export default function PersonasPage() {
                       Fecha de Nacimiento (AAAA-MM-DD)
                     </label>
                     <div className="relative">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
                       <input
                         type="text"
                         value={editForm.fecha_nacimiento || ""}
                         onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
                         placeholder="AAAA-MM-DD"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
+                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
                       />
                     </div>
                   </div>
@@ -694,7 +694,7 @@ export default function PersonasPage() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                       Edad Calculada
                     </label>
-                    <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300">
+                    <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300">
                       <Clock className="w-3.5 h-3.5 text-amber-400" />
                       {editForm.fecha_nacimiento && calcularEdad(editForm.fecha_nacimiento) !== null ? (
                         <span className="font-bold text-amber-300 font-mono">
@@ -711,10 +711,10 @@ export default function PersonasPage() {
               </div>
             ) : (
               /* Vista de Tarjetas (Compactas con content-start para evitar que se alarguen) */
-              <div className="p-3 space-y-2.5">
+              <div className="p-2.5 space-y-2 min-w-0">
                 {p.nombre_documento && (
-                  <div className="px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <FileText className="w-3.5 h-3.5 text-primary-400 shrink-0" />
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Documento PDF:</span>
                       <span className="font-mono text-xs text-slate-200 truncate" title={p.nombre_documento}>{p.nombre_documento}</span>
@@ -724,35 +724,35 @@ export default function PersonasPage() {
                     </span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-2 content-start">
+                <div className="grid grid-cols-2 gap-2 content-start min-w-0">
                   {campos.map(({ key, label, icono, valor }) => {
                     const c = conf(key);
                     const col = color(valor ? c : 0);
                     return (
-                      <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2.5 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[64px]">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-slate-500">
+                      <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[58px] min-w-0 overflow-hidden">
+                        <div className="flex items-center justify-between min-w-0">
+                          <div className="flex items-center gap-1 text-slate-500 min-w-0">
                             {icono}
-                            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider truncate">{label}</span>
                           </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
                             {valor ? `${c}%` : "N/D"}
                           </span>
                         </div>
-                        <div className="my-1">
+                        <div className="my-0.5 min-w-0">
                           {valor
                             ? (
-                              <div>
-                                <span className="text-xs font-semibold text-white truncate block font-mono">{valor}</span>
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold text-white truncate block font-mono" title={valor}>{valor}</span>
                                 {key === "numero_identificacion" && (p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                  <span className="text-[9px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5" title={`Corregido desde planilla oficial Excel (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                  <span className="text-[9px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5 truncate" title={`Corregido desde planilla oficial Excel (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
                                     <CheckCircle className="w-2.5 h-2.5 shrink-0" />
-                                    <span>Corregido de {(p.detalles_campos as any).numero_identificacion_original_ocr}</span>
+                                    <span className="truncate">Corregido de {(p.detalles_campos as any).numero_identificacion_original_ocr}</span>
                                   </span>
                                 )}
                               </div>
                             )
-                            : <span className="text-[11px] italic text-rose-400/80 font-medium block">No detectado por OCR</span>
+                            : <span className="text-[11px] italic text-rose-400/80 font-medium block truncate">No detectado por OCR</span>
                           }
                         </div>
                         {valor ? (
@@ -773,68 +773,72 @@ export default function PersonasPage() {
           </div>
 
           {/* Acciones del Panel */}
-          <div className="px-4 py-3 border-t border-slate-800/40 bg-slate-900/50 flex flex-wrap items-center gap-2 mt-auto">
+          <div className="px-3 py-2 border-t border-slate-800/40 bg-slate-900/50 flex flex-wrap items-center justify-between gap-1.5 mt-auto min-w-0">
             {estaEditando ? (
-              <>
-                <button
-                  onClick={() => guardarEdicion(p.id, false)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold shadow-lg shadow-primary-500/20 transition-all"
-                >
-                  <Save className="w-3.5 h-3.5" /> Guardar Cambios
-                </button>
-                {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+              <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={() => guardarEdicion(p.id, true)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
-                    title="Guardar datos y aprobar directamente"
+                    onClick={() => guardarEdicion(p.id, false)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold shadow-lg shadow-primary-500/20 transition-all shrink-0"
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> Guardar y Aprobar
+                    <Save className="w-3.5 h-3.5" /> Guardar Cambios
                   </button>
-                )}
+                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                    <button
+                      onClick={() => guardarEdicion(p.id, true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0"
+                      title="Guardar datos y aprobar directamente"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Guardar y Aprobar
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={() => setEditando(null)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold transition-all ml-auto"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold transition-all shrink-0 ml-auto"
                 >
                   <X className="w-3.5 h-3.5" /> Cancelar
                 </button>
-              </>
+              </div>
             ) : (
-              <>
-                <button
-                  onClick={() => iniciarEdicion(p)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 text-xs font-semibold transition-all"
-                >
-                  <Edit3 className="w-3.5 h-3.5" /> Editar Datos
-                </button>
-                <button
-                  onClick={() => abrirSubirPdf(p)}
-                  disabled={subiendoPdfId === p.id}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition-all"
-                  title="Subir documento PDF de la cédula para extraer datos automáticamente con OCR"
-                >
-                  {subiendoPdfId === p.id ? (
-                    <div className="spinner w-3.5 h-3.5" />
-                  ) : (
-                    <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
-                  )}
-                  Subir PDF Cédula
-                </button>
-                {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+              <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
-                    onClick={(e) => aprobarRevision(p.id, e)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all"
-                    title="Aprobar datos y marcar como válido"
+                    onClick={() => iniciarEdicion(p)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 text-xs font-semibold transition-all shrink-0"
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
+                    <Edit3 className="w-3.5 h-3.5" /> Editar Datos
                   </button>
-                )}
+                  <button
+                    onClick={() => abrirSubirPdf(p)}
+                    disabled={subiendoPdfId === p.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition-all shrink-0"
+                    title="Subir documento PDF de la cédula para extraer datos automáticamente con OCR"
+                  >
+                    {subiendoPdfId === p.id ? (
+                      <div className="spinner w-3.5 h-3.5" />
+                    ) : (
+                      <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
+                    )}
+                    Subir PDF Cédula
+                  </button>
+                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                    <button
+                      onClick={(e) => aprobarRevision(p.id, e)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0"
+                      title="Aprobar datos y marcar como válido"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={() => setExpandidoId(null)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all ml-auto"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all shrink-0 ml-auto"
                 >
                   <ChevronUp className="w-3.5 h-3.5" /> Colapsar
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -844,10 +848,10 @@ export default function PersonasPage() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
+    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
       <Sidebar />
 
-      <main className="ml-64 flex-1 p-8 overflow-x-hidden">
+      <main className="ml-64 flex-1 min-w-0 p-4 lg:p-6 overflow-x-hidden max-w-[calc(100vw-16rem)]">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
@@ -1132,11 +1136,11 @@ export default function PersonasPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto w-full">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-3 px-3 w-10 text-center">
+                    <th className="py-3 px-2 w-8 text-center">
                       <input
                         type="checkbox"
                         checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
@@ -1145,14 +1149,14 @@ export default function PersonasPage() {
                         title="Seleccionar / Deseleccionar todas las personas mostradas"
                       />
                     </th>
-                    <th className="py-3 px-1 w-7"></th>
-                    <th className="py-3 px-2 w-48 whitespace-nowrap">Documento / ID</th>
+                    <th className="py-3 px-1 w-7 text-center"></th>
+                    <th className="py-3 px-2 w-32 whitespace-nowrap">Documento / ID</th>
                     <th className="py-3 px-2 whitespace-nowrap">Nombre Completo</th>
-                    <th className="py-3 px-2 w-20 text-center whitespace-nowrap">Edad</th>
-                    <th className="py-3 px-2 w-14 text-center whitespace-nowrap">Pág.</th>
-                    <th className="py-3 px-3 w-36 text-center whitespace-nowrap">Fuente</th>
-                    <th className="py-3 px-3 w-32 text-center whitespace-nowrap">Estado</th>
-                    <th className="py-3 px-3 w-14 text-right">Acciones</th>
+                    <th className="py-3 px-1 w-16 text-center whitespace-nowrap">Edad</th>
+                    <th className="py-3 px-1 w-12 text-center whitespace-nowrap">Pág.</th>
+                    <th className="py-3 px-2 w-28 text-center whitespace-nowrap">Fuente</th>
+                    <th className="py-3 px-2 w-28 text-center whitespace-nowrap">Estado</th>
+                    <th className="py-3 px-2 w-10 text-center whitespace-nowrap">Acciones</th>
                   </tr>
                 </thead>
 
@@ -1178,7 +1182,7 @@ export default function PersonasPage() {
                           onClick={() => toggleExpandir(p)}
                         >
                           {/* Checkbox de selección */}
-                          <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-3 px-2 w-8 text-center" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSeleccionada}
@@ -1188,14 +1192,14 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Toggle expandir */}
-                          <td className="py-3 px-1">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
+                          <td className="py-3 px-1 w-7 text-center">
+                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
                               {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </div>
                           </td>
 
-                          {/* Documento e ID con Badge */}
-                          <td className="py-3 px-2 whitespace-nowrap">
+                          {/* Documento e ID con Badge - Compacto y pegado al nombre */}
+                          <td className="py-3 px-2 w-32 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-nowrap">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
                                 {tipoInfo.codigo}
@@ -1223,9 +1227,9 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Edad */}
-                          <td className="py-3 px-2 text-center whitespace-nowrap">
+                          <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
                             {edadRow !== null ? (
-                              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
+                              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
                                 {edadRow} años
                               </span>
                             ) : (
@@ -1234,39 +1238,39 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Página */}
-                          <td className="py-3 px-2 text-center whitespace-nowrap">
+                          <td className="py-3 px-1 w-12 text-center whitespace-nowrap">
                             <span className="text-[11px] font-mono text-slate-500 whitespace-nowrap">
                               {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
                             </span>
                           </td>
 
                           {/* Fuente: PDF y/o Excel */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                          <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center justify-center gap-1 whitespace-nowrap">
                               {/* PDF badge */}
                               {p.documento_id ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300 whitespace-nowrap shrink-0"
                                   title="Extraído de documento PDF por OCR"
                                 >
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> Sin PDF
                                 </span>
                               )}
                               {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap shrink-0"
                                   title="Encontrado en planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 whitespace-nowrap shrink-0"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Excel
@@ -1276,7 +1280,7 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Estado: Alertas VÁLIDO, REVISAR, NO EN PDF, NO EN EXCEL */}
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
                             <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
@@ -1318,7 +1322,7 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Acciones — solo eliminar */}
-                          <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-3 px-2 w-10 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1329,7 +1333,7 @@ export default function PersonasPage() {
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
                             <td colSpan={9} className="p-0">
-                              <div className="border-t border-primary-500/20 animate-slideDown">
+                              <div className="border-t border-primary-500/20 animate-slideDown w-full min-w-0 overflow-hidden">
                                 <PanelDetalle p={p} />
                               </div>
                             </td>

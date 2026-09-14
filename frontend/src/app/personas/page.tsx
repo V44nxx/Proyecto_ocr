@@ -384,18 +384,6 @@ export default function PersonasPage() {
         icono: <Clock className="w-3.5 h-3.5" />,
         valor: edadCalculada !== null ? `${edadCalculada} años cumplidos` : null
       },
-      {
-        key: "confianza_extraccion",
-        label: "Confianza OCR",
-        icono: <Cpu className="w-3.5 h-3.5" />,
-        valor: p.confianza_extraccion != null ? `${Math.round(Number(p.confianza_extraccion))}%` : null
-      },
-      {
-        key: "pagina",
-        label: "Página(s)",
-        icono: <FileText className="w-3.5 h-3.5" />,
-        valor: p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? ` / ${p.pagina_reverso}` : ""}` : (p.pagina_numero ? String(p.pagina_numero) : null)
-      },
     ];
 
     const conf = (key: string): number => {
@@ -1066,8 +1054,9 @@ export default function PersonasPage() {
                     <th className="py-3 px-2 w-8"></th>
                     <th className="py-3 px-4">Documento / ID</th>
                     <th className="py-3 px-4">Nombre Completo</th>
-                    <th className="py-3 px-3 text-center">F. Nacimiento</th>
                     <th className="py-3 px-3 text-center">Edad</th>
+                    <th className="py-3 px-3 text-center">Pág.</th>
+                    <th className="py-3 px-4 text-center">Confianza</th>
                     <th className="py-3 px-4 text-center">Estado</th>
                     <th className="py-3 px-3 text-right">Acciones</th>
                   </tr>
@@ -1132,17 +1121,6 @@ export default function PersonasPage() {
                             )}
                           </td>
 
-                          {/* Fecha de Nacimiento */}
-                          <td className="py-3 px-3 text-center">
-                            {p.fecha_nacimiento ? (
-                              <span className="font-mono text-xs text-slate-300 bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/60 inline-block">
-                                {String(p.fecha_nacimiento)}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 text-xs italic">—</span>
-                            )}
-                          </td>
-
                           {/* Edad */}
                           <td className="py-3 px-3 text-center">
                             {edadRow !== null ? (
@@ -1154,7 +1132,24 @@ export default function PersonasPage() {
                             )}
                           </td>
 
-                          {/* (Pág. y Confianza eliminadas de la tabla — se ven en el detalle expandido) */}
+                          {/* Página */}
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
+                            </span>
+                          </td>
+
+                          {/* Confianza */}
+                          <td className="py-3 px-4 text-center">
+                            {p.confianza_extraccion != null ? (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
+                                </div>
+                                <span className="text-xs text-slate-400">{Math.round(Number(p.confianza_extraccion))}%</span>
+                              </div>
+                            ) : <span className="text-slate-600 text-xs">—</span>}
+                          </td>
 
                           {/* Estado */}
                           <td className="py-3 px-4 text-center">
@@ -1184,7 +1179,7 @@ export default function PersonasPage() {
                         {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
-                            <td colSpan={8} className="p-0">
+                            <td colSpan={9} className="p-0">
                               <div className="border-t border-primary-500/20 animate-slideDown">
                                 <PanelDetalle p={p} />
                               </div>

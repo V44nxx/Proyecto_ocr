@@ -26,12 +26,8 @@ class ExportacionService:
         "nombre_completo": "Nombre Completo",
         "fecha_nacimiento": "Fecha Nacimiento",
         "edad": "Edad",
-        "fecha_expedicion": "Fecha Expedición",
-        "lugar_expedicion": "Lugar Expedición",
-        "sexo": "Sexo",
-        "confianza_extraccion": "Confianza OCR (%)",
-        "requiere_revision": "Requiere Revisión",
         "documento_origen": "Documento PDF Origen",
+        "requiere_revision": "Requiere Revisión",
         "fecha_registro": "Fecha Registro",
     }
 
@@ -105,12 +101,8 @@ class ExportacionService:
                 "nombre_completo": nom_comp,
                 "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
                 "edad": p.edad if p.edad is not None else "",
-                "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else "",
-                "lugar_expedicion": p.lugar_expedicion or "",
-                "sexo": p.sexo or "",
-                "confianza_extraccion": float(p.confianza_extraccion or 0),
-                "requiere_revision": "SÍ" if p.requiere_revision else "NO",
                 "documento_origen": doc_nombre,
+                "requiere_revision": "SÍ" if p.requiere_revision else "NO",
                 "fecha_registro": p.fecha_registro.strftime("%d/%m/%Y %H:%M") if p.fecha_registro else "",
             })
 
@@ -211,7 +203,7 @@ class ExportacionService:
         ws.row_dimensions[3].height = 30
 
         # Ajustar ancho de columnas y formatear datos
-        anchos = [20, 28, 18, 18, 25, 10, 16, 18, 28, 20]
+        anchos = [22, 34, 18, 12, 32, 18, 20]
         for i, ancho in enumerate(anchos, start=1):
             if i <= len(self.COLUMNAS):
                 ws.column_dimensions[get_column_letter(i)].width = ancho

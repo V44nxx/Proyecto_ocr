@@ -410,7 +410,8 @@ export default function ExportacionPage() {
                           />
                         </th>
                         <th>Cédula</th>
-                        <th>Nombre y Apellidos</th>
+                        <th>Nombre Completo</th>
+                        <th>F. Nacimiento</th>
                         <th>Edad</th>
                         <th>Documento PDF</th>
                         <th>Estado</th>
@@ -445,6 +446,9 @@ export default function ExportacionPage() {
                             </td>
                             <td className="font-medium text-slate-200">
                               {nomCompleto || "—"}
+                            </td>
+                            <td className="text-slate-300 font-mono text-[11px] whitespace-nowrap">
+                              {p.fecha_nacimiento ? String(p.fecha_nacimiento) : "—"}
                             </td>
                             <td className="text-slate-300 font-mono text-[11px] whitespace-nowrap">
                               {p.edad ? `${p.edad} años` : (calcularEdad(p.fecha_nacimiento) ? `${calcularEdad(p.fecha_nacimiento)} años` : "—")}

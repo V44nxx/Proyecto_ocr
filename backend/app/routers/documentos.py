@@ -10,7 +10,7 @@ from typing import List, Optional, Union
 from datetime import datetime
 import threading
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -352,22 +352,31 @@ def eliminar_documento(
 
 @router.get("/dashboard/estadisticas", summary="Estadísticas del dashboard")
 def estadisticas_dashboard(
+    documento_id: Optional[str] = Query(None, description="Filtrar estadísticas por ID de documento PDF específico"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Retorna estadísticas para el dashboard principal"""
+    """Retorna estadísticas para el dashboard principal o para un documento específico"""
     from app.models.persona import Persona
 
     total_docs = db.query(Documento).count()
     completados = db.query(Documento).filter(Documento.estado == "completado").count()
     en_proceso = db.query(Documento).filter(Documento.estado == "procesando").count()
     errores = db.query(Documento).filter(Documento.estado == "error").count()
-    total_personas = db.query(Persona).count()
-    revision = db.query(Persona).filter(
+
+    query_personas = db.query(Persona)
+    query_revision = db.query(Persona).filter(
         (Persona.requiere_revision == True) |
         (Persona.estado_registro.in_(["REVIEW_REQUIRED", "FALLBACK_TESSERACT"])) |
         (Persona.estado_registro != "VALID")
-    ).count()
+    )
+
+    if documento_id and documento_id.strip() and documento_id != "todos":
+        query_personas = query_personas.filter(Persona.documento_id == documento_id)
+        query_revision = query_revision.filter(Persona.documento_id == documento_id)
+
+    total_personas = query_personas.count()
+    revision = query_revision.count()
 
     from app.models.comparacion import Comparacion
     total_comparaciones = db.query(Comparacion).count()

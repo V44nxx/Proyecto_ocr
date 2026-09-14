@@ -427,27 +427,15 @@ class ValidadorColombia:
         if not nom_c_norm or nom_c_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(nom_c_str) or any(r in nom_c_str.upper() for r in ["NACIONA", "COLOMBIA", "REGISTRADURIA", "REPUBLICA"]):
             motivos.append("Nombre completo no reconocido o ausente")
 
-        # 5. Fecha de nacimiento
+        # 3. Fecha de nacimiento (con la que se calcula la edad)
         if not fecha_nacimiento:
             motivos.append("Fecha de nacimiento no reconocida por OCR")
 
-        # 6. Fecha de expedición
-        if not fecha_expedicion:
-            motivos.append("Fecha de expedición no reconocida por OCR")
+        # NOTA: Los campos secundarios (fecha_expedicion, lugar_expedicion, sexo)
+        # ya no son requeridos ni obligatorios para marcar a una persona como válida.
+        # Si están ausentes o ilegibles en el OCR, NO generan motivo de revisión.
 
-        # 7. Lugar de expedición
-        lug_str = str(lugar_expedicion or "").strip()
-        lug_norm = cls.normalizar_lugar(lug_str) if lug_str else None
-        if not lug_norm or lug_norm in {"COLOMBIA", "REPUBLICA DE COLOMBIA", "REPÚBLICA DE COLOMBIA"}:
-            motivos.append("Lugar de expedición no reconocido o genérico")
-
-        # 8. Sexo
-        sex_str = str(sexo or "").strip()
-        sex_norm = cls.normalizar_sexo(sex_str) if sex_str else None
-        if not sex_norm:
-            motivos.append("Sexo no detectado o no reconocido por OCR")
-
-        # 9. Confianza general
+        # 4. Confianza general
         try:
             conf_num = float(confianza or 0)
             if conf_num < 70.0:
@@ -455,10 +443,13 @@ class ValidadorColombia:
         except (ValueError, TypeError):
             pass
 
-        # 10. Conflictos o estatus de campos
+        # 5. Conflictos o estatus de campos primarios esenciales
+        CAMPOS_IGNORAR_REVISION = {
+            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento"
+        }
         if detalles_campos and isinstance(detalles_campos, dict):
             for campo, info in detalles_campos.items():
-                if campo in ("grouping", "motivos_revision"):
+                if campo in CAMPOS_IGNORAR_REVISION:
                     continue
                 if isinstance(info, dict):
                     st = info.get("status")
@@ -472,7 +463,7 @@ class ValidadorColombia:
                         if mot not in motivos:
                             motivos.append(mot)
 
-        # 11. Fallback de OCR secundario
+        # 6. Fallback de OCR secundario
         if motor_ocr == "tesseract_fallback":
             motivos.append("Procesado con motor fallback secundario (Tesseract)")
 

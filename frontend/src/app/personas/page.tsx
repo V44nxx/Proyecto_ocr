@@ -104,20 +104,30 @@ export default function PersonasPage() {
     if (mostrarSpinner) setCargando(true);
     try {
       const isRev = revOnly !== undefined ? revOnly : soloRevision;
+      const docIdFiltro = filtroDocumento !== "todos" ? filtroDocumento : undefined;
       const [resPersonas, resStats] = await Promise.all([
         apiPersonas.listar({
-          limit: 100,
+          limit: 300,
           requiere_revision: isRev ? true : undefined,
           buscar: buscar || undefined,
-          documento_id: filtroDocumento !== "todos" ? filtroDocumento : undefined,
+          documento_id: docIdFiltro,
         }),
-        apiDocumentos.estadisticas().catch(() => null),
+        apiDocumentos.estadisticas(docIdFiltro).catch(() => null),
       ]);
 
       const items = Array.isArray(resPersonas.data) ? resPersonas.data : ((resPersonas.data as any)?.items || []);
       setPersonas(items);
 
-      if (resStats?.data) {
+      if (docIdFiltro) {
+        // Conteo exclusivo para el archivo PDF seleccionado
+        const totalDoc = resStats?.data?.total_personas ?? items.length;
+        const revDoc = resStats?.data?.personas_en_revision ?? items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
+        setStats({
+          total: totalDoc,
+          revision: revDoc,
+          validas: Math.max(0, totalDoc - revDoc),
+        });
+      } else if (resStats?.data) {
         const tot = resStats.data.total_personas || 0;
         const rev = resStats.data.personas_en_revision || 0;
         setStats({
@@ -222,9 +232,6 @@ export default function PersonasPage() {
       nombres: p.nombres || "",
       apellidos: p.apellidos || "",
       fecha_nacimiento: p.fecha_nacimiento ? String(p.fecha_nacimiento) : "",
-      fecha_expedicion: p.fecha_expedicion ? String(p.fecha_expedicion) : "",
-      lugar_expedicion: p.lugar_expedicion || "",
-      sexo: p.sexo || "",
       requiere_revision: undefined,
     });
   };
@@ -363,17 +370,20 @@ export default function PersonasPage() {
     const nomCompleto = formatNombreCompleto(p);
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
     const campos = [
-      { key: "numero_identificacion", label: "Número de Cédula", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
-      { key: "nombre_completo", label: "Nombre y Apellidos", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
+      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
+      { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
       {
         key: "fecha_nacimiento",
-        label: "F. Nacimiento",
+        label: "Fecha de Nacimiento",
         icono: <Calendar className="w-3.5 h-3.5" />,
-        valor: p.fecha_nacimiento ? `${p.fecha_nacimiento}${edadCalculada !== null ? ` (${edadCalculada} años)` : ""}` : null
+        valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null
       },
-      { key: "fecha_expedicion", label: "F. Expedición", icono: <Calendar className="w-3.5 h-3.5" />, valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null },
-      { key: "lugar_expedicion", label: "Lugar Expedición", icono: <MapPin className="w-3.5 h-3.5" />, valor: p.lugar_expedicion },
-      { key: "sexo", label: "Sexo", icono: <Users className="w-3.5 h-3.5" />, valor: p.sexo },
+      {
+        key: "edad",
+        label: "Edad Calculada",
+        icono: <Clock className="w-3.5 h-3.5" />,
+        valor: edadCalculada !== null ? `${edadCalculada} años cumplidos` : null
+      },
     ];
 
     const conf = (key: string): number => {
@@ -526,27 +536,37 @@ export default function PersonasPage() {
             </div>
 
             {/* Motivos de Revisión / Alerta para Asistente */}
-            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-              <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                    Pendiente de Revisión por Asistente
-                  </span>
+            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (() => {
+              const rawMotivos: string[] = Array.isArray((p.detalles_campos as any)?.motivos_revision)
+                ? (p.detalles_campos as any).motivos_revision
+                : [];
+              const motivosFiltrados = rawMotivos.filter((m: string) => {
+                const ml = m.toLowerCase();
+                return !ml.includes("expedici") && !ml.includes("sexo") && !ml.includes("lugar");
+              });
+              if (motivosFiltrados.length === 0 && !p.requiere_revision) return null;
+              return (
+                <div className="m-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      Pendiente de Revisión por Asistente
+                    </span>
+                  </div>
+                  {motivosFiltrados.length > 0 ? (
+                    <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
+                      {motivosFiltrados.map((m: string, i: number) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-amber-200/90 ml-6">
+                      Uno o más datos esenciales (número de identificación, nombre o fecha de nacimiento) requieren verificación.
+                    </p>
+                  )}
                 </div>
-                {Array.isArray((p.detalles_campos as any)?.motivos_revision) && (p.detalles_campos as any).motivos_revision.length > 0 ? (
-                  <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
-                    {(p.detalles_campos as any).motivos_revision.map((m: string, i: number) => (
-                      <li key={i}>{m}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-amber-200/90 ml-6">
-                    Uno o más datos no fueron reconocidos con certeza suficiente por el OCR. Por favor complete los datos faltantes o verifique en el documento.
-                  </p>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {/* Contenido: Si está editando muestra el formulario integrado; si no, las tarjetas compactas */}
             {estaEditando ? (
@@ -612,7 +632,7 @@ export default function PersonasPage() {
                   {/* Fecha de Nacimiento */}
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      F. Nacimiento (AAAA-MM-DD)
+                      Fecha de Nacimiento (AAAA-MM-DD)
                     </label>
                     <div className="relative">
                       <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
@@ -626,66 +646,22 @@ export default function PersonasPage() {
                     </div>
                   </div>
 
-                  {/* Fecha de Expedición */}
+                  {/* Edad calculada automática */}
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      F. Expedición (AAAA-MM-DD)
+                      Edad Calculada
                     </label>
-                    <div className="relative">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
-                      <input
-                        type="text"
-                        value={editForm.fecha_expedicion || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_expedicion: e.target.value }))}
-                        placeholder="AAAA-MM-DD"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Lugar de Expedición */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Lugar de Expedición
-                    </label>
-                    <div className="relative">
-                      <MapPin className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
-                      <input
-                        type="text"
-                        value={editForm.lugar_expedicion || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, lugar_expedicion: e.target.value }))}
-                        placeholder="Ej: FLORENCIA"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Sexo (Botones interactivos M / F) */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Sexo
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditForm(prev => ({ ...prev, sexo: "M" }))}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${editForm.sexo === "M" || editForm.sexo === "MASCULINO"
-                            ? "bg-blue-600/30 border-blue-500 text-blue-300 shadow-sm"
-                            : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                          }`}
-                      >
-                        <span className="font-bold">M</span> Masculino
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm(prev => ({ ...prev, sexo: "F" }))}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all ${editForm.sexo === "F" || editForm.sexo === "FEMENINO"
-                            ? "bg-pink-600/30 border-pink-500 text-pink-300 shadow-sm"
-                            : "bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                          }`}
-                      >
-                        <span className="font-bold">F</span> Femenino
-                      </button>
+                    <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      {editForm.fecha_nacimiento && calcularEdad(editForm.fecha_nacimiento) !== null ? (
+                        <span className="font-bold text-amber-300 font-mono">
+                          {calcularEdad(editForm.fecha_nacimiento)} años cumplidos
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 italic text-[11px]">
+                          {editForm.fecha_nacimiento ? "Fecha no válida" : "Ingrese fecha para calcular"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -844,24 +820,28 @@ export default function PersonasPage() {
               <span>Exportar a Excel</span>
             </button>
             <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary-500/20 to-blue-500/20 border border-primary-500/30 text-sm font-semibold text-primary-300 shadow-lg shadow-primary-500/5">
-              Total: <strong className="text-white font-extrabold text-base ml-1">{personas.length}</strong> {personas.length === 1 ? "persona" : "personas"}
+              {filtroDocumento !== "todos" ? "Total archivo:" : "Total:"} <strong className="text-white font-extrabold text-base ml-1">{stats.total}</strong> {stats.total === 1 ? "persona" : "personas"}
             </span>
           </div>
         </div>
 
         {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {/* Card 1: Total General */}
+          {/* Card 1: Total General o por Archivo */}
           <div
             onClick={() => setSoloRevision(false)}
             className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${!soloRevision ? "border-primary-500/50 ring-1 ring-primary-500/30" : "border-slate-800/80 hover:border-slate-700"}`}
-            title="Mostrar todas las personas registradas"
+            title={filtroDocumento !== "todos" ? "Mostrar todas las personas de este archivo" : "Mostrar todas las personas registradas"}
           >
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total en Base de Datos</p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                {filtroDocumento !== "todos" ? "Total en este Archivo" : "Total en Base de Datos"}
+              </p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-white">{stats.total || personas.length}</span>
-                <span className="text-xs text-slate-500">registradas</span>
+                <span className="text-2xl font-black text-white">{stats.total}</span>
+                <span className="text-xs text-slate-500">
+                  {filtroDocumento !== "todos" ? "en este archivo" : "registradas"}
+                </span>
               </div>
             </div>
             <div className="w-12 h-12 rounded-xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center text-primary-400">
@@ -1074,6 +1054,8 @@ export default function PersonasPage() {
                     <th className="py-3 px-2 w-8"></th>
                     <th className="py-3 px-4">Documento / ID</th>
                     <th className="py-3 px-4">Nombre Completo</th>
+                    <th className="py-3 px-3 text-center">F. Nacimiento</th>
+                    <th className="py-3 px-3 text-center">Edad</th>
                     <th className="py-3 px-3 text-center">Pág.</th>
                     <th className="py-3 px-4 text-center">Confianza</th>
                     <th className="py-3 px-4 text-center">Estado</th>
@@ -1134,16 +1116,31 @@ export default function PersonasPage() {
                           {/* Nombre completo */}
                           <td className="py-3 px-4 whitespace-nowrap">
                             {nombreCompleto ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold text-slate-100">{nombreCompleto}</span>
-                                {edadRow !== null && (
-                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-300 font-medium" title={`Edad: ${edadRow} años (F. Nacimiento: ${p.fecha_nacimiento})`}>
-                                    {edadRow} años
-                                  </span>
-                                )}
-                              </div>
+                              <span className="text-sm font-semibold text-slate-100">{nombreCompleto}</span>
                             ) : (
                               <span className="text-slate-600 italic text-xs">Sin nombre</span>
+                            )}
+                          </td>
+
+                          {/* Fecha de Nacimiento */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {p.fecha_nacimiento ? (
+                              <span className="font-mono text-xs text-slate-300 bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/60">
+                                {String(p.fecha_nacimiento)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 text-xs italic">No detectada</span>
+                            )}
+                          </td>
+
+                          {/* Edad */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {edadRow !== null ? (
+                              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+                                {edadRow} años
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 text-xs">—</span>
                             )}
                           </td>
 
@@ -1159,7 +1156,7 @@ export default function PersonasPage() {
                             {p.confianza_extraccion != null ? (
                               <div className="flex items-center justify-center gap-1.5">
                                 <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
+                                   <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
                                 </div>
                                 <span className="text-xs text-slate-400">{Math.round(Number(p.confianza_extraccion))}%</span>
                               </div>
@@ -1196,7 +1193,7 @@ export default function PersonasPage() {
                         {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
                         {isExpandida && (
                           <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
-                            <td colSpan={8} className="p-0">
+                            <td colSpan={10} className="p-0">
                               <div className="border-t border-primary-500/20 animate-slideDown">
                                 <PanelDetalle p={p} />
                               </div>

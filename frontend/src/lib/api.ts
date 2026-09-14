@@ -179,8 +179,10 @@ export const apiDocumentos = {
   eliminar: (id: string) =>
     apiClient.delete(`/api/documentos/${id}`),
 
-  estadisticas: () =>
-    apiClient.get<DashboardStats>("/api/documentos/dashboard/estadisticas"),
+  estadisticas: (documentoId?: string) =>
+    apiClient.get<DashboardStats>("/api/documentos/dashboard/estadisticas", {
+      params: documentoId && documentoId !== "todos" ? { documento_id: documentoId } : undefined,
+    }),
 
   /**
    * Construye la URL para la imagen de preview de una página del PDF.

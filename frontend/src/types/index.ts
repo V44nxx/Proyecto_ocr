@@ -71,9 +71,11 @@ export interface Persona {
   requiere_revision: boolean;
   detalles_campos?: Record<string, any> | null;
   fecha_registro: string;
-  fecha_actualizacion: string;
+  fecha_actualizacion?: string;
   /** True si la persona aparece en alguna planilla Excel comparada */
   en_excel?: boolean | null;
+  /** True si la persona tiene documento PDF asociado */
+  en_pdf?: boolean | null;
 }
 
 export interface PersonaUpdate {

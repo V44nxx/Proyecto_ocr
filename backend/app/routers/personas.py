@@ -29,6 +29,71 @@ def _filtrar_persona_por_usuario(query, usuario: Usuario):
     )
 
 
+def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[set, bool]:
+    """Obtiene el conjunto de números de identificación presentes en las comparaciones Excel del usuario"""
+    try:
+        from app.models.diferencia import Diferencia
+        from app.models.comparacion import Comparacion
+        from pathlib import Path
+
+        comp_query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario_id)
+        comp_ids = [c.id for c in comp_query.all()]
+
+        ids_en_excel = set()
+        hay_excel = False
+
+        if comp_ids:
+            # Solo los que realmente están en el Excel: 'igual', 'diferente', 'faltante_bd'
+            # ('nuevo_bd' significa que está en BD pero NO en Excel)
+            rows = (
+                db.query(Diferencia.numero_identificacion)
+                .filter(
+                    Diferencia.comparacion_id.in_(comp_ids),
+                    Diferencia.tipo_diferencia.in_(["igual", "diferente", "faltante_bd"])
+                )
+                .distinct()
+                .all()
+            )
+            ids_en_excel = set(str(r[0]).strip() for r in rows)
+            hay_excel = True
+
+        if not ids_en_excel:
+            ult_comp = (
+                comp_query.filter(Comparacion.ruta_archivo.isnot(None))
+                .order_by(Comparacion.fecha_carga.desc())
+                .first()
+            )
+            if ult_comp and ult_comp.ruta_archivo and Path(ult_comp.ruta_archivo).exists():
+                try:
+                    from app.services.excel_lookup_service import excel_lookup_service
+                    lookup = excel_lookup_service.cargar_lookup(ult_comp.ruta_archivo)
+                    ids_en_excel = set(str(k).strip() for k in lookup.keys())
+                    hay_excel = True
+                except Exception:
+                    pass
+        return ids_en_excel, hay_excel
+    except Exception as e:
+        logger.warning(f"Error determinando presencia en Excel: {e}")
+        return set(), False
+
+
+def _enriquecer_persona_response(p: Persona, ids_en_excel: set, hay_excel: bool) -> PersonaResponse:
+    """Enriquece PersonaResponse con los flags precisos en_pdf y en_excel"""
+    r = PersonaResponse.model_validate(p)
+    r.en_pdf = p.documento_id is not None
+    fue_creada_excel = (
+        p.motor_ocr == "manual" or 
+        "Registro creado desde Excel" in str((p.detalles_campos or {}).get("motivos_revision", ""))
+    )
+    if fue_creada_excel:
+        r.en_excel = True
+    elif hay_excel:
+        r.en_excel = str(p.numero_identificacion).strip() in ids_en_excel
+    else:
+        r.en_excel = None
+    return r
+
+
 @router.get("", response_model=List[PersonaResponse], summary="Listar personas")
 def listar_personas(
     skip: int = 0,
@@ -69,33 +134,8 @@ def listar_personas(
 
     personas = query.order_by(Persona.fecha_registro.desc()).offset(skip).limit(limit).all()
 
-    # Obtener los números de identificación que aparecen en alguna comparación Excel del usuario
-    # para saber cuáles personas están tanto en PDF como en la planilla
-    try:
-        from app.models.diferencia import Diferencia
-        from app.models.comparacion import Comparacion
-
-        comp_query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
-        comp_ids = [c.id for c in comp_query.all()]
-
-        if comp_ids:
-            ids_en_excel = set(
-                row[0] for row in db.query(Diferencia.numero_identificacion)
-                .filter(Diferencia.comparacion_id.in_(comp_ids))
-                .distinct()
-                .all()
-            )
-        else:
-            ids_en_excel = set()
-    except Exception:
-        ids_en_excel = set()
-
-    result = []
-    for p in personas:
-        r = PersonaResponse.model_validate(p)
-        r.en_excel = p.numero_identificacion in ids_en_excel
-        result.append(r)
-    return result
+    ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+    return [_enriquecer_persona_response(p, ids_en_excel, hay_excel) for p in personas]
 
 
 @router.get("/{persona_id}", response_model=PersonaResponse, summary="Detalle de persona")
@@ -109,7 +149,8 @@ def obtener_persona(
     persona = _filtrar_persona_por_usuario(query, usuario).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
-    return PersonaResponse.model_validate(persona)
+    ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+    return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
 
 @router.put("/{persona_id}", response_model=PersonaResponse, summary="Corregir datos de persona")
@@ -255,7 +296,8 @@ def buscar_por_cedula(
     if not persona:
         raise HTTPException(status_code=404, detail=f"No se encontró persona con cédula {cedula}")
 
-    return PersonaResponse.model_validate(persona)
+    ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+    return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
 
 @router.post("/{persona_id}/subir-pdf", response_model=PersonaResponse, summary="Subir PDF de la cédula para una persona")

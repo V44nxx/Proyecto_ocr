@@ -118,6 +118,8 @@ class PersonaResponse(PersonaBase):
     fecha_actualizacion: datetime
     # Origen de datos: True si la persona aparece en alguna planilla Excel comparada
     en_excel: Optional[bool] = None
+    # Origen de datos: True si la persona tiene documento PDF asociado
+    en_pdf: Optional[bool] = None
 
     class Config:
         from_attributes = True

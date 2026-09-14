@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Fragment } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
-  Users, Search, AlertTriangle, CheckCircle,
+  Users, Search, AlertTriangle, AlertCircle, CheckCircle,
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
@@ -68,10 +68,19 @@ export default function PersonasPage() {
   const [exportando, setExportando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [buscar, setBuscar] = useState("");
-  const [soloRevision, setSoloRevision] = useState(false);
+  type FiltroEstado = "todos" | "validas" | "revision" | "discrepancia" | "falta_pdf" | "falta_excel";
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
+  const soloRevision = filtroEstado === "revision";
   const [editando, setEditando] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PersonaUpdate>({});
-  const [stats, setStats] = useState({ total: 0, validas: 0, revision: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    validas: 0,
+    revision: 0,
+    discrepancia: 0,
+    faltaPdf: 0,
+    faltaExcel: 0,
+  });
 
   // Acordeón: solo una fila expandida a la vez
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
@@ -89,7 +98,7 @@ export default function PersonasPage() {
     cargarPersonas(true);
     const interval = setInterval(() => cargarPersonas(false), 4000);
     return () => clearInterval(interval);
-  }, [pathname, soloRevision, filtroDocumento]);
+  }, [pathname, filtroDocumento]);
 
   const cargarDocumentos = async () => {
     try {
@@ -100,49 +109,37 @@ export default function PersonasPage() {
     }
   };
 
-  const cargarPersonas = async (mostrarSpinner = false, revOnly?: boolean) => {
+  const cargarPersonas = async (mostrarSpinner = false) => {
     if (mostrarSpinner) setCargando(true);
     try {
-      const isRev = revOnly !== undefined ? revOnly : soloRevision;
       const docIdFiltro = filtroDocumento !== "todos" ? filtroDocumento : undefined;
       const [resPersonas, resStats] = await Promise.all([
         apiPersonas.listar({
           limit: 300,
-          requiere_revision: isRev ? true : undefined,
           buscar: buscar || undefined,
           documento_id: docIdFiltro,
         }),
         apiDocumentos.estadisticas(docIdFiltro).catch(() => null),
       ]);
 
-      const items = Array.isArray(resPersonas.data) ? resPersonas.data : ((resPersonas.data as any)?.items || []);
+      const items: Persona[] = Array.isArray(resPersonas.data) ? resPersonas.data : (((resPersonas.data as any)?.items) || []);
       setPersonas(items);
 
-      if (docIdFiltro) {
-        // Conteo exclusivo para el archivo PDF seleccionado
-        const totalDoc = resStats?.data?.total_personas ?? items.length;
-        const revDoc = resStats?.data?.personas_en_revision ?? items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
-        setStats({
-          total: totalDoc,
-          revision: revDoc,
-          validas: Math.max(0, totalDoc - revDoc),
-        });
-      } else if (resStats?.data) {
-        const tot = resStats.data.total_personas || 0;
-        const rev = resStats.data.personas_en_revision || 0;
-        setStats({
-          total: tot,
-          revision: rev,
-          validas: Math.max(0, tot - rev),
-        });
-      } else {
-        const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
-        setStats({
-          total: items.length,
-          revision: revCount,
-          validas: Math.max(0, items.length - revCount),
-        });
-      }
+      const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
+      const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
+      const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
+      const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
+      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
+      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false).length;
+
+      setStats({
+        total: tot,
+        revision: revCount,
+        validas: valCount,
+        discrepancia: discCount,
+        faltaPdf: faltaPdfCount,
+        faltaExcel: faltaExcelCount,
+      });
 
       if (mostrarSpinner) toast.success(`${items.length} persona(s) sincronizada(s)`);
     } catch (err) {
@@ -274,13 +271,29 @@ export default function PersonasPage() {
     }
   };
 
-  // Filtrado local por cédula o nombre y apellidos
+  // Filtrado local por estado y cédula / nombre
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
-    if (soloRevision) {
+    if (filtroEstado === "revision") {
       const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
       if (!esRev) return false;
+    } else if (filtroEstado === "validas") {
+      const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
+      const faltaPdf = !p.documento_id || p.en_pdf === false;
+      const faltaExcel = p.en_excel === false;
+      if (esRev || faltaPdf || faltaExcel) return false;
+    } else if (filtroEstado === "discrepancia") {
+      const faltaPdf = !p.documento_id || p.en_pdf === false;
+      const faltaExcel = p.en_excel === false;
+      if (!faltaPdf && !faltaExcel) return false;
+    } else if (filtroEstado === "falta_pdf") {
+      const faltaPdf = !p.documento_id || p.en_pdf === false;
+      if (!faltaPdf) return false;
+    } else if (filtroEstado === "falta_excel") {
+      const faltaExcel = p.en_excel === false;
+      if (!faltaExcel) return false;
     }
+
     if (!buscar) return true;
     const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
     const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
@@ -534,6 +547,36 @@ export default function PersonasPage() {
                 p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[120px]">{p.grupo_documento_id}</span>
               )}
             </div>
+
+            {/* Alerta: Falta en Planilla Excel */}
+            {p.en_excel === false && (
+              <div className="m-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
+                    Alerta: No se encuentra en la Planilla Excel
+                  </span>
+                </div>
+                <p className="text-xs text-purple-200/90 ml-6">
+                  El número de identificación <strong className="font-mono text-white">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
+                </p>
+              </div>
+            )}
+
+            {/* Alerta: Sin Documento PDF */}
+            {(!p.documento_id || p.en_pdf === false) && (
+              <div className="m-3 p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <FileText className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                    Alerta: Sin Documento PDF Asociado
+                  </span>
+                </div>
+                <p className="text-xs text-sky-200/90 ml-6">
+                  Este registro fue creado manualmente o desde Excel y no cuenta con un archivo PDF vinculado. Puede subirlo con el botón &quot;Subir PDF Cédula&quot;.
+                </p>
+              </div>
+            )}
 
             {/* Motivos de Revisión / Alerta para Asistente */}
             {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (() => {
@@ -825,22 +868,22 @@ export default function PersonasPage() {
           </div>
         </div>
 
-        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas (4 estados) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Card 1: Total General o por Archivo */}
           <div
-            onClick={() => setSoloRevision(false)}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${!soloRevision ? "border-primary-500/50 ring-1 ring-primary-500/30" : "border-slate-800/80 hover:border-slate-700"}`}
+            onClick={() => setFiltroEstado("todos")}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "todos" ? "border-primary-500/60 ring-2 ring-primary-500/30 bg-primary-500/10" : "border-slate-800/80 hover:border-slate-700"}`}
             title={filtroDocumento !== "todos" ? "Mostrar todas las personas de este archivo" : "Mostrar todas las personas registradas"}
           >
             <div>
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                {filtroDocumento !== "todos" ? "Total en este Archivo" : "Total en Base de Datos"}
+                {filtroDocumento !== "todos" ? "Total Archivo" : "Total Registradas"}
               </p>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-black text-white">{stats.total}</span>
                 <span className="text-xs text-slate-500">
-                  {filtroDocumento !== "todos" ? "en este archivo" : "registradas"}
+                  {filtroDocumento !== "todos" ? "en archivo" : "en sistema"}
                 </span>
               </div>
             </div>
@@ -851,15 +894,22 @@ export default function PersonasPage() {
 
           {/* Card 2: Válidas */}
           <div
-            onClick={() => setSoloRevision(false)}
-            className="cursor-pointer bg-slate-900/80 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all"
-            title="Ver registros completos y válidos"
+            onClick={() => setFiltroEstado(filtroEstado === "validas" ? "todos" : "validas")}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "validas" ? "border-emerald-500/70 ring-2 ring-emerald-500/40 bg-emerald-500/10" : "border-slate-800/80 hover:border-emerald-500/40"}`}
+            title="Clic para ver solo personas con datos válidos y presentes"
           >
             <div>
-              <p className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider">Registros Válidos</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider">Válidos</p>
+                {filtroEstado === "validas" && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    Activo
+                  </span>
+                )}
+              </div>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-black text-emerald-400">{stats.validas}</span>
-                <span className="text-xs text-slate-500">completas</span>
+                <span className="text-xs text-slate-500">completos</span>
               </div>
             </div>
             <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -869,26 +919,51 @@ export default function PersonasPage() {
 
           {/* Card 3: Por Revisar */}
           <div
-            onClick={() => setSoloRevision(!soloRevision)}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${soloRevision ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-500/10" : "border-slate-800/80 hover:border-amber-500/40"}`}
-            title="Clic para alternar filtro de Solo Revisión"
+            onClick={() => setFiltroEstado(filtroEstado === "revision" ? "todos" : "revision")}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "revision" ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-500/10" : "border-slate-800/80 hover:border-amber-500/40"}`}
+            title="Clic para ver personas con datos incompletos pendientes de revisión"
           >
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <p className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
-                {soloRevision && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
-                    Filtrando
+                {filtroEstado === "revision" && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                    Activo
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-2xl font-black text-amber-400">{stats.revision}</span>
-                <span className="text-xs text-slate-500">incompletas</span>
+                <span className="text-xs text-slate-500">incompletos</span>
               </div>
             </div>
             <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <AlertTriangle className="w-6 h-6" />
+            </div>
+          </div>
+
+          {/* Card 4: Falta en PDF o Excel */}
+          <div
+            onClick={() => setFiltroEstado(filtroEstado === "discrepancia" ? "todos" : "discrepancia")}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel" ? "border-purple-500/70 ring-2 ring-purple-500/40 bg-purple-500/10" : "border-slate-800/80 hover:border-purple-500/40"}`}
+            title="Clic para ver personas que faltan en PDF o en la planilla Excel"
+          >
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-medium text-purple-400/90 uppercase tracking-wider">Falta PDF / Excel</p>
+                {(filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel") && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                    Activo
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-purple-400">{stats.discrepancia}</span>
+                <span className="text-xs text-slate-500">faltantes</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <AlertCircle className="w-6 h-6" />
             </div>
           </div>
         </div>
@@ -920,7 +995,7 @@ export default function PersonasPage() {
           </div>
 
           {/* Selector de Documento PDF */}
-          <div className="md:col-span-4 relative">
+          <div className="md:col-span-3 relative">
             <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 pointer-events-none" />
             <select
               value={filtroDocumento}
@@ -940,20 +1015,29 @@ export default function PersonasPage() {
             </select>
           </div>
 
-          {/* Solo revisión */}
-          <div className="md:col-span-2 flex items-center">
-            <label className={`flex items-center gap-2 cursor-pointer w-full py-2.5 px-3 rounded-xl border transition-all ${soloRevision ? "bg-amber-500/15 border-amber-500/40 shadow-sm shadow-amber-500/10" : "bg-slate-900/90 border-slate-800 hover:bg-slate-800/50"}`}>
-              <input
-                type="checkbox"
-                checked={soloRevision}
-                onChange={(e) => setSoloRevision(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500/40"
-              />
-              <AlertTriangle className={`w-3.5 h-3.5 ${soloRevision ? "text-amber-400" : "text-slate-400"}`} />
-              <span className={`text-xs font-medium truncate ${soloRevision ? "text-amber-200 font-bold" : "text-slate-300"}`}>
-                Revisión {stats.revision > 0 ? `(${stats.revision})` : ""}
-              </span>
-            </label>
+          {/* Selector de Estado */}
+          <div className="md:col-span-3 relative">
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
+              className={`w-full py-2.5 px-3 bg-slate-900/90 border rounded-xl text-xs font-medium cursor-pointer shadow-sm transition-all ${
+                filtroEstado === "revision"
+                  ? "border-amber-500/60 text-amber-300 bg-amber-500/10"
+                  : filtroEstado === "validas"
+                  ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
+                  : filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
+                  ? "border-purple-500/60 text-purple-300 bg-purple-500/10"
+                  : "border-slate-800 text-slate-200"
+              }`}
+              title="Filtrar por estado del registro"
+            >
+              <option value="todos">📋 Todos los estados ({stats.total})</option>
+              <option value="validas">✅ Solo Válidos ({stats.validas})</option>
+              <option value="revision">⚠️ Por Revisar ({stats.revision})</option>
+              <option value="discrepancia">🟣 Falta PDF o Excel ({stats.discrepancia})</option>
+              <option value="falta_pdf">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
+              <option value="falta_excel">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
+            </select>
           </div>
 
           {/* Recargar */}
@@ -1151,7 +1235,9 @@ export default function PersonasPage() {
                                   <FileText className="w-2.5 h-2.5" /> PDF
                                 </span>
                               ) : (
-                                <span className="text-slate-700 text-[10px]" title="Sin PDF asociado">—</span>
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500" title="Sin documento PDF asociado">
+                                  <FileText className="w-2.5 h-2.5" /> Sin PDF
+                                </span>
                               )}
                               {/* Excel badge */}
                               {p.en_excel === true ? (
@@ -1163,30 +1249,55 @@ export default function PersonasPage() {
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-700/40 border border-slate-700 text-slate-500"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5" /> Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5" /> No Excel
                                 </span>
                               ) : null}
                             </div>
                           </td>
 
-                          {/* Estado */}
+                          {/* Estado: Alertas VÁLIDO, REVISAR, NO EN PDF, NO EN EXCEL */}
                           <td className="py-3 px-4 text-center">
-                            {estadoStr === "VALID" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                                <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
-                              </span>
-                            ) : estadoStr === "FALLBACK_TESSERACT" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
-                                <AlertTriangle className="w-2.5 h-2.5" /> TESSERACT
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
-                                <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
-                              </span>
-                            )}
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              {/* Alerta: Falta en PDF */}
+                              {(!p.documento_id || p.en_pdf === false) && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-sky-500/10"
+                                  title="No tiene documento PDF de cédula asociado"
+                                >
+                                  <FileText className="w-2.5 h-2.5" /> NO EN PDF
+                                </span>
+                              )}
+
+                              {/* Alerta: Falta en Excel */}
+                              {p.en_excel === false && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-purple-500/10"
+                                  title="No encontrado en la planilla Excel comparada"
+                                >
+                                  <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
+                                </span>
+                              )}
+
+                              {/* Estado de validación de datos */}
+                              {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-amber-500/10"
+                                  title="Requiere revisión manual de datos incompletos"
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
+                                </span>
+                              ) : p.documento_id && p.en_excel !== false ? (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-emerald-500/10"
+                                  title="Registro completo y verificado"
+                                >
+                                  <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
 
                           {/* Acciones — solo eliminar */}
@@ -1231,11 +1342,15 @@ export default function PersonasPage() {
                 <div className="flex items-center gap-4 text-[11px] text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <strong className="text-slate-300 font-semibold">{personas.filter(p => !p.requiere_revision).length}</strong> Válidas
+                    <strong className="text-slate-300 font-semibold">{stats.validas}</strong> Válidas
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <strong className="text-slate-300 font-semibold">{personas.filter(p => p.requiere_revision).length}</strong> Por revisar
+                    <strong className="text-slate-300 font-semibold">{stats.revision}</strong> Por revisar
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                    <strong className="text-slate-300 font-semibold">{stats.discrepancia}</strong> Falta PDF/Excel
                   </span>
                 </div>
               </div>

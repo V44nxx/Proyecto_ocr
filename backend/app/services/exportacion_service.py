@@ -62,6 +62,9 @@ class ExportacionService:
         nombre_doc_especifico = None
 
         if filtros:
+            if filtros.get("usuario_id"):
+                query = query.join(Persona.documento).filter(Documento.usuario_id == filtros["usuario_id"])
+
             if filtros.get("documento_id"):
                 doc_id = filtros["documento_id"]
                 query = query.filter(Persona.documento_id == doc_id)

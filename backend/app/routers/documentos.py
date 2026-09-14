@@ -240,8 +240,11 @@ def listar_documentos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista todos los documentos subidos (todos los usuarios pueden ver todos)"""
+    """Lista los documentos del usuario (o todos si es admin)"""
     query = db.query(Documento)
+
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
 
     if estado:
         query = query.filter(Documento.estado == estado)
@@ -275,7 +278,10 @@ def estado_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Consulta el estado actual del procesamiento OCR de un documento"""
-    documento = db.query(Documento).filter(Documento.id == documento_id).first()
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -358,14 +364,23 @@ def estadisticas_dashboard(
 ):
     """Retorna estadísticas para el dashboard principal o para un documento específico"""
     from app.models.persona import Persona
+    from app.models.comparacion import Comparacion
 
-    total_docs = db.query(Documento).count()
-    completados = db.query(Documento).filter(Documento.estado == "completado").count()
-    en_proceso = db.query(Documento).filter(Documento.estado == "procesando").count()
-    errores = db.query(Documento).filter(Documento.estado == "error").count()
-
+    query_docs = db.query(Documento)
     query_personas = db.query(Persona)
-    query_revision = db.query(Persona).filter(
+    query_comparaciones = db.query(Comparacion)
+
+    if usuario.rol != "admin":
+        query_docs = query_docs.filter(Documento.usuario_id == usuario.id)
+        query_personas = query_personas.join(Persona.documento).filter(Documento.usuario_id == usuario.id)
+        query_comparaciones = query_comparaciones.filter(Comparacion.usuario_id == usuario.id)
+
+    total_docs = query_docs.count()
+    completados = query_docs.filter(Documento.estado == "completado").count()
+    en_proceso = query_docs.filter(Documento.estado == "procesando").count()
+    errores = query_docs.filter(Documento.estado == "error").count()
+
+    query_revision = query_personas.filter(
         (Persona.requiere_revision == True) |
         (Persona.estado_registro.in_(["REVIEW_REQUIRED", "FALLBACK_TESSERACT"])) |
         (Persona.estado_registro != "VALID")
@@ -377,9 +392,7 @@ def estadisticas_dashboard(
 
     total_personas = query_personas.count()
     revision = query_revision.count()
-
-    from app.models.comparacion import Comparacion
-    total_comparaciones = db.query(Comparacion).count()
+    total_comparaciones = query_comparaciones.count()
 
     return {
         "total_documentos": total_docs,
@@ -400,7 +413,10 @@ def debug_espacial_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Devuelve las cajas delimitadoras (LABEL, CANDIDATE, ACCEPTED, REJECTED) para depuración visual"""
-    documento = db.query(Documento).filter(Documento.id == documento_id).first()
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
@@ -428,8 +444,11 @@ def preview_pagina_pdf(
     y la devuelve como imagen PNG. Permite al frontend mostrar una vista
     previa de la página exacta donde se detectó la persona.
     """
-    # 1. Obtener el documento (accesible por cualquier usuario autenticado)
-    documento = db.query(Documento).filter(Documento.id == documento_id).first()
+    # 1. Obtener el documento validando pertenencia si no es admin
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if usuario.rol != "admin":
+        query = query.filter(Documento.usuario_id == usuario.id)
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")

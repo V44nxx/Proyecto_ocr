@@ -8,12 +8,26 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.persona import Persona
+from app.models.documento import Documento
 from app.models.usuario import Usuario
 from app.schemas.documento import PersonaResponse, PersonaUpdate
 from app.routers.auth import get_usuario_actual
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/personas", tags=["Personas"])
+
+
+def _filtrar_persona_por_usuario(query, usuario: Usuario):
+    """Filtra la consulta de personas para que usuarios no administradores solo vean sus registros"""
+    if usuario.rol != "admin":
+        from sqlalchemy import or_
+        query = query.outerjoin(Persona.documento).filter(
+            or_(
+                Documento.usuario_id == usuario.id,
+                Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
+            )
+        )
+    return query
 
 
 @router.get("", response_model=List[PersonaResponse], summary="Listar personas")
@@ -26,8 +40,9 @@ def listar_personas(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista todas las personas registradas con filtros opcionales"""
+    """Lista las personas registradas asociadas al usuario (o todas si es admin)"""
     query = db.query(Persona).options(joinedload(Persona.documento))
+    query = _filtrar_persona_por_usuario(query, usuario)
 
     if documento_id:
         query = query.filter(Persona.documento_id == documento_id)
@@ -64,7 +79,8 @@ def obtener_persona(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Obtiene el detalle completo de una persona"""
-    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id).first()
+    query = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id)
+    persona = _filtrar_persona_por_usuario(query, usuario).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
     return PersonaResponse.model_validate(persona)
@@ -81,7 +97,8 @@ def actualizar_persona(
     Permite corrección manual de datos extraídos por OCR.
     Registra qué campos fueron revisados manualmente.
     """
-    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    query = db.query(Persona).filter(Persona.id == persona_id)
+    persona = _filtrar_persona_por_usuario(query, usuario).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
@@ -187,7 +204,8 @@ def eliminar_persona(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Elimina un registro de persona"""
-    persona = db.query(Persona).filter(Persona.id == persona_id).first()
+    query = db.query(Persona).filter(Persona.id == persona_id)
+    persona = _filtrar_persona_por_usuario(query, usuario).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
@@ -203,9 +221,10 @@ def buscar_por_cedula(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Busca una persona por número de identificación exacto"""
-    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(
+    query = db.query(Persona).options(joinedload(Persona.documento)).filter(
         Persona.numero_identificacion == cedula.strip()
-    ).first()
+    )
+    persona = _filtrar_persona_por_usuario(query, usuario).first()
 
     if not persona:
         raise HTTPException(status_code=404, detail=f"No se encontró persona con cédula {cedula}")
@@ -230,11 +249,11 @@ async def subir_pdf_persona(
     from datetime import datetime
     from pathlib import Path
     from app.config import settings
-    from app.models.documento import Documento
     from app.services.ocr_service import ocr_service
     from app.utils.validators import validador
 
-    persona = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id).first()
+    query = db.query(Persona).options(joinedload(Persona.documento)).filter(Persona.id == persona_id)
+    persona = _filtrar_persona_por_usuario(query, usuario).first()
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 

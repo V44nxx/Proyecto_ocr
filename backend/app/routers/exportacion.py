@@ -22,7 +22,10 @@ class ExportarPersonasRequest(BaseModel):
 
 def _generar_descarga_personas(db: Session, usuario: Usuario, filtros: dict):
     try:
-        ruta_archivo = exportacion_service.exportar_personas(db, filtros or None)
+        filtros_con_usuario = dict(filtros or {})
+        if usuario.rol != "admin":
+            filtros_con_usuario["usuario_id"] = str(usuario.id)
+        ruta_archivo = exportacion_service.exportar_personas(db, filtros_con_usuario)
 
         if not Path(ruta_archivo).exists():
             raise HTTPException(status_code=500, detail="Error generando archivo Excel")

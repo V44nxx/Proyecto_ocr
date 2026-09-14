@@ -138,6 +138,24 @@ class ComparacionService:
             s = s[:-2]
         s = re.sub(r"[^\d]", "", s)
         return s
+    @staticmethod
+    def _distancia_levenshtein(s1: str, s2: str) -> int:
+        """Calcula la distancia de Levenshtein entre dos cadenas."""
+        if len(s1) < len(s2):
+            return ComparacionService._distancia_levenshtein(s2, s1)
+        if len(s2) == 0:
+            return len(s1)
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+        return previous_row[-1]
+
     def _son_nombres_equivalentes(
         self,
         nombres_bd: str,
@@ -146,34 +164,78 @@ class ComparacionService:
         apellidos_excel: str = ""
     ) -> bool:
         """
-        Verifica si los nombres/apellidos coinciden independientemente de si el Excel
-        los tiene en una sola columna ('JEISON BASTIDAS ORTIZ') o separados.
+        Verifica con alta fidelidad si los nombres/apellidos coinciden independientemente
+        de si el Excel los tiene en una sola columna o separados.
+        Tolerante a:
+        - Ruidos de cabecera de documentos oficiales (REPÚBLICA, COLOMBIA, CÉDULA, CIUDADANÍA, etc.)
+        - Omisión de un segundo nombre menor.
+        - Errores tipográficos menores de OCR (Levenshtein <= 2).
+        Estricto frente a:
+        - Nombres con apellidos diferentes (evita falsos positivos entre homónimos o familiares).
+        - Nombres con menos de 2 palabras sustantivas.
         """
         norm_nb = self._normalizar_para_comparacion(nombres_bd)
         norm_ab = self._normalizar_para_comparacion(apellidos_bd)
         norm_ne = self._normalizar_para_comparacion(nombres_excel)
         norm_ae = self._normalizar_para_comparacion(apellidos_excel)
 
-        # Si el Excel tiene nombres y apellidos en columnas separadas
-        if norm_ae:
-            if norm_nb == norm_ne and norm_ab == norm_ae:
-                return True
-
-        # Si el Excel tiene todo en una sola columna (Nombre Completo)
-        palabras_bd = set(re.findall(r"[A-Z0-9]+", f"{norm_nb} {norm_ab}"))
-        palabras_excel = set(re.findall(r"[A-Z0-9]+", f"{norm_ne} {norm_ae}"))
-
-        if not palabras_bd or not palabras_excel:
-            return False
-
-        # Si el conjunto de palabras es idéntico
-        inter = palabras_bd.intersection(palabras_excel)
-        if len(inter) == len(palabras_excel) and len(inter) == len(palabras_bd):
+        # Si el Excel tiene nombres y apellidos en columnas separadas exactamente idénticos
+        if norm_ae and norm_nb == norm_ne and norm_ab == norm_ae:
             return True
 
-        # Coincidencia de tokens >= 80% (por ejemplo si falta un segundo nombre menor)
-        coincidencia = len(inter) / max(len(palabras_bd), len(palabras_excel))
-        return coincidencia >= 0.75
+        PALABRAS_RUIDO = {
+            "REPUBLICA", "COLOMBIA", "DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "E",
+            "CEDULA", "CIUDADANIA", "TARJETA", "IDENTIDAD", "PERSONAL", "NACIONAL",
+            "REGISTRADURIA", "ESTADO", "CIVIL", "NUMERO", "NO", "DOC", "DOCUMENTO",
+            "POR", "REVISAR", "CAMSCANNER", "FIRMA", "INDICE", "TITULAR"
+        }
+
+        nom_total_bd = f"{norm_nb} {norm_ab}".strip()
+        nom_total_excel = f"{norm_ne} {norm_ae}".strip()
+
+        w_bd = [w for w in re.findall(r"[A-Z0-9]+", nom_total_bd) if w not in PALABRAS_RUIDO and len(w) > 1]
+        w_excel = [w for w in re.findall(r"[A-Z0-9]+", nom_total_excel) if w not in PALABRAS_RUIDO and len(w) > 1]
+
+        # Se requieren al menos 2 palabras sustantivas en ambos lados para dar como válida la persona
+        if len(w_bd) < 2 or len(w_excel) < 2:
+            return False
+
+        s_bd, s_excel = set(w_bd), set(w_excel)
+        if s_bd == s_excel:
+            return True
+
+        inter = set(s_bd.intersection(s_excel))
+        diff_bd = set(s_bd - s_excel)
+        diff_ex = set(s_excel - s_bd)
+
+        # Tratar de emparejar diferencias menores por error tipográfico de OCR (ej. BASTIDAZ vs BASTIDAS)
+        matched_bd = set()
+        matched_ex = set()
+        for d1 in diff_bd:
+            for d2 in diff_ex:
+                if d2 in matched_ex:
+                    continue
+                max_dist = 2 if max(len(d1), len(d2)) >= 6 else 1
+                if self._distancia_levenshtein(d1, d2) <= max_dist:
+                    inter.add(d1)
+                    matched_bd.add(d1)
+                    matched_ex.add(d2)
+                    break
+
+        diff_bd -= matched_bd
+        diff_ex -= matched_ex
+
+        # Si en ambos lados quedan palabras sustantivas no coincidentes que no son errores tipográficos,
+        # significa que tienen apellidos o nombres contradictorios (ej. PEREZ vs RODRIGUEZ)
+        if diff_bd and diff_ex:
+            return False
+
+        # Si uno es subconjunto limpio del otro (ej. se omitió el segundo nombre en OCR)
+        if (not diff_bd or not diff_ex) and len(inter) >= 2:
+            ratio = len(inter) / max(len(s_bd), len(s_excel))
+            return ratio >= 0.65
+
+        return False
 
     def _procesar_hoja_excel(self, df_raw: pd.DataFrame, filepath: str, sheet_name: str) -> Optional[pd.DataFrame]:
         """Procesa una hoja individual de Excel identificando encabezados y columnas."""
@@ -454,38 +516,98 @@ class ComparacionService:
                 total_iguales = 0
                 total_diferentes = 0
 
-                # Procesar personas reconciliadas por nombre (tienen diferencia en número_identificacion)
+                # Procesar personas reconciliadas por nombre (auto-corregir identificación en BD desde Excel)
                 for id_bd_rec, id_ex_rec in parejas_reconciliadas:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_bd_rec].iloc[0]
                     row_excel = df_excel[df_excel["numero_identificacion"] == id_ex_rec].iloc[0]
 
-                    # Diferencia en número de identificación
+                    # Auto-corregir en la base de datos
+                    query_p = db.query(Persona).filter(Persona.numero_identificacion == id_bd_rec)
+                    if comparacion_actual and comparacion_actual.usuario_id:
+                        query_p = query_p.filter(Persona.usuario_id == comparacion_actual.usuario_id)
+                    p_bd = query_p.first()
+
+                    nom_ex_ofic = str(row_excel.get('nombre_completo') or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}").strip()
+
+                    if p_bd:
+                        logger.info(
+                            f"[Comparacion] Auto-corrigiendo Persona en BD: '{id_bd_rec}' -> '{id_ex_rec}' "
+                            f"(Titular: '{nom_ex_ofic or p_bd.nombre_completo}')"
+                        )
+                        detalles = dict(p_bd.detalles_campos or {})
+                        detalles["numero_identificacion_original_ocr"] = id_bd_rec
+                        detalles["origen_identificacion"] = "corregido_desde_excel"
+                        detalles["numero_identificacion"] = {
+                            "valor": id_ex_rec,
+                            "value": id_ex_rec,
+                            "confidence": 1.0,
+                            "status": "VALID",
+                            "source": "excel_oficial",
+                            "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {id_bd_rec})"
+                        }
+
+                        if nom_ex_ofic:
+                            p_bd.nombre_completo = nom_ex_ofic
+                            if row_excel.get("nombres"):
+                                p_bd.nombres = str(row_excel.get("nombres")).strip()
+                            if row_excel.get("apellidos"):
+                                p_bd.apellidos = str(row_excel.get("apellidos")).strip()
+
+                        # Si ya existiera un registro con id_ex_rec para este usuario, fusionar
+                        query_duplicado = db.query(Persona).filter(
+                            Persona.numero_identificacion == id_ex_rec
+                        )
+                        if comparacion_actual and comparacion_actual.usuario_id:
+                            query_duplicado = query_duplicado.filter(Persona.usuario_id == comparacion_actual.usuario_id)
+                        p_duplicado = query_duplicado.first()
+
+                        if p_duplicado and p_duplicado.id != p_bd.id:
+                            logger.info(f"[Comparacion] Fusionando registro '{id_bd_rec}' con registro existente '{id_ex_rec}'")
+                            db.delete(p_bd)
+                            p_bd = p_duplicado
+                        else:
+                            p_bd.numero_identificacion = id_ex_rec
+
+                        p_bd.detalles_campos = detalles
+                        p_bd.fecha_actualizacion = datetime.utcnow()
+
+                        # Re-evaluar estado completo
+                        from app.services.field_validator import validador
+                        tiene_datos_c, motivos_c = validador.evaluar_persona_completa(
+                            numero_identificacion=id_ex_rec,
+                            nombres=p_bd.nombres,
+                            apellidos=p_bd.apellidos,
+                            nombre_completo=p_bd.nombre_completo,
+                            fecha_nacimiento=p_bd.fecha_nacimiento,
+                            fecha_expedicion=p_bd.fecha_expedicion,
+                            lugar_expedicion=p_bd.lugar_expedicion,
+                            sexo=p_bd.sexo,
+                            confianza=float(p_bd.confianza_extraccion or 0),
+                            detalles_campos=detalles,
+                            motor_ocr=p_bd.motor_ocr,
+                        )
+                        if tiene_datos_c:
+                            p_bd.requiere_revision = False
+                            p_bd.estado_registro = "VALID"
+                            detalles.pop("motivos_revision", None)
+                            p_bd.detalles_campos = detalles
+
+                    # Registrar la diferencia como coincidente/corregido
                     diferencias_a_guardar.append(Diferencia(
                         comparacion_id=comp_uuid,
-                        numero_identificacion=id_bd_rec,
+                        numero_identificacion=id_ex_rec,
                         campo="numero_identificacion",
-                        valor_bd=id_bd_rec,
+                        valor_bd=f"{id_ex_rec} (Corregido de {id_bd_rec})",
                         valor_excel=id_ex_rec,
-                        tipo_diferencia="diferente",
+                        tipo_diferencia="igual",
                     ))
-                    total_diferentes += 1
 
-                    # Comparar los demás campos si vienen en el Excel
-                    campos_resto = ["fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]
-                    for campo in campos_resto:
-                        if campo in row_excel and str(row_excel.get(campo) or "").strip():
-                            val_bd_norm = self._normalizar_para_comparacion(row_bd.get(campo), campo=campo)
-                            val_excel_norm = self._normalizar_para_comparacion(row_excel.get(campo), campo=campo)
+                    # Incorporar id_ex_rec a ids_comunes para que el bucle siguiente coteje los demás campos
+                    ids_comunes.add(id_ex_rec)
+                    # Actualizar en df_bd para que row_bd use el id_ex_rec
+                    df_bd.loc[df_bd["numero_identificacion"] == id_bd_rec, "numero_identificacion"] = id_ex_rec
 
-                            if val_bd_norm != val_excel_norm:
-                                diferencias_a_guardar.append(Diferencia(
-                                    comparacion_id=comp_uuid,
-                                    numero_identificacion=id_bd_rec,
-                                    campo=campo,
-                                    valor_bd=str(row_bd.get(campo) or "") or None,
-                                    valor_excel=str(row_excel.get(campo) or "") or None,
-                                    tipo_diferencia="diferente",
-                                ))
+                db.commit()
 
                 for id_comun in ids_comunes:
                     row_bd = df_bd[df_bd["numero_identificacion"] == id_comun].iloc[0]

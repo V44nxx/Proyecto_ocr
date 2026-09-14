@@ -741,7 +741,17 @@ export default function PersonasPage() {
                         </div>
                         <div className="my-1">
                           {valor
-                            ? <span className="text-xs font-semibold text-white truncate block">{valor}</span>
+                            ? (
+                              <div>
+                                <span className="text-xs font-semibold text-white truncate block font-mono">{valor}</span>
+                                {key === "numero_identificacion" && (p.detalles_campos as any)?.numero_identificacion_original_ocr && (
+                                  <span className="text-[9px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5" title={`Corregido desde planilla oficial Excel (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                    <CheckCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Corregido de {(p.detalles_campos as any).numero_identificacion_original_ocr}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )
                             : <span className="text-[11px] italic text-rose-400/80 font-medium block">No detectado por OCR</span>
                           }
                         </div>
@@ -1193,6 +1203,11 @@ export default function PersonasPage() {
                               <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
                                 {p.numero_identificacion}
                               </span>
+                              {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
+                                <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-1" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                  <CheckCircle className="w-2.5 h-2.5" /> Auto-corregido
+                                </span>
+                              )}
                             </div>
                           </td>
 

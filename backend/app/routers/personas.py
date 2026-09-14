@@ -223,6 +223,62 @@ def listar_personas(
     personas = query.order_by(Persona.fecha_registro.desc()).offset(skip).limit(limit).all()
 
     ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+
+    # Auto-corrección oportuna si alguna persona de BD no coincide con Excel por ID pero sí por nombre
+    if hay_excel and ids_en_excel and personas:
+        try:
+            from app.models.comparacion import Comparacion
+            from app.services.excel_lookup_service import excel_lookup_service
+            comp_obj = db.query(Comparacion).filter(
+                Comparacion.usuario_id == usuario.id,
+                Comparacion.ruta_archivo.isnot(None)
+            ).order_by(Comparacion.fecha_carga.desc()).first()
+            if not comp_obj:
+                comp_obj = db.query(Comparacion).filter(
+                    Comparacion.usuario_id.is_(None),
+                    Comparacion.ruta_archivo.isnot(None)
+                ).order_by(Comparacion.fecha_carga.desc()).first()
+
+            if comp_obj and comp_obj.ruta_archivo and os.path.exists(comp_obj.ruta_archivo):
+                lookup_excel = excel_lookup_service.cargar_lookup(comp_obj.ruta_archivo)
+                if lookup_excel:
+                    hubo_cambios = False
+                    for p in personas:
+                        id_crudo = str(p.numero_identificacion or "").strip()
+                        id_limp = re.sub(r"[^\d]", "", id_crudo)
+                        # Si no figura en Excel y tiene documento PDF
+                        if (id_limp not in ids_en_excel) and (id_crudo not in ids_en_excel) and p.documento_id:
+                            nom_p = str(p.nombre_completo or f"{p.nombres or ''} {p.apellidos or ''}").strip()
+                            if nom_p and "POR REVISAR" not in nom_p:
+                                match = excel_lookup_service.buscar_por_nombre(nom_p, lookup_excel, id_ocr_candidato=id_limp)
+                                if match:
+                                    id_ofic, reg_ofic = match
+                                    logger.info(f"[Personas] Auto-corrigiendo en BD por coincidencia de nombre '{nom_p}': '{p.numero_identificacion}' -> '{id_ofic}'")
+                                    detalles = dict(p.detalles_campos or {})
+                                    detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
+                                    detalles["origen_identificacion"] = "corregido_desde_excel"
+                                    detalles["numero_identificacion"] = {
+                                        "valor": id_ofic,
+                                        "value": id_ofic,
+                                        "confidence": 1.0,
+                                        "status": "VALID",
+                                        "source": "excel_oficial",
+                                        "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {p.numero_identificacion})"
+                                    }
+                                    nom_ex_ofic = reg_ofic.get("nombre_completo") or f"{reg_ofic.get('nombres', '')} {reg_ofic.get('apellidos', '')}".strip()
+                                    if nom_ex_ofic:
+                                        p.nombre_completo = nom_ex_ofic
+                                    p.numero_identificacion = id_ofic
+                                    p.detalles_campos = detalles
+                                    p.fecha_actualizacion = datetime.utcnow()
+                                    ids_en_excel.add(id_ofic)
+                                    hubo_cambios = True
+
+                    if hubo_cambios:
+                        db.commit()
+        except Exception as e_heal:
+            logger.warning(f"[Personas] Error en auto-corrección oportuna: {e_heal}")
+
     return [_enriquecer_persona_response(p, ids_en_excel, hay_excel) for p in personas]
 
 

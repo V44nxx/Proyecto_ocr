@@ -233,23 +233,65 @@ class ExcelLookupService:
     def buscar_por_nombre(
         self,
         nombre: str,
-        lookup: Dict[str, Dict[str, str]]
+        lookup: Dict[str, Dict[str, str]],
+        id_ocr_candidato: Optional[str] = None
     ) -> Optional[Tuple[str, Dict[str, str]]]:
         """
         Busca por coincidencia de nombre completo oficial en el lookup.
         Devuelve (numero_identificacion, entry) o None si no coincide.
+        Si hay múltiples candidatos con nombres similares, desempata usando
+        la similitud con el número de identificación detectado por OCR.
         """
         if not nombre or not lookup:
             return None
-        from app.services.comparacion_service import comparacion_service
+
         nom_clean = _limpiar_texto(nombre)
+        PALABRAS_IGNORAR = {
+            "REPUBLICA", "COLOMBIA", "DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "E",
+            "CEDULA", "CIUDADANIA", "TARJETA", "IDENTIDAD", "PERSONAL", "NACIONAL",
+            "REGISTRADURIA", "ESTADO", "CIVIL", "NUMERO", "NO", "DOC", "DOCUMENTO",
+            "POR", "REVISAR"
+        }
+        palabras_utiles = [p for p in re.findall(r"[A-Z0-9]+", nom_clean) if p not in PALABRAS_IGNORAR and len(p) > 1]
+        if len(palabras_utiles) < 2:
+            return None
+
+        from app.services.comparacion_service import comparacion_service
+
+        candidatos = []
         for num_id, entry in lookup.items():
             nom_comp_excel = entry.get("nombre_completo", "")
             if nom_comp_excel and comparacion_service._son_nombres_equivalentes(
                 nombres_bd=nom_clean, apellidos_bd="", nombres_excel=nom_comp_excel, apellidos_excel=""
             ):
-                return num_id, entry
-        return None
+                candidatos.append((num_id, entry))
+
+        if not candidatos:
+            return None
+
+        if len(candidatos) == 1:
+            return candidatos[0]
+
+        # Desempate entre múltiples coincidencias de nombre:
+        if id_ocr_candidato:
+            id_limp = _limpiar_id(id_ocr_candidato)
+            def score_candidato(item):
+                cand_id = item[0]
+                # Prefijo común
+                prefijo = 0
+                for a, b in zip(cand_id, id_limp):
+                    if a == b:
+                        prefijo += 1
+                    else:
+                        break
+                # Dígitos en común en cualquier posición
+                dist = comparacion_service._distancia_levenshtein(cand_id, id_limp)
+                return (prefijo, -dist)
+
+            candidatos.sort(key=score_candidato, reverse=True)
+            return candidatos[0]
+
+        return candidatos[0]
 
 
 excel_lookup_service = ExcelLookupService()

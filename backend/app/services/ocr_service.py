@@ -690,11 +690,16 @@ class OCRService:
                 try:
                     from app.services.excel_lookup_service import excel_lookup_service
                     from app.models.comparacion import Comparacion
-                    comp = db.query(Comparacion).filter(Comparacion.ruta_archivo.isnot(None)).order_by(Comparacion.fecha_carga.desc()).first()
+                    comp_q = db.query(Comparacion).filter(Comparacion.ruta_archivo.isnot(None))
+                    if doc_usuario_id:
+                        comp_user = comp_q.filter(Comparacion.usuario_id == doc_usuario_id).order_by(Comparacion.fecha_carga.desc()).first()
+                        comp = comp_user or comp_q.order_by(Comparacion.fecha_carga.desc()).first()
+                    else:
+                        comp = comp_q.order_by(Comparacion.fecha_carga.desc()).first()
                     if comp and comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
                         excel_lookup = excel_lookup_service.cargar_lookup(comp.ruta_archivo)
-                except Exception:
-                    pass
+                except Exception as e_lk:
+                    logger.warning(f"[ExcelLookup] No se pudo cargar planilla para OCR: {e_lk}")
 
             if excel_lookup and id_limpio and not id_limpio.startswith("SIN_ID"):
                 from app.services.excel_lookup_service import excel_lookup_service
@@ -726,32 +731,50 @@ class OCRService:
                         f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial por ID exacto."
                     )
 
-            # Fallback de búsqueda por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
+            # Fallback y auto-corrección de identificación por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
+            id_original_ocr = str(num_doc) if num_doc else ""
             if excel_lookup and not encontrado_en_excel:
                 from app.services.excel_lookup_service import excel_lookup_service
                 nom_buscar = f"{nombres_final or ''} {apellidos_final or ''}".strip()
                 if nom_buscar and "POR REVISAR" not in nom_buscar:
-                    match_nombre = excel_lookup_service.buscar_por_nombre(nom_buscar, excel_lookup)
+                    match_nombre = excel_lookup_service.buscar_por_nombre(nom_buscar, excel_lookup, id_ocr_candidato=id_limpio)
                     if match_nombre:
                         id_ofic, reg_ofic = match_nombre
-                        # Validar que no contradiga completamente el ID (ej. es prefijo o ID ausente)
-                        if not id_limpio or id_limpio.startswith("SIN_ID") or id_ofic.startswith(id_limpio) or id_limpio.startswith(id_ofic):
-                            logger.info(
-                                f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
-                                f"'{id_limpio}' -> '{id_ofic}'"
-                            )
-                            id_limpio = id_ofic
-                            num_doc = id_ofic
-                            nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
-                            nom_excel = reg_ofic.get("nombres", "").strip()
-                            ape_excel = reg_ofic.get("apellidos", "").strip()
-                            nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
-                            if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
-                                encontrado_en_excel = True
-                                fuente_nombre = "excel_oficial"
-                                nombre_completo_final = nombre_excel_candidato
-                                nombres_final = nom_excel or nombre_completo_final
-                                apellidos_final = ape_excel or ""
+                        logger.info(
+                            f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
+                            f"OCR leyó '{id_limpio or id_original_ocr}' -> Corregido a '{id_ofic}' desde planilla oficial Excel"
+                        )
+                        id_anterior = id_limpio or id_original_ocr
+                        id_limpio = id_ofic
+                        num_doc = id_ofic
+                        datos["identificacion"] = id_ofic
+                        encontrado_en_excel = True
+                        fuente_nombre = "excel_oficial"
+
+                        nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
+                        nom_excel = reg_ofic.get("nombres", "").strip()
+                        ape_excel = reg_ofic.get("apellidos", "").strip()
+                        nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
+                        if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
+                            nombre_completo_final = nombre_excel_candidato
+                            nombres_final = nom_excel or nombre_completo_final
+                            apellidos_final = ape_excel or ""
+
+                        # Si la persona ya había sido consultada en BD con el ID erróneo anterior:
+                        query_existente = db.query(Persona).filter(Persona.numero_identificacion == id_ofic)
+                        if doc_usuario_id:
+                            query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
+                        persona_oficial = query_existente.first()
+
+                        if persona:
+                            if persona_oficial and persona_oficial.id != persona.id:
+                                logger.info(f"[ExcelLookup] Fusionando registro erróneo '{id_anterior}' con registro existente '{id_ofic}'")
+                                db.delete(persona)
+                                persona = persona_oficial
+                            else:
+                                persona.numero_identificacion = id_ofic
+                        elif persona_oficial:
+                            persona = persona_oficial
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 
@@ -777,6 +800,18 @@ class OCRService:
 
             # ── Evaluación definitiva de completitud y validez ──
             detalles_payload = dict(datos.get("detalles_campos") or {})
+
+            if id_original_ocr and str(num_doc) != id_original_ocr:
+                detalles_payload["numero_identificacion_original_ocr"] = id_original_ocr
+                detalles_payload["origen_identificacion"] = "corregido_desde_excel"
+                detalles_payload["numero_identificacion"] = {
+                    "valor": str(num_doc),
+                    "value": str(num_doc),
+                    "confidence": 1.0,
+                    "status": "VALID",
+                    "source": "excel_oficial",
+                    "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {id_original_ocr})"
+                }
 
             if encontrado_en_excel and nombre_completo_final:
                 detalles_payload["nombre_completo"] = {
@@ -863,6 +898,8 @@ class OCRService:
                     persona.documento_id = doc_id_val
                 if doc_usuario_id and not persona.usuario_id:
                     persona.usuario_id = doc_usuario_id
+                if str(persona.numero_identificacion) != str(num_doc):
+                    persona.numero_identificacion = str(num_doc)
 
                 # Unificar páginas de frente y reverso
                 if not persona.pagina_frente and datos.get("pagina_frente"):

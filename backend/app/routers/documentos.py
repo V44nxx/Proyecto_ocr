@@ -335,7 +335,9 @@ def eliminar_documento(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Elimina un documento y su archivo asociado"""
+    """Elimina un documento, sus personas asociadas y el archivo físico"""
+    from app.models.persona import Persona
+
     query = db.query(Documento).filter(Documento.id == documento_id)
     if usuario.rol != "admin":
         query = query.filter(Documento.usuario_id == usuario.id)
@@ -344,16 +346,23 @@ def eliminar_documento(
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
-    # Eliminar archivo físico
+    # 1. Eliminar en cascada todas las personas asociadas a este documento
+    #    (evita que queden huérfanas con documento_id=NULL y desaparezcan del filtro)
+    personas_eliminadas = db.query(Persona).filter(Persona.documento_id == documento.id).delete(synchronize_session=False)
+    if personas_eliminadas:
+        logger.info(f"Eliminadas {personas_eliminadas} persona(s) asociadas al documento {documento.nombre_original}")
+
+    # 2. Eliminar archivo físico del PDF
     try:
         if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
             Path(documento.ruta_archivo).unlink()
     except Exception as e:
         logger.warning(f"No se pudo eliminar archivo físico {documento.ruta_archivo}: {e}")
 
+    # 3. Eliminar el documento de la base de datos
     db.delete(documento)
     db.commit()
-    logger.info(f"Documento eliminado: {documento.nombre_original}")
+    logger.info(f"Documento eliminado: {documento.nombre_original} (usuario: {usuario.email})")
 
 
 @router.get("/dashboard/estadisticas", summary="Estadísticas del dashboard")

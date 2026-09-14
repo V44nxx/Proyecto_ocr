@@ -1145,14 +1145,14 @@ export default function PersonasPage() {
                         title="Seleccionar / Deseleccionar todas las personas mostradas"
                       />
                     </th>
-                    <th className="py-3 px-2 w-8"></th>
-                    <th className="py-3 px-4">Documento / ID</th>
-                    <th className="py-3 px-4">Nombre Completo</th>
-                    <th className="py-3 px-3 text-center">Edad</th>
-                    <th className="py-3 px-3 text-center">Pág.</th>
-                    <th className="py-3 px-4 text-center">Fuente</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
-                    <th className="py-3 px-3 text-right">Acciones</th>
+                    <th className="py-3 px-1 w-7"></th>
+                    <th className="py-3 px-2 w-48 whitespace-nowrap">Documento / ID</th>
+                    <th className="py-3 px-2 whitespace-nowrap">Nombre Completo</th>
+                    <th className="py-3 px-2 w-20 text-center whitespace-nowrap">Edad</th>
+                    <th className="py-3 px-2 w-14 text-center whitespace-nowrap">Pág.</th>
+                    <th className="py-3 px-3 w-36 text-center whitespace-nowrap">Fuente</th>
+                    <th className="py-3 px-3 w-32 text-center whitespace-nowrap">Estado</th>
+                    <th className="py-3 px-3 w-14 text-right">Acciones</th>
                   </tr>
                 </thead>
 
@@ -1188,23 +1188,23 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Toggle expandir */}
-                          <td className="py-3 px-2">
+                          <td className="py-3 px-1">
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
                               {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </div>
                           </td>
 
                           {/* Documento e ID con Badge */}
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider ${tipoInfo.badge}`} title={tipoInfo.label}>
+                          <td className="py-3 px-2 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 flex-nowrap">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
                                 {tipoInfo.codigo}
                               </span>
-                              <span className="font-mono text-primary-300 font-bold text-sm tracking-wide">
+                              <span className="font-mono text-primary-300 font-bold text-sm tracking-wide shrink-0">
                                 {p.numero_identificacion}
                               </span>
                               {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-1" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
                                   <CheckCircle className="w-2.5 h-2.5" /> Auto-corregido
                                 </span>
                               )}
@@ -1212,18 +1212,20 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Nombre completo */}
-                          <td className="py-3 px-4 max-w-[220px]">
+                          <td className="py-3 px-2 whitespace-nowrap">
                             {nombreCompleto ? (
-                              <span className="text-sm font-semibold text-slate-100 leading-tight">{nombreCompleto}</span>
+                              <span className="text-sm font-semibold text-slate-100 whitespace-nowrap" title={nombreCompleto}>
+                                {nombreCompleto}
+                              </span>
                             ) : (
-                              <span className="text-slate-600 italic text-xs">Sin nombre</span>
+                              <span className="text-slate-600 italic text-xs whitespace-nowrap">Sin nombre</span>
                             )}
                           </td>
 
                           {/* Edad */}
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-3 px-2 text-center whitespace-nowrap">
                             {edadRow !== null ? (
-                              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+                              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
                                 {edadRow} años
                               </span>
                             ) : (
@@ -1232,50 +1234,50 @@ export default function PersonasPage() {
                           </td>
 
                           {/* Página */}
-                          <td className="py-3 px-3 text-center">
-                            <span className="text-[11px] font-mono text-slate-500">
+                          <td className="py-3 px-2 text-center whitespace-nowrap">
+                            <span className="text-[11px] font-mono text-slate-500 whitespace-nowrap">
                               {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
                             </span>
                           </td>
 
                           {/* Fuente: PDF y/o Excel */}
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1">
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                               {/* PDF badge */}
                               {p.documento_id ? (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300 whitespace-nowrap shrink-0"
                                   title="Extraído de documento PDF por OCR"
                                 >
-                                  <FileText className="w-2.5 h-2.5" /> PDF
+                                  <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500" title="Sin documento PDF asociado">
-                                  <FileText className="w-2.5 h-2.5" /> Sin PDF
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
+                                  <FileText className="w-2.5 h-2.5 shrink-0" /> Sin PDF
                                 </span>
                               )}
                               {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap shrink-0"
                                   title="Encontrado en planilla Excel comparada"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5" /> Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 whitespace-nowrap shrink-0"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5" /> No Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Excel
                                 </span>
                               ) : null}
                             </div>
                           </td>
 
                           {/* Estado: Alertas VÁLIDO, REVISAR, NO EN PDF, NO EN EXCEL */}
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex flex-col items-center justify-center gap-1">
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span

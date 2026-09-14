@@ -334,8 +334,28 @@ class ComparacionService:
         }
 
         try:
-            # 1. Cargar datos de BD
-            personas_bd = db.query(Persona).all()
+            comp_uuid = uuid_pkg.UUID(str(comparacion_id))
+            comparacion_actual = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
+            if comparacion_actual:
+                comparacion_actual.estado = "procesando"
+                db.commit()
+
+            # 1. Cargar datos de BD filtrados estrictamente por el usuario dueño de la comparación
+            from app.models.documento import Documento
+            from sqlalchemy import or_
+
+            if comparacion_actual and comparacion_actual.usuario_id:
+                uid = comparacion_actual.usuario_id
+                personas_bd = db.query(Persona).outerjoin(Persona.documento).filter(
+                    or_(
+                        Persona.usuario_id == uid,
+                        Documento.usuario_id == uid,
+                        Persona.detalles_campos["usuario_id"].astext == str(uid)
+                    )
+                ).all()
+            else:
+                personas_bd = db.query(Persona).all()
+
             df_bd = pd.DataFrame([{
                 "numero_identificacion": self._limpiar_numero_id(p.numero_identificacion),
                 "nombre_completo": getattr(p, "nombre_completo", None) if isinstance(getattr(p, "nombre_completo", None), str) else f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip(),
@@ -362,13 +382,6 @@ class ComparacionService:
 
             # 3. Analizar diferencias
             diferencias_a_guardar = []
-            comp_uuid = uuid_pkg.UUID(str(comparacion_id))
-
-            # Marcar estado en progreso en la base de datos
-            comparacion_actual = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
-            if comparacion_actual:
-                comparacion_actual.estado = "procesando"
-                db.commit()
 
             if len(df_bd) > 0:
                 ids_bd = set(df_bd["numero_identificacion"].tolist())

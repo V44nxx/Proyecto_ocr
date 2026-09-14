@@ -91,7 +91,13 @@ def create_tables():
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS detalles_campos JSONB;",
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(400);",
                 "CREATE INDEX IF NOT EXISTS ix_personas_nombre_completo ON personas (nombre_completo);",
-                "UPDATE personas SET nombre_completo = TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, ''))) WHERE (nombre_completo IS NULL OR nombre_completo = '') AND (nombres IS NOT NULL OR apellidos IS NOT NULL);"
+                "UPDATE personas SET nombre_completo = TRIM(CONCAT(COALESCE(nombres, ''), ' ', COALESCE(apellidos, ''))) WHERE (nombre_completo IS NULL OR nombre_completo = '') AND (nombres IS NOT NULL OR apellidos IS NOT NULL);",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE;",
+                "CREATE INDEX IF NOT EXISTS ix_personas_usuario_id ON personas (usuario_id);",
+                "UPDATE personas p SET usuario_id = d.usuario_id FROM documentos d WHERE p.documento_id = d.id AND p.usuario_id IS NULL;",
+                "UPDATE personas SET usuario_id = CAST(detalles_campos->>'usuario_id' AS UUID) WHERE usuario_id IS NULL AND detalles_campos->>'usuario_id' IS NOT NULL;",
+                "ALTER TABLE personas DROP CONSTRAINT IF EXISTS personas_numero_identificacion_key;",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL;"
             ]
             for q in queries:
                 try:

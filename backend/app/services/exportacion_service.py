@@ -63,7 +63,15 @@ class ExportacionService:
 
         if filtros:
             if filtros.get("usuario_id"):
-                query = query.join(Persona.documento).filter(Documento.usuario_id == filtros["usuario_id"])
+                from sqlalchemy import or_
+                uid = filtros["usuario_id"]
+                query = query.outerjoin(Persona.documento).filter(
+                    or_(
+                        Persona.usuario_id == uid,
+                        Documento.usuario_id == uid,
+                        Persona.detalles_campos["usuario_id"].astext == str(uid)
+                    )
+                )
 
             if filtros.get("documento_id"):
                 doc_id = filtros["documento_id"]

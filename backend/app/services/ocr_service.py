@@ -611,13 +611,19 @@ class OCRService:
 
             num_doc = id_limpio if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
 
-            # Verificar si ya existe en BD para unificar
-            persona_existente = (
-                db.query(Persona)
-                .filter(Persona.numero_identificacion == str(num_doc))
-                .first()
-                if tiene_identificacion else None
+            doc_exists = (
+                db.query(Documento).filter(Documento.id == documento_id).first()
+                if documento_id
+                else None
             )
+            doc_id_val = str(doc_exists.id) if doc_exists else None
+            doc_usuario_id = doc_exists.usuario_id if doc_exists else None
+
+            # Verificar si ya existe en BD para unificar (filtrando por usuario para aislar cuentas)
+            query_existente = db.query(Persona).filter(Persona.numero_identificacion == str(num_doc))
+            if doc_usuario_id:
+                query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
+            persona_existente = query_existente.first() if tiene_identificacion else None
 
             # Si es un reverso huérfano sin nombres y no existe en BD, omitir para no crear persona fantasma
             if es_reverso_huerfano and not persona_existente:
@@ -627,13 +633,6 @@ class OCRService:
             if not tiene_identificacion and not (tiene_nombres and tiene_apellidos):
                 logger.info("Omitiendo guardado: sin identificación ni nombres válidos")
                 return None
-
-            doc_exists = (
-                db.query(Documento).filter(Documento.id == documento_id).first()
-                if documento_id
-                else None
-            )
-            doc_id_val = str(doc_exists.id) if doc_exists else None
 
             fecha_nac = None
             if datos.get("fecha_nacimiento"):
@@ -661,11 +660,10 @@ class OCRService:
             else:
                 estado_reg = "VALID"
 
-            persona = (
-                db.query(Persona)
-                .filter(Persona.numero_identificacion == str(num_doc))
-                .first()
-            )
+            query_persona = db.query(Persona).filter(Persona.numero_identificacion == str(num_doc))
+            if doc_usuario_id:
+                query_persona = query_persona.filter(Persona.usuario_id == doc_usuario_id)
+            persona = query_persona.first()
 
             def _es_nombre_invalido(val: Optional[str]) -> bool:
                 if not val:
@@ -834,6 +832,7 @@ class OCRService:
             if not persona:
                 persona = Persona(
                     documento_id=doc_id_val,
+                    usuario_id=doc_usuario_id,
                     grupo_documento_id=datos.get("grupo_documento_id", "DOC-001"),
                     pagina_frente=datos.get("pagina_frente"),
                     pagina_reverso=datos.get("pagina_reverso"),
@@ -862,6 +861,8 @@ class OCRService:
                 logger.info(f"Unificando datos para persona existente ID '{num_doc}'...")
                 if doc_id_val:
                     persona.documento_id = doc_id_val
+                if doc_usuario_id and not persona.usuario_id:
+                    persona.usuario_id = doc_usuario_id
 
                 # Unificar páginas de frente y reverso
                 if not persona.pagina_frente and datos.get("pagina_frente"):

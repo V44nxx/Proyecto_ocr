@@ -13,9 +13,10 @@ class Persona(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     documento_id = Column(UUID(as_uuid=True), ForeignKey("documentos.id", ondelete="SET NULL"), nullable=True)
+    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Datos extraídos
-    numero_identificacion = Column(String(20), unique=True, nullable=False, index=True)
+    numero_identificacion = Column(String(20), nullable=False, index=True)
     nombre_completo = Column(String(400), nullable=True, index=True)
     nombres = Column(String(200), nullable=True)
     apellidos = Column(String(200), nullable=True)
@@ -44,6 +45,7 @@ class Persona(Base):
 
     # Relaciones
     documento = relationship("Documento", back_populates="personas")
+    usuario = relationship("Usuario", backref="personas")
 
     @property
     def nombre_documento(self):

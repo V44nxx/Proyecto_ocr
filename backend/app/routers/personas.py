@@ -18,16 +18,15 @@ router = APIRouter(prefix="/api/personas", tags=["Personas"])
 
 
 def _filtrar_persona_por_usuario(query, usuario: Usuario):
-    """Filtra la consulta de personas para que usuarios no administradores solo vean sus registros"""
-    if usuario.rol != "admin":
-        from sqlalchemy import or_
-        query = query.outerjoin(Persona.documento).filter(
-            or_(
-                Documento.usuario_id == usuario.id,
-                Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
-            )
+    """Filtra la consulta de personas para que cada usuario solo vea sus propios registros"""
+    from sqlalchemy import or_
+    return query.outerjoin(Persona.documento).filter(
+        or_(
+            Persona.usuario_id == usuario.id,
+            Documento.usuario_id == usuario.id,
+            Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
         )
-    return query
+    )
 
 
 @router.get("", response_model=List[PersonaResponse], summary="Listar personas")
@@ -44,7 +43,7 @@ def listar_personas(
     query = db.query(Persona).options(joinedload(Persona.documento))
     query = _filtrar_persona_por_usuario(query, usuario)
 
-    if documento_id:
+    if documento_id and isinstance(documento_id, str):
         query = query.filter(Persona.documento_id == documento_id)
 
     if requiere_revision is True:
@@ -59,7 +58,7 @@ def listar_personas(
             ((Persona.estado_registro == "VALID") | (Persona.estado_registro.is_(None)))
         )
 
-    if buscar:
+    if buscar and isinstance(buscar, str):
         buscar_upper = f"%{buscar.upper()}%"
         query = query.filter(
             Persona.numero_identificacion.ilike(f"%{buscar}%") |
@@ -76,9 +75,7 @@ def listar_personas(
         from app.models.diferencia import Diferencia
         from app.models.comparacion import Comparacion
 
-        comp_query = db.query(Comparacion)
-        if usuario.rol != "admin":
-            comp_query = comp_query.filter(Comparacion.usuario_id == usuario.id)
+        comp_query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
         comp_ids = [c.id for c in comp_query.all()]
 
         if comp_ids:
@@ -359,8 +356,9 @@ async def subir_pdf_persona(
             # Eliminar la persona duplicada que creó el OCR
             db.delete(otra)
 
-        # Asociar explícitamente el documento a la persona
+        # Asociar explícitamente el documento y usuario a la persona
         persona.documento_id = str(doc.id)
+        persona.usuario_id = usuario.id
 
         # Reevaluar completitud
         det = dict(persona.detalles_campos or {})

@@ -92,10 +92,10 @@ def ejecutar_comparacion(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Ejecuta manualmente una comparación pendiente"""
-    query = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query = query.filter(Comparacion.usuario_id == usuario.id)
-    comparacion = query.first()
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
@@ -122,10 +122,8 @@ def listar_comparaciones(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista el historial de comparaciones del usuario (o todas si es admin)"""
-    query = db.query(Comparacion)
-    if usuario.rol != "admin":
-        query = query.filter(Comparacion.usuario_id == usuario.id)
+    """Lista el historial de comparaciones propias del usuario"""
+    query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
     comparaciones = (
         query
         .order_by(Comparacion.fecha_carga.desc())
@@ -142,11 +140,11 @@ def obtener_comparacion(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Obtiene el detalle y estadísticas de una comparación"""
-    query = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query = query.filter(Comparacion.usuario_id == usuario.id)
-    comparacion = query.first()
+    """Obtiene el detalle y estadísticas de una comparación propia"""
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
     return ComparacionResponse.model_validate(comparacion)
@@ -161,11 +159,12 @@ def obtener_diferencias(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista las diferencias encontradas en una comparación"""
-    query_comp = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query_comp = query_comp.filter(Comparacion.usuario_id == usuario.id)
-    if not query_comp.first():
+    """Lista las diferencias encontradas en una comparación propia"""
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
+    if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
     query = db.query(Diferencia).filter(Diferencia.comparacion_id == comparacion_id)
@@ -184,10 +183,10 @@ def descargar_reporte(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Genera y descarga el reporte detallado de diferencias en XLSX"""
-    query = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query = query.filter(Comparacion.usuario_id == usuario.id)
-    comparacion = query.first()
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
@@ -232,15 +231,18 @@ def corregir_campo_desde_comparacion(
     from app.models.persona import Persona
     from app.models.diferencia import Diferencia
 
-    query_comp = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query_comp = query_comp.filter(Comparacion.usuario_id == usuario.id)
-    comparacion = query_comp.first()
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
     num_id = datos.numero_identificacion.strip()
-    persona = db.query(Persona).filter(Persona.numero_identificacion == num_id).first()
+    persona = db.query(Persona).filter(
+        Persona.numero_identificacion == num_id,
+        Persona.usuario_id == usuario.id
+    ).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona con identificación {num_id} no encontrada en la BD")
 
@@ -328,10 +330,10 @@ def agregar_persona_bd_desde_comparacion(
     from app.models.diferencia import Diferencia
     from app.services.excel_lookup_service import excel_lookup_service
 
-    query_comp = db.query(Comparacion).filter(Comparacion.id == comparacion_id)
-    if usuario.rol != "admin":
-        query_comp = query_comp.filter(Comparacion.usuario_id == usuario.id)
-    comparacion = query_comp.first()
+    comparacion = db.query(Comparacion).filter(
+        Comparacion.id == comparacion_id,
+        Comparacion.usuario_id == usuario.id
+    ).first()
     if not comparacion:
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
@@ -339,7 +341,10 @@ def agregar_persona_bd_desde_comparacion(
     if not num_id:
         raise HTTPException(status_code=400, detail="El número de identificación es obligatorio")
 
-    persona = db.query(Persona).filter(Persona.numero_identificacion == num_id).first()
+    persona = db.query(Persona).filter(
+        Persona.numero_identificacion == num_id,
+        Persona.usuario_id == usuario.id
+    ).first()
 
     # Extraer datos si están en el Excel de la comparación
     nom_completo = (datos.nombre_completo or "").strip()
@@ -363,6 +368,7 @@ def agregar_persona_bd_desde_comparacion(
 
     if not persona:
         persona = Persona(
+            usuario_id=usuario.id,
             numero_identificacion=num_id,
             nombre_completo=nom_completo,
             nombres=nombres or nom_completo,

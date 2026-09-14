@@ -72,6 +72,8 @@ export interface Persona {
   detalles_campos?: Record<string, any> | null;
   fecha_registro: string;
   fecha_actualizacion: string;
+  /** True si la persona aparece en alguna planilla Excel comparada */
+  en_excel?: boolean | null;
 }
 
 export interface PersonaUpdate {

@@ -116,6 +116,8 @@ class PersonaResponse(PersonaBase):
     detalles_campos: Optional[dict] = None
     fecha_registro: datetime
     fecha_actualizacion: datetime
+    # Origen de datos: True si la persona aparece en alguna planilla Excel comparada
+    en_excel: Optional[bool] = None
 
     class Config:
         from_attributes = True

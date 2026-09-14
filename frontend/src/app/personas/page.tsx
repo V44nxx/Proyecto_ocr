@@ -8,7 +8,7 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud
+  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
@@ -1056,7 +1056,7 @@ export default function PersonasPage() {
                     <th className="py-3 px-4">Nombre Completo</th>
                     <th className="py-3 px-3 text-center">Edad</th>
                     <th className="py-3 px-3 text-center">Pág.</th>
-                    <th className="py-3 px-4 text-center">Confianza</th>
+                    <th className="py-3 px-4 text-center">Fuente</th>
                     <th className="py-3 px-4 text-center">Estado</th>
                     <th className="py-3 px-3 text-right">Acciones</th>
                   </tr>
@@ -1139,16 +1139,37 @@ export default function PersonasPage() {
                             </span>
                           </td>
 
-                          {/* Confianza */}
+                          {/* Fuente: PDF y/o Excel */}
                           <td className="py-3 px-4 text-center">
-                            {p.confianza_extraccion != null ? (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <div className="w-10 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style={{ width: `${p.confianza_extraccion}%` }} />
-                                </div>
-                                <span className="text-xs text-slate-400">{Math.round(Number(p.confianza_extraccion))}%</span>
-                              </div>
-                            ) : <span className="text-slate-600 text-xs">—</span>}
+                            <div className="flex items-center justify-center gap-1">
+                              {/* PDF badge */}
+                              {p.documento_id ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300"
+                                  title="Extraído de documento PDF por OCR"
+                                >
+                                  <FileText className="w-2.5 h-2.5" /> PDF
+                                </span>
+                              ) : (
+                                <span className="text-slate-700 text-[10px]" title="Sin PDF asociado">—</span>
+                              )}
+                              {/* Excel badge */}
+                              {p.en_excel === true ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                                  title="Encontrado en planilla Excel comparada"
+                                >
+                                  <FileSpreadsheet className="w-2.5 h-2.5" /> Excel
+                                </span>
+                              ) : p.en_excel === false ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-700/40 border border-slate-700 text-slate-500"
+                                  title="No encontrado en ninguna planilla Excel"
+                                >
+                                  <FileSpreadsheet className="w-2.5 h-2.5" /> Excel
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
 
                           {/* Estado */}

@@ -69,7 +69,36 @@ def listar_personas(
         )
 
     personas = query.order_by(Persona.fecha_registro.desc()).offset(skip).limit(limit).all()
-    return [PersonaResponse.model_validate(p) for p in personas]
+
+    # Obtener los números de identificación que aparecen en alguna comparación Excel del usuario
+    # para saber cuáles personas están tanto en PDF como en la planilla
+    try:
+        from app.models.diferencia import Diferencia
+        from app.models.comparacion import Comparacion
+
+        comp_query = db.query(Comparacion)
+        if usuario.rol != "admin":
+            comp_query = comp_query.filter(Comparacion.usuario_id == usuario.id)
+        comp_ids = [c.id for c in comp_query.all()]
+
+        if comp_ids:
+            ids_en_excel = set(
+                row[0] for row in db.query(Diferencia.numero_identificacion)
+                .filter(Diferencia.comparacion_id.in_(comp_ids))
+                .distinct()
+                .all()
+            )
+        else:
+            ids_en_excel = set()
+    except Exception:
+        ids_en_excel = set()
+
+    result = []
+    for p in personas:
+        r = PersonaResponse.model_validate(p)
+        r.en_excel = p.numero_identificacion in ids_en_excel
+        result.append(r)
+    return result
 
 
 @router.get("/{persona_id}", response_model=PersonaResponse, summary="Detalle de persona")

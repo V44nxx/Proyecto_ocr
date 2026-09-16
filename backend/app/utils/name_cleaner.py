@@ -7,12 +7,22 @@ import unicodedata
 
 JUNK_WORDS = {
     "IDENTIDAD", "TARJETA", "CEDULA", "CIUDADANIA", "REPUBLICA", "COLOMBIA", 
-    "RETUBEICA", "REPUBLICA", "REPÚBLICA", "NACIONAL", "REGISTRADURIA", 
-    "ESTADO", "NUMERO", "FIRMA", "HUELLA", "INDICE", "DERECHO", "IZQUIERDO", 
-    "DOCUMENTO", "PERSONAL", "REGISTRO", "CIVIL", "EXPEDICION", "LUGAR", 
-    "FECHA", "NACIMIENTO", "SEXO", "ESTATURA", "RH", "VIGENCIA", "POSTAL", 
-    "CUE", "III", "DR", "CDI", "AAAS", "AAS"
+    "RETUBEICA", "REPÚBLICA", "NACIONAL", "REGISTRADURIA", "ESTADO", "NUMERO", 
+    "NÚMERO", "FIRMA", "HUELLA", "INDICE", "ÍNDICE", "DERECHO", "IZQUIERDO", 
+    "DOCUMENTO", "PERSONAL", "REGISTRO", "CIVIL", "EXPEDICION", "EXPEDICIÓN", 
+    "LUGAR", "FECHA", "NACIMIENTO", "SEXO", "ESTATURA", "RH", "VIGENCIA", 
+    "POSTAL", "CUE", "DR", "CDI", "AAAS", "AAS", "NOMBRES", "APELLIDOS", 
+    "NOMBRE", "APELLIDO", "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
+    "PÚBLICA", "ICADE", "CADE", "MEIA"
 }
+
+ROMAN_NOISE = {
+    "I", "II", "III", "IIII", "IIIII", "IIIIII", "IV", "V", "VI", "VII", 
+    "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", 
+    "XVIII", "XIX", "XX"
+}
+
+VOCALES_VALIDAS = set("AEIOUÁÉÍÓÚÜY")
 
 
 def normalizar_str(s: str) -> str:
@@ -23,23 +33,53 @@ def normalizar_str(s: str) -> str:
     return s.upper().strip()
 
 
+def es_token_ruido(t_raw: str) -> bool:
+    """Detecta si un token individual es ruido de OCR (IIII, números romanos, siglas, artefactos)."""
+    if not t_raw:
+        return True
+    t_norm = normalizar_str(t_raw)
+    t_alpha = re.sub(r"[^A-Z]", "", t_norm)
+    if not t_alpha:
+        return True
+    # Secuencias puras de I (ej: I, II, III, IIII, IIIII...)
+    if re.fullmatch(r"I+", t_alpha):
+        return True
+    # Números romanos o ruidos de líneas verticales
+    if t_alpha in ROMAN_NOISE:
+        return True
+    # Palabras de encabezado y etiquetas de cédula/TI
+    if t_alpha in JUNK_WORDS:
+        return True
+    # Letras solas (excepto la conjunción válida 'Y')
+    if len(t_alpha) <= 1 and t_alpha != "Y":
+        return True
+    # Caracteres repetidos 3 o más veces consecutivas (ej: AAAA, XXXX, ZZZ)
+    if re.search(r"(.)\1{2,}", t_alpha):
+        return True
+    # Palabras de 2 o más letras sin ninguna vocal (ej: CDI, MGR, PR, ST)
+    if len(t_alpha) >= 2 and not any(v in VOCALES_VALIDAS for v in t_alpha):
+        return True
+    return False
+
+
 def limpiar_tokens_ruido(texto: str) -> str:
     if not texto:
         return ""
-    toks = texto.split()
+    # Reemplazar símbolos, barras, números y caracteres no alfabéticos
+    limpio_pre = re.sub(r"[|!/\\\[\]{}()<>=*#+~_^¿?¡,.;:\d]", " ", str(texto))
+    toks = limpio_pre.split()
     limpios = []
     for t in toks:
-        t_norm = normalizar_str(t)
-        t_norm = re.sub(r"[^A-Z]", "", t_norm)
-        if t_norm in JUNK_WORDS:
+        if es_token_ruido(t):
             continue
-        if len(t_norm) <= 1 and t_norm not in {"Y"}:
-            continue
-        limpios.append(t)
-    # Quitar conectores al final o al inicio
+        # Limpiar cualquier caracter residual no alfabético del token
+        t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\-]", "", t).strip()
+        if t_clean:
+            limpios.append(t_clean)
+    # Quitar conectores al final o al inicio que queden huérfanos
     while limpios and limpios[-1].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "Y"}:
         limpios.pop()
-    while limpios and limpios[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "III"}:
+    while limpios and limpios[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "Y"}:
         limpios.pop(0)
     return " ".join(limpios)
 
@@ -81,7 +121,9 @@ def resolver_nombre_completo(nombres: str, apellidos: str = "", actual: str = No
     toks_n = n_norm.split()
     toks_a = a_norm.split()
 
-    if not a_limpio:
+    if not a_limpio and not n_limpio and actual and actual.strip() and actual != "POR REVISAR":
+        res = limpiar_tokens_ruido(actual)
+    elif not a_limpio:
         res = n_limpio
     elif not n_limpio:
         res = a_limpio
@@ -95,6 +137,12 @@ def resolver_nombre_completo(nombres: str, apellidos: str = "", actual: str = No
         res = a_limpio
     else:
         res = f"{n_limpio} {a_limpio}".strip()
+
+    if actual and actual.strip() and actual != "POR REVISAR":
+        act_limp = limpiar_tokens_ruido(actual)
+        # Si actual tiene más palabras válidas que lo combinado, preferir actual
+        if len(act_limp.split()) > len(res.split()) and len(act_limp.split()) >= 2:
+            res = act_limp
 
     res = deduplicar_ngrams(res)
     res = limpiar_tokens_ruido(res)

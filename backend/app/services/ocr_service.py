@@ -827,18 +827,25 @@ class OCRService:
                 if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
                     detalles_payload["apellidos"]["status"] = "VALID"
             elif nombre_completo_final and nombre_completo_final != "POR REVISAR":
+                es_val_nom, mot_val_nom = validador.validar_nombre_estricto(nombre_completo_final)
                 detalles_payload["nombre_completo"] = {
                     "valor": nombre_completo_final,
                     "value": nombre_completo_final,
                     "confidence": round(confianza / 100.0, 2),
-                    "status": "VALID",
+                    "status": "VALID" if es_val_nom else "REVIEW_REQUIRED",
                     "source": ocr_engine,
-                    "reason": "Nombre completo extraído y consolidado"
+                    "reason": "Nombre completo extraído y consolidado" if es_val_nom else mot_val_nom
                 }
-                if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
-                    detalles_payload["nombres"]["status"] = "VALID"
-                if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
-                    detalles_payload["apellidos"]["status"] = "VALID"
+                if not es_val_nom:
+                    if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
+                        detalles_payload["nombres"]["status"] = "REVIEW_REQUIRED"
+                    if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
+                        detalles_payload["apellidos"]["status"] = "REVIEW_REQUIRED"
+                else:
+                    if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
+                        detalles_payload["nombres"]["status"] = "VALID"
+                    if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
+                        detalles_payload["apellidos"]["status"] = "VALID"
             tiene_datos_completos, motivos_rev = validador.evaluar_persona_completa(
                 numero_identificacion=str(num_doc),
                 nombres=nombres_final,

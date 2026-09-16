@@ -113,14 +113,23 @@ def create_tables():
     # ── Saneamiento de nombres y reevaluación de estado de revisión ──
     try:
         from app.models.persona import Persona
-        from app.utils.name_cleaner import resolver_nombre_completo
+        from app.utils.name_cleaner import resolver_nombre_completo, limpiar_tokens_ruido
         from app.utils.validators import validador
         db_s = SessionLocal()
         try:
             personas = db_s.query(Persona).all()
             modificados = 0
             for p in personas:
-                nom_limpio = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
+                nomb_limp = limpiar_tokens_ruido(p.nombres or "")
+                apel_limp = limpiar_tokens_ruido(p.apellidos or "")
+                nom_limpio = resolver_nombre_completo(nomb_limp, apel_limp, p.nombre_completo)
+
+                if nomb_limp != (p.nombres or ""):
+                    p.nombres = nomb_limp or None
+                    modificados += 1
+                if apel_limp != (p.apellidos or ""):
+                    p.apellidos = apel_limp or None
+                    modificados += 1
                 if nom_limpio and nom_limpio != p.nombre_completo:
                     p.nombre_completo = nom_limpio
                     modificados += 1
@@ -147,6 +156,16 @@ def create_tables():
                     det["motivos_revision"] = motivos_rev
                 else:
                     det.pop("motivos_revision", None)
+
+                # Mantener sincronizado detalles_campos de nombre_completo
+                if "nombre_completo" in det and isinstance(det["nombre_completo"], dict):
+                    det["nombre_completo"]["valor"] = p.nombre_completo
+                    det["nombre_completo"]["value"] = p.nombre_completo
+                    es_v_nom, mot_v_nom = validador.validar_nombre_estricto(p.nombre_completo)
+                    det["nombre_completo"]["status"] = "VALID" if es_v_nom else "REVIEW_REQUIRED"
+                    if not es_v_nom:
+                        det["nombre_completo"]["reason"] = mot_v_nom
+
                 p.detalles_campos = det
 
                 if p.requiere_revision != nuevo_req or p.estado_registro != nuevo_est:

@@ -38,7 +38,8 @@ class ValidadorColombia:
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
-        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|DR|CDI|AAAS|AAS)\b",
+        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|DR|CDI|AAAS|AAS|"
+        r"I+|[I|l1!]{2,}|II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b",
         re.IGNORECASE,
     )
 
@@ -186,6 +187,59 @@ class ValidadorColombia:
             return None
 
         return resultado
+
+    @classmethod
+    def validar_nombre_estricto(cls, texto: Optional[str]) -> Tuple[bool, str]:
+        """
+        Validación estricta de nombres y apellidos en documentos colombianos:
+          - No nulo ni 'POR REVISAR'
+          - Mínimo 2 palabras (nombre + apellido)
+          - Longitud total >= 5 caracteres
+          - Sin palabras institucionales (COLOMBIA, REPUBLICA, REGISTRADURIA...)
+          - Sin números, símbolos ni caracteres no alfabéticos
+          - Sin secuencias de I (I, II, III, IIII...) ni números romanos
+          - Sin caracteres repetidos anómalos (ej: XXXX, ZZZ)
+          - Cada palabra debe tener al menos una vocal y >= 2 caracteres (salvo 'Y')
+        """
+        if not texto or not str(texto).strip() or str(texto).strip() == "POR REVISAR":
+            return False, "Nombre ausente o no reconocido por el OCR"
+
+        raw = str(texto).strip()
+
+        # 1. Palabras institucionales de documentos
+        if cls._PALABRAS_NO_NOMBRE.search(raw) or any(r in raw.upper() for r in ["COLOMBIA", "REPUBLICA", "REGISTRADURIA", "RETUBEICA", "IDENTIDAD", "TARJETA", "CEDULA", "CIUDADANIA"]):
+            return False, f"El nombre contiene etiquetas de documento o palabras institucionales ('{raw}')"
+
+        # 2. Números o símbolos no permitidos
+        if re.search(r"[\d|!_#$*@~^<>=/\\\[\]{}¿?¡;:]", raw):
+            return False, f"El nombre contiene dígitos o caracteres especiales no permitidos ('{raw}')"
+
+        # 3. Caracteres repetidos de forma anómala (3 o más veces consecutivas)
+        if re.search(r"(.)\1{2,}", raw):
+            return False, f"El nombre contiene repeticiones anómalas de caracteres ('{raw}')"
+
+        # 4. Secuencias de I o números romanos
+        if re.search(r"\b(I+|[I|l1!]{2,}|II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII|XIII)\b", raw.upper()):
+            return False, f"El nombre contiene secuencias de I o números romanos no válidos ('{raw}')"
+
+        # 5. Cantidad de palabras
+        palabras = raw.split()
+        if len(palabras) < 2:
+            return False, f"Nombre incompleto: solo contiene {len(palabras)} palabra ('{raw}'), se requieren nombres y apellidos"
+
+        # 6. Validación por cada palabra individual
+        vocales = set("AEIOUÁÉÍÓÚÜY")
+        for p in palabras:
+            p_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\-]", "", p)
+            if len(p_clean) <= 1 and p_clean.upper() != "Y":
+                return False, f"El nombre contiene iniciales o letras sueltas ('{p}')"
+            if len(p_clean) >= 2 and not any(v in vocales for v in p_clean.upper()):
+                return False, f"El nombre contiene una palabra sin vocales ('{p}')"
+
+        if len(raw) < 5:
+            return False, f"Nombre excesivamente corto ('{raw}')"
+
+        return True, ""
 
     # ──────────────────────────────────────────
     # FECHAS
@@ -410,10 +464,7 @@ class ValidadorColombia:
             if not valida:
                 motivos.append(f"Número de identificación dudoso ({id_limpio}): {msg_ced}")
 
-        # 2. Nombre Completo Unificado
-        # Los nombres se manejan completos y unificados (nombre_completo);
-        # ya no se exigen de forma separada "nombres" y "apellidos" para evitar
-        # falsos requerimientos de revisión cuando el nombre ya está completo o viene del Excel.
+        # 2. Nombre Completo Unificado (Criterio Estricto)
         nom_c_str = str(nombre_completo or "").strip()
         if not nom_c_str or nom_c_str == "POR REVISAR":
             partes = []
@@ -424,8 +475,12 @@ class ValidadorColombia:
             nom_c_str = " ".join(partes).strip()
 
         nom_c_norm = cls.normalizar_nombre(nom_c_str) if nom_c_str else None
-        if not nom_c_norm or nom_c_norm == "POR REVISAR" or cls._PALABRAS_NO_NOMBRE.search(nom_c_str) or any(r in nom_c_str.upper() for r in ["NACIONA", "COLOMBIA", "REGISTRADURIA", "REPUBLICA"]):
+        if not nom_c_norm or nom_c_norm == "POR REVISAR":
             motivos.append("Nombre completo no reconocido o ausente")
+        else:
+            valido_nom, mot_nom = cls.validar_nombre_estricto(nom_c_norm)
+            if not valido_nom:
+                motivos.append(mot_nom)
 
         # 3. Fecha de nacimiento (con la que se calcula la edad)
         if not fecha_nacimiento:

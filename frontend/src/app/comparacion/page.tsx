@@ -368,17 +368,17 @@ export default function ComparacionPage() {
                       onClick={() => verDiferencias(c)}
                       className={`w-full text-left p-3 rounded-xl border transition-all duration-200 ${
                         comparacionActiva?.id === c.id
-                          ? "border-primary-500 bg-primary-500/10"
-                          : "border-white/[0.06] hover:border-white/15 bg-dark-800"
+                          ? "border-primary-500 bg-primary-500/10 shadow-sm"
+                          : "border-slate-300 dark:border-white/[0.06] hover:border-slate-400 dark:hover:border-white/15 bg-white dark:bg-dark-800 shadow-sm"
                       }`}
                     >
-                      <p className="text-sm text-white font-medium truncate">{c.nombre_original}</p>
+                      <p className="text-sm text-slate-900 dark:text-white font-medium truncate">{c.nombre_original}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`badge text-[10px] ${c.estado === "completado" ? "badge-success" : c.estado === "error" ? "badge-danger" : "badge-warning"}`}>
                           {c.estado}
                         </span>
                         {c.estado === "completado" && (
-                          <span className="text-[10px] text-slate-500">
+                          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
                             {c.total_diferentes} difs · {c.total_coincidentes} OK
                           </span>
                         )}
@@ -398,11 +398,11 @@ export default function ComparacionPage() {
                 <div className="card page-enter">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div>
-                      <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-primary-400" />
+                      <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-primary-500 dark:text-primary-400" />
                         Resultados: {comparacionActiva.nombre_original}
                       </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         Auditoría automática de calidad de extracción vs planilla oficial
                       </p>
                     </div>
@@ -419,16 +419,16 @@ export default function ComparacionPage() {
 
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
                     {[
-                      { label: "Total BD (OCR)", value: comparacionActiva.total_registros_bd, color: "text-blue-400" },
-                      { label: "Total Excel", value: comparacionActiva.total_registros_excel, color: "text-slate-300" },
-                      { label: "Coincidentes", value: comparacionActiva.total_coincidentes, color: "text-green-400" },
-                      { label: "Con Diferencias", value: comparacionActiva.total_diferentes, color: "text-yellow-400" },
-                      { label: "Faltantes en BD", value: comparacionActiva.total_faltantes_bd, color: "text-red-400" },
-                      { label: "Sobrantes en BD", value: comparacionActiva.total_nuevos_bd, color: "text-purple-400" },
+                      { label: "Total BD (OCR)", value: comparacionActiva.total_registros_bd, color: "text-blue-600 dark:text-blue-400" },
+                      { label: "Total Excel", value: comparacionActiva.total_registros_excel, color: "text-slate-800 dark:text-slate-200" },
+                      { label: "Coincidentes", value: comparacionActiva.total_coincidentes, color: "text-emerald-600 dark:text-green-400" },
+                      { label: "Con Diferencias", value: comparacionActiva.total_diferentes, color: "text-amber-600 dark:text-yellow-400" },
+                      { label: "Faltantes en BD", value: comparacionActiva.total_faltantes_bd, color: "text-rose-600 dark:text-red-400" },
+                      { label: "Sobrantes en BD", value: comparacionActiva.total_nuevos_bd, color: "text-purple-600 dark:text-purple-400" },
                     ].map((s) => (
-                      <div key={s.label} className="bg-dark-800 rounded-xl p-2.5 text-center border border-white/[0.05]">
+                      <div key={s.label} className="bg-slate-50 dark:bg-dark-800 rounded-xl p-2.5 text-center border border-slate-300 dark:border-white/[0.05] shadow-sm">
                         <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                        <p className="text-slate-500 text-[11px] mt-0.5 leading-tight">{s.label}</p>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] font-medium mt-0.5 leading-tight">{s.label}</p>
                       </div>
                     ))}
                   </div>
@@ -614,7 +614,7 @@ export default function ComparacionPage() {
                 <p className="text-slate-300 text-sm max-w-md mb-2 font-medium">
                   Cotejando registros con la planilla oficial:
                 </p>
-                <div className="px-3.5 py-1.5 rounded-lg bg-dark-800 border border-white/10 text-primary-300 font-mono text-xs mb-5 max-w-sm truncate">
+                <div className="px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-800 border border-slate-300 dark:border-white/10 text-primary-600 dark:text-primary-300 font-mono text-xs mb-5 max-w-sm truncate shadow-sm">
                   📄 {comparacionActiva.nombre_original}
                 </div>
                 <p className="text-slate-400 text-xs max-w-md mb-6 leading-relaxed">

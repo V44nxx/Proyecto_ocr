@@ -548,11 +548,11 @@ export default function DocumentosPage() {
 
               {/* Indicadores de Cronómetro y Tiempo Estimado */}
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-dark-800/80 border border-white/[0.08] text-xs font-mono text-slate-300">
-                  <Timer className="w-3.5 h-3.5 text-primary-400" />
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-800/80 border border-slate-300 dark:border-white/[0.08] text-xs font-mono text-slate-700 dark:text-slate-300 shadow-sm">
+                  <Timer className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
                   <span>
                     {procesoFinalizado ? "Tiempo total:" : "Transcurrido:"}{" "}
-                    <strong className="text-white">
+                    <strong className="text-slate-900 dark:text-white">
                       {procesoFinalizado ? tiempoProcesamientoTexto : formatTimer(tiempoTranscurrido)}
                     </strong>
                   </span>
@@ -684,7 +684,7 @@ export default function DocumentosPage() {
                 </span>
               </div>
 
-              <div className="w-full h-3.5 bg-dark-800 rounded-full overflow-hidden p-0.5 border border-white/[0.08] relative">
+              <div className="w-full h-3.5 bg-slate-200 dark:bg-dark-800 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-white/[0.08] relative shadow-inner">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ease-out relative ${
                     procesoFinalizado
@@ -711,56 +711,56 @@ export default function DocumentosPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-2 relative z-10">
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoSubida >= 100 || faseActual === "procesando" || procesoFinalizado
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
                   : faseActual === "subiendo"
-                  ? "bg-blue-500/10 border-blue-500/30 text-blue-300 animate-pulse"
-                  : "bg-dark-800/40 border-white/[0.04] text-slate-500"
+                  ? "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-300 animate-pulse"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
               }`}>
                 <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
+                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
                   Carga del PDF
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">
                   {progresoSubida >= 100 ? "Subida completada" : `${progresoSubida}% cargado`}
                 </p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 40
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-300"
-                  : "bg-dark-800/40 border-white/[0.04] text-slate-500"
+                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
               }`}>
                 <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-[10px] font-bold">2</span>
+                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">2</span>
                   Reconocimiento OCR
                 </div>
-                <p className="text-[11px] text-slate-400">Google Document AI</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">Google Document AI</p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 75
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-300"
-                  : "bg-dark-800/40 border-white/[0.04] text-slate-500"
+                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
               }`}>
                 <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
+                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
                   Emparejamiento
                 </div>
-                <p className="text-[11px] text-slate-400">Frente y Reverso</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">Frente y Reverso</p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 100
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
                   : progresoGlobal >= 85
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-300"
-                  : "bg-dark-800/40 border-white/[0.04] text-slate-500"
+                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
               }`}>
                 <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className={`w-4 h-4 rounded-full ${progresoGlobal >= 100 ? "bg-emerald-500/20 text-emerald-400" : "bg-primary-500/20 text-primary-400"} flex items-center justify-center text-[10px] font-bold`}>4</span>
+                  <span className={`w-4 h-4 rounded-full ${progresoGlobal >= 100 ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-primary-500/20 text-primary-500 dark:text-primary-400"} flex items-center justify-center text-[10px] font-bold`}>4</span>
                   Extracción Personas
                 </div>
-                <p className="text-[11px] text-slate-400">Estructuración y guardado</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">Estructuración y guardado</p>
               </div>
             </div>
 
@@ -769,17 +769,17 @@ export default function DocumentosPage() {
               {docsEnProceso.map((doc) => (
                 <div
                   key={doc.id}
-                  className="p-3.5 bg-dark-800/70 border border-white/[0.06] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className="p-3.5 bg-slate-50 dark:bg-dark-800/70 border border-slate-300 dark:border-white/[0.06] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-5 h-5 text-primary-400 flex-shrink-0" />
+                    <FileText className="w-5 h-5 text-primary-500 dark:text-primary-400 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white truncate max-w-sm sm:max-w-md">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate max-w-sm sm:max-w-md">
                         {doc.nombre}
                       </p>
-                      <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
                         {doc.estado === "procesando" && (
-                          <RefreshCw className="w-3 h-3 text-yellow-400 animate-spin flex-shrink-0" />
+                          <RefreshCw className="w-3 h-3 text-yellow-500 dark:text-yellow-400 animate-spin flex-shrink-0" />
                         )}
                         {doc.estado === "completado" && (
                           <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />

@@ -49,12 +49,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [cargando, setCargando] = useState(true);
 
-  // Historial de Fichas y Personas
+  // Historial de Fichas
   const [documentosHistorial, setDocumentosHistorial] = useState<Documento[]>([]);
   const [cargandoDocs, setCargandoDocs] = useState(true);
-  const [docSeleccionado, setDocSeleccionado] = useState<Documento | null>(null);
-  const [personasDoc, setPersonasDoc] = useState<Persona[]>([]);
-  const [cargandoPersonasDoc, setCargandoPersonasDoc] = useState(false);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) {
@@ -76,31 +73,11 @@ export default function DashboardPage() {
       if (resStats?.data) setStats(resStats.data);
       const docs = Array.isArray(resDocs?.data) ? resDocs.data : [];
       setDocumentosHistorial(docs);
-
-      // Si no hay documento seleccionado pero hay documentos en el historial, seleccionar el primero por defecto
-      if (!docSeleccionado && docs.length > 0) {
-        seleccionarDocumento(docs[0]);
-      }
     } catch (err) {
       console.error("Error cargando datos del dashboard:", err);
     } finally {
       setCargando(false);
       setCargandoDocs(false);
-    }
-  };
-
-  const seleccionarDocumento = async (doc: Documento) => {
-    setDocSeleccionado(doc);
-    setCargandoPersonasDoc(true);
-    try {
-      const res = await apiPersonas.listar({ documento_id: doc.id, limit: 150 });
-      const items = Array.isArray(res.data) ? res.data : (((res.data as any)?.items) || []);
-      setPersonasDoc(items);
-    } catch (err) {
-      console.error("Error cargando personas de la ficha:", err);
-      setPersonasDoc([]);
-    } finally {
-      setCargandoPersonasDoc(false);
     }
   };
 
@@ -232,34 +209,34 @@ export default function DashboardPage() {
             </div>
 
             {/* ── HISTORIAL DE FICHAS / DOCUMENTOS ── */}
-            <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md mb-8 page-enter">
-              <div className="p-5 border-b border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/40">
+            <div className="card-glass border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm dark:shadow-xl overflow-hidden mb-8 page-enter">
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 dark:bg-slate-950/40">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    <span className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400">
                       <FileText className="w-4 h-4" />
                     </span>
-                    <h2 className="text-lg font-bold text-white tracking-tight">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                       Historial de Fichas Subidas
                     </h2>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Selecciona cualquier ficha para desplegar la tabla de personas que pertenecen exclusivamente a ese documento.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Haz clic en &quot;Visualizar Personas&quot; para abrir la tabla completa con cédula, nombres, edad, estado y visor de cada persona.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={cargarDatos}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 text-xs font-semibold transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 text-xs font-semibold transition-all cursor-pointer shadow-sm"
                     title="Recargar historial de fichas"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-primary-400" />
+                    <RefreshCw className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
                     <span>Actualizar</span>
                   </button>
                   <button
                     onClick={() => router.push("/documentos")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/40 text-xs font-bold transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold transition-all cursor-pointer shadow-sm shadow-primary-600/30"
                   >
                     <span>Subir Ficha</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -271,48 +248,43 @@ export default function DashboardPage() {
               {cargandoDocs ? (
                 <div className="p-6 space-y-3">
                   {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className="h-12 bg-slate-800/40 animate-pulse rounded-xl" />
+                    <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded-xl" />
                   ))}
                 </div>
               ) : documentosHistorial.length === 0 ? (
                 <div className="text-center py-12 px-4">
-                  <FileText className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-300">No hay fichas registradas</p>
+                  <FileText className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No hay fichas registradas</p>
                   <p className="text-xs text-slate-500 mt-0.5">Sube tu primer archivo PDF en el módulo de documentos para comenzar.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        <th className="py-3 px-4">Ficha / Documento PDF</th>
-                        <th className="py-3 px-3 text-center">Fecha de Carga</th>
-                        <th className="py-3 px-3 text-center">Páginas</th>
-                        <th className="py-3 px-3 text-center">Estado</th>
-                        <th className="py-3 px-3 text-center">Confianza</th>
-                        <th className="py-3 px-4 text-right">Personas de esta Ficha</th>
+                      <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="py-3.5 px-4">Ficha / Documento PDF</th>
+                        <th className="py-3.5 px-3 text-center">Fecha de Carga</th>
+                        <th className="py-3.5 px-3 text-center">Páginas</th>
+                        <th className="py-3.5 px-3 text-center">Estado</th>
+                        <th className="py-3.5 px-3 text-center">Confianza</th>
+                        <th className="py-3.5 px-4 text-right">Acción</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/30 text-xs">
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800/30 text-xs">
                       {documentosHistorial.map((doc) => {
-                        const isSelected = docSeleccionado?.id === doc.id;
                         return (
                           <tr
                             key={doc.id}
-                            onClick={() => seleccionarDocumento(doc)}
-                            className={`transition-colors cursor-pointer ${
-                              isSelected
-                                ? "bg-primary-500/15 border-l-4 border-l-primary-500 text-white font-medium"
-                                : "hover:bg-slate-800/30 text-slate-200"
-                            }`}
+                            onClick={() => router.push(`/personas?documento_id=${doc.id}`)}
+                            className="transition-colors cursor-pointer hover:bg-primary-50/50 dark:hover:bg-slate-800/30 text-slate-800 dark:text-slate-200"
                           >
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <div className={`p-2 rounded-lg shrink-0 ${isSelected ? "bg-primary-500/20 text-primary-300" : "bg-slate-800 text-slate-400"}`}>
+                                <div className="p-2 rounded-lg shrink-0 bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-slate-400 border border-blue-200/60 dark:border-transparent">
                                   <FileText className="w-4 h-4" />
                                 </div>
                                 <div className="min-w-0">
-                                  <span className="font-semibold block truncate max-w-[280px]" title={doc.nombre_original}>
+                                  <span className="font-semibold block truncate max-w-[320px] text-slate-900 dark:text-slate-100 hover:text-primary-600 transition-colors" title={doc.nombre_original}>
                                     {doc.nombre_original}
                                   </span>
                                   <span className="text-[10px] text-slate-500 font-mono">
@@ -321,44 +293,41 @@ export default function DashboardPage() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 px-3 text-center text-slate-400 whitespace-nowrap text-[11px]">
+                            <td className="py-3 px-3 text-center text-slate-600 dark:text-slate-400 whitespace-nowrap text-[11px] font-medium">
                               {doc.fecha_carga ? new Date(doc.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                             </td>
-                            <td className="py-3 px-3 text-center font-mono">
+                            <td className="py-3 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                               {doc.total_paginas || 1}
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
                               {doc.estado === "completado" ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 text-[10px] font-bold">
                                   <CheckCircle className="w-2.5 h-2.5" /> Completado
                                 </span>
                               ) : doc.estado === "procesando" ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold animate-pulse">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-yellow-500/15 border border-amber-300 dark:border-yellow-500/30 text-amber-800 dark:text-yellow-400 text-[10px] font-bold animate-pulse">
                                   <Clock className="w-2.5 h-2.5" /> Procesando
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-bold">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-red-500/15 border border-rose-300 dark:border-red-500/30 text-rose-800 dark:text-red-400 text-[10px] font-bold">
                                   <AlertTriangle className="w-2.5 h-2.5" /> {doc.estado}
                                 </span>
                               )}
                             </td>
-                            <td className="py-3 px-3 text-center font-mono text-slate-300">
+                            <td className="py-3 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                               {doc.confianza_ocr != null ? `${Math.round(doc.confianza_ocr)}%` : "—"}
                             </td>
                             <td className="py-3 px-4 text-right whitespace-nowrap">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  seleccionarDocumento(doc);
+                                  router.push(`/personas?documento_id=${doc.id}`);
                                 }}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1 cursor-pointer ${
-                                  isSelected
-                                    ? "bg-primary-600 text-white shadow-md shadow-primary-500/20"
-                                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60"
-                                }`}
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-primary-600 hover:bg-primary-500 text-white shadow-sm shadow-primary-600/30 hover:scale-[1.02] active:scale-98"
+                                title="Visualizar personas de este archivo en el módulo de Personas"
                               >
-                                <span>{isSelected ? "Visualizando" : "Ver Personas"}</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
+                                <span>Visualizar Personas</span>
+                                <ArrowUpRight className="w-3.5 h-3.5" />
                               </button>
                             </td>
                           </tr>
@@ -369,127 +338,6 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-
-            {/* ── TABLA DE PERSONAS DEL DOCUMENTO SELECCIONADO ── */}
-            {docSeleccionado && (
-              <div id="personas-ficha" className="bg-slate-900/90 border-2 border-primary-500/40 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md mb-8 page-enter">
-                <div className="p-5 border-b border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-primary-950/60 via-slate-900 to-primary-950/60">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="p-1.5 rounded-lg bg-primary-500/20 text-primary-300 border border-primary-500/30">
-                        <Users className="w-4 h-4" />
-                      </span>
-                      <h3 className="text-base font-extrabold text-white">
-                        Personas de la Ficha: <span className="text-primary-300 font-mono">{docSeleccionado.nombre_original}</span>
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Tabla de personas que pertenecen unicamente a este documento seleccionado.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 rounded-xl bg-primary-500/15 border border-primary-500/30 text-xs font-bold text-primary-300">
-                      Total en ficha: <strong className="text-white ml-1">{personasDoc.length}</strong> {personasDoc.length === 1 ? "persona" : "personas"}
-                    </span>
-                    <button
-                      onClick={() => router.push(`/personas?documento_id=${docSeleccionado.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all shadow-sm cursor-pointer"
-                      title="Abrir este documento con visor de páginas en el módulo de personas"
-                    >
-                      <span>Abrir en Módulo Personas</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {cargandoPersonasDoc ? (
-                  <div className="p-8 text-center">
-                    <div className="w-7 h-7 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-xs text-slate-400">Cargando personas de la ficha…</p>
-                  </div>
-                ) : personasDoc.length === 0 ? (
-                  <div className="text-center py-12 px-4">
-                    <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-300">No hay personas registradas en esta ficha</p>
-                    <p className="text-xs text-slate-500 mt-0.5">El documento aún no ha terminado de procesar o no se detectaron cédulas en sus páginas.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800/80 bg-slate-950/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          <th className="py-3 px-4">Documento / ID</th>
-                          <th className="py-3 px-4">Nombre Completo</th>
-                          <th className="py-3 px-3 text-center">Fecha Nacimiento</th>
-                          <th className="py-3 px-3 text-center">Edad</th>
-                          <th className="py-3 px-3 text-center">Página</th>
-                          <th className="py-3 px-4 text-center">Estado y Alertas</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/30 text-xs">
-                        {personasDoc.map((p) => {
-                          const nom = formatNombreCompleto(p);
-                          const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
-                          const esMenor14 = edad !== null && edad < 14;
-
-                          return (
-                            <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                              <td className="py-3 px-4 font-mono font-bold text-primary-300 whitespace-nowrap">
-                                {p.numero_identificacion}
-                              </td>
-                              <td className="py-3 px-4 font-semibold text-slate-100 whitespace-nowrap">
-                                {nom || <span className="text-slate-500 italic">Sin nombre</span>}
-                              </td>
-                              <td className="py-3 px-3 text-center font-mono text-slate-300 whitespace-nowrap">
-                                {p.fecha_nacimiento ? String(p.fecha_nacimiento) : "—"}
-                              </td>
-                              <td className="py-3 px-3 text-center whitespace-nowrap">
-                                {edad !== null ? (
-                                  esMenor14 ? (
-                                    <span className="inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 font-black shadow-sm shadow-rose-500/20 animate-pulse" title={`Alerta: Menor de 14 años (${edad} años cumplidos)`}>
-                                      {edad} años
-                                    </span>
-                                  ) : (
-                                    <span className="inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
-                                      {edad} años
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-slate-600 text-xs">—</span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3 text-center font-mono text-slate-400 whitespace-nowrap">
-                                {p.pagina_frente ? `Pág. ${p.pagina_frente}` : (p.pagina_numero || "—")}
-                              </td>
-                              <td className="py-3 px-4 text-center whitespace-nowrap">
-                                <div className="inline-flex items-center justify-center gap-1.5 flex-wrap">
-                                  {/* Alerta roja para menores de 14 años */}
-                                  {esMenor14 && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-500/50 text-rose-300 text-[10px] font-black shadow-sm shadow-rose-500/20 animate-pulse">
-                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-400" /> MENOR (&lt; 14)
-                                    </span>
-                                  )}
-                                  {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
-                                      <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
-                                      <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
           </>
         ) : (
           <div className="card text-center py-12">

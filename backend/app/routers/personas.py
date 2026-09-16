@@ -2,7 +2,7 @@
 Router de Personas
 Endpoints: Listar, detalle, actualizar (corrección manual), eliminar
 """
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 
@@ -407,6 +407,51 @@ def actualizar_persona(
     logger.info(f"Persona {persona.numero_identificacion} actualizada. Campos: {campos_actualizados}")
     ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
     return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
+
+
+@router.post("/batch-delete", summary="Eliminar múltiples personas")
+def eliminar_multiples_personas(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """Elimina en lote una lista de personas seleccionadas por ID"""
+    ids = payload.get("ids", [])
+    if not ids:
+        return {"eliminadas": 0}
+
+    # Filtrar que las personas pertenezcan al usuario
+    query = db.query(Persona.id).filter(Persona.id.in_(ids))
+    persona_ids = [row[0] for row in _filtrar_persona_por_usuario(query, usuario).all()]
+
+    if not persona_ids:
+        return {"eliminadas": 0}
+
+    eliminadas = db.query(Persona).filter(Persona.id.in_(persona_ids)).delete(synchronize_session=False)
+    db.commit()
+    logger.info(f"{eliminadas} personas eliminadas en lote por usuario {usuario.id}")
+    return {"eliminadas": eliminadas}
+
+
+@router.delete("/vaciar/todas", summary="Vaciar tabla de personas")
+def vaciar_tabla_personas(
+    documento_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """Elimina todas las personas del usuario (o solo las de un documento específico si se especifica documento_id)"""
+    query = db.query(Persona.id)
+    if documento_id and documento_id != "todos":
+        query = query.filter(Persona.documento_id == documento_id)
+
+    persona_ids = [row[0] for row in _filtrar_persona_por_usuario(query, usuario).all()]
+    if not persona_ids:
+        return {"eliminadas": 0, "mensaje": "No hay registros para eliminar"}
+
+    eliminadas = db.query(Persona).filter(Persona.id.in_(persona_ids)).delete(synchronize_session=False)
+    db.commit()
+    logger.info(f"Tabla de personas vaciada: {eliminadas} personas eliminadas por usuario {usuario.id}")
+    return {"eliminadas": eliminadas, "mensaje": f"{eliminadas} registros eliminados exitosamente"}
 
 
 @router.delete("/{persona_id}", status_code=204, summary="Eliminar persona")

@@ -86,6 +86,11 @@ function PersonasContent() {
     menores: 0,
   });
 
+  // Modales de eliminación masiva y vaciado de tabla
+  const [modalVaciarAbierto, setModalVaciarAbierto] = useState(false);
+  const [modalEliminarSeleccionadosAbierto, setModalEliminarSeleccionadosAbierto] = useState(false);
+  const [eliminandoEnLote, setEliminandoEnLote] = useState(false);
+
   // Acordeón: solo una fila expandida a la vez
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   // Control de campos secundarios (fecha exp, lugar exp, género)
@@ -293,6 +298,46 @@ function PersonasContent() {
       cargarPersonas(true);
     } catch {
       toast.error("Error al eliminar registro");
+    }
+  };
+
+  const ejecutarEliminarSeleccionados = async () => {
+    if (seleccionados.size === 0) return;
+    setEliminandoEnLote(true);
+    const toastId = toast.loading(`Eliminando ${seleccionados.size} registros...`);
+    try {
+      const res = await apiPersonas.eliminarMultiples(Array.from(seleccionados));
+      const cant = res.data.eliminadas || seleccionados.size;
+      toast.success(`Se eliminaron ${cant} personas exitosamente`, { id: toastId });
+      setSeleccionados(new Set());
+      setModalEliminarSeleccionadosAbierto(false);
+      if (expandidoId && seleccionados.has(expandidoId)) setExpandidoId(null);
+      cargarPersonas(true);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error al eliminar personas seleccionadas");
+      toast.error(msg, { id: toastId });
+    } finally {
+      setEliminandoEnLote(false);
+    }
+  };
+
+  const ejecutarVaciarTabla = async () => {
+    setEliminandoEnLote(true);
+    const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
+    const toastId = toast.loading("Vaciando tabla de personas...");
+    try {
+      const res = await apiPersonas.vaciarTodas({ documento_id: docId });
+      const cant = res.data.eliminadas;
+      toast.success(`Tabla vaciada: ${cant} personas eliminadas`, { id: toastId });
+      setSeleccionados(new Set());
+      setExpandidoId(null);
+      setModalVaciarAbierto(false);
+      cargarPersonas(true);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error al vaciar la tabla de personas");
+      toast.error(msg, { id: toastId });
+    } finally {
+      setEliminandoEnLote(false);
     }
   };
 
@@ -1078,18 +1123,27 @@ function PersonasContent() {
               Haz clic en el ícono <Eye className="inline w-3.5 h-3.5 text-primary-400 mx-1" /> para expandir el documento y los datos OCR de cada persona.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setModalVaciarAbierto(true)}
+              disabled={personas.length === 0}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-100 dark:bg-rose-500/20 hover:bg-rose-200 dark:hover:bg-rose-500/30 border-2 border-rose-500 text-xs font-black text-rose-950 dark:text-rose-200 transition-all shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Vaciar tabla de personas"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-700 dark:text-rose-400" />
+              <span>Vaciar Tabla</span>
+            </button>
             <button
               onClick={exportarVistaActual}
               disabled={exportando || personas.length === 0}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-bold text-emerald-300 transition-all shadow-lg shadow-emerald-500/5 disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 border border-emerald-400 dark:border-emerald-500/30 text-xs font-bold text-emerald-950 dark:text-emerald-300 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
               title="Exportar registros a Excel (.xlsx)"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <Download className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
               <span>Exportar a Excel</span>
             </button>
-            <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-primary-500/20 to-blue-500/20 border border-primary-500/30 text-sm font-semibold text-primary-300 shadow-lg shadow-primary-500/5">
-              {filtroDocumento !== "todos" ? "Total archivo:" : "Total:"} <strong className="text-white font-extrabold text-base ml-1">{stats.total}</strong> {stats.total === 1 ? "persona" : "personas"}
+            <span className="px-4 py-2 rounded-xl bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-sm font-semibold text-blue-900 dark:text-primary-300 shadow-sm">
+              {filtroDocumento !== "todos" ? "Total archivo:" : "Total:"} <strong className="text-blue-950 dark:text-white font-extrabold text-base ml-1">{stats.total}</strong> {stats.total === 1 ? "persona" : "personas"}
             </span>
           </div>
         </div>
@@ -1323,7 +1377,16 @@ function PersonasContent() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setModalEliminarSeleccionadosAbierto(true)}
+                disabled={eliminandoEnLote}
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar seleccionados ({seleccionados.size})</span>
+              </button>
+
               <button
                 onClick={exportarSeleccion}
                 disabled={exportando}
@@ -1344,13 +1407,31 @@ function PersonasContent() {
 
               <button
                 onClick={() => setSeleccionados(new Set())}
-                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700/60 transition-colors"
+                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700/60 transition-colors cursor-pointer"
               >
                 Limpiar selección
               </button>
             </div>
           </div>
         )}
+
+        {/* Barra de acción directa sobre la tabla */}
+        <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2 text-xs">
+          <div className="text-slate-600 dark:text-slate-400 font-medium">
+            Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{stats.total}</strong> personas
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setModalVaciarAbierto(true)}
+              disabled={personas.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-40"
+              title="Vaciar tabla de personas sin tener que eliminar una a una"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span>Vaciar Tabla</span>
+            </button>
+          </div>
+        </div>
 
         {/* Tabla */}
         <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-md dark:shadow-xl overflow-hidden backdrop-blur-md">
@@ -1640,6 +1721,139 @@ function PersonasContent() {
           )}
         </div>
 
+        {/* Modal Confirmar Vaciar Tabla */}
+        {modalVaciarAbierto && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => !eliminandoEnLote && setModalVaciarAbierto(false)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-4">
+                <Trash2 className="w-7 h-7" />
+              </div>
+
+              <h3 className="text-xl font-black text-slate-900 dark:text-white text-center">
+                ¿Vaciar tabla de personas?
+              </h3>
+
+              <p className="text-xs text-slate-600 dark:text-slate-400 text-center mt-2 leading-relaxed">
+                {filtroDocumento !== "todos" ? (
+                  <>
+                    Estás a punto de eliminar permanentemente todas las personas del archivo{" "}
+                    <strong className="text-slate-900 dark:text-white">
+                      {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "seleccionado"}
+                    </strong>{" "}
+                    (<span className="font-bold text-rose-600 dark:text-rose-400">{stats.total} registros</span>).
+                  </>
+                ) : (
+                  <>
+                    Estás a punto de eliminar permanentemente{" "}
+                    <strong className="text-rose-600 dark:text-rose-400 font-bold">{stats.total} registros</strong>{" "}
+                    de la tabla de personas.
+                  </>
+                )}
+              </p>
+
+              <div className="p-3 my-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Esta acción no se puede deshacer. Todos los datos asociados se borrarán permanentemente.</span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setModalVaciarAbierto(false)}
+                  disabled={eliminandoEnLote}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={ejecutarVaciarTabla}
+                  disabled={eliminandoEnLote}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all cursor-pointer shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {eliminandoEnLote ? (
+                    <>
+                      <div className="spinner w-3.5 h-3.5 border-white" />
+                      <span>Vaciando tabla...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Sí, vaciar tabla</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Confirmar Eliminar Seleccionados */}
+        {modalEliminarSeleccionadosAbierto && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => !eliminandoEnLote && setModalEliminarSeleccionadosAbierto(false)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-4">
+                <Trash2 className="w-7 h-7" />
+              </div>
+
+              <h3 className="text-xl font-black text-slate-900 dark:text-white text-center">
+                ¿Eliminar personas seleccionadas?
+              </h3>
+
+              <p className="text-xs text-slate-600 dark:text-slate-400 text-center mt-2 leading-relaxed">
+                Has seleccionado{" "}
+                <strong className="text-rose-600 dark:text-rose-400 font-bold">{seleccionados.size} {seleccionados.size === 1 ? "persona" : "personas"}</strong>.
+                ¿Deseas eliminarlas definitivamente de la tabla de personas?
+              </p>
+
+              <div className="p-3 my-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Esta acción eliminará estos registros de forma permanente.</span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setModalEliminarSeleccionadosAbierto(false)}
+                  disabled={eliminandoEnLote}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={ejecutarEliminarSeleccionados}
+                  disabled={eliminandoEnLote}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all cursor-pointer shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {eliminandoEnLote ? (
+                    <>
+                      <div className="spinner w-3.5 h-3.5 border-white" />
+                      <span>Eliminando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Sí, eliminar seleccionados</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Input oculto para subir PDF de la cédula para una persona */}
         <input
           type="file"

@@ -218,6 +218,12 @@ export const apiPersonas = {
   eliminar: (id: string) =>
     apiClient.delete(`/api/personas/${id}`),
 
+  eliminarMultiples: (ids: string[]) =>
+    apiClient.post<{ eliminadas: number }>("/api/personas/batch-delete", { ids }),
+
+  vaciarTodas: (params?: { documento_id?: string }) =>
+    apiClient.delete<{ eliminadas: number; mensaje: string }>("/api/personas/vaciar/todas", { params }),
+
   buscarCedula: (cedula: string) =>
     apiClient.get<Persona>(`/api/personas/buscar/cedula/${cedula}`),
 

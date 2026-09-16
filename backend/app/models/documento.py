@@ -1,7 +1,7 @@
 """Modelo SQLAlchemy: Documento"""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, BigInteger, DateTime, Numeric, Text, ForeignKey
+from sqlalchemy import Column, String, Integer, BigInteger, DateTime, Numeric, Text, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,6 +24,7 @@ class Documento(Base):
     fecha_carga = Column(DateTime(timezone=True), default=datetime.utcnow)
     fecha_procesamiento = Column(DateTime(timezone=True), nullable=True)
     metadatos = Column(JSONB, default=dict)
+    visible_en_subida = Column(Boolean, default=True, nullable=False)
 
     # Relaciones
     usuario = relationship("Usuario", back_populates="documentos")

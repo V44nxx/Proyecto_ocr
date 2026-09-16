@@ -19,6 +19,7 @@ class DocumentoResponse(BaseModel):
     tiempo_procesamiento_ms: Optional[int]
     fecha_carga: datetime
     fecha_procesamiento: Optional[datetime]
+    visible_en_subida: Optional[bool] = True
 
     class Config:
         from_attributes = True

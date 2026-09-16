@@ -167,7 +167,7 @@ export const apiDocumentos = {
     });
   },
 
-  listar: (params?: { skip?: number; limit?: number; estado?: string }) =>
+  listar: (params?: { skip?: number; limit?: number; estado?: string; solo_subida?: boolean }) =>
     apiClient.get<Documento[]>("/api/documentos", { params }),
 
   detalle: (id: string) =>
@@ -176,8 +176,8 @@ export const apiDocumentos = {
   estado: (id: string) =>
     apiClient.get<DocumentoEstadoResponse>(`/api/documentos/${id}/estado`),
 
-  eliminar: (id: string) =>
-    apiClient.delete(`/api/documentos/${id}`),
+  eliminar: (id: string, permanente: boolean = false) =>
+    apiClient.delete(`/api/documentos/${id}`, { params: { permanente } }),
 
   estadisticas: (documentoId?: string) =>
     apiClient.get<DashboardStats>("/api/documentos/dashboard/estadisticas", {

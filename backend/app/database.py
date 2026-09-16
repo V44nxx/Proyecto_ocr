@@ -95,9 +95,10 @@ def create_tables():
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS usuario_id UUID REFERENCES usuarios(id) ON DELETE CASCADE;",
                 "CREATE INDEX IF NOT EXISTS ix_personas_usuario_id ON personas (usuario_id);",
                 "UPDATE personas p SET usuario_id = d.usuario_id FROM documentos d WHERE p.documento_id = d.id AND p.usuario_id IS NULL;",
-                "UPDATE personas SET usuario_id = CAST(detalles_campos->>'usuario_id' AS UUID) WHERE usuario_id IS NULL AND detalles_campos->>'usuario_id' IS NOT NULL;",
                 "ALTER TABLE personas DROP CONSTRAINT IF EXISTS personas_numero_identificacion_key;",
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL;"
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL;",
+                "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS visible_en_subida BOOLEAN DEFAULT TRUE;",
+                "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;"
             ]
             for q in queries:
                 try:

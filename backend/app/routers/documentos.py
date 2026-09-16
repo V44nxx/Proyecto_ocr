@@ -237,11 +237,17 @@ def listar_documentos(
     skip: int = 0,
     limit: int = 50,
     estado: str = None,
+    solo_subida: bool = False,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Lista los documentos propios del usuario actual"""
+    from sqlalchemy import or_
+
     query = db.query(Documento).filter(Documento.usuario_id == usuario.id)
+
+    if solo_subida:
+        query = query.filter(or_(Documento.visible_en_subida == True, Documento.visible_en_subida.is_(None)))
 
     if estado:
         query = query.filter(Documento.estado == estado)
@@ -326,13 +332,17 @@ def estado_documento(
 
 
 
-@router.delete("/{documento_id}", status_code=204, summary="Eliminar documento")
+@router.delete("/{documento_id}", summary="Eliminar o retirar documento del apartado de subida")
 def eliminar_documento(
     documento_id: str,
+    permanente: bool = Query(False, description="Si es False (default), solo se retira del apartado de subida preservando el historial y las personas extraídas"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Elimina un documento propio del usuario, sus personas asociadas y el archivo físico"""
+    """
+    Retira un documento del apartado de subida.
+    Preserva el registro histórico en el Dashboard y conserva todas las personas extraídas y sus datos intactos.
+    """
     from app.models.persona import Persona
 
     documento = db.query(Documento).filter(
@@ -343,7 +353,21 @@ def eliminar_documento(
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado o no pertenece a su cuenta")
 
-    # 1. Eliminar en cascada todas las personas asociadas a este documento que pertenezcan a este usuario
+    if not permanente:
+        # Retirar únicamente de la vista del apartado de subida
+        documento.visible_en_subida = False
+        meta = dict(documento.metadatos or {})
+        meta["oculto_en_subida"] = True
+        documento.metadatos = meta
+        db.commit()
+        logger.info(f"Documento retirado del apartado de subida (preservado en historial y personas): {documento.nombre_original}")
+        return {
+            "ok": True,
+            "mensaje": "Documento retirado del apartado de subida. Su historial y personas asociadas continúan preservados en el sistema.",
+            "documento_id": str(documento.id)
+        }
+
+    # 1. Si es eliminación permanente explícita: eliminar personas
     personas_eliminadas = db.query(Persona).filter(
         Persona.documento_id == documento.id,
         (Persona.usuario_id == usuario.id) | (Persona.usuario_id.is_(None))
@@ -361,7 +385,8 @@ def eliminar_documento(
     # 3. Eliminar el documento de la base de datos
     db.delete(documento)
     db.commit()
-    logger.info(f"Documento eliminado: {documento.nombre_original} (usuario: {usuario.email})")
+    logger.info(f"Documento eliminado permanentemente: {documento.nombre_original} (usuario: {usuario.email})")
+    return {"ok": True, "mensaje": "Documento y personas eliminados permanentemente"}
 
 
 @router.get("/dashboard/estadisticas", summary="Estadísticas del dashboard")

@@ -68,7 +68,7 @@ export default function DocumentosPage() {
 
   const cargarDocumentos = async () => {
     try {
-      const res = await apiDocumentos.listar({ limit: 50 });
+      const res = await apiDocumentos.listar({ limit: 50, solo_subida: true });
       if (Array.isArray(res?.data)) {
         setDocumentos(res.data);
       } else if (res?.data && Array.isArray((res.data as any).documentos)) {
@@ -389,13 +389,13 @@ export default function DocumentosPage() {
   };
 
   const eliminarDocumento = async (id: string, nombre: string) => {
-    if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+    if (!confirm(`¿Quitar "${nombre}" del apartado de subida?\n\nNota: Su historial de ficha y personas asociadas seguirán disponibles en el Dashboard.`)) return;
     try {
       await apiDocumentos.eliminar(id);
-      toast.success("Documento eliminado");
+      toast.success("Documento quitado del apartado de subida. Su historial y personas siguen disponibles en el Dashboard.");
       cargarDocumentos();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Error eliminando documento"));
+      toast.error(getErrorMessage(err, "Error quitando documento"));
     }
   };
 

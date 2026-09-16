@@ -1,17 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
-  RefreshCw, ChevronRight, ExternalLink, ArrowUpRight
+  RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
+  X, Search, Eye, ChevronUp, ChevronDown
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiDocumentos, apiPersonas } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
 import type { DashboardStats, Documento, Persona } from "@/types";
+
+const getTipoDocInfo = (tipo?: string | null) => {
+  const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
+  if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
+    return {
+      codigo: "CT",
+      label: "Contraseña",
+      badge: "bg-teal-100 dark:bg-teal-900/50 border-2 border-teal-600 dark:border-teal-400 text-teal-950 dark:text-teal-200 font-extrabold shadow-sm",
+    };
+  }
+  if (t.includes("TARJETA") || t === "TI") {
+    return {
+      codigo: "TI",
+      label: "Tarjeta de Identidad",
+      badge: "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-700 dark:border-purple-400 text-purple-950 dark:text-purple-100 font-black shadow-sm",
+    };
+  }
+  if (t.includes("EXTRANJERIA") || t === "CE") {
+    return {
+      codigo: "CE",
+      label: "Cédula Extranjería",
+      badge: "bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-600 dark:border-amber-400 text-amber-950 dark:text-amber-200 font-black shadow-sm",
+    };
+  }
+  if (t.includes("PASAPORTE") || t === "PAS") {
+    return {
+      codigo: "PAS",
+      label: "Pasaporte",
+      badge: "bg-emerald-100 dark:bg-emerald-900/50 border-2 border-emerald-600 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 font-black shadow-sm",
+    };
+  }
+  return {
+    codigo: "CC",
+    label: "Cédula de Ciudadanía",
+    badge: "bg-blue-100 dark:bg-blue-900/60 border-2 border-blue-700 dark:border-blue-400 text-blue-950 dark:text-blue-100 font-black shadow-sm",
+  };
+};
 
 function StatCard({
   title,
@@ -53,6 +91,30 @@ export default function DashboardPage() {
   const [documentosHistorial, setDocumentosHistorial] = useState<Documento[]>([]);
   const [cargandoDocs, setCargandoDocs] = useState(true);
 
+  // Modal de Personas de Ficha (Tabla Separada / Independiente)
+  const [docSeleccionadoModal, setDocSeleccionadoModal] = useState<Documento | null>(null);
+  const [personasFicha, setPersonasFicha] = useState<Persona[]>([]);
+  const [cargandoPersonasFicha, setCargandoPersonasFicha] = useState(false);
+  const [busquedaModal, setBusquedaModal] = useState("");
+  const [personaDetalleId, setPersonaDetalleId] = useState<string | null>(null);
+
+  const abrirPersonasFicha = async (doc: Documento) => {
+    setDocSeleccionadoModal(doc);
+    setPersonaDetalleId(null);
+    setBusquedaModal("");
+    setCargandoPersonasFicha(true);
+    try {
+      const res = await apiPersonas.listar({ documento_id: doc.id, limit: 200 });
+      const items = Array.isArray(res.data) ? res.data : (res.data as any).items || [];
+      setPersonasFicha(items);
+    } catch (err) {
+      console.error("Error al cargar personas de la ficha:", err);
+      setPersonasFicha([]);
+    } finally {
+      setCargandoPersonasFicha(false);
+    }
+  };
+
   useEffect(() => {
     if (!auth.isAuthenticated()) {
       router.push("/");
@@ -82,18 +144,18 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
       <Sidebar />
 
       <main className="ml-64 flex-1 p-6 lg:p-8 min-w-0 max-w-[calc(100vw-16rem)] overflow-x-hidden">
         {/* Header */}
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">
-            <Activity className="w-5 h-5 text-primary-400" />
-            <span className="text-primary-400 text-sm font-medium">Panel de Control</span>
+            <Activity className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <span className="text-primary-700 dark:text-primary-400 text-sm font-semibold">Panel de Control</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard</h1>
-          <p className="text-slate-400 mt-1 text-sm">
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">
             Resumen en tiempo real del sistema OCR e historial interactivo de fichas procesadas
           </p>
         </div>
@@ -275,7 +337,7 @@ export default function DashboardPage() {
                         return (
                           <tr
                             key={doc.id}
-                            onClick={() => router.push(`/personas?documento_id=${doc.id}`)}
+                            onClick={() => abrirPersonasFicha(doc)}
                             className="transition-colors cursor-pointer hover:bg-primary-50/50 dark:hover:bg-slate-800/30 text-slate-800 dark:text-slate-200"
                           >
                             <td className="py-3 px-4">
@@ -321,13 +383,13 @@ export default function DashboardPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/personas?documento_id=${doc.id}`);
+                                  abrirPersonasFicha(doc);
                                 }}
                                 className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-primary-600 hover:bg-primary-500 text-white shadow-sm shadow-primary-600/30 hover:scale-[1.02] active:scale-98"
-                                title="Visualizar personas de este archivo en el módulo de Personas"
+                                title="Visualizar personas de este archivo en una tabla independiente"
                               >
+                                <Eye className="w-3.5 h-3.5" />
                                 <span>Visualizar Personas</span>
-                                <ArrowUpRight className="w-3.5 h-3.5" />
                               </button>
                             </td>
                           </tr>
@@ -345,6 +407,282 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* ── MODAL: TABLA DISTINTA E INDEPENDIENTE DE PERSONAS DE LA FICHA ── */}
+      {docSeleccionadoModal && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setDocSeleccionadoModal(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700/60">
+                    <FileText className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] uppercase font-black tracking-wider text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 rounded-md border border-primary-300 dark:border-primary-500/20">
+                      Tabla Independiente de Ficha
+                    </span>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white truncate max-w-[500px]" title={docSeleccionadoModal.nombre_original}>
+                      {docSeleccionadoModal.nombre_original}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 flex-wrap mt-2">
+                  <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                    📄 {docSeleccionadoModal.total_paginas || 1} {docSeleccionadoModal.total_paginas === 1 ? "página" : "páginas"}
+                  </span>
+                  <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                    ⚡ Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}
+                  </span>
+                  <span className="bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 font-bold text-[11px] text-blue-900 dark:text-blue-300">
+                    👥 {personasFicha.length} {personasFicha.length === 1 ? "persona encontrada" : "personas encontradas"}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Cargado: {docSeleccionadoModal.fecha_carga ? new Date(docSeleccionadoModal.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botón cerrar */}
+              <button
+                onClick={() => setDocSeleccionadoModal(null)}
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
+                title="Cerrar ventana"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Aviso explicativo y buscador local */}
+            <div className="px-5 py-2.5 bg-blue-50/80 dark:bg-blue-950/30 border-b border-blue-200 dark:border-blue-900/40 text-blue-950 dark:text-blue-200 text-xs flex items-center justify-between gap-3 flex-wrap">
+              <span className="flex items-center gap-1.5 font-medium">
+                <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                Esta tabla muestra única y exclusivamente las personas pertenecientes a este archivo sin alterar ni mezclar la tabla general de personas.
+              </span>
+              <div className="relative min-w-[240px]">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar por cédula o nombre..."
+                  value={busquedaModal}
+                  onChange={(e) => setBusquedaModal(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-primary-500"
+                />
+              </div>
+            </div>
+
+            {/* Modal Body: Tabla de Personas */}
+            <div className="overflow-y-auto flex-1 p-5 min-h-[250px] max-h-[60vh]">
+              {cargandoPersonasFicha ? (
+                <div className="space-y-3 py-6">
+                  {Array(4).fill(0).map((_, i) => (
+                    <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded-xl" />
+                  ))}
+                </div>
+              ) : personasFicha.filter((p) => {
+                if (!busquedaModal) return true;
+                const q = busquedaModal.toLowerCase().trim().replace(/[.\s]/g, "");
+                const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
+                const nom = formatNombreCompleto(p).toLowerCase();
+                return cedula.includes(q) || nom.includes(q);
+              }).length === 0 ? (
+                <div className="text-center py-16">
+                  <Users className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {busquedaModal ? `Sin resultados para "${busquedaModal}"` : "No se registraron personas para esta ficha"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    El documento puede estar en procesamiento o no contener cédulas legibles.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950/60 text-[11px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="py-3 px-3 w-10 text-center">#</th>
+                        <th className="py-3 px-3 whitespace-nowrap">Documento / Cédula</th>
+                        <th className="py-3 px-3 whitespace-nowrap">Nombre Completo</th>
+                        <th className="py-3 px-3 text-center whitespace-nowrap">Edad</th>
+                        <th className="py-3 px-3 text-center whitespace-nowrap">Página</th>
+                        <th className="py-3 px-3 text-center whitespace-nowrap">Estado OCR</th>
+                        <th className="py-3 px-3 text-right whitespace-nowrap">Detalles</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800/40 text-xs">
+                      {personasFicha
+                        .filter((p) => {
+                          if (!busquedaModal) return true;
+                          const q = busquedaModal.toLowerCase().trim().replace(/[.\s]/g, "");
+                          const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
+                          const nom = formatNombreCompleto(p).toLowerCase();
+                          return cedula.includes(q) || nom.includes(q);
+                        })
+                        .map((p, idx) => {
+                          const nombre = formatNombreCompleto(p);
+                          const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
+                          const esMenor14 = edad !== null && edad < 14;
+                          const tipoInfo = getTipoDocInfo(p.tipo_documento);
+                          const isExpanded = personaDetalleId === p.id;
+
+                          return (
+                            <Fragment key={p.id}>
+                              <tr
+                                onClick={() => setPersonaDetalleId(isExpanded ? null : p.id)}
+                                className={`transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 ${
+                                  isExpanded ? "bg-blue-50/70 dark:bg-slate-800/40" : ""
+                                }`}
+                              >
+                                <td className="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-3 px-3 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 flex-nowrap">
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`}>
+                                      {tipoInfo.codigo}
+                                    </span>
+                                    <span className="font-mono text-blue-900 dark:text-primary-300 font-black text-sm tracking-wide">
+                                      {p.numero_identificacion}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 whitespace-nowrap">
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                                    {nombre || "Sin nombre extraído"}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-center whitespace-nowrap">
+                                  {edad !== null ? (
+                                    esMenor14 ? (
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-600 dark:border-rose-500/50 text-rose-950 dark:text-rose-300 font-black animate-pulse">
+                                        {edad} años (MENOR)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 font-bold">
+                                        {edad} años
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="text-slate-400 text-xs">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                                  {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "1")}
+                                </td>
+                                <td className="py-3 px-3 text-center whitespace-nowrap">
+                                  {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-400 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-[10px] font-extrabold shadow-sm">
+                                      <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold shadow-sm">
+                                      <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-right whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPersonaDetalleId(isExpanded ? null : p.id);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <span>{isExpanded ? "Ocultar" : "Detalles"}</span>
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+                                </td>
+                              </tr>
+
+                              {/* Fila desplegable de detalles completos de la persona */}
+                              {isExpanded && (
+                                <tr className="bg-slate-50/90 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800">
+                                  <td colSpan={7} className="p-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                                      <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-500">Fecha de Nacimiento</p>
+                                        <p className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                                          {p.fecha_nacimiento || "No extraída"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-500">Fecha de Expedición</p>
+                                        <p className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                                          {p.fecha_expedicion || "No extraída"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-500">Lugar de Expedición</p>
+                                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                                          {p.lugar_expedicion || "No extraído"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-500">Género / Sexo</p>
+                                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                                          {p.sexo || (p.detalles_campos as any)?.genero || "No extraído"}
+                                        </p>
+                                      </div>
+
+                                      {/* Nombre desglosado */}
+                                      <div className="sm:col-span-2 lg:col-span-4 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 flex-wrap text-xs">
+                                        <span className="text-slate-500 text-[11px]">
+                                          <strong className="text-slate-700 dark:text-slate-300">Apellidos:</strong> {p.apellidos || (p.detalles_campos as any)?.primer_apellido || "—"}
+                                        </span>
+                                        <span className="text-slate-500 text-[11px]">
+                                          <strong className="text-slate-700 dark:text-slate-300">Nombres:</strong> {p.nombres || (p.detalles_campos as any)?.primer_nombre || "—"}
+                                        </span>
+                                        {p.requiere_revision && (
+                                          <span className="text-amber-800 dark:text-amber-300 text-[11px] bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 font-medium">
+                                            ⚠️ Requiere verificación de datos OCR
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                Mostrando <strong className="text-slate-900 dark:text-white">
+                  {personasFicha.filter((p) => {
+                    if (!busquedaModal) return true;
+                    const q = busquedaModal.toLowerCase().trim().replace(/[.\s]/g, "");
+                    const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
+                    const nom = formatNombreCompleto(p).toLowerCase();
+                    return cedula.includes(q) || nom.includes(q);
+                  }).length}
+                </strong> de <strong className="text-slate-900 dark:text-white">{personasFicha.length}</strong> personas de esta ficha
+              </div>
+              <button
+                onClick={() => setDocSeleccionadoModal(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-bold transition-all cursor-pointer shadow-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,39 +22,39 @@ const getTipoDocInfo = (tipo?: string | null) => {
     return {
       codigo: "CT",
       label: "Contraseña",
-      badge: "bg-teal-500/20 border-teal-500/40 text-teal-300 font-bold",
-      pill: "bg-teal-500/20 text-teal-300 border-teal-500/40",
+      badge: "bg-teal-100 dark:bg-teal-900/50 border-2 border-teal-600 dark:border-teal-400 text-teal-950 dark:text-teal-200 font-extrabold shadow-sm",
+      pill: "bg-teal-100 dark:bg-teal-900/50 text-teal-950 dark:text-teal-200 border-2 border-teal-600 dark:border-teal-400 font-bold shadow-sm",
     };
   }
   if (t.includes("TARJETA") || t === "TI") {
     return {
       codigo: "TI",
       label: "Tarjeta de Identidad",
-      badge: "bg-purple-500/20 border-purple-500/40 text-purple-300 font-bold",
-      pill: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+      badge: "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-700 dark:border-purple-400 text-purple-950 dark:text-purple-100 font-black shadow-sm",
+      pill: "bg-purple-100 dark:bg-purple-900/60 text-purple-950 dark:text-purple-100 border-2 border-purple-700 dark:border-purple-400 font-black shadow-sm",
     };
   }
   if (t.includes("EXTRANJERIA") || t === "CE") {
     return {
       codigo: "CE",
       label: "Cédula Extranjería",
-      badge: "bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold",
-      pill: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+      badge: "bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-600 dark:border-amber-400 text-amber-950 dark:text-amber-200 font-black shadow-sm",
+      pill: "bg-amber-100 dark:bg-amber-900/50 text-amber-950 dark:text-amber-200 border-2 border-amber-600 dark:border-amber-400 font-bold shadow-sm",
     };
   }
   if (t.includes("PASAPORTE") || t === "PAS") {
     return {
       codigo: "PAS",
       label: "Pasaporte",
-      badge: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold",
-      pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+      badge: "bg-emerald-100 dark:bg-emerald-900/50 border-2 border-emerald-600 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 font-black shadow-sm",
+      pill: "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-950 dark:text-emerald-200 border-2 border-emerald-600 dark:border-emerald-400 font-bold shadow-sm",
     };
   }
   return {
     codigo: "CC",
     label: "Cédula de Ciudadanía",
-    badge: "bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold",
-    pill: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+    badge: "bg-blue-100 dark:bg-blue-900/60 border-2 border-blue-700 dark:border-blue-400 text-blue-950 dark:text-blue-100 font-black shadow-sm",
+    pill: "bg-blue-100 dark:bg-blue-900/60 text-blue-950 dark:text-blue-100 border-2 border-blue-700 dark:border-blue-400 font-black shadow-sm",
   };
 };
 
@@ -582,25 +582,25 @@ function PersonasContent() {
         <div className="lg:w-[56%] w-full flex flex-col justify-between min-w-0 overflow-hidden">
           <div>
             {/* Meta info */}
-            <div className="px-3 py-2 border-b border-slate-800/40 bg-slate-900/50 flex items-center justify-between flex-wrap gap-1.5 min-w-0">
+            <div className="px-3 py-2 border-b border-slate-300 dark:border-slate-800/40 bg-slate-100 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-1.5 min-w-0">
               <div className="flex items-center gap-2 text-[10px] flex-wrap min-w-0">
                 <span className={`px-2 py-0.5 rounded text-[10px] border font-bold shrink-0 ${getTipoDocInfo(p.tipo_documento).pill}`}>
                   {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
                 </span>
                 {p.nombre_documento && (
-                  <span className="flex items-center gap-1 text-slate-300 font-mono text-[10px] bg-primary-500/10 border border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink" title={`Archivo PDF origen: ${p.nombre_documento}`}>
-                    <FileText className="w-3 h-3 text-primary-400 shrink-0" />
-                    <span className="text-primary-400 font-semibold shrink-0">PDF:</span>
+                  <span className="flex items-center gap-1 text-slate-800 dark:text-slate-300 font-mono text-[10px] bg-blue-100 dark:bg-primary-500/10 border border-blue-300 dark:border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`Archivo PDF origen: ${p.nombre_documento}`}>
+                    <FileText className="w-3 h-3 text-blue-700 dark:text-primary-400 shrink-0" />
+                    <span className="text-blue-800 dark:text-primary-400 font-bold shrink-0">PDF:</span>
                     <span className="truncate">{p.nombre_documento}</span>
                   </span>
                 )}
-                <span className="flex items-center gap-1 text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
-                <span className="flex items-center gap-1 text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
+                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">{p.motor_ocr || "google_document_ai"}</span></span>
+                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-700 dark:text-slate-400 font-medium">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
                 {edadCalculada !== null && (
-                  <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-semibold shrink-0 border ${
+                  <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-bold shrink-0 border shadow-sm ${
                     esMenor14Detalle
-                      ? "bg-rose-500/20 border-rose-500/40 text-rose-300 font-bold animate-pulse"
-                      : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                      ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
+                      : "bg-amber-100 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300"
                   }`} title={`Edad: ${edadCalculada} años cumplidos`}>
                     <span>{esMenor14Detalle ? `⚠️ MENOR: ${edadCalculada} años` : `${edadCalculada} años`}</span>
                   </span>
@@ -617,44 +617,44 @@ function PersonasContent() {
 
             {/* Alerta Destacada en Rojo: Menor de 14 Años */}
             {esMenor14Detalle && (
-              <div className="m-2.5 p-3 rounded-xl bg-rose-500/15 border-2 border-rose-500/50 text-rose-200 shadow-lg shadow-rose-500/20 animate-pulse min-w-0">
+              <div className="m-2.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-500/15 border-2 border-rose-400 dark:border-rose-500/50 text-rose-950 dark:text-rose-200 shadow-md animate-pulse min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider text-rose-300">
-                    Alerta: Persona Menor de 14 Años
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-rose-800 dark:text-rose-300">
+                    ALERTA: PERSONA MENOR DE 14 AÑOS ({edadCalculada} AÑOS)
                   </span>
                 </div>
-                <p className="text-xs text-rose-100 ml-6 break-words font-medium">
-                  Esta persona tiene <strong className="text-white font-bold underline">{edadCalculada} años cumplidos</strong> según su fecha de nacimiento registrada (<strong className="font-mono text-white">{p.fecha_nacimiento || "sin fecha"}</strong>).
+                <p className="text-xs text-rose-900 dark:text-rose-100 ml-6 break-words font-medium">
+                  Esta persona tiene <strong className="text-rose-950 dark:text-white font-bold underline">{edadCalculada} años cumplidos</strong> según su fecha de nacimiento registrada (<strong className="font-mono text-rose-950 dark:text-white">{p.fecha_nacimiento || "sin fecha"}</strong>).
                 </p>
               </div>
             )}
 
             {/* Alerta: Falta en Planilla Excel */}
             {p.en_excel === false && (
-              <div className="m-2.5 p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileSpreadsheet className="w-4 h-4 text-purple-400 shrink-0" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
+              <div className="m-2.5 p-3.5 rounded-xl bg-purple-100/90 dark:bg-purple-950/60 border-2 border-purple-600 dark:border-purple-500 text-purple-950 dark:text-purple-100 min-w-0 shadow-sm">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-purple-900 dark:text-purple-300 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-950 dark:text-purple-200">
                     Alerta: No se encuentra en la Planilla Excel
                   </span>
                 </div>
-                <p className="text-xs text-purple-200/90 ml-6 break-words">
-                  El número de identificación <strong className="font-mono text-white">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
+                <p className="text-xs text-purple-950 dark:text-purple-100 ml-6 break-words font-semibold leading-relaxed">
+                  El número de identificación <strong className="font-mono text-purple-950 dark:text-white font-black bg-purple-300/80 dark:bg-purple-900 px-2 py-0.5 rounded border border-purple-500 dark:border-purple-600">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
                 </p>
               </div>
             )}
 
             {/* Alerta: Sin Documento PDF */}
             {(!p.documento_id || p.en_pdf === false) && (
-              <div className="m-2.5 p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
+              <div className="m-2.5 p-3.5 rounded-xl bg-sky-100/90 dark:bg-sky-950/60 border-2 border-sky-600 dark:border-sky-500 text-sky-950 dark:text-sky-100 min-w-0 shadow-sm">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <FileText className="w-4 h-4 text-sky-900 dark:text-sky-300 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-sky-950 dark:text-sky-200">
                     Alerta: Sin Documento PDF Asociado
                   </span>
                 </div>
-                <p className="text-xs text-sky-200/90 ml-6 break-words">
+                <p className="text-xs text-sky-950 dark:text-sky-100 ml-6 break-words font-semibold leading-relaxed">
                   Este registro fue creado manualmente o desde Excel y no cuenta con un archivo PDF vinculado. Puede subirlo con el botón &quot;Subir PDF Cédula&quot;.
                 </p>
               </div>
@@ -1223,7 +1223,7 @@ function PersonasContent() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
           {/* Búsqueda unificada por cédula, nombres o apellidos */}
           <div className="md:col-span-5 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-slate-400" />
             <input
               id="buscar-persona"
               type="text"
@@ -1232,12 +1232,12 @@ function PersonasContent() {
               onChange={(e) => setBuscar(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
               placeholder="Buscar por número de cédula o nombre y apellidos..."
-              className="w-full pl-10 pr-10 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary-500/60 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono sm:font-sans"
+              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono sm:font-sans"
             />
             {buscar && (
               <button
                 onClick={() => { setBuscar(""); cargarPersonas(true); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
                 title="Limpiar búsqueda"
               >
                 <X className="w-4 h-4" />
@@ -1247,14 +1247,14 @@ function PersonasContent() {
 
           {/* Selector de Documento PDF */}
           <div className="md:col-span-3 relative">
-            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 pointer-events-none" />
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-600 dark:text-primary-400 pointer-events-none" />
             <select
               value={filtroDocumento}
               onChange={(e) => {
                 setFiltroDocumento(e.target.value);
                 setSeleccionados(new Set());
               }}
-              className="w-full pl-9 pr-3 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-primary-500/60 font-medium truncate cursor-pointer shadow-sm"
+              className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-primary-500 font-semibold truncate cursor-pointer shadow-sm"
               title="Filtrar por archivo PDF de origen"
             >
               <option value="todos">📄 Todos los PDFs ({documentos.length})</option>
@@ -1271,16 +1271,16 @@ function PersonasContent() {
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
-              className={`w-full py-2.5 px-3 bg-slate-900/90 border rounded-xl text-xs font-medium cursor-pointer shadow-sm transition-all ${
+              className={`w-full py-2.5 px-3 border rounded-xl text-xs font-semibold cursor-pointer shadow-sm transition-all ${
                 filtroEstado === "revision"
-                  ? "border-amber-500/60 text-amber-300 bg-amber-500/10"
+                  ? "border-amber-500 text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10"
                   : filtroEstado === "validas"
-                  ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
+                  ? "border-emerald-500 text-emerald-900 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10"
                   : filtroEstado === "menores"
-                  ? "border-rose-500/60 text-rose-300 bg-rose-500/10"
+                  ? "border-rose-500 text-rose-900 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10"
                   : filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
-                  ? "border-purple-500/60 text-purple-300 bg-purple-500/10"
-                  : "border-slate-800 text-slate-200"
+                  ? "border-purple-500 text-purple-900 dark:text-purple-300 bg-purple-50 dark:bg-purple-500/10"
+                  : "bg-white dark:bg-slate-900/90 border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-200"
               }`}
               title="Filtrar por estado del registro"
             >
@@ -1298,10 +1298,10 @@ function PersonasContent() {
           <div className="md:col-span-1 flex justify-end">
             <button
               onClick={() => cargarPersonas(true)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold transition-all"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700/60 rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer"
               title="Recargar datos"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-primary-400" />
+              <RefreshCw className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
             </button>
           </div>
         </div>
@@ -1353,24 +1353,24 @@ function PersonasContent() {
         )}
 
         {/* Tabla */}
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-md dark:shadow-xl overflow-hidden backdrop-blur-md">
           {cargando ? (
             <div className="p-8 space-y-3">
               {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-12 bg-slate-800/40 animate-pulse rounded-xl" />
+                <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded-xl" />
               ))}
             </div>
           ) : personasFiltradas.length === 0 ? (
             <div className="text-center py-20 px-4">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center text-slate-500">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex items-center justify-center text-slate-500">
                 <Users className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-300">No se encontraron registros</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-300">No se encontraron registros</h3>
               <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto">
                 {buscar ? `Sin resultados para "${buscar}"` : "No hay personas registradas."}
               </p>
               {buscar && (
-                <button onClick={() => setBuscar("")} className="mt-3 text-xs text-primary-400 hover:underline">
+                <button onClick={() => setBuscar("")} className="mt-3 text-xs text-primary-600 dark:text-primary-400 hover:underline">
                   Limpiar búsqueda
                 </button>
               )}
@@ -1379,13 +1379,13 @@ function PersonasContent() {
             <div className="overflow-x-auto w-full">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800/80 bg-slate-950/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-100 dark:bg-slate-950/50 text-[11px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">
                     <th className="py-3 px-2 w-8 text-center">
                       <input
                         type="checkbox"
                         checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
                         onChange={toggleSeleccionarTodasVisibles}
-                        className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
+                        className="rounded border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-primary-600 focus:ring-primary-500/40 cursor-pointer"
                         title="Seleccionar / Deseleccionar todas las personas mostradas"
                       />
                     </th>
@@ -1414,11 +1414,11 @@ function PersonasContent() {
                       <Fragment key={p.id}>
                         {/* ── Fila principal ── */}
                         <tr
-                          className={`border-b border-slate-800/30 transition-colors cursor-pointer ${isExpandida
-                              ? "bg-slate-800/40 border-primary-500/20"
+                          className={`border-b border-slate-200 dark:border-slate-800/30 transition-colors cursor-pointer ${isExpandida
+                              ? "bg-blue-50/70 dark:bg-slate-800/40 border-primary-500/30"
                               : isSeleccionada
-                                ? "bg-primary-500/10 hover:bg-primary-500/15"
-                                : "hover:bg-slate-800/20"
+                                ? "bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/15"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-800/20"
                             }`}
                           onClick={() => toggleExpandir(p)}
                         >
@@ -1428,13 +1428,13 @@ function PersonasContent() {
                               type="checkbox"
                               checked={isSeleccionada}
                               onChange={() => toggleSeleccionPersona(p.id)}
-                              className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
+                              className="rounded border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-primary-600 focus:ring-primary-500/40 cursor-pointer"
                             />
                           </td>
 
                           {/* Toggle expandir */}
                           <td className="py-3 px-1 w-7 text-center">
-                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-500/20 border border-primary-500/40 text-primary-300" : "bg-slate-800/60 border border-slate-700/50 text-slate-400"}`}>
+                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-100 dark:bg-primary-500/20 border border-primary-400 dark:border-primary-500/40 text-primary-700 dark:text-primary-300" : "bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/50 text-slate-600 dark:text-slate-400"}`}>
                               {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </div>
                           </td>
@@ -1445,11 +1445,11 @@ function PersonasContent() {
                               <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
                                 {tipoInfo.codigo}
                               </span>
-                              <span className="font-mono text-primary-300 font-bold text-sm tracking-wide shrink-0">
+                              <span className="font-mono text-blue-900 dark:text-primary-300 font-extrabold text-sm tracking-wide shrink-0">
                                 {p.numero_identificacion}
                               </span>
                               {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-medium flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                <span className="text-[9px] bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
                                   <CheckCircle className="w-2.5 h-2.5" /> Auto-corregido
                                 </span>
                               )}
@@ -1459,11 +1459,11 @@ function PersonasContent() {
                           {/* Nombre completo */}
                           <td className="py-3 px-2 whitespace-nowrap">
                             {nombreCompleto ? (
-                              <span className="text-sm font-semibold text-slate-100 whitespace-nowrap" title={nombreCompleto}>
+                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap" title={nombreCompleto}>
                                 {nombreCompleto}
                               </span>
                             ) : (
-                              <span className="text-slate-600 italic text-xs whitespace-nowrap">Sin nombre</span>
+                              <span className="text-slate-400 italic text-xs whitespace-nowrap">Sin nombre</span>
                             )}
                           </td>
 
@@ -1471,22 +1471,22 @@ function PersonasContent() {
                           <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
                             {edadRow !== null ? (
                               esMenor14 ? (
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 font-extrabold whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse" title={`Persona menor de 14 años (${edadRow} años)`}>
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 border border-rose-500 dark:border-rose-500/50 text-rose-950 dark:text-rose-300 font-black whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse" title={`Persona menor de 14 años (${edadRow} años)`}>
                                   {edadRow} años
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
+                                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 font-bold whitespace-nowrap">
                                   {edadRow} años
                                 </span>
                               )
                             ) : (
-                              <span className="text-slate-600 text-xs">—</span>
+                              <span className="text-slate-400 text-xs">—</span>
                             )}
                           </td>
 
                           {/* Página */}
                           <td className="py-3 px-1 w-12 text-center whitespace-nowrap">
-                            <span className="text-[11px] font-mono text-slate-500 whitespace-nowrap">
+                            <span className="text-[11px] font-mono text-slate-700 dark:text-slate-400 font-semibold whitespace-nowrap">
                               {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
                             </span>
                           </td>
@@ -1497,27 +1497,27 @@ function PersonasContent() {
                               {/* PDF badge */}
                               {p.documento_id ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-500/15 border border-blue-400 dark:border-blue-500/30 text-blue-950 dark:text-blue-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Extraído de documento PDF por OCR"
                                 >
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 border border-slate-700/60 text-slate-500 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-400 whitespace-nowrap shrink-0 shadow-sm" title="Sin documento PDF asociado">
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> Sin PDF
                                 </span>
                               )}
                               {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Encontrado en planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 whitespace-nowrap shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-600 dark:border-rose-500/40 text-rose-950 dark:text-rose-200 whitespace-nowrap shrink-0 shadow-sm"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Excel
@@ -1532,17 +1532,17 @@ function PersonasContent() {
                               {/* Alerta roja vistosa: Menor de 14 años */}
                               {esMenor14 && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-500/50 text-rose-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse"
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/25 border-2 border-rose-600 dark:border-rose-500/50 text-rose-950 dark:text-rose-200 text-[10px] font-black whitespace-nowrap shadow-sm animate-pulse"
                                   title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
                                 >
-                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" /> MENOR (&lt; 14)
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-700 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
                                 </span>
                               )}
 
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-sky-500/10"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-500/15 border-2 border-sky-600 dark:border-sky-500/30 text-sky-950 dark:text-sky-200 text-[10px] font-black whitespace-nowrap shadow-sm"
                                   title="No tiene documento PDF de cédula asociado"
                                 >
                                   <FileText className="w-2.5 h-2.5" /> NO EN PDF
@@ -1552,7 +1552,7 @@ function PersonasContent() {
                               {/* Alerta: Falta en Excel */}
                               {p.en_excel === false && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-purple-500/10"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/20 border-2 border-purple-600 dark:border-purple-500/40 text-purple-950 dark:text-purple-200 text-[10px] font-black whitespace-nowrap shadow-sm"
                                   title="No encontrado en la planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
@@ -1562,14 +1562,14 @@ function PersonasContent() {
                               {/* Estado de validación de datos */}
                               {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-amber-500/10"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-400 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm"
                                   title="Requiere revisión manual de datos incompletos"
                                 >
                                   <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
                                 </span>
                               ) : p.documento_id && p.en_excel !== false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold whitespace-nowrap shadow-sm shadow-emerald-500/10"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm"
                                   title="Registro completo y verificado"
                                 >
                                   <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO

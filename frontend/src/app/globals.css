@@ -622,3 +622,34 @@ html.light .dropzone.active {
   background-color: rgba(37, 99, 235, 0.04) !important;
 }
 
+/* High contrast badges and alerts in Light Mode */
+html.light [class*="text-purple-950"] {
+  color: #3B0764 !important;
+}
+html.light [class*="text-blue-950"] {
+  color: #0F2D6B !important;
+}
+html.light [class*="text-rose-950"] {
+  color: #881337 !important;
+}
+html.light [class*="text-amber-950"] {
+  color: #78350F !important;
+}
+html.light [class*="text-emerald-950"] {
+  color: #064E3B !important;
+}
+html.light [class*="text-sky-950"] {
+  color: #0C4A6E !important;
+}
+html.light [class*="border-purple-600"],
+html.light [class*="border-purple-700"] {
+  border-color: #7E22CE !important;
+}
+html.light [class*="border-blue-600"],
+html.light [class*="border-blue-700"] {
+  border-color: #1D4ED8 !important;
+}
+html.light [class*="border-rose-600"] {
+  border-color: #E11D48 !important;
+}
+

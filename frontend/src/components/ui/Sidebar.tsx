@@ -12,10 +12,13 @@ import {
   Cpu,
   ShieldCheck,
   UserPlus,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import toast from "react-hot-toast";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
+import { useTheme } from "@/context/ThemeContext";
 
 interface NavItem {
   href: string;
@@ -36,6 +39,7 @@ const navItems: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
   const [usuario, setUsuario] = useState<{ nombre: string; email: string; rol: string } | null>(null);
   const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
 
@@ -111,10 +115,44 @@ export default function Sidebar() {
           )}
         </nav>
 
-        {/* Usuario y logout */}
-        <div className="border-t border-white/[0.06] p-4">
+        {/* Tema, Usuario y logout */}
+        <div className="border-t border-white/[0.06] p-4 space-y-3">
+          {/* Selector de Modo Claro / Oscuro */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/60 border border-white/[0.08]">
+            <div className="flex items-center gap-2">
+              {theme === "dark" ? (
+                <Moon className="w-4 h-4 text-blue-400" />
+              ) : (
+                <Sun className="w-4 h-4 text-amber-500" />
+              )}
+              <span className="text-xs font-semibold text-slate-300">
+                {theme === "dark" ? "Modo Oscuro" : "Modo Claro"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                toggleTheme();
+                toast.success(theme === "dark" ? "Modo Claro activado" : "Modo Oscuro activado", {
+                  duration: 2000,
+                  icon: theme === "dark" ? "☀️" : "🌙",
+                });
+              }}
+              title={theme === "dark" ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                theme === "dark" ? "bg-primary-600" : "bg-amber-500"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  theme === "dark" ? "translate-x-0" : "translate-x-4"
+                }`}
+              />
+            </button>
+          </div>
+
           {usuario && (
-            <div className="mb-3 px-1">
+            <div className="px-1">
               <p className="text-xs font-semibold text-white truncate">{usuario.nombre}</p>
               <p className="text-[11px] text-slate-500 truncate">{usuario.email}</p>
               <span className={`badge mt-1 ${usuario.rol === "admin" ? "badge-info" : "badge-neutral"}`}>

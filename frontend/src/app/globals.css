@@ -32,6 +32,23 @@
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 30px rgba(59, 130, 246, 0.25);
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color-scheme: dark;
+}
+
+html.light {
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-surface-3: #E2E8F0;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+  --color-text: #0F172A;
+  --color-text-muted: #64748B;
+  --color-accent: #2563EB;
+  --color-accent-glow: rgba(37, 99, 235, 0.18);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --shadow-glow: 0 0 25px rgba(37, 99, 235, 0.15);
+  color-scheme: light;
 }
 
 /* ────────────────────────────────────────────
@@ -319,3 +336,228 @@ body {
 .animate-slideDown {
   animation: slideDown 0.2s ease-out forwards;
 }
+
+/* ────────────────────────────────────────────
+   Light Mode Theme Styling
+──────────────────────────────────────────── */
+html.light,
+html.light body {
+  background-color: var(--color-bg) !important;
+  color: var(--color-text) !important;
+}
+
+/* Page containers */
+html.light .bg-\[\#0b0f19\],
+html.light .bg-dark-950,
+html.light .bg-\[\#080E1A\] {
+  background-color: #F8FAFC !important;
+}
+
+/* Cards and Panels */
+html.light .card,
+html.light .stats-card,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/95,
+html.light .bg-slate-900,
+html.light .bg-dark-900 {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* Glass cards in Light Mode */
+html.light .card-glass {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Subpanels, Table Headers and Secondary Bars */
+html.light .bg-slate-950\/40,
+html.light .bg-slate-950\/50,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950,
+html.light .bg-dark-800\/60,
+html.light .bg-dark-800,
+html.light .bg-slate-800\/40,
+html.light .bg-slate-800\/50,
+html.light .bg-slate-800\/60,
+html.light .table-base thead {
+  background-color: #F1F5F9 !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Input Fields and Selects */
+html.light .input-field,
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.light select,
+html.light textarea {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #0F172A !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+html.light .input-label {
+  color: #475569 !important;
+}
+
+/* Secondary Buttons */
+html.light .btn-secondary {
+  background-color: #F1F5F9 !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #334155 !important;
+}
+html.light .btn-secondary:hover {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+/* Borders and Separators */
+html.light .border-slate-800,
+html.light .border-slate-800\/40,
+html.light .border-slate-800\/60,
+html.light .border-slate-800\/80,
+html.light .border-slate-700,
+html.light .border-slate-700\/60,
+html.light .border-white\/\[0\.06\],
+html.light .border-white\/\[0\.08\],
+html.light .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Dividers */
+html.light .divide-slate-800\/30 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800\/40 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 0, 0, 0.07) !important;
+}
+
+/* Table rows and hovers */
+html.light .table-base tbody tr {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+html.light .table-base tbody tr:hover,
+html.light .hover\:bg-slate-800\/30:hover,
+html.light .hover\:bg-slate-800\/40:hover,
+html.light .hover\:bg-slate-800\/50:hover,
+html.light .hover\:bg-slate-800\/70:hover,
+html.light .hover\:bg-slate-800:hover {
+  background-color: rgba(37, 99, 235, 0.04) !important;
+}
+html.light .table-base tbody td {
+  color: #1E293B !important;
+}
+html.light .table-base thead th {
+  color: #475569 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Typography contrast */
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4 {
+  color: #0F172A !important;
+}
+html.light .text-white:not(.btn-primary):not(.btn-danger):not(.btn-success):not([class*="bg-primary"]):not([class*="bg-blue-600"]):not([class*="bg-rose"]):not([class*="bg-red"]):not([class*="bg-emerald"]):not([class*="bg-green"]):not([class*="bg-amber"]):not([class*="badge"]) {
+  color: #0F172A !important;
+}
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #1E293B !important;
+}
+html.light .text-slate-300,
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+html.light .text-slate-500 {
+  color: #64748B !important;
+}
+html.light .text-slate-600 {
+  color: #94A3B8 !important;
+}
+
+/* Badges readability in Light Mode */
+html.light .text-rose-300 {
+  color: #BE123C !important; /* Rose 700 - ultra high contrast and alarming */
+}
+html.light .bg-rose-500\/20,
+html.light .bg-rose-500\/25 {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
+}
+html.light .text-amber-300,
+html.light .text-amber-400 {
+  color: #B45309 !important; /* Amber 700 */
+}
+html.light .bg-amber-500\/10,
+html.light .bg-amber-500\/15 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+html.light .text-emerald-300,
+html.light .text-emerald-400 {
+  color: #047857 !important; /* Emerald 700 */
+}
+html.light .bg-emerald-500\/10,
+html.light .bg-emerald-500\/15 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* Sidebar in Light Mode */
+html.light .sidebar {
+  background: rgba(255, 255, 255, 0.97) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.04) !important;
+}
+html.light .sidebar-item {
+  color: #475569 !important;
+}
+html.light .sidebar-item:hover {
+  background: rgba(37, 99, 235, 0.07) !important;
+  color: #1D4ED8 !important;
+}
+html.light .sidebar-item.active {
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #2563EB !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Scrollbar in Light Mode */
+html.light ::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Skeletons */
+html.light .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 75%
+  ) !important;
+  background-size: 200% 100% !important;
+}
+
+/* Dropzone */
+html.light .dropzone {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  background-color: #FFFFFF !important;
+}
+html.light .dropzone:hover,
+html.light .dropzone.active {
+  border-color: #2563EB !important;
+  background-color: rgba(37, 99, 235, 0.04) !important;
+}
+

@@ -223,7 +223,12 @@ export default function DocumentosPage() {
     if (cuentaAtrasRedireccion === null) return;
 
     if (cuentaAtrasRedireccion <= 0) {
-      router.push("/personas");
+      const docCompletado = docsEnProceso.find((d) => d.estado === "completado") || docsEnProceso[0];
+      if (docCompletado?.id) {
+        router.push(`/personas?documento_id=${docCompletado.id}`);
+      } else {
+        router.push("/personas");
+      }
       return;
     }
 
@@ -636,8 +641,11 @@ export default function DocumentosPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => router.push("/personas")}
-                    className="text-xs bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md hover:shadow-emerald-500/30"
+                    onClick={() => {
+                      const docCompletado = docsEnProceso.find((d) => d.estado === "completado") || docsEnProceso[0];
+                      router.push(docCompletado?.id ? `/personas?documento_id=${docCompletado.id}` : "/personas");
+                    }}
+                    className="text-xs bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-md hover:shadow-emerald-500/30 cursor-pointer"
                   >
                     <span>Ir a Personas</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -851,8 +859,11 @@ export default function DocumentosPage() {
                     Ver Historial de Documentos
                   </button>
                   <button
-                    onClick={() => router.push("/personas")}
-                    className="btn-primary text-sm py-2.5 px-5 flex-1 md:flex-initial flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25"
+                    onClick={() => {
+                      const docCompletado = docsEnProceso.find((d) => d.estado === "completado") || docsEnProceso[0];
+                      router.push(docCompletado?.id ? `/personas?documento_id=${docCompletado.id}` : "/personas");
+                    }}
+                    className="btn-primary text-sm py-2.5 px-5 flex-1 md:flex-initial flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25 cursor-pointer"
                   >
                     <Users className="w-4 h-4" />
                     <span>Ver Personas Extraídas</span>

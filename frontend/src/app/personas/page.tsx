@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, Fragment } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Fragment, Suspense } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   Users, Search, AlertTriangle, AlertCircle, CheckCircle,
@@ -58,17 +58,20 @@ const getTipoDocInfo = (tipo?: string | null) => {
   };
 };
 
-export default function PersonasPage() {
+function PersonasContent() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const docParam = searchParams.get("documento_id");
+
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
-  const [filtroDocumento, setFiltroDocumento] = useState<string>("todos");
+  const [filtroDocumento, setFiltroDocumento] = useState<string>(docParam || "todos");
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [exportando, setExportando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [buscar, setBuscar] = useState("");
-  type FiltroEstado = "todos" | "validas" | "revision" | "discrepancia" | "falta_pdf" | "falta_excel";
+  type FiltroEstado = "todos" | "validas" | "revision" | "discrepancia" | "falta_pdf" | "falta_excel" | "menores";
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
   const soloRevision = filtroEstado === "revision";
   const [editando, setEditando] = useState<string | null>(null);
@@ -80,10 +83,22 @@ export default function PersonasPage() {
     discrepancia: 0,
     faltaPdf: 0,
     faltaExcel: 0,
+    menores: 0,
   });
 
   // Acordeón: solo una fila expandida a la vez
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
+  // Control de campos secundarios (fecha exp, lugar exp, género)
+  const [detallesExpandidos, setDetallesExpandidos] = useState<Set<string>>(new Set());
+  const toggleDetallesExtra = (id: string) => {
+    setDetallesExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const [paginaPrevia, setPaginaPrevia] = useState<number>(1);
   const [imgCargando, setImgCargando] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -100,10 +115,23 @@ export default function PersonasPage() {
     return () => clearInterval(interval);
   }, [pathname, filtroDocumento]);
 
+  useEffect(() => {
+    const docQuery = searchParams.get("documento_id");
+    if (docQuery && docQuery !== filtroDocumento) {
+      setFiltroDocumento(docQuery);
+    }
+  }, [searchParams]);
+
   const cargarDocumentos = async () => {
     try {
       const res = await apiDocumentos.listar({ limit: 100 });
-      setDocumentos(Array.isArray(res.data) ? res.data : []);
+      const docs = Array.isArray(res.data) ? res.data : [];
+      setDocumentos(docs);
+      // Si no viene en la URL y filtroDocumento es "todos", seleccionar por defecto el último archivo subido
+      // para cumplir: únicamente el total de personas en la sección solo sale del archivo subido
+      if (!docParam && docs.length > 0 && filtroDocumento === "todos") {
+        setFiltroDocumento(docs[0].id);
+      }
     } catch {
       // Ignorar
     }
@@ -131,6 +159,10 @@ export default function PersonasPage() {
       const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
       const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
       const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false).length;
+      const menoresCount = items.filter((p: Persona) => {
+        const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
+        return ed !== null && ed < 14;
+      }).length;
 
       setStats({
         total: tot,
@@ -139,6 +171,7 @@ export default function PersonasPage() {
         discrepancia: discCount,
         faltaPdf: faltaPdfCount,
         faltaExcel: faltaExcelCount,
+        menores: menoresCount,
       });
 
       if (mostrarSpinner) toast.success(`${items.length} persona(s) sincronizada(s)`);
@@ -229,6 +262,9 @@ export default function PersonasPage() {
       nombres: p.nombres || "",
       apellidos: p.apellidos || "",
       fecha_nacimiento: p.fecha_nacimiento ? String(p.fecha_nacimiento) : "",
+      fecha_expedicion: p.fecha_expedicion ? String(p.fecha_expedicion) : "",
+      lugar_expedicion: p.lugar_expedicion || "",
+      sexo: p.sexo || "",
       requiere_revision: undefined,
     });
   };
@@ -292,6 +328,9 @@ export default function PersonasPage() {
     } else if (filtroEstado === "falta_excel") {
       const faltaExcel = p.en_excel === false;
       if (!faltaExcel) return false;
+    } else if (filtroEstado === "menores") {
+      const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
+      if (ed === null || ed >= 14) return false;
     }
 
     if (!buscar) return true;
@@ -382,6 +421,8 @@ export default function PersonasPage() {
 
     const nomCompleto = formatNombreCompleto(p);
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
+    const esMenor14Detalle = edadCalculada !== null && edadCalculada < 14;
+
     const campos = [
       { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
       { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
@@ -395,7 +436,29 @@ export default function PersonasPage() {
         key: "edad",
         label: "Edad Calculada",
         icono: <Clock className="w-3.5 h-3.5" />,
-        valor: edadCalculada !== null ? `${edadCalculada} años cumplidos` : null
+        valor: edadCalculada !== null ? `${edadCalculada} años cumplidos` : null,
+        esMenor: esMenor14Detalle,
+      },
+    ];
+
+    const camposSecundarios = [
+      {
+        key: "fecha_expedicion",
+        label: "Fecha de Expedición",
+        icono: <Calendar className="w-3.5 h-3.5" />,
+        valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null
+      },
+      {
+        key: "lugar_expedicion",
+        label: "Lugar de Expedición",
+        icono: <MapPin className="w-3.5 h-3.5" />,
+        valor: p.lugar_expedicion || null
+      },
+      {
+        key: "sexo",
+        label: "Género / Sexo",
+        icono: <Users className="w-3.5 h-3.5" />,
+        valor: p.sexo || null
       },
     ];
 
@@ -534,8 +597,12 @@ export default function PersonasPage() {
                 <span className="flex items-center gap-1 text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-400 font-mono">{p.motor_ocr || "google_document_ai"}</span></span>
                 <span className="flex items-center gap-1 text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-400">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
                 {edadCalculada !== null && (
-                  <span className="flex items-center gap-1 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-semibold shrink-0" title={`Edad: ${edadCalculada} años cumplidos`}>
-                    <span> {edadCalculada} años</span>
+                  <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-semibold shrink-0 border ${
+                    esMenor14Detalle
+                      ? "bg-rose-500/20 border-rose-500/40 text-rose-300 font-bold animate-pulse"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                  }`} title={`Edad: ${edadCalculada} años cumplidos`}>
+                    <span>{esMenor14Detalle ? `⚠️ MENOR: ${edadCalculada} años` : `${edadCalculada} años`}</span>
                   </span>
                 )}
               </div>
@@ -547,6 +614,21 @@ export default function PersonasPage() {
                 p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[90px] shrink-0">{p.grupo_documento_id}</span>
               )}
             </div>
+
+            {/* Alerta Destacada en Rojo: Menor de 14 Años */}
+            {esMenor14Detalle && (
+              <div className="m-2.5 p-3 rounded-xl bg-rose-500/15 border-2 border-rose-500/50 text-rose-200 shadow-lg shadow-rose-500/20 animate-pulse min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-rose-300">
+                    Alerta: Persona Menor de 14 Años
+                  </span>
+                </div>
+                <p className="text-xs text-rose-100 ml-6 break-words font-medium">
+                  Esta persona tiene <strong className="text-white font-bold underline">{edadCalculada} años cumplidos</strong> según su fecha de nacimiento registrada (<strong className="font-mono text-white">{p.fecha_nacimiento || "sin fecha"}</strong>).
+                </p>
+              </div>
+            )}
 
             {/* Alerta: Falta en Planilla Excel */}
             {p.en_excel === false && (
@@ -585,7 +667,7 @@ export default function PersonasPage() {
                 : [];
               const motivosFiltrados = rawMotivos.filter((m: string) => {
                 const ml = m.toLowerCase();
-                return !ml.includes("expedici") && !ml.includes("sexo") && !ml.includes("lugar");
+                return !ml.includes("expedici") && !ml.includes("sexo") && !ml.includes("lugar") && !ml.includes("genero");
               });
               if (motivosFiltrados.length === 0 && !p.requiere_revision) return null;
               return (
@@ -707,11 +789,68 @@ export default function PersonasPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Campos adicionales desplegables en modo edición */}
+                  <div className="sm:col-span-2 pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => toggleDetallesExtra(p.id)}
+                      className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 font-semibold mb-2 transition-colors cursor-pointer"
+                    >
+                      {detallesExpandidos.has(p.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      <span>{detallesExpandidos.has(p.id) ? "Ocultar datos adicionales" : "Editar datos adicionales (Fecha/Lugar Expedición, Género)"}</span>
+                    </button>
+
+                    {detallesExpandidos.has(p.id) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 animate-in fade-in duration-200">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Fecha de Expedición
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.fecha_expedicion || ""}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, fecha_expedicion: e.target.value }))}
+                            placeholder="AAAA-MM-DD"
+                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Lugar de Expedición
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.lugar_expedicion || ""}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, lugar_expedicion: e.target.value }))}
+                            placeholder="Ej: BOGOTA D.C."
+                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Género / Sexo
+                          </label>
+                          <select
+                            value={editForm.sexo || ""}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, sexo: e.target.value }))}
+                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
+                          >
+                            <option value="">No especificado</option>
+                            <option value="M">MASCULINO (M)</option>
+                            <option value="F">FEMENINO (F)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
               /* Vista de Tarjetas (Compactas con content-start para evitar que se alarguen) */
-              <div className="p-2.5 space-y-2 min-w-0">
+              <div className="p-2.5 space-y-2.5 min-w-0">
                 {p.nombre_documento && (
                   <div className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -725,25 +864,35 @@ export default function PersonasPage() {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2 content-start min-w-0">
-                  {campos.map(({ key, label, icono, valor }) => {
+                  {campos.map(({ key, label, icono, valor, esMenor }) => {
                     const c = conf(key);
                     const col = color(valor ? c : 0);
                     return (
-                      <div key={key} className="rounded-lg bg-slate-900/60 border border-slate-800/60 p-2 hover:border-slate-700/80 transition-colors flex flex-col justify-between min-h-[58px] min-w-0 overflow-hidden">
+                      <div key={key} className={`rounded-lg p-2 transition-colors flex flex-col justify-between min-h-[58px] min-w-0 overflow-hidden ${
+                        esMenor
+                          ? "bg-rose-950/20 border border-rose-500/40"
+                          : "bg-slate-900/60 border border-slate-800/60 hover:border-slate-700/80"
+                      }`}>
                         <div className="flex items-center justify-between min-w-0">
-                          <div className="flex items-center gap-1 text-slate-500 min-w-0">
+                          <div className={`flex items-center gap-1 min-w-0 ${esMenor ? "text-rose-400 font-semibold" : "text-slate-500"}`}>
                             {icono}
                             <span className="text-[10px] font-bold uppercase tracking-wider truncate">{label}</span>
                           </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 ${valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"}`}>
-                            {valor ? `${c}%` : "N/D"}
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 ${
+                            esMenor
+                              ? "bg-rose-500/20 border-rose-500/40 text-rose-300 font-extrabold"
+                              : valor ? col.badge : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                          }`}>
+                            {esMenor ? "MENOR" : valor ? `${c}%` : "N/D"}
                           </span>
                         </div>
                         <div className="my-0.5 min-w-0">
                           {valor
                             ? (
                               <div className="min-w-0">
-                                <span className="text-xs font-semibold text-white truncate block font-mono" title={valor}>{valor}</span>
+                                <span className={`text-xs font-semibold truncate block font-mono ${esMenor ? "text-rose-300 font-bold" : "text-white"}`} title={valor}>
+                                  {valor}
+                                </span>
                                 {key === "numero_identificacion" && (p.detalles_campos as any)?.numero_identificacion_original_ocr && (
                                   <span className="text-[9px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5 truncate" title={`Corregido desde planilla oficial Excel (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
                                     <CheckCircle className="w-2.5 h-2.5 shrink-0" />
@@ -757,7 +906,7 @@ export default function PersonasPage() {
                         </div>
                         {valor ? (
                           <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                            <div className={`h-full bg-gradient-to-r ${col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
+                            <div className={`h-full bg-gradient-to-r ${esMenor ? "from-rose-500 to-red-400" : col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
                           </div>
                         ) : (
                           <div className="h-1 bg-rose-950/30 rounded-full overflow-hidden">
@@ -767,6 +916,69 @@ export default function PersonasPage() {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Botón Ver Más Detalles (Expedición, Género) — Sin alertas de revisión */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleDetallesExtra(p.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer"
+                  >
+                    {detallesExpandidos.has(p.id) ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5 text-primary-400" />
+                        <span>Ocultar datos adicionales</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5 text-primary-400" />
+                        <span>Ver más detalles (Fecha/Lugar Expedición, Género)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {detallesExpandidos.has(p.id) && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-2 animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Datos Adicionales
+                        </span>
+                        <span className="text-[9px] text-slate-500 italic">
+                          Opcionales • No generan motivo de revisión
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {camposSecundarios.map(({ key, label, icono, valor }) => (
+                          <div
+                            key={key}
+                            className="rounded-lg bg-slate-950/60 border border-slate-800/80 p-2 flex flex-col justify-between min-h-[56px] min-w-0"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                {icono}
+                                <span className="truncate">{label}</span>
+                              </div>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-800/80 border border-slate-700/60 text-slate-400 shrink-0">
+                                {valor ? "OK" : "Opcional"}
+                              </span>
+                            </div>
+                            <div className="mt-1 min-w-0">
+                              {valor ? (
+                                <span className="text-xs font-semibold text-slate-200 font-mono block truncate" title={valor}>
+                                  {valor}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-500 italic block">
+                                  No registrado
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -882,9 +1094,9 @@ export default function PersonasPage() {
           </div>
         </div>
 
-        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas (4 estados) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Card 1: Total General o por Archivo */}
+        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas (5 estados) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
+          {/* Card 1: Total por Archivo o General */}
           <div
             onClick={() => setFiltroEstado("todos")}
             className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "todos" ? "border-primary-500/60 ring-2 ring-primary-500/30 bg-primary-500/10" : "border-slate-800/80 hover:border-slate-700"}`}
@@ -901,8 +1113,8 @@ export default function PersonasPage() {
                 </span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center text-primary-400">
-              <Users className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center text-primary-400">
+              <Users className="w-5 h-5" />
             </div>
           </div>
 
@@ -926,8 +1138,8 @@ export default function PersonasPage() {
                 <span className="text-xs text-slate-500">completos</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <CheckCircle className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <CheckCircle className="w-5 h-5" />
             </div>
           </div>
 
@@ -951,12 +1163,37 @@ export default function PersonasPage() {
                 <span className="text-xs text-slate-500">incompletos</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <AlertTriangle className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
 
-          {/* Card 4: Falta en PDF o Excel */}
+          {/* Card 4: Menores de 14 Años */}
+          <div
+            onClick={() => setFiltroEstado(filtroEstado === "menores" ? "todos" : "menores")}
+            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "menores" ? "border-rose-500/70 ring-2 ring-rose-500/40 bg-rose-500/10" : "border-slate-800/80 hover:border-rose-500/40"}`}
+            title="Clic para ver personas menores de 14 años detectadas"
+          >
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-medium text-rose-400/90 uppercase tracking-wider">Menores (&lt; 14)</p>
+                {filtroEstado === "menores" && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                    Activo
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-rose-400">{stats.menores}</span>
+                <span className="text-xs text-slate-500">detectados</span>
+              </div>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 5: Falta en PDF o Excel */}
           <div
             onClick={() => setFiltroEstado(filtroEstado === "discrepancia" ? "todos" : "discrepancia")}
             className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel" ? "border-purple-500/70 ring-2 ring-purple-500/40 bg-purple-500/10" : "border-slate-800/80 hover:border-purple-500/40"}`}
@@ -976,8 +1213,8 @@ export default function PersonasPage() {
                 <span className="text-xs text-slate-500">faltantes</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <AlertCircle className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <AlertCircle className="w-5 h-5" />
             </div>
           </div>
         </div>
@@ -1039,6 +1276,8 @@ export default function PersonasPage() {
                   ? "border-amber-500/60 text-amber-300 bg-amber-500/10"
                   : filtroEstado === "validas"
                   ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
+                  : filtroEstado === "menores"
+                  ? "border-rose-500/60 text-rose-300 bg-rose-500/10"
                   : filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
                   ? "border-purple-500/60 text-purple-300 bg-purple-500/10"
                   : "border-slate-800 text-slate-200"
@@ -1048,6 +1287,7 @@ export default function PersonasPage() {
               <option value="todos">📋 Todos los estados ({stats.total})</option>
               <option value="validas">✅ Solo Válidos ({stats.validas})</option>
               <option value="revision">⚠️ Por Revisar ({stats.revision})</option>
+              <option value="menores">🚨 Menores de 14 Años ({stats.menores})</option>
               <option value="discrepancia">🟣 Falta PDF o Excel ({stats.discrepancia})</option>
               <option value="falta_pdf">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
               <option value="falta_excel">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
@@ -1167,6 +1407,7 @@ export default function PersonasPage() {
                     const isSeleccionada = seleccionados.has(p.id);
                     const nombreCompleto = formatNombreCompleto(p);
                     const edadRow = p.edad ?? calcularEdad(p.fecha_nacimiento);
+                    const esMenor14 = edadRow !== null && edadRow < 14;
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
 
                     return (
@@ -1229,9 +1470,15 @@ export default function PersonasPage() {
                           {/* Edad */}
                           <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
                             {edadRow !== null ? (
-                              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
-                                {edadRow} años
-                              </span>
+                              esMenor14 ? (
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 font-extrabold whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse" title={`Persona menor de 14 años (${edadRow} años)`}>
+                                  {edadRow} años
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold whitespace-nowrap">
+                                  {edadRow} años
+                                </span>
+                              )
                             ) : (
                               <span className="text-slate-600 text-xs">—</span>
                             )}
@@ -1279,9 +1526,19 @@ export default function PersonasPage() {
                             </div>
                           </td>
 
-                          {/* Estado: Alertas VÁLIDO, REVISAR, NO EN PDF, NO EN EXCEL */}
+                          {/* Estado: Alertas VÁLIDO, REVISAR, MENOR (< 14), NO EN PDF, NO EN EXCEL */}
                           <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
                             <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
+                              {/* Alerta roja vistosa: Menor de 14 años */}
+                              {esMenor14 && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/25 border border-rose-500/50 text-rose-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse"
+                                  title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" /> MENOR (&lt; 14)
+                                </span>
+                              )}
+
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span
@@ -1360,7 +1617,7 @@ export default function PersonasPage() {
                     )}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <strong className="text-slate-300 font-semibold">{stats.validas}</strong> Válidas
@@ -1368,6 +1625,10 @@ export default function PersonasPage() {
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400" />
                     <strong className="text-slate-300 font-semibold">{stats.revision}</strong> Por revisar
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+                    <strong className="text-rose-300 font-semibold">{stats.menores}</strong> Menores (&lt; 14)
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-purple-400" />
@@ -1389,5 +1650,22 @@ export default function PersonasPage() {
         />
       </main>
     </div>
+  );
+}
+
+export default function PersonasPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-slate-400 font-medium">Cargando módulo de personas...</p>
+          </div>
+        </div>
+      }
+    >
+      <PersonasContent />
+    </Suspense>
   );
 }

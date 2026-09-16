@@ -142,7 +142,12 @@ function PersonasContent() {
     }
   };
 
-  const cargarPersonas = async (mostrarSpinner = false) => {
+  const recargarManual = async () => {
+    setCargando(true);
+    await cargarPersonas(true, true);
+  };
+
+  const cargarPersonas = async (mostrarSpinner = false, esManual = false) => {
     if (mostrarSpinner) setCargando(true);
     try {
       const docIdFiltro = filtroDocumento !== "todos" ? filtroDocumento : undefined;
@@ -179,10 +184,15 @@ function PersonasContent() {
         menores: menoresCount,
       });
 
-      if (mostrarSpinner) toast.success(`${items.length} persona(s) sincronizada(s)`);
+      // Solo mostrar notificación si el usuario ejecutó la recarga manualmente
+      if (esManual) {
+        toast.success(`${items.length} persona(s) sincronizada(s)`, { id: "personas-sync" });
+      }
     } catch (err) {
       console.error("Error al cargar personas:", err);
-      if (mostrarSpinner) toast.error("Error al cargar la lista de personas");
+      if (esManual) {
+        toast.error("Error al cargar la lista de personas", { id: "personas-sync" });
+      }
     } finally {
       if (mostrarSpinner) setCargando(false);
     }
@@ -281,11 +291,11 @@ function PersonasContent() {
         ...(forzarAprobado ? { requiere_revision: false } : {}),
       };
       await apiPersonas.actualizar(id, payload);
-      toast.success(forzarAprobado ? "Datos guardados y persona validada" : "Datos actualizados correctamente");
+      toast.success(forzarAprobado ? "Datos guardados y persona validada" : "Datos actualizados correctamente", { id: "guardar-persona" });
       setEditando(null);
       cargarPersonas(true);
     } catch {
-      toast.error("Error guardando cambios");
+      toast.error("Error guardando cambios", { id: "guardar-persona" });
     }
   };
 
@@ -293,11 +303,11 @@ function PersonasContent() {
     if (!confirm(`¿Desea eliminar el registro de la persona con cédula ${cedula}?`)) return;
     try {
       await apiPersonas.eliminar(id);
-      toast.success("Registro eliminado");
+      toast.success("Registro eliminado", { id: "eliminar-persona" });
       if (expandidoId === id) setExpandidoId(null);
       cargarPersonas(true);
     } catch {
-      toast.error("Error al eliminar registro");
+      toast.error("Error al eliminar registro", { id: "eliminar-persona" });
     }
   };
 
@@ -345,10 +355,10 @@ function PersonasContent() {
     if (e) e.stopPropagation();
     try {
       await apiPersonas.actualizar(id, { requiere_revision: false });
-      toast.success("Persona aprobada como válida");
+      toast.success("Persona aprobada como válida", { id: `aprobar-${id}` });
       cargarPersonas(true);
     } catch {
-      toast.error("Error al aprobar persona");
+      toast.error("Error al aprobar persona", { id: `aprobar-${id}` });
     }
   };
 
@@ -423,7 +433,7 @@ function PersonasContent() {
 
   const exportarSeleccion = async () => {
     if (seleccionados.size === 0) {
-      toast.error("Selecciona al menos una persona para exportar");
+      toast.error("Selecciona al menos una persona para exportar", { id: "export-seleccion" });
       return;
     }
     setExportando(true);
@@ -434,9 +444,9 @@ function PersonasContent() {
         personaIds: Array.from(seleccionados),
         requiereRevision: soloRevision ? true : undefined,
       });
-      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`);
+      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`, { id: "export-seleccion" });
     } catch {
-      toast.error("Error al exportar personas a Excel");
+      toast.error("Error al exportar personas a Excel", { id: "export-seleccion" });
     } finally {
       setExportando(false);
     }
@@ -450,9 +460,9 @@ function PersonasContent() {
         documentoId: docId,
         requiereRevision: soloRevision ? true : undefined,
       });
-      toast.success("Archivo Excel descargado correctamente");
+      toast.success("Archivo Excel descargado correctamente", { id: "export-excel" });
     } catch {
-      toast.error("Error al exportar a Excel");
+      toast.error("Error al exportar a Excel", { id: "export-excel" });
     } finally {
       setExportando(false);
     }
@@ -1105,46 +1115,54 @@ function PersonasContent() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
       <Sidebar />
 
       <main className="ml-64 flex-1 min-w-0 p-4 lg:p-6 overflow-x-hidden max-w-[calc(100vw-16rem)]">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        {/* Header Superior Organizado */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="p-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-400">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="p-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-600 dark:text-primary-400">
                 <Users className="w-4 h-4" />
               </span>
-              <span className="text-xs font-semibold text-primary-400 uppercase tracking-wider">Base de Datos OCR</span>
+              <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Base de Datos OCR</span>
+              {filtroDocumento !== "todos" && (
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-300 font-medium flex items-center gap-1.5 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                  <span className="font-bold text-slate-900 dark:text-white truncate max-w-[240px]">
+                    {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} {stats.total === 1 ? "persona" : "personas"})</span>
+                </span>
+              )}
             </div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">Personas Registradas</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Haz clic en el ícono <Eye className="inline w-3.5 h-3.5 text-primary-400 mx-1" /> para expandir el documento y los datos OCR de cada persona.
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Personas Registradas</h1>
+            <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
+              Haz clic en el ícono <Eye className="inline w-3.5 h-3.5 text-primary-600 dark:text-primary-400 mx-1" /> para expandir el documento y los datos OCR de cada persona.
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setModalVaciarAbierto(true)}
-              disabled={personas.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-100 dark:bg-rose-500/20 hover:bg-rose-200 dark:hover:bg-rose-500/30 border-2 border-rose-500 text-xs font-black text-rose-950 dark:text-rose-200 transition-all shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Vaciar tabla de personas"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-700 dark:text-rose-400" />
-              <span>Vaciar Tabla</span>
-            </button>
+
+          {/* Botones de acción organizados (alineados y con etiquetas completas) */}
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
             <button
               onClick={exportarVistaActual}
               disabled={exportando || personas.length === 0}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 hover:bg-emerald-200 dark:hover:bg-emerald-500/25 border border-emerald-400 dark:border-emerald-500/30 text-xs font-bold text-emerald-950 dark:text-emerald-300 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
-              title="Exportar registros a Excel (.xlsx)"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950/30 border border-emerald-500/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+              title="Exportar registros mostrados a Excel (.xlsx)"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+              <Download className="w-4 h-4 shrink-0 text-white" />
               <span>Exportar a Excel</span>
             </button>
-            <span className="px-4 py-2 rounded-xl bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-sm font-semibold text-blue-900 dark:text-primary-300 shadow-sm">
-              {filtroDocumento !== "todos" ? "Total archivo:" : "Total:"} <strong className="text-blue-950 dark:text-white font-extrabold text-base ml-1">{stats.total}</strong> {stats.total === 1 ? "persona" : "personas"}
-            </span>
+            <button
+              onClick={() => setModalVaciarAbierto(true)}
+              disabled={personas.length === 0}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs font-bold transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+              title={filtroDocumento !== "todos" ? "Vaciar personas de este archivo" : "Vaciar todas las personas de la tabla"}
+            >
+              <Trash2 className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span>Vaciar Tabla</span>
+            </button>
           </div>
         </div>
 
@@ -1153,121 +1171,141 @@ function PersonasContent() {
           {/* Card 1: Total por Archivo o General */}
           <div
             onClick={() => setFiltroEstado("todos")}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "todos" ? "border-primary-500/60 ring-2 ring-primary-500/30 bg-primary-500/10" : "border-slate-800/80 hover:border-slate-700"}`}
+            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+              filtroEstado === "todos"
+                ? "border-primary-500/60 ring-2 ring-primary-500/30 bg-primary-50/60 dark:bg-primary-500/10"
+                : "border-slate-200 dark:border-slate-800/80 hover:border-slate-400 dark:hover:border-slate-700"
+            }`}
             title={filtroDocumento !== "todos" ? "Mostrar todas las personas de este archivo" : "Mostrar todas las personas registradas"}
           >
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {filtroDocumento !== "todos" ? "Total Archivo" : "Total Registradas"}
               </p>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-white">{stats.total}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.total}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   {filtroDocumento !== "todos" ? "en archivo" : "en sistema"}
                 </span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center text-primary-400">
+            <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-500/15 border border-primary-200 dark:border-primary-500/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
               <Users className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 2: Válidas */}
           <div
-            onClick={() => setFiltroEstado(filtroEstado === "validas" ? "todos" : "validas")}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "validas" ? "border-emerald-500/70 ring-2 ring-emerald-500/40 bg-emerald-500/10" : "border-slate-800/80 hover:border-emerald-500/40"}`}
+            onClick={() => setFiltroEstado("validas")}
+            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+              filtroEstado === "validas"
+                ? "border-emerald-500/70 ring-2 ring-emerald-500/40 bg-emerald-50/60 dark:bg-emerald-500/10"
+                : "border-slate-200 dark:border-slate-800/80 hover:border-emerald-500/40"
+            }`}
             title="Clic para ver solo personas con datos válidos y presentes"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-emerald-400/90 uppercase tracking-wider">Válidos</p>
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400/90 uppercase tracking-wider">Válidos</p>
                 {filtroEstado === "validas" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
                     Activo
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-emerald-400">{stats.validas}</span>
-                <span className="text-xs text-slate-500">completos</span>
+                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.validas}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">completos</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
               <CheckCircle className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 3: Por Revisar */}
           <div
-            onClick={() => setFiltroEstado(filtroEstado === "revision" ? "todos" : "revision")}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "revision" ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-500/10" : "border-slate-800/80 hover:border-amber-500/40"}`}
+            onClick={() => setFiltroEstado("revision")}
+            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+              filtroEstado === "revision"
+                ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-50/60 dark:bg-amber-500/10"
+                : "border-slate-200 dark:border-slate-800/80 hover:border-amber-500/40"
+            }`}
             title="Clic para ver personas con datos incompletos pendientes de revisión"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
                 {filtroEstado === "revision" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 animate-pulse">
                     Activo
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-amber-400">{stats.revision}</span>
-                <span className="text-xs text-slate-500">incompletos</span>
+                <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{stats.revision}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">incompletos</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 4: Menores de 14 Años */}
           <div
-            onClick={() => setFiltroEstado(filtroEstado === "menores" ? "todos" : "menores")}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "menores" ? "border-rose-500/70 ring-2 ring-rose-500/40 bg-rose-500/10" : "border-slate-800/80 hover:border-rose-500/40"}`}
+            onClick={() => setFiltroEstado("menores")}
+            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+              filtroEstado === "menores"
+                ? "border-rose-500/70 ring-2 ring-rose-500/40 bg-rose-50/60 dark:bg-rose-500/10"
+                : "border-slate-200 dark:border-slate-800/80 hover:border-rose-500/40"
+            }`}
             title="Clic para ver personas menores de 14 años detectadas"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-rose-400/90 uppercase tracking-wider">Menores (&lt; 14)</p>
+                <p className="text-xs font-semibold text-rose-700 dark:text-rose-400/90 uppercase tracking-wider">Menores (&lt; 14)</p>
                 {filtroEstado === "menores" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 animate-pulse">
                     Activo
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-rose-400">{stats.menores}</span>
-                <span className="text-xs text-slate-500">detectados</span>
+                <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{stats.menores}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">detectados</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+            <div className="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card 5: Falta en PDF o Excel */}
           <div
-            onClick={() => setFiltroEstado(filtroEstado === "discrepancia" ? "todos" : "discrepancia")}
-            className={`cursor-pointer bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel" ? "border-purple-500/70 ring-2 ring-purple-500/40 bg-purple-500/10" : "border-slate-800/80 hover:border-purple-500/40"}`}
+            onClick={() => setFiltroEstado("discrepancia")}
+            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+              filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
+                ? "border-purple-500/70 ring-2 ring-purple-500/40 bg-purple-50/60 dark:bg-purple-500/10"
+                : "border-slate-200 dark:border-slate-800/80 hover:border-purple-500/40"
+            }`}
             title="Clic para ver personas que faltan en PDF o en la planilla Excel"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-purple-400/90 uppercase tracking-wider">Falta PDF / Excel</p>
+                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400/90 uppercase tracking-wider">Falta PDF / Excel</p>
                 {(filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel") && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 animate-pulse">
                     Activo
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-purple-400">{stats.discrepancia}</span>
-                <span className="text-xs text-slate-500">faltantes</span>
+                <span className="text-2xl font-black text-purple-600 dark:text-purple-400">{stats.discrepancia}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">faltantes</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-500/15 border border-purple-200 dark:border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
               <AlertCircle className="w-5 h-5" />
             </div>
           </div>
@@ -1351,11 +1389,11 @@ function PersonasContent() {
           {/* Recargar */}
           <div className="md:col-span-1 flex justify-end">
             <button
-              onClick={() => cargarPersonas(true)}
+              onClick={recargarManual}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700/60 rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer"
-              title="Recargar datos"
+              title="Recargar datos manualmente"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
+              <RefreshCw className={`w-3.5 h-3.5 text-primary-600 dark:text-primary-400 ${cargando ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
@@ -1415,21 +1453,10 @@ function PersonasContent() {
           </div>
         )}
 
-        {/* Barra de acción directa sobre la tabla */}
+        {/* Barra de estado de la tabla */}
         <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2 text-xs">
           <div className="text-slate-600 dark:text-slate-400 font-medium">
             Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{stats.total}</strong> personas
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setModalVaciarAbierto(true)}
-              disabled={personas.length === 0}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-40"
-              title="Vaciar tabla de personas sin tener que eliminar una a una"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-              <span>Vaciar Tabla</span>
-            </button>
           </div>
         </div>
 

@@ -1,13 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 
 export type Theme = "dark" | "light";
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
-  setTheme: (t: Theme) => void;
+  toggleTheme: (event?: React.MouseEvent | MouseEvent | { clientX: number; clientY: number }) => void;
+  setTheme: (t: Theme, coords?: { clientX: number; clientY: number }) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -19,6 +19,7 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
+  const isTransitioningRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -45,17 +46,104 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = (newTheme: Theme, coords?: { clientX: number; clientY: number }) => {
+    if (isTransitioningRef.current) return;
     setThemeState(newTheme);
     try {
       localStorage.setItem("ocr_theme", newTheme);
     } catch {}
-    applyTheme(newTheme);
+
+    if (typeof document === "undefined") return;
+
+    const root = document.documentElement;
+
+    // Verificar si el navegador soporta View Transitions de forma nativa
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const hasViewTransition =
+      "startViewTransition" in document &&
+      typeof (document as any).startViewTransition === "function" &&
+      !prefersReducedMotion;
+
+    if (hasViewTransition) {
+      isTransitioningRef.current = true;
+      root.classList.add("theme-transitioning");
+
+      // Calcular origen del destello radial
+      let x = coords?.clientX;
+      let y = coords?.clientY;
+      if (x === undefined || y === undefined) {
+        const toggleBtn = document.querySelector('button[title*="Modo"]');
+        if (toggleBtn) {
+          const rect = toggleBtn.getBoundingClientRect();
+          x = rect.left + rect.width / 2;
+          y = rect.top + rect.height / 2;
+        } else {
+          x = window.innerWidth / 2;
+          y = window.innerHeight / 2;
+        }
+      }
+
+      const endRadius = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y)
+      );
+
+      root.classList.add("theme-clip-reveal");
+
+      const transition = (document as any).startViewTransition(() => {
+        applyTheme(newTheme);
+      });
+
+      transition.ready
+        .then(() => {
+          try {
+            const anim = (document.documentElement as any).animate(
+              {
+                clipPath: [
+                  `circle(0px at ${x}px ${y}px)`,
+                  `circle(${endRadius}px at ${x}px ${y}px)`,
+                ],
+              },
+              {
+                duration: 450,
+                easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+                pseudoElement: "::view-transition-new(root)",
+              }
+            );
+            return anim.finished;
+          } catch {
+            return undefined;
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          root.classList.remove("theme-transitioning");
+          root.classList.remove("theme-clip-reveal");
+          isTransitioningRef.current = false;
+        });
+    } else {
+      // Fallback controlado para navegadores sin View Transitions:
+      // Se sincronizan todas las transiciones simultáneamente para evitar desfases
+      root.classList.add("theme-sync-transition");
+      applyTheme(newTheme);
+      setTimeout(() => {
+        root.classList.remove("theme-sync-transition");
+        isTransitioningRef.current = false;
+      }, 350);
+    }
   };
 
-  const toggleTheme = () => {
+  const toggleTheme = (event?: React.MouseEvent | MouseEvent | { clientX: number; clientY: number }) => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
+    const coords =
+      event && "clientX" in event && "clientY" in event
+        ? { clientX: event.clientX, clientY: event.clientY }
+        : undefined;
+    setTheme(next, coords);
   };
 
   return (

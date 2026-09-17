@@ -131,8 +131,8 @@ export default function Sidebar() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                toggleTheme();
+              onClick={(e) => {
+                toggleTheme(e);
                 toast.success(theme === "dark" ? "Modo Claro activado" : "Modo Oscuro activado", {
                   duration: 2000,
                   icon: theme === "dark" ? "☀️" : "🌙",

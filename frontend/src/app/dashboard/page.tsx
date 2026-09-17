@@ -377,7 +377,6 @@ export default function DashboardPage() {
                       <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                         <th className="py-3.5 px-4">Ficha / Documento PDF</th>
                         <th className="py-3.5 px-3 text-center">Fecha de Carga</th>
-                        <th className="py-3.5 px-3 text-center">Páginas</th>
                         <th className="py-3.5 px-3 text-center">Personas</th>
                         <th className="py-3.5 px-3 text-center">Estado</th>
                         <th className="py-3.5 px-3 text-center">Confianza</th>
@@ -409,9 +408,6 @@ export default function DashboardPage() {
                             </td>
                             <td className="py-3 px-3 text-center text-slate-600 dark:text-slate-400 whitespace-nowrap text-[11px] font-medium">
                               {doc.fecha_carga ? new Date(doc.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                            </td>
-                            <td className="py-3 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
-                              {doc.total_paginas || 1}
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 font-mono font-bold text-[11px] text-purple-900 dark:text-purple-300">
@@ -505,9 +501,6 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 flex-wrap mt-2">
-                  <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300">
-                    📄 {docSeleccionadoModal.total_paginas || 1} {docSeleccionadoModal.total_paginas === 1 ? "página" : "páginas"}
-                  </span>
                   <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300">
                     ⚡ Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}
                   </span>
@@ -805,7 +798,6 @@ export default function DashboardPage() {
                 <span className="truncate">{fichaAEliminar.nombre_original}</span>
               </div>
               <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-3">
-                <span>📄 {fichaAEliminar.total_paginas || 1} pág.</span>
                 <span>👥 {fichaAEliminar.total_personas ?? 0} personas asociadas</span>
               </div>
             </div>

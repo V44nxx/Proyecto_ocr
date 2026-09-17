@@ -653,3 +653,76 @@ html.light [class*="border-rose-600"] {
   border-color: #E11D48 !important;
 }
 
+/* ────────────────────────────────────────────
+   Theme Switch - Animación Cinematográfica y Sincronización
+   ──────────────────────────────────────────── */
+
+/* Configuración de View Transitions nativas */
+::view-transition-group(root) {
+  animation-duration: 450ms;
+}
+
+::view-transition-old(root) {
+  animation: 320ms cubic-bezier(0.4, 0, 0.2, 1) both theme-fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 320ms cubic-bezier(0.4, 0, 0.2, 1) both theme-fade-in;
+  mix-blend-mode: normal;
+}
+
+/* Efecto Reveal Radial (cuando se expande en círculo desde el botón) */
+html.theme-clip-reveal::view-transition-old(root) {
+  animation: none !important;
+  z-index: 1 !important;
+}
+
+html.theme-clip-reveal::view-transition-new(root) {
+  animation: none !important;
+  z-index: 9999 !important;
+  mix-blend-mode: normal !important;
+}
+
+@keyframes theme-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes theme-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 
+  Mientras dura la captura de View Transitions, desactivamos las transiciones 
+  individuales de Tailwind/CSS para que ningún elemento (tarjetas, inputs, textos)
+  se quede a mitad de camino o en blanco mientras el fondo ya cambió.
+*/
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: none !important;
+}
+
+/* 
+  Fallback controlado para navegadores sin soporte de View Transitions:
+  Sincroniza todos los fondos, textos y bordes al unísono exacto de 300ms.
+*/
+html.theme-sync-transition,
+html.theme-sync-transition *,
+html.theme-sync-transition *::before,
+html.theme-sync-transition *::after {
+  transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              color 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 300ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition-delay: 0s !important;
+}

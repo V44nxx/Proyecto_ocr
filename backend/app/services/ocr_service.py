@@ -594,6 +594,22 @@ class OCRService:
             import uuid
 
             from app.utils.validators import validador
+            from app.services.colombia_geo_service import colombia_geo
+
+            def _es_nombre_invalido(val: Optional[str]) -> bool:
+                if not val:
+                    return True
+                v_up = str(val).strip().upper()
+                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
+                    return True
+                if any(hdr in v_up for hdr in [
+                    "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI",
+                    "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER"
+                ]):
+                    return True
+                if colombia_geo.es_geografico(v_up):
+                    return True
+                return False
 
             raw_id = datos.get("identificacion")
             id_limpio = validador.limpiar_identificacion(raw_id)
@@ -602,11 +618,11 @@ class OCRService:
             confianza = float(datos.get("confianza_extraccion") or 0.0)
 
             # Criterio estricto de Entidad Ciudadana:
-            # Una nueva persona se crea si tiene identificación válida O (nombres y apellidos).
-            # Se descartan reversos huérfanos que no tienen cara frontal ni nombres.
+            # Una nueva persona se crea si tiene identificación válida O (nombres y apellidos reales).
+            # Se descartan reversos huérfanos que no tienen cara frontal ni nombres, y topónimos como CAQUETA SOLANO.
             tiene_identificacion = bool(id_limpio and not id_limpio.startswith("SIN_ID"))
-            tiene_nombres = bool(nombres_val and str(nombres_val).strip() and nombres_val != "POR REVISAR")
-            tiene_apellidos = bool(apellidos_val and str(apellidos_val).strip() and apellidos_val != "POR REVISAR")
+            tiene_nombres = bool(nombres_val and str(nombres_val).strip() and not _es_nombre_invalido(nombres_val))
+            tiene_apellidos = bool(apellidos_val and str(apellidos_val).strip() and not _es_nombre_invalido(apellidos_val))
             es_reverso_huerfano = bool(datos.get("pagina_reverso") and not datos.get("pagina_frente") and not (tiene_nombres or tiene_apellidos))
 
             num_doc = id_limpio if tiene_identificacion else f"SIN_ID_{str(uuid.uuid4())[:8]}"
@@ -665,19 +681,6 @@ class OCRService:
                 query_persona = query_persona.filter(Persona.usuario_id == doc_usuario_id)
             persona = query_persona.first()
 
-            def _es_nombre_invalido(val: Optional[str]) -> bool:
-                if not val:
-                    return True
-                v_up = str(val).strip().upper()
-                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
-                    return True
-                if any(hdr in v_up for hdr in [
-                    "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI",
-                    "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER"
-                ]):
-                    return True
-                return False
-
             nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
             apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
 
@@ -732,24 +735,32 @@ class OCRService:
                     )
 
             # Fallback y auto-corrección de identificación por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
+            # Si el OCR ya obtuvo una cédula válida pero simplemente NO está en el Excel, se respeta la cédula del OCR ("sacar solo")
             id_original_ocr = str(num_doc) if num_doc else ""
             if excel_lookup and not encontrado_en_excel:
                 from app.services.excel_lookup_service import excel_lookup_service
+                from app.services.comparacion_service import comparacion_service
                 nom_buscar = f"{nombres_final or ''} {apellidos_final or ''}".strip()
                 if nom_buscar and "POR REVISAR" not in nom_buscar:
                     match_nombre = excel_lookup_service.buscar_por_nombre(nom_buscar, excel_lookup, id_ocr_candidato=id_limpio)
                     if match_nombre:
                         id_ofic, reg_ofic = match_nombre
-                        logger.info(
-                            f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
-                            f"OCR leyó '{id_limpio or id_original_ocr}' -> Corregido a '{id_ofic}' desde planilla oficial Excel"
-                        )
-                        id_anterior = id_limpio or id_original_ocr
-                        id_limpio = id_ofic
-                        num_doc = id_ofic
-                        datos["identificacion"] = id_ofic
-                        encontrado_en_excel = True
-                        fuente_nombre = "excel_oficial"
+                        # Solo auto-corregir si no teníamos identificación, o si la distancia Levenshtein es <= 2 (error leve de lectura)
+                        es_ced_valida_ocr = bool(id_limpio and validador.validar_cedula(id_limpio)[0])
+                        dist_id = comparacion_service._distancia_levenshtein(str(id_ofic), str(id_limpio or "")) if id_limpio else 99
+                        debe_corregir = (not es_ced_valida_ocr) or (dist_id <= 2)
+
+                        if debe_corregir:
+                            logger.info(
+                                f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
+                                f"OCR leyó '{id_limpio or id_original_ocr}' -> Corregido a '{id_ofic}' desde planilla oficial Excel"
+                            )
+                            id_anterior = id_limpio or id_original_ocr
+                            id_limpio = id_ofic
+                            num_doc = id_ofic
+                            datos["identificacion"] = id_ofic
+                            encontrado_en_excel = True
+                            fuente_nombre = "excel_oficial"
 
                         nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
                         nom_excel = reg_ofic.get("nombres", "").strip()

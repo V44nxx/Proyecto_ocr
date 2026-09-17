@@ -156,6 +156,8 @@ class SpatialFieldExtractor:
         if not toks_propios:
             return None  # Solo partículas sin nombre real → descartar
         res = " ".join(toks).strip()  # Mantener partículas EN CONTEXTO de un nombre válido
+        if colombia_geo.es_geografico(res):
+            return None
         return validador.normalizar_nombre(res) if len(res) >= 3 else None
 
     def identificar_etiquetas_espaciales(self, lines: List[Any], page_num: int = 1) -> Dict[str, SpatialCandidate]:
@@ -381,13 +383,13 @@ class SpatialFieldExtractor:
                     resultado_campos["fecha_nacimiento"] = {"value": dt.isoformat(), "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
 
         # ── 2. Identificación (NUIP / Cédula) ──
-        # Busca en toda la mitad superior de la página (y<0.55) para cubrir
-        # cédulas rotadas, Tarjetas de Identidad y layouts variables
+        # Busca en la página para cubrir cédulas estándar, rotadas, Tarjetas de Identidad y layouts variables
         if not resultado_campos["identificacion"]["value"]:
+            # Fase 2.1: Búsqueda preferencial en franja superior (y < 0.55)
             for l in lines:
                 t = getattr(l, "text", "").upper().strip()
                 y_pos = getattr(l, "y", 0.0)
-                if y_pos < 0.55:  # Ampliado desde 0.35 para capturar más layouts
+                if y_pos < 0.55:
                     matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
@@ -397,14 +399,42 @@ class SpatialFieldExtractor:
                             break
                     if resultado_campos["identificacion"]["value"]:
                         break
+
+            # Fase 2.2: Búsqueda extendida en TODA la página (y completo de 0.0 a 1.0)
             if not resultado_campos["identificacion"]["value"]:
                 for l in lines:
-                    m_bc = re.search(r"[A-Z]-[0-9]+-[0-9]+-[MF]-([0-9]{7,10})-[0-9]+", getattr(l, "text", ""))
-                    if m_bc:
-                        valido, id_limpio = validador.validar_cedula(m_bc.group(1))
+                    t = getattr(l, "text", "").upper().strip()
+                    matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
+                    for m in matches:
+                        raw_num = re.sub(r"[^\d]", "", m.group(1))
+                        valido, ced_ok = validador.validar_cedula(raw_num)
                         if valido:
-                            resultado_campos["identificacion"] = {"value": id_limpio, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de código de barras inferior"}
+                            resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence * 0.95, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por escaneo universal de página"}
                             break
+                    if resultado_campos["identificacion"]["value"]:
+                        break
+
+            # Fase 2.3: Búsqueda en códigos de barras / PDF417 de reverso
+            if not resultado_campos["identificacion"]["value"]:
+                patrones_barcode = [
+                    r"[A-Z0-9]+-[A-Z0-9]+-[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+                    r"[A-Z0-9]+-[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+                    r"[A-Z0-9]+[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
+                    r"[0-9]{6,8}[MF][0-9]{7}C[0O]L0*([1-9][0-9]{5,9})",
+                    r"COL0*([1-9][0-9]{5,9})[<0-9]",
+                    r"[A-Z]-[0-9]+-[0-9]+-[MF]-([0-9]{7,10})-[0-9]+",
+                ]
+                for l in lines:
+                    txt_line = getattr(l, "text", "")
+                    for pat in patrones_barcode:
+                        m_bc = re.search(pat, txt_line)
+                        if m_bc:
+                            valido, id_limpio = validador.validar_cedula(m_bc.group(1))
+                            if valido:
+                                resultado_campos["identificacion"] = {"value": id_limpio, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de código de barras reverso"}
+                                break
+                    if resultado_campos["identificacion"]["value"]:
+                        break
 
         # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla y Digital) ──
         # Ejecutar siempre para extraer o enriquecer nombres visuales frente a MRZ truncado
@@ -578,19 +608,24 @@ class SpatialFieldExtractor:
                         # Filtro robusto: sin dígitos, no es ruido o cabecera documental, tiene >=1 palabras de >=3 letras
                         palabras_validas = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ]{3,}", limpio)
                         es_ruido = limpio_up in RUIDO_NOMBRES or any(r in limpio_up for r in ["CEDULA", "REPUBLIC", "IDENTIF", "REGISTRAD", "ESTADO CIVIL", "INDICE DERECHO", "HUELLA", "FIRMA"])
-                        es_geo_compuesto = any(r in limpio_up for r in ["DEPARTAMENTO DE", "MUNICIPIO DE", "LUGAR DE", "ALCALDIA"]) or limpio_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA"}
+                        es_geo_compuesto = any(r in limpio_up for r in ["DEPARTAMENTO DE", "MUNICIPIO DE", "LUGAR DE", "ALCALDIA"]) or limpio_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA"} or colombia_geo.es_geografico(limpio)
                         tiene_digito = bool(re.search(r"\d", t_val))
                         if len(palabras_validas) >= 1 and not es_ruido and not es_geo_compuesto and not tiene_digito and limpio not in cands_limpios:
                             cands_limpios.append(limpio)
 
                 if len(cands_limpios) >= 2:
-                    if not resultado_campos["apellidos"]["value"]:
-                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
-                    if not resultado_campos["nombres"]["value"]:
-                        resultado_campos["nombres"] = {"value": cands_limpios[1], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
+                    # Descartar si juntos forman un término geográfico (ej: 'CAQUETA SOLANO')
+                    if colombia_geo.es_geografico(f"{cands_limpios[0]} {cands_limpios[1]}"):
+                        cands_limpios = []
+                    else:
+                        if not resultado_campos["apellidos"]["value"]:
+                            resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        if not resultado_campos["nombres"]["value"]:
+                            resultado_campos["nombres"] = {"value": cands_limpios[1], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
                 elif len(cands_limpios) == 1:
-                    if not resultado_campos["apellidos"]["value"]:
-                        resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                    if not colombia_geo.es_geografico(cands_limpios[0]):
+                        if not resultado_campos["apellidos"]["value"]:
+                            resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
 
         # ── 4. Fechas (Estrategia Universal Cronológica Invariante) ──
         fechas_doc = set()

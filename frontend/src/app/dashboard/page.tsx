@@ -652,7 +652,7 @@ export default function DashboardPage() {
                                         {edad} años (MENOR)
                                       </span>
                                     ) : (
-                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">
+                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/25 text-amber-800 dark:text-amber-300 font-medium whitespace-nowrap shadow-sm">
                                         {edad} años
                                       </span>
                                     )

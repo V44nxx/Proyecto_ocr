@@ -8,7 +8,7 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet
+  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
@@ -1016,13 +1016,24 @@ function PersonasContent() {
                             key={key}
                             className="rounded-lg bg-white dark:bg-slate-950/60 border border-slate-300 dark:border-slate-800/80 p-2.5 flex flex-col justify-between min-h-[58px] min-w-0 shadow-sm"
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                            <div className="flex items-center justify-between gap-1.5 min-w-0">
+                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider min-w-0 flex-1">
                                 {icono}
-                                <span className="truncate">{label}</span>
+                                <span className="truncate" title={label}>{label}</span>
                               </div>
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 shrink-0">
-                                {valor ? "OK" : "Opcional"}
+                              <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-semibold shrink-0 border inline-flex items-center gap-0.5 ${
+                                valor
+                                  ? "bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
+                                  : "bg-slate-100 dark:bg-slate-800/80 border-slate-300 dark:border-slate-700/60 text-slate-500 dark:text-slate-400"
+                              }`}>
+                                {valor ? (
+                                  <>
+                                    <Check className="w-2.5 h-2.5 shrink-0" />
+                                    <span>OK</span>
+                                  </>
+                                ) : (
+                                  "Opcional"
+                                )}
                               </span>
                             </div>
                             <div className="mt-1 min-w-0">
@@ -1591,7 +1602,7 @@ function PersonasContent() {
                                   {edadRow} años
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/25 text-amber-800 dark:text-amber-300 font-medium whitespace-nowrap shadow-sm">
                                   {edadRow} años
                                 </span>
                               )
@@ -1613,10 +1624,10 @@ function PersonasContent() {
                               {/* PDF badge */}
                               {p.documento_id ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/25 dark:border-rose-400/25 text-rose-700 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Extraído de documento PDF por OCR"
                                 >
-                                  <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
+                                  <FileText className="w-2.5 h-2.5 shrink-0 text-rose-600 dark:text-rose-400" /> PDF
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-400 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
@@ -1626,17 +1637,17 @@ function PersonasContent() {
                               {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 dark:border-emerald-400/25 text-emerald-700 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Encontrado en planilla Excel comparada"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/25 dark:border-rose-400/25 text-rose-700 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0 text-rose-600 dark:text-rose-400" /> No Excel
                                 </span>
                               ) : null}
                             </div>

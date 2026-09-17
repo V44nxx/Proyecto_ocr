@@ -343,6 +343,40 @@ class ColombiaGeoService:
         
         return None
 
+    def es_geografico(self, texto: Optional[str]) -> bool:
+        """
+        Determina con alta precisión si un texto corresponde a un departamento,
+        municipio o combinación de topónimos (ej: 'CAQUETA SOLANO', 'SOLANO CAQUETA',
+        'BOGOTA D.C.', 'ANTIOQUIA MEDELLIN', 'HUILA NEIVA').
+        Se utiliza para evitar que lugares sean tomados erróneamente como nombres o apellidos.
+        """
+        if not texto:
+            return False
+        raw = str(texto).strip().upper()
+        if not raw or len(raw) < 3:
+            return False
+
+        # Si contiene palabras explícitas de encabezado geográfico
+        if any(h in raw for h in ["DEPARTAMENTO", "MUNICIPIO", "CORREGIMIENTO", "VEREDA", "DISTRITO"]):
+            return True
+
+        norm = self._quitar_tildes(raw)
+        deptos_set = {self._quitar_tildes(d) for d in self.DEPARTAMENTOS}
+        muns_set = {self._quitar_tildes(m) for m in self.MUNICIPIOS}
+
+        # Coincidencia directa completa
+        if norm in deptos_set or norm in muns_set:
+            return True
+
+        # Analizar palabras individuales ignorando conectores comunes
+        palabras = [w for w in re.sub(r"[^A-Z\s]", " ", norm).split() if len(w) >= 3 and w not in {"DE", "DEL", "LA", "LAS", "LOS", "EL", "SAN", "SANTA", "D.C", "DC"}]
+        if palabras and len(palabras) <= 4:
+            # Si todas las palabras útiles son departamentos o municipios (ej: 'CAQUETA SOLANO')
+            if all(p in deptos_set or p in muns_set for p in palabras):
+                return True
+
+        return False
+
     def extraer_lugar_universal(self, texto: str, lineas: List[str], nombres_excluir: Optional[str] = None) -> Optional[str]:
         """
         Algoritmo Universal de Extracción de Municipios Colombianos:

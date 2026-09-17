@@ -258,26 +258,33 @@ def listar_personas(
                                 match = excel_lookup_service.buscar_por_nombre(nom_p, lookup_excel, id_ocr_candidato=id_limp)
                                 if match:
                                     id_ofic, reg_ofic = match
-                                    logger.info(f"[Personas] Auto-corrigiendo en BD por coincidencia de nombre '{nom_p}': '{p.numero_identificacion}' -> '{id_ofic}'")
-                                    detalles = dict(p.detalles_campos or {})
-                                    detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
-                                    detalles["origen_identificacion"] = "corregido_desde_excel"
-                                    detalles["numero_identificacion"] = {
-                                        "valor": id_ofic,
-                                        "value": id_ofic,
-                                        "confidence": 1.0,
-                                        "status": "VALID",
-                                        "source": "excel_oficial",
-                                        "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {p.numero_identificacion})"
-                                    }
-                                    nom_ex_ofic = reg_ofic.get("nombre_completo") or f"{reg_ofic.get('nombres', '')} {reg_ofic.get('apellidos', '')}".strip()
-                                    if nom_ex_ofic:
-                                        p.nombre_completo = nom_ex_ofic
-                                    p.numero_identificacion = id_ofic
-                                    p.detalles_campos = detalles
-                                    p.fecha_actualizacion = datetime.utcnow()
-                                    ids_en_excel.add(id_ofic)
-                                    hubo_cambios = True
+                                    from app.services.comparacion_service import comparacion_service
+                                    from app.utils.validators import validador
+                                    es_ced_valida_ocr = bool(id_limp and validador.validar_cedula(id_limp)[0])
+                                    dist_id = comparacion_service._distancia_levenshtein(str(id_ofic), str(id_limp or "")) if id_limp else 99
+                                    debe_corregir = (not es_ced_valida_ocr) or (dist_id <= 2)
+
+                                    if debe_corregir:
+                                        logger.info(f"[Personas] Auto-corrigiendo en BD por coincidencia de nombre '{nom_p}': '{p.numero_identificacion}' -> '{id_ofic}'")
+                                        detalles = dict(p.detalles_campos or {})
+                                        detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
+                                        detalles["origen_identificacion"] = "corregido_desde_excel"
+                                        detalles["numero_identificacion"] = {
+                                            "valor": id_ofic,
+                                            "value": id_ofic,
+                                            "confidence": 1.0,
+                                            "status": "VALID",
+                                            "source": "excel_oficial",
+                                            "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {p.numero_identificacion})"
+                                        }
+                                        nom_ex_ofic = reg_ofic.get("nombre_completo") or f"{reg_ofic.get('nombres', '')} {reg_ofic.get('apellidos', '')}".strip()
+                                        if nom_ex_ofic:
+                                            p.nombre_completo = nom_ex_ofic
+                                        p.numero_identificacion = id_ofic
+                                        p.detalles_campos = detalles
+                                        p.fecha_actualizacion = datetime.utcnow()
+                                        ids_en_excel.add(id_ofic)
+                                        hubo_cambios = True
 
                     if hubo_cambios:
                         db.commit()

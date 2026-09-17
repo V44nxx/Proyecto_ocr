@@ -690,13 +690,29 @@ class ExtractorService:
         if not lineas_combinadas:
             lineas_combinadas = [l.strip() for l in texto_combinado.splitlines() if l.strip()]
 
+        # Si tras procesar caras individuales la identificación quedó vacía, rescatarla con escaneo global
+        if not res.get("identificacion"):
+            id_comb = self._extraer_identificacion(texto_combinado, lineas_combinadas)
+            if id_comb:
+                res["identificacion"] = id_comb
+                logger.info(f"[ExtractorService] Identificación '{id_comb}' rescatada mediante combinación de caras")
+
+        # Descartar nombres o apellidos si son puramente geográficos (ej: CAQUETA SOLANO)
+        if res.get("nombres") and colombia_geo.es_geografico(res["nombres"]):
+            res["nombres"] = None
+        if res.get("apellidos") and colombia_geo.es_geografico(res["apellidos"]):
+            res["apellidos"] = None
+        if res.get("nombres") and res.get("apellidos") and colombia_geo.es_geografico(f"{res['nombres']} {res['apellidos']}"):
+            res["nombres"] = None
+            res["apellidos"] = None
+
         # Fallback de nombres/apellidos si quedaron vacíos o con 'POR REVISAR'
         invalidos_nombre = {"POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}
         if not res["nombres"] or res["nombres"] in invalidos_nombre or not res["apellidos"] or res["apellidos"] in invalidos_nombre:
             nom_pos, ape_pos = self._extraer_nombres_por_posicion(lineas_combinadas)
-            if nom_pos and (not res["nombres"] or res["nombres"] in invalidos_nombre):
+            if nom_pos and (not res["nombres"] or res["nombres"] in invalidos_nombre) and not colombia_geo.es_geografico(nom_pos):
                 res["nombres"] = nom_pos
-            if ape_pos and (not res["apellidos"] or res["apellidos"] in invalidos_nombre):
+            if ape_pos and (not res["apellidos"] or res["apellidos"] in invalidos_nombre) and not colombia_geo.es_geografico(ape_pos):
                 res["apellidos"] = ape_pos
 
         # Fallback de lugar y fecha de expedición si quedaron vacíos
@@ -1083,6 +1099,8 @@ class ExtractorService:
             return None
         if any(r in res_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
             return None
+        if colombia_geo.es_geografico(res):
+            return None
         return res if len(res) >= 3 else None
 
     def _siguiente_linea_valida(
@@ -1107,6 +1125,8 @@ class ExtractorService:
                     if norm_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                         continue
                     if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
+                        continue
+                    if colombia_geo.es_geografico(nombre_norm):
                         continue
                     return nombre_norm
         return None
@@ -1181,6 +1201,8 @@ class ExtractorService:
                 return None
             res_up = res.upper()
             if res_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
+                return None
+            if colombia_geo.es_geografico(res):
                 return None
             return res
 
@@ -1287,6 +1309,8 @@ class ExtractorService:
             if res_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                 continue
             if NO_NOMBRE_HEADER.search(res_up):
+                continue
+            if colombia_geo.es_geografico(res):
                 continue
 
             # Priorizar líneas cercanas al número (dentro de 5 líneas)

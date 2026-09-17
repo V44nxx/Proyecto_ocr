@@ -22,6 +22,7 @@ export interface Documento {
   nombre_original: string;
   estado: "pendiente" | "procesando" | "completado" | "error" | "revision";
   total_paginas: number;
+  total_personas?: number;
   confianza_ocr: number | null;
   mensaje_error: string | null;
   tiempo_procesamiento_ms: number | null;

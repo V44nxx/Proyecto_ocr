@@ -18,15 +18,20 @@ router = APIRouter(prefix="/api/personas", tags=["Personas"])
 
 
 def _filtrar_persona_por_usuario(query, usuario: Usuario):
-    """Filtra la consulta de personas para que cada usuario solo vea sus propios registros"""
+    """Filtra la consulta de personas para que cada usuario solo vea sus propios registros (o todos si es admin)"""
+    if getattr(usuario, "rol", None) == "admin":
+        return query
     from sqlalchemy import or_
     return query.outerjoin(Persona.documento).filter(
         or_(
             Persona.usuario_id == usuario.id,
             Documento.usuario_id == usuario.id,
-            Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
+            Persona.detalles_campos["usuario_id"].astext == str(usuario.id),
+            Persona.usuario_id.is_(None),
+            Documento.usuario_id.is_(None)
         )
     )
+
 
 
 import os

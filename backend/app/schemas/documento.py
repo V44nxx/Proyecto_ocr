@@ -20,6 +20,8 @@ class DocumentoResponse(BaseModel):
     fecha_carga: datetime
     fecha_procesamiento: Optional[datetime]
     visible_en_subida: Optional[bool] = True
+    total_personas: Optional[int] = 0
+    metadatos: Optional[dict] = None
 
     class Config:
         from_attributes = True

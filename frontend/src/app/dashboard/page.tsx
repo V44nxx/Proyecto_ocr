@@ -6,10 +6,10 @@ import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
   RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
-  X, Search, Eye, ChevronUp, ChevronDown
+  X, Search, Eye, ChevronUp, ChevronDown, Download
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
-import { apiDocumentos, apiPersonas } from "@/lib/api";
+import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
 import type { DashboardStats, Documento, Persona } from "@/types";
@@ -97,6 +97,7 @@ export default function DashboardPage() {
   const [cargandoPersonasFicha, setCargandoPersonasFicha] = useState(false);
   const [busquedaModal, setBusquedaModal] = useState("");
   const [personaDetalleId, setPersonaDetalleId] = useState<string | null>(null);
+  const [exportandoModal, setExportandoModal] = useState(false);
 
   const abrirPersonasFicha = async (doc: Documento) => {
     setDocSeleccionadoModal(doc);
@@ -104,14 +105,37 @@ export default function DashboardPage() {
     setBusquedaModal("");
     setCargandoPersonasFicha(true);
     try {
-      const res = await apiPersonas.listar({ documento_id: doc.id, limit: 200 });
-      const items = Array.isArray(res.data) ? res.data : (res.data as any).items || [];
+      // Usar endpoint dedicado que garantiza fallback a metadatos históricos si la tabla fue vaciada
+      const res = await apiDocumentos.obtenerPersonas(doc.id);
+      const items = Array.isArray(res.data) ? res.data : [];
       setPersonasFicha(items);
     } catch (err) {
       console.error("Error al cargar personas de la ficha:", err);
-      setPersonasFicha([]);
+      try {
+        const res2 = await apiPersonas.listar({ documento_id: doc.id, limit: 200 });
+        const items2 = Array.isArray(res2.data) ? res2.data : (res2.data as any).items || [];
+        setPersonasFicha(items2);
+      } catch {
+        setPersonasFicha([]);
+      }
     } finally {
       setCargandoPersonasFicha(false);
+    }
+  };
+
+  const exportarFichaModal = async () => {
+    if (!docSeleccionadoModal) return;
+    setExportandoModal(true);
+    try {
+      const nombreLimpio = docSeleccionadoModal.nombre_original.replace(/\.[^/.]+$/, "");
+      await apiExportacion.descargarXlsx({
+        documentoId: docSeleccionadoModal.id,
+        nombreArchivo: `personas_${nombreLimpio}.xlsx`,
+      });
+    } catch (err) {
+      console.error("Error al exportar ficha:", err);
+    } finally {
+      setExportandoModal(false);
     }
   };
 
@@ -327,6 +351,7 @@ export default function DashboardPage() {
                         <th className="py-3.5 px-4">Ficha / Documento PDF</th>
                         <th className="py-3.5 px-3 text-center">Fecha de Carga</th>
                         <th className="py-3.5 px-3 text-center">Páginas</th>
+                        <th className="py-3.5 px-3 text-center">Personas</th>
                         <th className="py-3.5 px-3 text-center">Estado</th>
                         <th className="py-3.5 px-3 text-center">Confianza</th>
                         <th className="py-3.5 px-4 text-right">Acción</th>
@@ -360,6 +385,11 @@ export default function DashboardPage() {
                             </td>
                             <td className="py-3 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                               {doc.total_paginas || 1}
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 font-mono font-bold text-[11px] text-purple-900 dark:text-purple-300">
+                                👥 {doc.total_personas ?? 0}
+                              </span>
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
                               {doc.estado === "completado" ? (
@@ -451,14 +481,25 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Botón cerrar */}
-              <button
-                onClick={() => setDocSeleccionadoModal(null)}
-                className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
-                title="Cerrar ventana"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {/* Botones de acción del Modal */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={exportarFichaModal}
+                  disabled={exportandoModal || personasFicha.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer shadow-sm shadow-emerald-600/30 active:scale-95"
+                  title="Exportar la lista de personas de esta ficha a Excel"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{exportandoModal ? "Exportando..." : "Exportar Ficha"}</span>
+                </button>
+                <button
+                  onClick={() => setDocSeleccionadoModal(null)}
+                  className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
+                  title="Cerrar ventana"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Aviso explicativo y buscador local */}

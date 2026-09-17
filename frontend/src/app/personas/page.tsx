@@ -442,7 +442,6 @@ function PersonasContent() {
       await apiExportacion.descargarXlsx({
         documentoId: docId,
         personaIds: Array.from(seleccionados),
-        requiereRevision: soloRevision ? true : undefined,
       });
       toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`, { id: "export-seleccion" });
     } catch {
@@ -453,14 +452,18 @@ function PersonasContent() {
   };
 
   const exportarVistaActual = async () => {
+    if (personasFiltradas.length === 0) {
+      toast.error("No hay personas para exportar en la vista actual", { id: "export-excel" });
+      return;
+    }
     setExportando(true);
     try {
       const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
       await apiExportacion.descargarXlsx({
         documentoId: docId,
-        requiereRevision: soloRevision ? true : undefined,
+        personaIds: personasFiltradas.map((p) => p.id),
       });
-      toast.success("Archivo Excel descargado correctamente", { id: "export-excel" });
+      toast.success(`${personasFiltradas.length} persona(s) exportada(s) a Excel`, { id: "export-excel" });
     } catch {
       toast.error("Error al exportar a Excel", { id: "export-excel" });
     } finally {

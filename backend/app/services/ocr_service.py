@@ -1057,6 +1057,34 @@ class OCRService:
 
             doc = db.query(Documento).filter(Documento.id == documento_id).first()
             if doc:
+                from app.models.persona import Persona
+                personas_db = db.query(Persona).filter(Persona.documento_id == doc.id).all()
+                snapshot_personas = []
+                for p in personas_db:
+                    snapshot_personas.append({
+                        "id": str(p.id),
+                        "documento_id": str(doc.id),
+                        "nombre_documento": doc.nombre_original,
+                        "numero_identificacion": p.numero_identificacion,
+                        "nombre_completo": p.nombre_completo,
+                        "nombres": p.nombres,
+                        "apellidos": p.apellidos,
+                        "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else None,
+                        "edad": p.edad,
+                        "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else None,
+                        "lugar_expedicion": p.lugar_expedicion,
+                        "sexo": p.sexo,
+                        "tipo_documento": p.tipo_documento or "CEDULA_CIUDADANIA",
+                        "estado_registro": p.estado_registro or "VALID",
+                        "confianza_extraccion": float(p.confianza_extraccion or 0),
+                        "requiere_revision": bool(p.requiere_revision),
+                        "pagina_frente": p.pagina_frente,
+                        "pagina_reverso": p.pagina_reverso,
+                        "pagina_numero": p.pagina_numero,
+                        "motor_ocr": p.motor_ocr,
+                        "detalles_campos": p.detalles_campos,
+                    })
+
                 doc.estado = "completado"
                 doc.total_paginas = total_paginas
                 doc.confianza_ocr = confianza  # confianza real
@@ -1065,14 +1093,16 @@ class OCRService:
                 meta = dict(doc.metadatos or {})
                 meta.update({
                     "progreso": 100,
-                    "paso": f"Extracción completada con éxito ({personas_count} personas encontradas)",
+                    "paso": f"Extracción completada con éxito ({len(snapshot_personas) or personas_count} personas encontradas)",
                     "pagina_actual": total_paginas,
                     "total_paginas": total_paginas,
-                    "personas_extraidas": personas_count,
+                    "personas_extraidas": len(snapshot_personas) or personas_count,
+                    "personas_extraidas_datos": snapshot_personas,
                     "tiempo_procesamiento_ms": tiempo_ms,
                 })
                 doc.metadatos = meta
                 db.commit()
+                logger.info(f"[OCR] Documento {doc.id} completado con {len(snapshot_personas)} personas en snapshot histórico")
         except Exception as e:
             logger.error(f"Error actualizando estado del documento: {e}")
 

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/exportacion", tags=["Exportación"])
 
 class ExportarPersonasRequest(BaseModel):
     requiere_revision: Optional[bool] = None
+    solo_menores: Optional[bool] = None
     documento_id: Optional[str] = None
     persona_ids: Optional[List[str]] = None
 
@@ -24,6 +25,7 @@ def _generar_descarga_personas(db: Session, usuario: Usuario, filtros: dict):
     try:
         filtros_con_usuario = dict(filtros or {})
         filtros_con_usuario["usuario_id"] = str(usuario.id)
+        filtros_con_usuario["es_admin"] = getattr(usuario, "rol", None) == "admin"
         ruta_archivo = exportacion_service.exportar_personas(db, filtros_con_usuario)
 
         if not Path(ruta_archivo).exists():
@@ -49,17 +51,20 @@ def _generar_descarga_personas(db: Session, usuario: Usuario, filtros: dict):
 @router.get("/xlsx", summary="Exportar personas a Excel (GET)")
 def exportar_xlsx(
     requiere_revision: Optional[bool] = Query(None),
+    solo_menores: Optional[bool] = Query(None),
     documento_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
-    Genera un archivo XLSX filtrado por documento o estado de revisión.
+    Genera un archivo XLSX filtrado por documento, estado de revisión o solo menores de edad.
     Retorna el archivo para descarga directa.
     """
     filtros = {}
     if requiere_revision is not None:
         filtros["requiere_revision"] = requiere_revision
+    if solo_menores is not None:
+        filtros["solo_menores"] = solo_menores
     if documento_id:
         filtros["documento_id"] = documento_id
 
@@ -78,6 +83,8 @@ def exportar_personas_post(
     filtros = {}
     if payload.requiere_revision is not None:
         filtros["requiere_revision"] = payload.requiere_revision
+    if payload.solo_menores is not None:
+        filtros["solo_menores"] = payload.solo_menores
     if payload.documento_id:
         filtros["documento_id"] = payload.documento_id
     if payload.persona_ids:

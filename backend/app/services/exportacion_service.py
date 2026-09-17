@@ -62,14 +62,15 @@ class ExportacionService:
         nombre_doc_especifico = None
 
         if filtros:
-            if filtros.get("usuario_id"):
+            if filtros.get("usuario_id") and not filtros.get("es_admin"):
                 from sqlalchemy import or_
                 uid = filtros["usuario_id"]
                 query = query.outerjoin(Persona.documento).filter(
                     or_(
                         Persona.usuario_id == uid,
                         Documento.usuario_id == uid,
-                        Persona.detalles_campos["usuario_id"].astext == str(uid)
+                        Persona.detalles_campos["usuario_id"].astext == str(uid),
+                        Persona.usuario_id.is_(None)
                     )
                 )
 
@@ -83,6 +84,9 @@ class ExportacionService:
             if filtros.get("persona_ids"):
                 p_ids = filtros["persona_ids"]
                 query = query.filter(Persona.id.in_(p_ids))
+
+            if filtros.get("solo_menores"):
+                query = query.filter(Persona.edad.isnot(None), Persona.edad < 18)
 
             if filtros.get("requiere_revision") is not None:
                 if filtros["requiere_revision"] is True:
@@ -103,6 +107,42 @@ class ExportacionService:
         # Convertir a DataFrame
         datos = []
         from app.utils.name_cleaner import resolver_nombre_completo
+
+        # Si se filtró por documento_id y la tabla activa no tiene personas (ej. vaciada),
+        # recurrir al snapshot guardado en los metadatos del documento
+        if not personas and filtros and filtros.get("documento_id"):
+            doc_id = filtros["documento_id"]
+            doc = db.query(Documento).filter(Documento.id == doc_id).first()
+            if doc and doc.metadatos and doc.metadatos.get("personas_extraidas_datos"):
+                snapshot = doc.metadatos["personas_extraidas_datos"]
+                for p_snap in snapshot:
+                    if filtros.get("solo_menores"):
+                        edad_val = p_snap.get("edad")
+                        if edad_val is None:
+                            continue
+                        try:
+                            if int(edad_val) >= 18:
+                                continue
+                        except Exception:
+                            continue
+
+                    if filtros.get("requiere_revision") is True:
+                        if not p_snap.get("requiere_revision"):
+                            continue
+                    elif filtros.get("requiere_revision") is False:
+                        if p_snap.get("requiere_revision"):
+                            continue
+
+                    nom_comp = resolver_nombre_completo(p_snap.get("nombres"), p_snap.get("apellidos"), p_snap.get("nombre_completo"))
+                    datos.append({
+                        "numero_identificacion": p_snap.get("numero_identificacion") or "",
+                        "nombre_completo": nom_comp,
+                        "fecha_nacimiento": p_snap.get("fecha_nacimiento") or "",
+                        "edad": p_snap.get("edad") if p_snap.get("edad") is not None else "",
+                        "documento_origen": doc.nombre_original,
+                        "requiere_revision": "SÍ" if p_snap.get("requiere_revision") else "NO",
+                        "fecha_registro": doc.fecha_carga.strftime("%d/%m/%Y %H:%M") if doc.fecha_carga else "",
+                    })
 
         for p in personas:
             nom_comp = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
@@ -199,7 +239,7 @@ class ExportacionService:
         # Insertar fila de metadatos
         ws.insert_rows(2)
         meta_cell = ws["A2"]
-        meta_cell.value = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Total registros: {total_filas}"
+        meta_cell.value = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Total registros: {total_filas} | ⚠️ Personas menores de edad (< 18 años) destacadas en ROJO"
         meta_cell.font = Font(name="Calibri", italic=True, size=9, color="555555")
         ws.merge_cells(f"A2:{get_column_letter(len(self.COLUMNAS))}2")
         ws.row_dimensions[2].height = 20
@@ -219,28 +259,65 @@ class ExportacionService:
             if i <= len(self.COLUMNAS):
                 ws.column_dimensions[get_column_letter(i)].width = ancho
 
+        col_edad_idx = list(self.COLUMNAS.keys()).index("edad") + 1
         col_revision_idx = list(self.COLUMNAS.keys()).index("requiere_revision") + 1
+
+        # Estilos especiales para menores de edad
+        relleno_menor_fila = PatternFill(
+            start_color="FFF0F0",
+            end_color="FFF0F0",
+            fill_type="solid"
+        )
+        relleno_menor_edad = PatternFill(
+            start_color="FFC7CE",
+            end_color="FFC7CE",
+            fill_type="solid"
+        )
+        fuente_menor_edad = Font(name="Calibri", size=11, bold=True, color="9C0006")
+        fuente_menor_fila = Font(name="Calibri", size=10, color="500000")
 
         # Formatear filas de datos
         for row_num in range(4, total_filas + 4):
             es_altrow = (row_num % 2 == 0)
             requiere_revision = ws.cell(row=row_num, column=col_revision_idx).value == "SÍ"
 
+            # Detectar si es menor de edad (< 18)
+            val_edad = ws.cell(row=row_num, column=col_edad_idx).value
+            es_menor = False
+            try:
+                if val_edad is not None and str(val_edad).strip() != "":
+                    if int(float(str(val_edad).strip())) < 18:
+                        es_menor = True
+            except Exception:
+                es_menor = False
+
             for col_num in range(1, len(self.COLUMNAS) + 1):
                 cell = ws.cell(row=row_num, column=col_num)
-                cell.font = fuente_datos
                 cell.border = borde
                 cell.alignment = Alignment(horizontal="left", vertical="center")
 
-                # Colorear según estado de revisión
-                if requiere_revision:
+                # Colorear según menor de edad, estado de revisión, o fila normal
+                if es_menor:
+                    cell.fill = relleno_menor_fila
+                    cell.font = fuente_menor_fila
+                elif requiere_revision:
                     cell.fill = relleno_revision
+                    cell.font = fuente_datos
                 elif es_altrow:
                     cell.fill = relleno_altrow
+                    cell.font = fuente_datos
                 else:
                     cell.fill = relleno_ok
+                    cell.font = fuente_datos
 
-            ws.row_dimensions[row_num].height = 18
+            # Destacar celda de EDAD en ROJO ALERTA si es menor de edad
+            if es_menor:
+                cell_edad = ws.cell(row=row_num, column=col_edad_idx)
+                cell_edad.fill = relleno_menor_edad
+                cell_edad.font = fuente_menor_edad
+                cell_edad.alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.row_dimensions[row_num].height = 20
 
         # Inmovilizar paneles
         ws.freeze_panes = "A4"

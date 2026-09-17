@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.documento import Documento
 from app.models.usuario import Usuario
-from app.schemas.documento import DocumentoResponse
+from app.schemas.documento import DocumentoResponse, PersonaResponse
 from app.routers.auth import get_usuario_actual, get_usuario_desde_token_o_query
 from app.services.ocr_service import ocr_service
 from app.config import settings
@@ -241,10 +241,12 @@ def listar_documentos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Lista los documentos propios del usuario actual"""
+    """Lista los documentos propios del usuario actual (o todos si es admin)"""
     from sqlalchemy import or_
 
-    query = db.query(Documento).filter(Documento.usuario_id == usuario.id)
+    query = db.query(Documento)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
 
     if solo_subida:
         query = query.filter(or_(Documento.visible_en_subida == True, Documento.visible_en_subida.is_(None)))
@@ -263,15 +265,78 @@ def obtener_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Obtiene el detalle de un documento específico propio"""
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    from sqlalchemy import or_
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
     return DocumentoResponse.model_validate(documento)
+
+
+@router.get("/{documento_id}/personas", response_model=List[PersonaResponse], summary="Listar personas de un documento específico")
+def listar_personas_documento(
+    documento_id: str,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Obtiene la lista de personas pertenecientes a este documento.
+    Si las personas fueron eliminadas de la vista activa de la base de datos,
+    utiliza el snapshot histórico inmutable guardado en metadatos para que
+    el historial de archivos NUNCA aparezca sin personas.
+    """
+    from sqlalchemy import or_
+    from app.models.persona import Persona
+    from app.routers.personas import _obtener_ids_en_excel, _enriquecer_persona_response
+    import re
+
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    documento = query.first()
+
+    if not documento:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
+
+    # 1. Consultar personas activas en la BD vinculadas a este documento
+    personas_db = db.query(Persona).filter(Persona.documento_id == documento.id).all()
+
+    if personas_db and len(personas_db) > 0:
+        return [_enriquecer_persona_response(p, ids_en_excel, hay_excel) for p in personas_db]
+
+    # 2. Si la tabla activa no tiene personas (ej. se limpió la tabla o se desasoció),
+    # recurrir al snapshot guardado en metadatos del documento
+    meta = documento.metadatos or {}
+    snapshot = meta.get("personas_extraidas_datos", [])
+    if snapshot:
+        resultado = []
+        for s in snapshot:
+            id_crudo = str(s.get("numero_identificacion") or "").strip()
+            id_limpio = re.sub(r"[^\d]", "", id_crudo)
+            en_excel = None
+            if hay_excel:
+                en_excel = bool(
+                    (id_limpio and id_limpio in ids_en_excel) or
+                    (id_crudo and id_crudo in ids_en_excel)
+                )
+
+            p_data = dict(s)
+            p_data["en_pdf"] = True
+            p_data["en_excel"] = en_excel
+            if "fecha_registro" not in p_data or not p_data["fecha_registro"]:
+                p_data["fecha_registro"] = documento.fecha_carga
+            if "fecha_actualizacion" not in p_data or not p_data["fecha_actualizacion"]:
+                p_data["fecha_actualizacion"] = documento.fecha_carga
+            resultado.append(PersonaResponse.model_validate(p_data))
+        return resultado
+
+    return []
 
 
 @router.get("/{documento_id}/estado", summary="Estado de procesamiento OCR")
@@ -281,10 +346,11 @@ def estado_documento(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Consulta el estado actual del procesamiento OCR de un documento propio"""
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    from sqlalchemy import or_
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -345,10 +411,11 @@ def eliminar_documento(
     """
     from app.models.persona import Persona
 
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    from sqlalchemy import or_
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado o no pertenece a su cuenta")
@@ -479,11 +546,11 @@ def preview_pagina_pdf(
     y la devuelve como imagen PNG. Permite al frontend mostrar una vista
     previa de la página exacta donde se detectó la persona.
     """
-    # 1. Obtener el documento validando pertenencia
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
+    from sqlalchemy import or_
+    query = db.query(Documento).filter(Documento.id == documento_id)
+    if getattr(usuario, "rol", None) != "admin":
+        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    documento = query.first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")

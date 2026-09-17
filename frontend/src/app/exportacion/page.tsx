@@ -20,7 +20,7 @@ export default function ExportacionPage() {
   const [documentoSeleccionado, setDocumentoSeleccionado] = useState<string>("todos");
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
-  const [filtroRevision, setFiltroRevision] = useState<"todos" | "revision" | "ok">("todos");
+  const [filtroRevision, setFiltroRevision] = useState<"todos" | "revision" | "ok" | "menores">("todos");
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -53,17 +53,21 @@ export default function ExportacionPage() {
     }
   };
 
-  // Filtrar personas según documento y estado de revisión
+  // Filtrar personas según documento y estado de revisión o menores
   const personasFiltradas = useMemo(() => {
     return personas.filter((p) => {
       // Filtro por documento
       if (documentoSeleccionado !== "todos" && p.documento_id !== documentoSeleccionado) {
         return false;
       }
-      // Filtro por revisión
+      // Filtro por revisión o menores
       const esRev = p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID");
+      const edadNum = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
+      const esMenor = edadNum !== null && edadNum < 18;
+
       if (filtroRevision === "revision" && !esRev) return false;
       if (filtroRevision === "ok" && esRev) return false;
+      if (filtroRevision === "menores" && !esMenor) return false;
 
       return true;
     });
@@ -117,6 +121,7 @@ export default function ExportacionPage() {
       let requiereRevision: boolean | undefined;
       if (filtroRevision === "revision") requiereRevision = true;
       else if (filtroRevision === "ok") requiereRevision = false;
+      const soloMenores = filtroRevision === "menores" ? true : undefined;
 
       const docId = documentoSeleccionado !== "todos" ? documentoSeleccionado : undefined;
 
@@ -127,6 +132,7 @@ export default function ExportacionPage() {
 
       await apiExportacion.descargarXlsx({
         requiereRevision,
+        soloMenores,
         documentoId: docId,
         personaIds: todosFueronSeleccionados && !docId ? undefined : Array.from(seleccionados),
       });
@@ -143,6 +149,10 @@ export default function ExportacionPage() {
     total: personas.length,
     ok: personas.filter((p) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID")).length,
     revision: personas.filter((p) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length,
+    menores: personas.filter((p) => {
+      const ed = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
+      return ed !== null && ed < 18;
+    }).length,
     completas: personas.filter(
       (p) => (p.nombre_completo || (p.nombres && p.apellidos)) && p.fecha_nacimiento && p.fecha_expedicion
     ).length,
@@ -270,6 +280,12 @@ export default function ExportacionPage() {
                       icon: <AlertTriangle className="w-4 h-4 text-amber-400" />,
                       count: stats.revision,
                     },
+                    {
+                      value: "menores",
+                      label: "Solo menores de edad (< 18)",
+                      icon: <AlertTriangle className="w-4 h-4 text-rose-400" />,
+                      count: stats.menores,
+                    },
                   ].map((opt) => (
                     <label
                       key={opt.value}
@@ -327,6 +343,13 @@ export default function ExportacionPage() {
                     </>
                   )}
                 </button>
+
+                <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Alerta de menores:</strong> Cualquier persona menor de edad (&lt; 18 años) será automáticamente resaltada con fila y celda de edad en <strong>ROJO</strong> en el archivo Excel descargado.
+                  </span>
+                </div>
 
                 {personasFiltradas.length === 0 && (
                   <p className="text-center text-slate-500 text-xs mt-3">

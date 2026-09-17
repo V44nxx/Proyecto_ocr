@@ -185,6 +185,12 @@ export const apiDocumentos = {
     }),
 
   /**
+   * Obtiene las personas de un documento específico (con fallback al snapshot histórico si fue vaciada)
+   */
+  obtenerPersonas: (documentoId: string) =>
+    apiClient.get<Persona[]>(`/api/documentos/${documentoId}/personas`),
+
+  /**
    * Construye la URL para la imagen de preview de una página del PDF.
    * Incluye el token JWT como query param para autenticación en <img src>.
    */
@@ -239,6 +245,7 @@ export const apiPersonas = {
 // ──────────────────────────────────────────
 export interface DescargarXlsxOptions {
   requiereRevision?: boolean;
+  soloMenores?: boolean;
   documentoId?: string;
   personaIds?: string[];
   nombreArchivo?: string;
@@ -257,6 +264,7 @@ export const apiExportacion = {
         "/api/exportacion/xlsx",
         {
           requiere_revision: opts.requiereRevision,
+          solo_menores: opts.soloMenores,
           documento_id: opts.documentoId,
           persona_ids: opts.personaIds,
         },
@@ -266,6 +274,9 @@ export const apiExportacion = {
       const params: Record<string, any> = {};
       if (opts.requiereRevision !== undefined) {
         params.requiere_revision = opts.requiereRevision;
+      }
+      if (opts.soloMenores !== undefined) {
+        params.solo_menores = opts.soloMenores;
       }
       if (opts.documentoId) {
         params.documento_id = opts.documentoId;

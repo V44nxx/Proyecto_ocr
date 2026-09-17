@@ -30,5 +30,16 @@ class Documento(Base):
     usuario = relationship("Usuario", back_populates="documentos")
     personas = relationship("Persona", back_populates="documento", cascade="all, delete-orphan")
 
+    @property
+    def total_personas(self) -> int:
+        """Retorna el total de personas en BD o el histórico de metadatos"""
+        if self.personas:
+            return len(self.personas)
+        if self.metadatos and isinstance(self.metadatos, dict):
+            if self.metadatos.get("personas_extraidas_datos"):
+                return len(self.metadatos["personas_extraidas_datos"])
+            return int(self.metadatos.get("personas_extraidas", 0))
+        return 0
+
     def __repr__(self):
         return f"<Documento {self.nombre_original} [{self.estado}]>"

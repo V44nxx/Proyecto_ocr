@@ -6,8 +6,9 @@ import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
   RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
-  X, Search, Eye, ChevronUp, ChevronDown, Download
+  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2
 } from "lucide-react";
+import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
 import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -136,6 +137,32 @@ export default function DashboardPage() {
       console.error("Error al exportar ficha:", err);
     } finally {
       setExportandoModal(false);
+    }
+  };
+
+  // Estado para modal de confirmación de eliminación de ficha
+  const [fichaAEliminar, setFichaAEliminar] = useState<Documento | null>(null);
+  const [eliminandoFicha, setEliminandoFicha] = useState(false);
+
+  const confirmarEliminarFicha = async () => {
+    if (!fichaAEliminar) return;
+    setEliminandoFicha(true);
+    const toastId = toast.loading(`Eliminando ficha ${fichaAEliminar.nombre_original}...`);
+    try {
+      await apiDocumentos.eliminar(fichaAEliminar.id, true);
+      toast.success(`Ficha eliminada del historial`, { id: toastId });
+      setDocumentosHistorial((prev) => prev.filter((d) => d.id !== fichaAEliminar.id));
+      if (docSeleccionadoModal?.id === fichaAEliminar.id) {
+        setDocSeleccionadoModal(null);
+      }
+      setFichaAEliminar(null);
+      const resStats = await apiDocumentos.estadisticas().catch(() => null);
+      if (resStats?.data) setStats(resStats.data);
+    } catch (err) {
+      console.error("Error al eliminar ficha del historial:", err);
+      toast.error("Error al eliminar la ficha del historial", { id: toastId });
+    } finally {
+      setEliminandoFicha(false);
     }
   };
 
@@ -410,17 +437,29 @@ export default function DashboardPage() {
                               {doc.confianza_ocr != null ? `${Math.round(doc.confianza_ocr)}%` : "—"}
                             </td>
                             <td className="py-3 px-4 text-right whitespace-nowrap">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  abrirPersonasFicha(doc);
-                                }}
-                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-primary-600 hover:bg-primary-500 text-white shadow-sm shadow-primary-600/30 hover:scale-[1.02] active:scale-98"
-                                title="Visualizar personas de este archivo en una tabla independiente"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Visualizar Personas</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    abrirPersonasFicha(doc);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-primary-600 hover:bg-primary-500 text-white shadow-sm shadow-primary-600/30 hover:scale-[1.02] active:scale-98"
+                                  title="Visualizar personas de este archivo en una tabla independiente"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Visualizar Personas</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFichaAEliminar(doc);
+                                  }}
+                                  className="p-1.5 rounded-xl text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/50 transition-all inline-flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                                  title="Eliminar esta ficha del historial"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -491,6 +530,14 @@ export default function DashboardPage() {
                 >
                   <Download className="w-4 h-4" />
                   <span>{exportandoModal ? "Exportando..." : "Exportar Ficha"}</span>
+                </button>
+                <button
+                  onClick={() => setFichaAEliminar(docSeleccionadoModal)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-700 dark:text-rose-300 hover:text-white dark:bg-rose-950/40 dark:hover:bg-rose-600 border border-rose-200 dark:border-rose-900/60 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Eliminar esta ficha del historial"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Eliminar Ficha</span>
                 </button>
                 <button
                   onClick={() => setDocSeleccionadoModal(null)}
@@ -719,6 +766,78 @@ export default function DashboardPage() {
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-bold transition-all cursor-pointer shadow-sm"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CONFIRMACIÓN PARA ELIMINAR FICHA DEL HISTORIAL ── */}
+      {fichaAEliminar && (
+        <div
+          className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => !eliminandoFicha && setFichaAEliminar(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  ¿Eliminar ficha del historial?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Esta acción no se puede deshacer
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
+              Estás a punto de eliminar del historial el siguiente documento:
+            </p>
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-900 dark:text-slate-100 mb-4 break-all">
+              <div className="font-bold flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary-500 shrink-0" />
+                <span className="truncate">{fichaAEliminar.nombre_original}</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-3">
+                <span>📄 {fichaAEliminar.total_paginas || 1} pág.</span>
+                <span>👥 {fichaAEliminar.total_personas ?? 0} personas asociadas</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-rose-700 dark:text-rose-300 font-medium mb-5 bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl border border-rose-200 dark:border-rose-900/40">
+              ⚠️ Se eliminará el registro del historial, el archivo físico del PDF y todas las personas asociadas a esta ficha de forma permanente.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setFichaAEliminar(null)}
+                disabled={eliminandoFicha}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarEliminarFicha}
+                disabled={eliminandoFicha}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition-all cursor-pointer shadow-sm shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50 active:scale-95"
+              >
+                {eliminandoFicha ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Sí, eliminar ficha</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

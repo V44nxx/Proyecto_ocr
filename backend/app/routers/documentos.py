@@ -434,11 +434,13 @@ def eliminar_documento(
             "documento_id": str(documento.id)
         }
 
-    # 1. Si es eliminación permanente explícita: eliminar personas
-    personas_eliminadas = db.query(Persona).filter(
-        Persona.documento_id == documento.id,
-        (Persona.usuario_id == usuario.id) | (Persona.usuario_id.is_(None))
-    ).delete(synchronize_session=False)
+    # 1. Si es eliminación permanente explícita: eliminar personas asociadas
+    personas_query = db.query(Persona).filter(Persona.documento_id == documento.id)
+    if getattr(usuario, "rol", None) != "admin":
+        personas_query = personas_query.filter(
+            (Persona.usuario_id == usuario.id) | (Persona.usuario_id.is_(None))
+        )
+    personas_eliminadas = personas_query.delete(synchronize_session=False)
     if personas_eliminadas:
         logger.info(f"Eliminadas {personas_eliminadas} persona(s) asociadas al documento {documento.nombre_original}")
 
@@ -453,7 +455,7 @@ def eliminar_documento(
     db.delete(documento)
     db.commit()
     logger.info(f"Documento eliminado permanentemente: {documento.nombre_original} (usuario: {usuario.email})")
-    return {"ok": True, "mensaje": "Documento y personas eliminados permanentemente"}
+    return {"ok": True, "mensaje": f"Ficha '{documento.nombre_original}' eliminada del historial permanentemente"}
 
 
 @router.get("/dashboard/estadisticas", summary="Estadísticas del dashboard")

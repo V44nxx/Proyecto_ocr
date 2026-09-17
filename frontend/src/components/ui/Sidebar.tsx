@@ -181,7 +181,7 @@ export default function Sidebar() {
               <div className="pt-3">
                 <button
                   onClick={() => setModalUsuarioAbierto(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary-600 to-blue-700 hover:from-primary-500 hover:to-blue-600 text-white shadow-lg shadow-primary-950/20 border border-primary-400/30 transition-all hover:scale-[1.01] active:scale-98 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700/90 text-primary-300 dark:text-primary-400 hover:text-white border border-primary-500/30 transition-all hover:border-primary-400/60 shadow-sm cursor-pointer"
                   title="Agregar nuevo usuario al sistema"
                 >
                   <UserPlus className="w-3.5 h-3.5 shrink-0" />
@@ -222,7 +222,7 @@ export default function Sidebar() {
               <div className="pt-2">
                 <button
                   onClick={() => setModalUsuarioAbierto(true)}
-                  className="w-11 h-11 mx-auto flex items-center justify-center rounded-xl bg-gradient-to-r from-primary-600 to-blue-700 hover:from-primary-500 hover:to-blue-600 text-white shadow-md border border-primary-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  className="w-11 h-11 mx-auto flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700/90 text-primary-300 dark:text-primary-400 hover:text-white border border-primary-500/30 transition-all hover:border-primary-400/60 shadow-sm cursor-pointer"
                   title="Agregar nuevo usuario"
                   aria-label="Agregar nuevo usuario"
                 >

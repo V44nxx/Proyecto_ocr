@@ -412,22 +412,23 @@ export default function DashboardPage() {
                               {doc.fecha_carga ? new Date(doc.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 font-mono font-bold text-[11px] text-purple-900 dark:text-purple-300">
-                                👥 {doc.total_personas ?? 0}
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-100/80 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-800/50 font-mono font-bold text-[11px] text-purple-900 dark:text-purple-300">
+                                <Users className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span>{doc.total_personas ?? 0}</span>
                               </span>
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
                               {doc.estado === "completado" ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 text-[10px] font-bold">
-                                  <CheckCircle className="w-2.5 h-2.5" /> Completado
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-400 text-[10px] font-semibold">
+                                  <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> Completado
                                 </span>
                               ) : doc.estado === "procesando" ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-yellow-500/15 border border-amber-300 dark:border-yellow-500/30 text-amber-800 dark:text-yellow-400 text-[10px] font-bold animate-pulse">
-                                  <Clock className="w-2.5 h-2.5" /> Procesando
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/40 text-amber-900 dark:text-amber-400 text-[10px] font-semibold animate-pulse">
+                                  <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> Procesando
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-red-500/15 border border-rose-300 dark:border-red-500/30 text-rose-800 dark:text-red-400 text-[10px] font-bold">
-                                  <AlertTriangle className="w-2.5 h-2.5" /> {doc.estado}
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100/80 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-800/40 text-rose-900 dark:text-rose-400 text-[10px] font-semibold">
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" /> {doc.estado}
                                 </span>
                               )}
                             </td>
@@ -441,10 +442,10 @@ export default function DashboardPage() {
                                     e.stopPropagation();
                                     abrirPersonasFicha(doc);
                                   }}
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-primary-600 hover:bg-primary-500 text-white shadow-sm shadow-primary-600/30 hover:scale-[1.02] active:scale-98"
+                                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm hover:border-primary-500/50"
                                   title="Visualizar personas de este archivo en una tabla independiente"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
+                                  <Eye className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
                                   <span>Visualizar Personas</span>
                                 </button>
                                 <button
@@ -647,11 +648,11 @@ export default function DashboardPage() {
                                 <td className="py-3 px-3 text-center whitespace-nowrap">
                                   {edad !== null ? (
                                     esMenor14 ? (
-                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-600 dark:border-rose-500/50 text-rose-950 dark:text-rose-300 font-black animate-pulse">
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm">
                                         {edad} años (MENOR)
                                       </span>
                                     ) : (
-                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 font-bold">
+                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">
                                         {edad} años
                                       </span>
                                     )
@@ -664,12 +665,12 @@ export default function DashboardPage() {
                                 </td>
                                 <td className="py-3 px-3 text-center whitespace-nowrap">
                                   {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-400 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-[10px] font-extrabold shadow-sm">
-                                      <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-medium shadow-sm">
+                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold shadow-sm">
-                                      <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-medium shadow-sm">
+                                      <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
                                     </span>
                                   )}
                                 </td>

@@ -23,39 +23,39 @@ const getTipoDocInfo = (tipo?: string | null) => {
     return {
       codigo: "CT",
       label: "Contraseña",
-      badge: "bg-teal-100 dark:bg-teal-900/50 border-2 border-teal-600 dark:border-teal-400 text-teal-950 dark:text-teal-200 font-extrabold shadow-sm",
-      pill: "bg-teal-100 dark:bg-teal-900/50 text-teal-950 dark:text-teal-200 border-2 border-teal-600 dark:border-teal-400 font-bold shadow-sm",
+      badge: "bg-teal-50 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800/50 text-teal-800 dark:text-teal-300 font-bold shadow-sm",
+      pill: "bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800/50 font-semibold shadow-sm",
     };
   }
   if (t.includes("TARJETA") || t === "TI") {
     return {
       codigo: "TI",
       label: "Tarjeta de Identidad",
-      badge: "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-700 dark:border-purple-400 text-purple-950 dark:text-purple-100 font-black shadow-sm",
-      pill: "bg-purple-100 dark:bg-purple-900/60 text-purple-950 dark:text-purple-100 border-2 border-purple-700 dark:border-purple-400 font-black shadow-sm",
+      badge: "bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 font-bold shadow-sm",
+      pill: "bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800/50 font-semibold shadow-sm",
     };
   }
   if (t.includes("EXTRANJERIA") || t === "CE") {
     return {
       codigo: "CE",
       label: "Cédula Extranjería",
-      badge: "bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-600 dark:border-amber-400 text-amber-950 dark:text-amber-200 font-black shadow-sm",
-      pill: "bg-amber-100 dark:bg-amber-900/50 text-amber-950 dark:text-amber-200 border-2 border-amber-600 dark:border-amber-400 font-bold shadow-sm",
+      badge: "bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 font-bold shadow-sm",
+      pill: "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/50 font-semibold shadow-sm",
     };
   }
   if (t.includes("PASAPORTE") || t === "PAS") {
     return {
       codigo: "PAS",
       label: "Pasaporte",
-      badge: "bg-emerald-100 dark:bg-emerald-900/50 border-2 border-emerald-600 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 font-black shadow-sm",
-      pill: "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-950 dark:text-emerald-200 border-2 border-emerald-600 dark:border-emerald-400 font-bold shadow-sm",
+      badge: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 font-bold shadow-sm",
+      pill: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/50 font-semibold shadow-sm",
     };
   }
   return {
     codigo: "CC",
     label: "Cédula de Ciudadanía",
-    badge: "bg-blue-100 dark:bg-blue-900/60 border-2 border-blue-700 dark:border-blue-400 text-blue-950 dark:text-blue-100 font-black shadow-sm",
-    pill: "bg-blue-100 dark:bg-blue-900/60 text-blue-950 dark:text-blue-100 border-2 border-blue-700 dark:border-blue-400 font-black shadow-sm",
+    badge: "bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800/50 text-blue-800 dark:text-blue-300 font-bold shadow-sm",
+    pill: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800/50 font-semibold shadow-sm",
   };
 };
 
@@ -979,27 +979,29 @@ function PersonasContent() {
                 </div>
 
                 {/* Botón Ver Más Detalles (Expedición, Género) — Sin alertas de revisión */}
-                <div className="pt-1 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => toggleDetallesExtra(p.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/60 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm cursor-pointer"
-                  >
-                    {detallesExpandidos.has(p.id) ? (
-                      <>
-                        <ChevronUp className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
-                        <span>Ocultar datos adicionales</span>
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
-                        <span>Ver más detalles (Fecha/Lugar Expedición, Género)</span>
-                      </>
-                    )}
-                  </button>
+                <div className="pt-2 w-full">
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleDetallesExtra(p.id)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/60 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm cursor-pointer"
+                    >
+                      {detallesExpandidos.has(p.id) ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
+                          <span>Ocultar datos adicionales</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
+                          <span>Ver más detalles (Fecha/Lugar Expedición, Género)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
 
                   {detallesExpandidos.has(p.id) && (
-                    <div className="mt-2.5 p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-800/80 space-y-2 animate-in fade-in duration-200 shadow-sm">
+                    <div className="w-full mt-3 p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900/70 border border-slate-300 dark:border-slate-800 space-y-2.5 animate-in fade-in duration-200 shadow-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">
                           Datos Adicionales
@@ -1008,11 +1010,11 @@ function PersonasContent() {
                           Opcionales • No generan motivo de revisión
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         {camposSecundarios.map(({ key, label, icono, valor }) => (
                           <div
                             key={key}
-                            className="rounded-lg bg-white dark:bg-slate-950/60 border border-slate-300 dark:border-slate-800/80 p-2 flex flex-col justify-between min-h-[56px] min-w-0 shadow-sm"
+                            className="rounded-lg bg-white dark:bg-slate-950/60 border border-slate-300 dark:border-slate-800/80 p-2.5 flex flex-col justify-between min-h-[58px] min-w-0 shadow-sm"
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
@@ -1585,11 +1587,11 @@ function PersonasContent() {
                           <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
                             {edadRow !== null ? (
                               esMenor14 ? (
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/20 border border-rose-500 dark:border-rose-500/50 text-rose-950 dark:text-rose-300 font-black whitespace-nowrap shadow-sm shadow-rose-500/20 animate-pulse" title={`Persona menor de 14 años (${edadRow} años)`}>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm" title={`Persona menor de 14 años (${edadRow} años)`}>
                                   {edadRow} años
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 font-bold whitespace-nowrap">
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">
                                   {edadRow} años
                                 </span>
                               )
@@ -1611,27 +1613,27 @@ function PersonasContent() {
                               {/* PDF badge */}
                               {p.documento_id ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-500/15 border border-blue-400 dark:border-blue-500/30 text-blue-950 dark:text-blue-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Extraído de documento PDF por OCR"
                                 >
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700/60 text-slate-700 dark:text-slate-400 whitespace-nowrap shrink-0 shadow-sm" title="Sin documento PDF asociado">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-400 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
                                   <FileText className="w-2.5 h-2.5 shrink-0" /> Sin PDF
                                 </span>
                               )}
                               {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="Encontrado en planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-600 dark:border-rose-500/40 text-rose-950 dark:text-rose-200 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Excel
@@ -1643,20 +1645,20 @@ function PersonasContent() {
                           {/* Estado: Alertas VÁLIDO, REVISAR, MENOR (< 14), NO EN PDF, NO EN EXCEL */}
                           <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
                             <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
-                              {/* Alerta roja vistosa: Menor de 14 años */}
+                              {/* Alerta: Menor de 14 años */}
                               {esMenor14 && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-500/25 border-2 border-rose-600 dark:border-rose-500/50 text-rose-950 dark:text-rose-200 text-[10px] font-black whitespace-nowrap shadow-sm animate-pulse"
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
                                   title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
                                 >
-                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-700 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
                                 </span>
                               )}
 
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-500/15 border-2 border-sky-600 dark:border-sky-500/30 text-sky-950 dark:text-sky-200 text-[10px] font-black whitespace-nowrap shadow-sm"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
                                   title="No tiene documento PDF de cédula asociado"
                                 >
                                   <FileText className="w-2.5 h-2.5" /> NO EN PDF
@@ -1666,7 +1668,7 @@ function PersonasContent() {
                               {/* Alerta: Falta en Excel */}
                               {p.en_excel === false && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/20 border-2 border-purple-600 dark:border-purple-500/40 text-purple-950 dark:text-purple-200 text-[10px] font-black whitespace-nowrap shadow-sm"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
                                   title="No encontrado en la planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
@@ -1676,17 +1678,17 @@ function PersonasContent() {
                               {/* Estado de validación de datos */}
                               {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 border border-amber-400 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
                                   title="Requiere revisión manual de datos incompletos"
                                 >
-                                  <AlertTriangle className="w-2.5 h-2.5" /> REVISAR
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
                                 </span>
                               ) : p.documento_id && p.en_excel !== false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold whitespace-nowrap shadow-sm"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
                                   title="Registro completo y verificado"
                                 >
-                                  <CheckCircle className="w-2.5 h-2.5" /> VÁLIDO
+                                  <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
                                 </span>
                               ) : null}
                             </div>

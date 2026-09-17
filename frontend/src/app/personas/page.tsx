@@ -979,7 +979,7 @@ function PersonasContent() {
                 </div>
 
                 {/* Botón Ver Más Detalles (Expedición, Género) — Sin alertas de revisión */}
-                <div className="pt-1">
+                <div className="pt-1 flex justify-center">
                   <button
                     type="button"
                     onClick={() => toggleDetallesExtra(p.id)}
@@ -1106,9 +1106,10 @@ function PersonasContent() {
                 </div>
                 <button
                   onClick={() => setExpandidoId(null)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 text-xs font-medium transition-all shrink-0 ml-auto"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 hover:text-white text-xs font-medium transition-all shrink-0 ml-auto cursor-pointer"
+                  title="Subir y ocultar panel de detalles"
                 >
-                  <ChevronUp className="w-3.5 h-3.5" /> Colapsar
+                  <ChevronUp className="w-3.5 h-3.5" /> Subir
                 </button>
               </div>
             )}

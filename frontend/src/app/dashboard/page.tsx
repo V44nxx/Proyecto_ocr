@@ -6,7 +6,7 @@ import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
   RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
-  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2
+  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2, Zap
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
@@ -503,11 +503,13 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 flex-wrap mt-2">
-                  <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300">
-                    ⚡ Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}
+                  <span className="bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 shadow-sm">
+                    <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}</span>
                   </span>
-                  <span className="bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 font-bold text-[11px] text-blue-900 dark:text-blue-300">
-                    👥 {personasFicha.length} {personasFicha.length === 1 ? "persona encontrada" : "personas encontradas"}
+                  <span className="bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800 font-bold text-[11px] text-blue-900 dark:text-blue-300 inline-flex items-center gap-1.5 shadow-sm">
+                    <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>{personasFicha.length} {personasFicha.length === 1 ? "persona encontrada" : "personas encontradas"}</span>
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Cargado: {docSeleccionadoModal.fecha_carga ? new Date(docSeleccionadoModal.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
@@ -725,8 +727,9 @@ export default function DashboardPage() {
                                           <strong className="text-slate-700 dark:text-slate-300">Nombres:</strong> {p.nombres || (p.detalles_campos as any)?.primer_nombre || "—"}
                                         </span>
                                         {p.requiere_revision && (
-                                          <span className="text-amber-800 dark:text-amber-300 text-[11px] bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 font-medium">
-                                            ⚠️ Requiere verificación de datos OCR
+                                          <span className="text-amber-800 dark:text-amber-300 text-[11px] bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 font-medium inline-flex items-center gap-1.5">
+                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                            <span>Requiere verificación de datos OCR</span>
                                           </span>
                                         )}
                                       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import { flushSync } from "react-dom";
 
 export type Theme = "dark" | "light";
 
@@ -88,20 +89,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const endRadius = Math.hypot(
-        Math.max(x, window.innerWidth - x),
-        Math.max(y, window.innerHeight - y)
-      );
+      // Añadimos margen de seguridad (+20px y * 1.05) para asegurar que el círculo cubra el 100% de las esquinas
+      const endRadius =
+        Math.hypot(
+          Math.max(x, window.innerWidth - x),
+          Math.max(y, window.innerHeight - y)
+        ) * 1.05 + 20;
 
       // Fijar variables CSS del centro para que el clip-path inicial sea exactamente 0px
-      // Esto elimina el flasheo de 1 frame al iniciar la transición.
       root.style.setProperty("--theme-x", `${x}px`);
       root.style.setProperty("--theme-y", `${y}px`);
       root.classList.add("theme-transitioning");
 
       const transition = (document as any).startViewTransition(() => {
+        // Usar flushSync para que React renderice sincrónicamente los componentes (botones, textos)
+        // antes de que el navegador tome el snapshot. Esto evita que los componentes "salten" al terminar la animación.
+        flushSync(() => {
+          setThemeState(newTheme);
+        });
         applyTheme(newTheme);
-        setThemeState(newTheme);
       });
 
       transition.ready
@@ -117,6 +123,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
               {
                 duration: 480,
                 easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+                fill: "forwards", // CRÍTICO: Mantiene el círculo abierto al 100% y evita que regrese a 0px al terminar
                 pseudoElement: "::view-transition-new(root)",
               }
             );
@@ -138,10 +145,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         });
     } else {
       // Fallback controlado para navegadores sin View Transitions:
-      // Se sincronizan todas las transiciones simultáneamente para evitar desfases
       root.classList.add("theme-sync-transition");
+      flushSync(() => {
+        setThemeState(newTheme);
+      });
       applyTheme(newTheme);
-      setThemeState(newTheme);
       setTimeout(() => {
         root.classList.remove("theme-sync-transition");
         isTransitioningRef.current = false;

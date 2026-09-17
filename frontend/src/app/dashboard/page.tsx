@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
+import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
@@ -85,6 +86,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { collapsed } = useSidebar();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [cargando, setCargando] = useState(true);
 
@@ -198,7 +200,7 @@ export default function DashboardPage() {
     <div className="flex min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
       <Sidebar />
 
-      <main className="ml-64 flex-1 p-6 lg:p-8 min-w-0 max-w-[calc(100vw-16rem)] overflow-x-hidden">
+      <main className={`${collapsed ? "ml-20 max-w-[calc(100vw-5rem)]" : "ml-64 max-w-[calc(100vw-16rem)]"} transition-all duration-300 ease-in-out flex-1 p-6 lg:p-8 min-w-0 overflow-x-hidden`}>
         {/* Header */}
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">

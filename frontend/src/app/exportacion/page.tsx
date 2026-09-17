@@ -8,6 +8,7 @@ import {
   CheckCircle, AlertTriangle, RefreshCw, FileText, CheckSquare, Square,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import { useSidebar } from "@/context/SidebarContext";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
@@ -15,6 +16,7 @@ import type { Persona, Documento } from "@/types";
 
 export default function ExportacionPage() {
   const router = useRouter();
+  const { collapsed } = useSidebar();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [documentoSeleccionado, setDocumentoSeleccionado] = useState<string>("todos");
@@ -177,7 +179,7 @@ export default function ExportacionPage() {
   return (
     <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
       <Sidebar />
-      <main className="ml-64 flex-1 p-8 overflow-x-hidden">
+      <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 overflow-x-hidden min-w-0`}>
         {/* Header */}
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">

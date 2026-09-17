@@ -12,6 +12,7 @@ import {
   BarChart2, PlusCircle
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,7 @@ interface DocTracking {
 
 export default function DocumentosPage() {
   const router = useRouter();
+  const { collapsed } = useSidebar();
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [subiendo, setSubiendo] = useState(false);
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([]);
@@ -469,7 +471,7 @@ export default function DocumentosPage() {
   return (
     <div className="flex min-h-screen bg-dark-950 text-slate-100">
       <Sidebar />
-      <main className="ml-64 flex-1 p-8 max-w-7xl">
+      <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 max-w-7xl min-w-0`}>
         {/* Encabezado */}
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">

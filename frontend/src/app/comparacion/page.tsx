@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "@/components/ui/Sidebar";
+import { useSidebar } from "@/context/SidebarContext";
 import { apiComparacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Comparacion, Diferencia } from "@/types";
@@ -65,8 +66,8 @@ function limpiarEtiquetaCampo(campo: string | null | undefined, tipo: string): s
 }
 
 export default function ComparacionPage() {
-
   const router = useRouter();
+  const { collapsed } = useSidebar();
   const [comparaciones, setComparaciones] = useState<Comparacion[]>([]);
   const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(null);
   const [diferencias, setDiferencias] = useState<Diferencia[]>([]);
@@ -297,7 +298,7 @@ export default function ComparacionPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="ml-64 flex-1 p-8">
+      <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0`}>
         <div className="mb-8 page-enter">
           <div className="flex items-center gap-2 mb-1">
             <GitCompare className="w-5 h-5 text-primary-400" />

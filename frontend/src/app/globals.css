@@ -252,16 +252,29 @@ body {
 
   /* ── Sidebar ── */
   .sidebar {
-    @apply fixed left-0 top-0 h-screen w-64 flex flex-col;
+    @apply fixed left-0 top-0 h-screen flex flex-col overflow-x-hidden;
+    width: 16rem;
     background: rgba(8, 14, 26, 0.95);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     backdrop-filter: blur(20px);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+  }
+  .sidebar.collapsed {
+    width: 5rem !important;
+  }
+  .sidebar.expanded {
+    width: 16rem !important;
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-4 py-3 mx-2 rounded-xl
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
            text-slate-400 hover:text-white
-           transition-all duration-200 cursor-pointer text-sm font-medium;
+           transition-all duration-200 cursor-pointer text-sm font-medium w-full;
+    box-sizing: border-box;
+  }
+  .sidebar.collapsed .sidebar-item {
+    @apply justify-center px-0;
   }
   .sidebar-item:hover {
     background: rgba(59, 130, 246, 0.08);

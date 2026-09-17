@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import { useSidebar } from "@/context/SidebarContext";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -24,6 +25,7 @@ import toast from "react-hot-toast";
 
 export default function UsuariosPage() {
   const router = useRouter();
+  const { collapsed } = useSidebar();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -107,7 +109,7 @@ export default function UsuariosPage() {
     <div className="flex min-h-screen">
       <Sidebar />
 
-      <main className="ml-64 flex-1 p-8">
+      <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0`}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 page-enter">
           <div>

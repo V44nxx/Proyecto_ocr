@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { SidebarProvider } from "@/context/SidebarContext";
 
 export const metadata: Metadata = {
   title: "Sistema OCR | Documentos Colombianos",
@@ -39,25 +40,27 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider>
-          {children}
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: "var(--color-surface, #1E293B)",
-                color: "var(--color-text, #F1F5F9)",
-                border: "1px solid var(--color-border, rgba(255,255,255,0.1))",
-                borderRadius: "12px",
-                fontSize: "14px",
-              },
-              success: {
-                iconTheme: { primary: "#22C55E", secondary: "#fff" },
-              },
-              error: {
-                iconTheme: { primary: "#EF4444", secondary: "#fff" },
-              },
-            }}
-          />
+          <SidebarProvider>
+            {children}
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: "var(--color-surface, #1E293B)",
+                  color: "var(--color-text, #F1F5F9)",
+                  border: "1px solid var(--color-border, rgba(255,255,255,0.1))",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                },
+                success: {
+                  iconTheme: { primary: "#22C55E", secondary: "#fff" },
+                },
+                error: {
+                  iconTheme: { primary: "#EF4444", secondary: "#fff" },
+                },
+              }}
+            />
+          </SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

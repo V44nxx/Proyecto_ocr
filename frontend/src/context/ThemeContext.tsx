@@ -48,12 +48,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: Theme, coords?: { clientX: number; clientY: number }) => {
     if (isTransitioningRef.current) return;
-    setThemeState(newTheme);
     try {
       localStorage.setItem("ocr_theme", newTheme);
     } catch {}
 
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined") {
+      setThemeState(newTheme);
+      return;
+    }
 
     const root = document.documentElement;
 
@@ -70,7 +72,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     if (hasViewTransition) {
       isTransitioningRef.current = true;
-      root.classList.add("theme-transitioning");
 
       // Calcular origen del destello radial
       let x = coords?.clientX;
@@ -92,10 +93,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         Math.max(y, window.innerHeight - y)
       );
 
-      root.classList.add("theme-clip-reveal");
+      // Fijar variables CSS del centro para que el clip-path inicial sea exactamente 0px
+      // Esto elimina el flasheo de 1 frame al iniciar la transición.
+      root.style.setProperty("--theme-x", `${x}px`);
+      root.style.setProperty("--theme-y", `${y}px`);
+      root.classList.add("theme-transitioning");
 
       const transition = (document as any).startViewTransition(() => {
         applyTheme(newTheme);
+        setThemeState(newTheme);
       });
 
       transition.ready
@@ -109,20 +115,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
                 ],
               },
               {
-                duration: 450,
-                easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+                duration: 480,
+                easing: "cubic-bezier(0.16, 1, 0.3, 1)",
                 pseudoElement: "::view-transition-new(root)",
               }
             );
-            return anim.finished;
+            return anim?.finished;
           } catch {
             return undefined;
           }
         })
+        .catch(() => {});
+
+      // Esperar a que la transición termine completamente en el navegador antes de limpiar
+      transition.finished
         .catch(() => {})
         .finally(() => {
           root.classList.remove("theme-transitioning");
-          root.classList.remove("theme-clip-reveal");
+          root.style.removeProperty("--theme-x");
+          root.style.removeProperty("--theme-y");
           isTransitioningRef.current = false;
         });
     } else {
@@ -130,6 +141,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Se sincronizan todas las transiciones simultáneamente para evitar desfases
       root.classList.add("theme-sync-transition");
       applyTheme(newTheme);
+      setThemeState(newTheme);
       setTimeout(() => {
         root.classList.remove("theme-sync-transition");
         isTransitioningRef.current = false;

@@ -135,9 +135,14 @@ export default function Sidebar() {
                 const targetTheme = theme === "dark" ? "light" : "dark";
                 toggleTheme(e);
                 setTimeout(() => {
-                  toast.success(targetTheme === "light" ? "Modo Claro activado" : "Modo Oscuro activado", {
+                  toast(targetTheme === "light" ? "Modo Claro activado" : "Modo Oscuro activado", {
                     duration: 2000,
-                    icon: targetTheme === "light" ? "☀️" : "🌙",
+                    icon: targetTheme === "light" ? (
+                      <Sun className="w-4 h-4 text-amber-500 shrink-0" />
+                    ) : (
+                      <Moon className="w-4 h-4 text-blue-400 shrink-0" />
+                    ),
+                    className: "text-xs font-semibold !rounded-xl !border !border-slate-300 dark:!border-slate-700 !shadow-md",
                   });
                 }, 520);
               }}

@@ -516,10 +516,12 @@ html.light [class*="bg-yellow-500/"] {
   border-color: #F59E0B !important;
   color: #92400E !important;
 }
+html.light [class*="text-amber-200"],
 html.light [class*="text-amber-300"],
 html.light [class*="text-amber-400"],
 html.light [class*="text-yellow-400"] {
-  color: #92400E !important;
+  color: #78350F !important;
+  font-weight: 600;
 }
 
 /* Válido / Éxito (Emerald / Green) */
@@ -527,11 +529,13 @@ html.light [class*="bg-emerald-500/"],
 html.light [class*="bg-green-500/"] {
   background-color: #D1FAE5 !important;
   border-color: #10B981 !important;
-  color: #065F46 !important;
+  color: #064E3B !important;
 }
+html.light [class*="text-emerald-200"],
 html.light [class*="text-emerald-300"],
 html.light [class*="text-emerald-400"] {
-  color: #065F46 !important;
+  color: #064E3B !important;
+  font-weight: 600;
 }
 
 /* Blue badges (PDF, info) */

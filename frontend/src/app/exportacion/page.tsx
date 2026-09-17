@@ -63,7 +63,7 @@ export default function ExportacionPage() {
       // Filtro por revisión o menores
       const esRev = p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID");
       const edadNum = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
-      const esMenor = edadNum !== null && edadNum < 18;
+      const esMenor = edadNum !== null && edadNum < 14;
 
       if (filtroRevision === "revision" && !esRev) return false;
       if (filtroRevision === "ok" && esRev) return false;
@@ -151,7 +151,7 @@ export default function ExportacionPage() {
     revision: personas.filter((p) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length,
     menores: personas.filter((p) => {
       const ed = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
-      return ed !== null && ed < 18;
+      return ed !== null && ed < 14;
     }).length,
     completas: personas.filter(
       (p) => (p.nombre_completo || (p.nombres && p.apellidos)) && p.fecha_nacimiento && p.fecha_expedicion
@@ -282,7 +282,7 @@ export default function ExportacionPage() {
                     },
                     {
                       value: "menores",
-                      label: "Solo menores de edad (< 18)",
+                      label: "Solo menores de 14 años (< 14)",
                       icon: <AlertTriangle className="w-4 h-4 text-rose-400" />,
                       count: stats.menores,
                     },
@@ -347,7 +347,7 @@ export default function ExportacionPage() {
                 <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Alerta de menores:</strong> Cualquier persona menor de edad (&lt; 18 años) será automáticamente resaltada con fila y celda de edad en <strong>ROJO</strong> en el archivo Excel descargado.
+                    <strong>Alerta de menores (&lt; 14 años):</strong> Cualquier persona menor de 14 años será automáticamente resaltada con fila y celda de edad en <strong>ROJO</strong> en el archivo Excel descargado.
                   </span>
                 </div>
 

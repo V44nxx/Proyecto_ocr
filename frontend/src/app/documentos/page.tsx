@@ -711,56 +711,56 @@ export default function DocumentosPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-2 relative z-10">
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoSubida >= 100 || faseActual === "procesando" || procesoFinalizado
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
+                  ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300"
                   : faseActual === "subiendo"
-                  ? "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-300 animate-pulse"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
+                  ? "bg-blue-50 dark:bg-blue-500/10 border-blue-300 dark:border-blue-500/30 text-blue-950 dark:text-blue-300 animate-pulse"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
               }`}>
-                <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
+                <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
+                  <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
                   Carga del PDF
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
                   {progresoSubida >= 100 ? "Subida completada" : `${progresoSubida}% cargado`}
                 </p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 40
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
+                  ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
               }`}>
-                <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">2</span>
+                <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
+                  <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">2</span>
                   Reconocimiento OCR
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">Google Document AI</p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">Google Document AI</p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 75
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
+                  ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
               }`}>
-                <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className="w-4 h-4 rounded-full bg-primary-500/20 text-primary-500 dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
+                <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
+                  <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
                   Emparejamiento
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">Frente y Reverso</p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">Frente y Reverso</p>
               </div>
 
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 100
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
+                  ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300"
                   : progresoGlobal >= 85
-                  ? "bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-600 dark:text-slate-500"
+                  ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
               }`}>
-                <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                  <span className={`w-4 h-4 rounded-full ${progresoGlobal >= 100 ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-primary-500/20 text-primary-500 dark:text-primary-400"} flex items-center justify-center text-[10px] font-bold`}>4</span>
+                <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
+                  <span className={`w-4 h-4 rounded-full ${progresoGlobal >= 100 ? "bg-emerald-600 dark:bg-emerald-500/20 text-white dark:text-emerald-400" : "bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400"} flex items-center justify-center text-[10px] font-bold`}>4</span>
                   Extracción Personas
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400">Estructuración y guardado</p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">Estructuración y guardado</p>
               </div>
             </div>
 
@@ -774,27 +774,27 @@ export default function DocumentosPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <FileText className="w-5 h-5 text-primary-500 dark:text-primary-400 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate max-w-sm sm:max-w-md">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-sm sm:max-w-md">
                         {doc.nombre}
                       </p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5 mt-0.5">
                         {doc.estado === "procesando" && (
-                          <RefreshCw className="w-3 h-3 text-yellow-500 dark:text-yellow-400 animate-spin flex-shrink-0" />
+                          <RefreshCw className="w-3 h-3 text-yellow-600 dark:text-yellow-400 animate-spin flex-shrink-0" />
                         )}
                         {doc.estado === "completado" && (
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                         )}
                         {doc.estado === "error" && (
-                          <AlertCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                          <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0" />
                         )}
-                        <span>{doc.paso}</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{doc.paso}</span>
                         {doc.total_paginas > 0 && (
-                          <span className="text-slate-500">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">
                             • {doc.pagina_actual > 0 ? `Pág. ${doc.pagina_actual}/${doc.total_paginas}` : `${doc.total_paginas} págs`}
                           </span>
                         )}
                         {doc.tiempo_procesamiento_ms && (
-                          <span className="text-primary-400 font-mono">
+                          <span className="text-primary-700 dark:text-primary-400 font-mono font-bold">
                             • {(doc.tiempo_procesamiento_ms / 1000).toFixed(1)}s
                           </span>
                         )}
@@ -804,17 +804,17 @@ export default function DocumentosPage() {
 
                   <div className="flex items-center gap-3 self-end sm:self-center flex-shrink-0">
                     {doc.personas_count > 0 && (
-                      <span className="badge badge-info text-xs flex items-center gap-1">
+                      <span className="badge badge-info text-xs flex items-center gap-1 font-bold">
                         <Users className="w-3 h-3" />
                         {doc.personas_count} persona(s)
                       </span>
                     )}
                     {doc.confianza_ocr !== null && (
-                      <span className="badge badge-success text-xs font-mono">
+                      <span className="badge badge-success text-xs font-mono font-bold">
                         {getConfianzaDisplay(doc.confianza_ocr)}% conf.
                       </span>
                     )}
-                    <span className="text-xs font-mono font-bold text-primary-400 w-10 text-right">
+                    <span className="text-xs font-mono font-bold text-primary-700 dark:text-primary-400 w-10 text-right">
                       {faseActual === "subiendo" ? `${progresoSubida}%` : `${doc.progreso}%`}
                     </span>
                   </div>
@@ -890,49 +890,49 @@ export default function DocumentosPage() {
            ───────────────────────────────────────────────────────────── */}
         <div className="card mb-8 page-enter">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Upload className="w-4 h-4 text-primary-400" />
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Upload className="w-4 h-4 text-primary-600 dark:text-primary-400" />
               Cargar Documentos PDF
             </h2>
-            <span className="text-xs text-slate-400">Formato admitido: PDF (Cédulas colombianas)</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">Formato admitido: PDF (Cédulas colombianas)</span>
           </div>
 
           {/* ── PASO 1: PLANILLA EXCEL OFICIAL (OBLIGATORIO) ────────────────── */}
           <div className={`mb-6 p-4 rounded-xl border-2 transition-all ${
             excelSeleccionado
-              ? "border-emerald-500/50 bg-emerald-500/[0.06]"
-              : "border-dashed border-amber-500/40 bg-amber-500/[0.04]"
+              ? "border-emerald-600/70 dark:border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/[0.06]"
+              : "border-dashed border-amber-600/50 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/[0.04]"
           }`}>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-500 text-dark-950">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-600 dark:bg-amber-500 text-white dark:text-dark-950">
                 1
               </div>
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-semibold text-white">Planilla Excel Oficial</h3>
-              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">OBLIGATORIO</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Planilla Excel Oficial</h3>
+              <span className="text-[10px] font-extrabold text-amber-950 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 border border-amber-400 dark:border-amber-500/40 px-2 py-0.5 rounded-full">OBLIGATORIO</span>
             </div>
-            <p className="text-xs text-slate-400 mb-3 ml-8">
+            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium mb-3 ml-8">
               Los nombres y apellidos de las personas se extraerán de esta planilla usando el número de cédula/TI como referencia.
             </p>
 
             {excelSeleccionado ? (
-              <div className="ml-8 flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <div className="ml-8 flex items-center justify-between p-3.5 bg-emerald-100/90 dark:bg-emerald-500/15 border-2 border-emerald-500/50 dark:border-emerald-500/30 rounded-xl shadow-sm">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  <div className="w-9 h-9 rounded-lg bg-emerald-200/80 dark:bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-800 dark:text-emerald-300" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-sm font-medium text-emerald-200 truncate block">{excelSeleccionado.name}</span>
-                    <span className="text-xs text-slate-500 font-mono">{formatSize(excelSeleccionado.size)} · Planilla oficial lista ✓</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-emerald-200 truncate block tracking-tight">{excelSeleccionado.name}</span>
+                    <span className="text-xs text-emerald-900 dark:text-slate-400 font-mono font-semibold">{formatSize(excelSeleccionado.size)} · Planilla oficial lista ✓</span>
                   </div>
                 </div>
                 <button
                   onClick={() => setExcelSeleccionado(null)}
                   disabled={subiendo}
-                  className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 flex-shrink-0"
+                  className="text-slate-700 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-emerald-200/60 dark:hover:bg-dark-700 flex-shrink-0 cursor-pointer"
                   title="Cambiar Excel"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4 text-slate-700 dark:text-slate-400" />
                 </button>
               </div>
             ) : (
@@ -958,10 +958,10 @@ export default function DocumentosPage() {
                   <PlusCircle className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-amber-300 group-hover:text-amber-200 transition-colors">
+                  <p className="text-sm font-bold text-amber-950 dark:text-amber-300 group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
                     Haz clic para seleccionar la planilla Excel
                   </p>
-                  <p className="text-xs text-slate-500 mt-0.5">.xlsx · .xls · Requerido para extracción correcta de nombres</p>
+                  <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">.xlsx · .xls · Requerido para extracción correcta de nombres</p>
                 </div>
               </label>
             )}
@@ -969,11 +969,11 @@ export default function DocumentosPage() {
 
           {/* ── PASO 2: PDF(s) ───────────────────────────────────────── */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary-500 text-dark-950">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary-600 dark:bg-primary-500 text-white dark:text-dark-950">
               2
             </div>
-            <Upload className="w-4 h-4 text-primary-400" />
-            <h3 className="text-sm font-semibold text-white">Documentos PDF (Cédulas)</h3>
+            <Upload className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Documentos PDF (Cédulas)</h3>
           </div>
 
           <div

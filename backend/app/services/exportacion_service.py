@@ -86,7 +86,7 @@ class ExportacionService:
                 query = query.filter(Persona.id.in_(p_ids))
 
             if filtros.get("solo_menores"):
-                query = query.filter(Persona.edad.isnot(None), Persona.edad < 18)
+                query = query.filter(Persona.edad.isnot(None), Persona.edad < 14)
 
             if filtros.get("requiere_revision") is not None:
                 if filtros["requiere_revision"] is True:
@@ -121,7 +121,7 @@ class ExportacionService:
                         if edad_val is None:
                             continue
                         try:
-                            if int(edad_val) >= 18:
+                            if int(edad_val) >= 14:
                                 continue
                         except Exception:
                             continue
@@ -239,7 +239,7 @@ class ExportacionService:
         # Insertar fila de metadatos
         ws.insert_rows(2)
         meta_cell = ws["A2"]
-        meta_cell.value = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Total registros: {total_filas} | ⚠️ Personas menores de edad (< 18 años) destacadas en ROJO"
+        meta_cell.value = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Total registros: {total_filas} | ⚠️ Personas menores de 14 años (< 14 años) destacadas en ROJO"
         meta_cell.font = Font(name="Calibri", italic=True, size=9, color="555555")
         ws.merge_cells(f"A2:{get_column_letter(len(self.COLUMNAS))}2")
         ws.row_dimensions[2].height = 20
@@ -281,12 +281,12 @@ class ExportacionService:
             es_altrow = (row_num % 2 == 0)
             requiere_revision = ws.cell(row=row_num, column=col_revision_idx).value == "SÍ"
 
-            # Detectar si es menor de edad (< 18)
+            # Detectar si es menor de 14 años (< 14)
             val_edad = ws.cell(row=row_num, column=col_edad_idx).value
             es_menor = False
             try:
                 if val_edad is not None and str(val_edad).strip() != "":
-                    if int(float(str(val_edad).strip())) < 18:
+                    if int(float(str(val_edad).strip())) < 14:
                         es_menor = True
             except Exception:
                 es_menor = False

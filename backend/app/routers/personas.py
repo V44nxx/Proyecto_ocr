@@ -166,10 +166,20 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
 
 def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: bool) -> PersonaResponse:
     """
-    Enriquece PersonaResponse con flags 100% precisos de presencia en PDF y en Excel.
+    Enriquece PersonaResponse con flags 100% precisos de presencia en PDF y en Excel,
+    y asegura que si hay discrepancia registrada con la planilla oficial de Excel,
+    se conserve y retorne prioritariamente el nombre oficial del Excel.
     """
     r = PersonaResponse.model_validate(p)
     r.en_pdf = p.documento_id is not None
+
+    detalles = p.detalles_campos or {}
+    if isinstance(detalles, dict):
+        disc_excel = detalles.get("discrepancia_excel")
+        if isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
+            nom_ex_ofic = disc_excel["nombre_excel"].strip()
+            if nom_ex_ofic:
+                r.nombre_completo = nom_ex_ofic
 
     if hay_excel:
         id_crudo = str(p.numero_identificacion or "").strip()

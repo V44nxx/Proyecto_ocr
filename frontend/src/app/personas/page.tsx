@@ -701,24 +701,24 @@ function PersonasContent() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                      Discrepancia Crítica de Nombre: Cédula Física vs Planilla Excel
+                      Discrepancia de Nombre: Cédula Física (PDF) vs Planilla Excel
                     </span>
                   </div>
                   <p className="text-xs text-amber-950 dark:text-amber-100 ml-7 mb-2.5 font-medium leading-relaxed">
-                    El nombre extraído de la cédula física del PDF difiere del registrado en la planilla oficial de Excel. La cédula física es la verdad documental irrefutable; por tanto, se preservó el nombre de la cédula y se requiere revisión obligatoria.
+                    El nombre extraído de la cédula física del PDF difiere del registrado en la planilla oficial de Excel. Se ha conservado prioritariamente el nombre de la planilla oficial de Excel y se requiere revisión obligatoria para validar inconsistencias.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 ml-7 text-xs">
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-emerald-400 dark:border-emerald-600/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Nombre en Cédula Física (PDF)
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-blue-400 dark:border-blue-600/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-blue-800 dark:text-blue-400 flex items-center gap-1">
+                        <FileSpreadsheet className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Nombre Oficial en Planilla Excel (Conservado)
                       </div>
-                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">{nombreCedula || p.nombre_completo}</div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">{nombreExcel || p.nombre_completo}</div>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-rose-300 dark:border-rose-700/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400 flex items-center gap-1">
-                        <FileSpreadsheet className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Nombre en Planilla Excel
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-amber-400 dark:border-amber-600/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Nombre detectado en Cédula Física (PDF)
                       </div>
-                      <div className="font-extrabold text-rose-900 dark:text-rose-300 text-sm mt-0.5 line-through">{nombreExcel || "Diferente en Excel"}</div>
+                      <div className="font-extrabold text-amber-950 dark:text-amber-200 text-sm mt-0.5">{nombreCedula || "Diferente en PDF"}</div>
                     </div>
                   </div>
                 </div>

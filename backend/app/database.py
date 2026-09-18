@@ -120,19 +120,27 @@ def create_tables():
             personas = db_s.query(Persona).all()
             modificados = 0
             for p in personas:
-                nomb_limp = limpiar_tokens_ruido(p.nombres or "")
-                apel_limp = limpiar_tokens_ruido(p.apellidos or "")
-                nom_limpio = resolver_nombre_completo(nomb_limp, apel_limp, p.nombre_completo)
+                detalles = p.detalles_campos or {}
+                disc_excel = detalles.get("discrepancia_excel") if isinstance(detalles, dict) else None
+                if disc_excel and isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
+                    nom_ofic = disc_excel["nombre_excel"].strip()
+                    if nom_ofic and p.nombre_completo != nom_ofic:
+                        p.nombre_completo = nom_ofic
+                        modificados += 1
+                else:
+                    nomb_limp = limpiar_tokens_ruido(p.nombres or "")
+                    apel_limp = limpiar_tokens_ruido(p.apellidos or "")
+                    nom_limpio = resolver_nombre_completo(nomb_limp, apel_limp, p.nombre_completo)
 
-                if nomb_limp != (p.nombres or ""):
-                    p.nombres = nomb_limp or None
-                    modificados += 1
-                if apel_limp != (p.apellidos or ""):
-                    p.apellidos = apel_limp or None
-                    modificados += 1
-                if nom_limpio and nom_limpio != p.nombre_completo:
-                    p.nombre_completo = nom_limpio
-                    modificados += 1
+                    if nomb_limp != (p.nombres or ""):
+                        p.nombres = nomb_limp or None
+                        modificados += 1
+                    if apel_limp != (p.apellidos or ""):
+                        p.apellidos = apel_limp or None
+                        modificados += 1
+                    if nom_limpio and nom_limpio != p.nombre_completo:
+                        p.nombre_completo = nom_limpio
+                        modificados += 1
 
                 # Reevaluar con criterio estricto de completitud OCR
                 tiene_datos, motivos_rev = validador.evaluar_persona_completa(

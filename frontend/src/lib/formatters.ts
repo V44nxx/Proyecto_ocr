@@ -11,11 +11,14 @@ const JUNK_WORDS = new Set([
 /**
  * Deduplica repeticiones consecutivas de frases o n-gramas de palabras
  * Ej: "EDWAR FABIAN ESCALANTE LOPEZ ESCALANTE LOPEZ" -> "EDWAR FABIAN ESCALANTE LOPEZ"
- * Ej: "AYALA CASTRO AYALA CASTRO" -> "AYALA CASTRO"
+ * Para palabras individuales (k = 1): NUNCA colapsa repeticiones de 2 palabras consecutivas
+ * (ej: "VILLA VILLA" o "RODRIGUEZ RODRIGUEZ") ya que son apellidos legítimos comunes.
+ * Solo deduplica si se repite 3 o más veces consecutivas por error de loop OCR.
  */
 function deduplicarNgrams(words: string[]): string[] {
   const n = words.length;
-  for (let k = Math.floor(n / 2); k >= 1; k--) {
+  // 1. Deduplicar n-gramas de longitud k >= 2 (frases completas)
+  for (let k = Math.floor(n / 2); k >= 2; k--) {
     for (let i = 0; i <= n - 2 * k; i++) {
       const slice1 = words.slice(i, i + k).map((w) => w.toUpperCase()).join(" ");
       const slice2 = words.slice(i + k, i + 2 * k).map((w) => w.toUpperCase()).join(" ");
@@ -25,6 +28,15 @@ function deduplicarNgrams(words: string[]): string[] {
       }
     }
   }
+
+  // 2. Para k = 1: solo deduplicar si se repite 3 o más veces consecutivas (OCR loop glitch)
+  for (let i = 0; i <= words.length - 3; i++) {
+    if (words[i].toUpperCase() === words[i + 1].toUpperCase() && words[i + 1].toUpperCase() === words[i + 2].toUpperCase()) {
+      const nextWords = [...words.slice(0, i + 2), ...words.slice(i + 3)];
+      return deduplicarNgrams(nextWords);
+    }
+  }
+
   return words;
 }
 

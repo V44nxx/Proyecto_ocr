@@ -18,7 +18,8 @@ JUNK_WORDS = {
     "NÚMEPO", "NVYMERO", "NVMERO", "NOMORO", "NRO", "CEDLA", "CEDUIA", "CEDUI",
     "CFDULA", "CELDULA", "CIUDADAMA", "CIUDADANLA", "CIUDADANA", "CIUDADANÌA",
     "IDENTIF", "IDENTIFICACI", "IDENTIFICACIONPERSONAL", "REPUBLICADECOLOMBIA",
-    "MOUSEES", "FMRMA", "FIRMAS", "FIRMADO"
+    "MOUSEES", "FMRMA", "FIRMAS", "FIRMADO", "ANDAQUIES", "CAQUETA",
+    "FECHAYLUGARDEEXPEDICION", "LUGARDENACIMIENTG", "INDICEDERECHO", "REGISTRADGRNACIONAL"
 }
 
 ROMAN_NOISE = {
@@ -26,6 +27,14 @@ ROMAN_NOISE = {
     "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", 
     "XVIII", "XIX", "XX"
 }
+
+# Patrón para detectar fechas y meses de expedición/nacimiento deformados por OCR (ej: IOCTI, 10OCT, 21-OCT-2021, 03OCT, OCT2021)
+PATRON_FECHA_MES_RUIDO = re.compile(
+    r"^(?:[0-9]{1,2}|[IOl!]{1,2})[\s\-]*(?:ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)[A-Z0-9]*$"
+    r"|^(?:ENE|FEB|ABR|AGO|SEP|OCT|NOV|DIC)[0-9]{1,4}$"
+    r"|^(?:ENE|FEB|ABR|AGO|SEP|OCT|NOV|DIC)$",
+    re.I
+)
 
 PALABRAS_ENCABEZADO_CANONICAS = (
     "NUMERO", "CEDULA", "CIUDADANIA", "REPUBLICA", "IDENTIFICACION",
@@ -35,7 +44,8 @@ PALABRAS_ENCABEZADO_CANONICAS = (
 
 NOMBRES_LEGITIMOS_EXCEPCION = {
     "HOMERO", "DANIEL", "DIEGO", "ANA", "DOLY", "VARGAS", "VILLA",
-    "ORTEGA", "RODRIGUEZ", "EDILMER", "LEONEL", "PEDRO", "JOSE", "MARIA"
+    "ORTEGA", "RODRIGUEZ", "EDILMER", "LEONEL", "PEDRO", "JOSE", "MARIA",
+    "JULIO", "JULIAN", "JULIA", "MARIO", "MARTIN", "MAYRA"
 }
 
 VOCALES_VALIDAS = set("AEIOUÁÉÍÓÚÜY")
@@ -81,7 +91,7 @@ def es_token_ruido_difuso(t_alpha: str) -> bool:
 
 
 def es_token_ruido(t_raw: str) -> bool:
-    """Detecta si un token individual es ruido de OCR (IIII, números romanos, siglas, artefactos)."""
+    """Detecta si un token individual es ruido de OCR (IIII, números romanos, fechas, siglas, artefactos)."""
     if not t_raw:
         return True
     t_norm = normalizar_str(t_raw)
@@ -97,6 +107,10 @@ def es_token_ruido(t_raw: str) -> bool:
     # Palabras de encabezado y etiquetas de cédula/TI
     if t_alpha in JUNK_WORDS:
         return True
+    # Detección de fechas o meses OCR deformados (ej: IOCTI, 10OCT, 21-OCT-2021, 03OCT, OCT2021)
+    if PATRON_FECHA_MES_RUIDO.search(t_alpha) or PATRON_FECHA_MES_RUIDO.search(re.sub(r"[^A-Za-z0-9]", "", t_norm)):
+        if t_alpha not in NOMBRES_LEGITIMOS_EXCEPCION:
+            return True
     # Detección difusa de encabezados distorsionados por OCR (NIMEPO, EDULA, etc.)
     if es_token_ruido_difuso(t_alpha):
         return True
@@ -145,17 +159,31 @@ def limpiar_tokens_ruido(texto: str) -> str:
 
 
 def deduplicar_ngrams(texto: str) -> str:
-    """Elimina repeticiones consecutivas de n-gramas de palabras (ej: 'A B C B C' -> 'A B C')"""
+    """
+    Elimina repeticiones consecutivas de n-gramas de palabras (longitud k >= 2).
+    Ejemplo: 'VARGAS VILLA VARGAS VILLA' -> 'VARGAS VILLA'.
+    Para palabras individuales (k = 1): NUNCA colapsa repeticiones de 2 palabras consecutivas
+    (ej: 'RODRIGUEZ RODRIGUEZ' o 'VILLA VILLA'), ya que en Colombia los apellidos paterno y
+    materno coinciden legítimamente. Solo deduplica si una palabra se repite 3 o más veces
+    consecutivas (ej: 'A A A' -> 'A A').
+    """
     words = texto.split()
     if not words:
         return ""
     n = len(words)
-    # Intentar secuencias repetidas de longitud k desde n//2 hasta 1
-    for k in range(n // 2, 0, -1):
+    # 1. Deduplicar n-gramas de longitud k >= 2
+    for k in range(n // 2, 1, -1):
         for i in range(n - 2 * k + 1):
             if [w.upper() for w in words[i:i + k]] == [w.upper() for w in words[i + k:i + 2 * k]]:
                 words = words[:i + k] + words[i + 2 * k:]
                 return deduplicar_ngrams(" ".join(words))
+
+    # 2. Para k = 1: solo deduplicar si se repite 3 o más veces consecutivas (OCR loop glitch)
+    for i in range(len(words) - 2):
+        if words[i].upper() == words[i + 1].upper() == words[i + 2].upper():
+            words = words[:i + 2] + words[i + 3:]
+            return deduplicar_ngrams(" ".join(words))
+
     return " ".join(words)
 
 

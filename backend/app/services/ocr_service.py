@@ -828,25 +828,30 @@ class OCRService:
 
             from app.services.spatial_field_extractor import spatial_field_extractor
 
-            # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ", "ICA DE ANTONIO JAVIER" -> "ANTONIO JAVIER")
-            if nombres_final and nombres_final != "POR REVISAR":
-                toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
-                    toks.pop(0)
-                nombres_final = " ".join(toks).strip() or "POR REVISAR"
-            if apellidos_final and apellidos_final != "POR REVISAR":
-                toks = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
-                    toks.pop(0)
-                apellidos_final = " ".join(toks).strip() or "POR REVISAR"
+            if fuente_nombre == "excel_oficial" and nombre_excel_candidato:
+                nombre_completo_final = nombre_excel_candidato
+            else:
+                from app.services.spatial_field_extractor import spatial_field_extractor
 
-            from app.utils.name_cleaner import resolver_nombre_completo
+                # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ", "ICA DE ANTONIO JAVIER" -> "ANTONIO JAVIER")
+                if nombres_final and nombres_final != "POR REVISAR":
+                    toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                    while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                        toks.pop(0)
+                    nombres_final = " ".join(toks).strip() or "POR REVISAR"
+                if apellidos_final and apellidos_final != "POR REVISAR":
+                    toks = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                    while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                        toks.pop(0)
+                    apellidos_final = " ".join(toks).strip() or "POR REVISAR"
 
-            nombre_completo_final = resolver_nombre_completo(
-                nombres=nombres_final if nombres_final != "POR REVISAR" else "",
-                apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
-                actual=nombre_completo_final
-            )
+                from app.utils.name_cleaner import resolver_nombre_completo
+
+                nombre_completo_final = resolver_nombre_completo(
+                    nombres=nombres_final if nombres_final != "POR REVISAR" else "",
+                    apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
+                    actual=nombre_completo_final
+                )
 
             # ── Evaluación definitiva de completitud y validez ──
             detalles_payload = dict(datos.get("detalles_campos") or {})
@@ -920,16 +925,18 @@ class OCRService:
                 motor_ocr=ocr_engine,
             )
 
-            requiere_revision = not tiene_datos_completos
+            requiere_revision = not tiene_datos_completos or bool(discrepancia_nombre_excel)
             if ocr_engine == "tesseract_fallback":
                 estado_reg = "FALLBACK_TESSERACT"
-            elif tiene_datos_completos:
+            elif not requiere_revision:
                 estado_reg = "VALID"
             else:
                 estado_reg = "REVIEW_REQUIRED"
 
             if motivos_rev:
                 detalles_payload["motivos_revision"] = motivos_rev
+            elif discrepancia_nombre_excel:
+                detalles_payload["motivos_revision"] = [discrepancia_nombre_excel["motivo"]]
 
             if not persona:
                 persona = Persona(
@@ -1041,14 +1048,17 @@ class OCRService:
                     motor_ocr=persona.motor_ocr,
                 )
 
-                if tiene_datos_completos:
+                if tiene_datos_completos and not discrepancia_nombre_excel and "discrepancia_excel" not in detalles_existentes:
                     persona.requiere_revision = False
                     persona.estado_registro = "VALID"
                     detalles_existentes.pop("motivos_revision", None)
                 else:
                     persona.requiere_revision = True
                     persona.estado_registro = "FALLBACK_TESSERACT" if persona.motor_ocr == "tesseract_fallback" else "REVIEW_REQUIRED"
-                    detalles_existentes["motivos_revision"] = motivos_rev
+                    if motivos_rev:
+                        detalles_existentes["motivos_revision"] = motivos_rev
+                    elif discrepancia_nombre_excel:
+                        detalles_existentes["motivos_revision"] = [discrepancia_nombre_excel["motivo"]]
 
                 persona.detalles_campos = detalles_existentes
                 persona.fecha_actualizacion = datetime.utcnow()

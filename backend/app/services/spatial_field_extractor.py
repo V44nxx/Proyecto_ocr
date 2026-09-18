@@ -146,9 +146,20 @@ class SpatialFieldExtractor:
     def limpiar_nombre(self, texto: str) -> Optional[str]:
         if not texto:
             return None
-        from app.utils.name_cleaner import es_token_ruido
-        t_norm = str(texto).translate(validador.HOMOGLYPHS).replace("!", "I").replace("1", "I")
-        toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w) and not es_token_ruido(w)]
+        from app.utils.name_cleaner import es_token_ruido, limpiar_tokens_ruido
+
+        # Descartar inmediatamente si la línea contiene fechas o patrones de fecha (ej: 21-OCT-2021)
+        if re.search(r"\b\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{2,4}\b", str(texto)):
+            return None
+        if re.search(r"\b(FECHA|EXPEDICI[OÓ]N|NACIMIENTO|LUGAR|ESTATURA|SEXO|REGISTRADOR|INDICE|HUELLA|FIRMA)\b", str(texto), re.I):
+            return None
+
+        t_raw = str(texto)
+        limpio_tokens = limpiar_tokens_ruido(t_raw)
+        if not limpio_tokens:
+            return None
+
+        toks = [w for w in limpio_tokens.split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w) and not es_token_ruido(w)]
         # Remover partículas huérfanas al inicio (ej: "DE" residual de "REPUBLICA DE" o "ICA DE")
         while toks and self._PARTICULAS_SOLAS.match(toks[0]) and len(toks) > 1:
             toks.pop(0)
@@ -386,36 +397,24 @@ class SpatialFieldExtractor:
         # ── 2. Identificación (NUIP / Cédula) ──
         # Busca en la página para cubrir cédulas estándar, rotadas, Tarjetas de Identidad y layouts variables
         if not resultado_campos["identificacion"]["value"]:
-            # Fase 2.1: Búsqueda preferencial en franja superior (y < 0.55)
+            # Fase 2.1: Prioridad máxima a líneas con etiqueta explícita de número/NUIP/Cédula en el frente
             for l in lines:
                 t = getattr(l, "text", "").upper().strip()
-                y_pos = getattr(l, "y", 0.0)
-                if y_pos < 0.55:
+                # Excluir líneas que son códigos de barras PDF417
+                if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t):
+                    continue
+                if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|NO\.)\b", t):
                     matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
                         valido, ced_ok = validador.validar_cedula(raw_num)
                         if valido:
-                            resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de franja superior de identificación"}
+                            resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de línea con etiqueta explícita de número"}
                             break
-                    if resultado_campos["identificacion"]["value"]:
-                        break
+                if resultado_campos["identificacion"]["value"]:
+                    break
 
-            # Fase 2.2: Búsqueda extendida en TODA la página (y completo de 0.0 a 1.0)
-            if not resultado_campos["identificacion"]["value"]:
-                for l in lines:
-                    t = getattr(l, "text", "").upper().strip()
-                    matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
-                    for m in matches:
-                        raw_num = re.sub(r"[^\d]", "", m.group(1))
-                        valido, ced_ok = validador.validar_cedula(raw_num)
-                        if valido:
-                            resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence * 0.95, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por escaneo universal de página"}
-                            break
-                    if resultado_campos["identificacion"]["value"]:
-                        break
-
-            # Fase 2.3: Búsqueda en códigos de barras / PDF417 de reverso
+            # Fase 2.2: Búsqueda en códigos de barras / PDF417 de reverso
             if not resultado_campos["identificacion"]["value"]:
                 patrones_barcode = [
                     r"[A-Z0-9]+-[A-Z0-9]+-[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
@@ -437,6 +436,22 @@ class SpatialFieldExtractor:
                     if resultado_campos["identificacion"]["value"]:
                         break
 
+            # Fase 2.3: Búsqueda por escaneo posicional (descartando líneas de barcode y fechas)
+            if not resultado_campos["identificacion"]["value"]:
+                for l in lines:
+                    t = getattr(l, "text", "").upper().strip()
+                    if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b\d{1,2}[\s/\-\.][A-Z]{3}[\s/\-\.]\d{4}\b", t):
+                        continue
+                    matches = re.finditer(r"\b(\d{1,3}(?:\.\d{3}){1,3}|\d{7,10})\b", t)
+                    for m in matches:
+                        raw_num = re.sub(r"[^\d]", "", m.group(1))
+                        valido, ced_ok = validador.validar_cedula(raw_num)
+                        if valido:
+                            resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence * 0.90, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por escaneo posicional de página"}
+                            break
+                    if resultado_campos["identificacion"]["value"]:
+                        break
+
         # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla y Digital) ──
         # Ejecutar siempre para extraer o enriquecer nombres visuales frente a MRZ truncado
         if True:
@@ -447,14 +462,49 @@ class SpatialFieldExtractor:
                 for l in lines
             )
 
-            # Filtrado inteligente por layout:
-            # - En Cédula Digital / TI: los textos están en el centro/derecha (y < 0.55).
-            # - En Cédula Amarilla: los nombres están estrictamente en la columna izquierda (x < 0.48 y y < 0.68).
-            #   El área x >= 0.48 contiene la foto del ciudadano y hologramas de fondo ('ICA DE', 'MEIA', 'CADE').
+            # Detección inteligente de páginas con FRENTE y REVERSO combinados
+            REVERSO_KEYWORDS = re.compile(
+                r"\b(FECHA\s+DE\s+NACIMIENTO|LUGAR\s+DE\s+NACIMIENTO|ESTATURA|G\.?S\.?\s*RH|SEXO|"
+                r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|INDICE\s+DERECHO|REGISTRADOR\s+NACIONAL)\b"
+                r"|^[AP]-[0-9]+-[0-9]+-[MF]-",
+                re.I
+            )
+            FRENTE_KEYWORDS = re.compile(
+                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|NUMERO|N[UÚ]MERO|APELL[I10]*D|N[O0]?[MRD]+[BDR]*[EÉ]S?)\b",
+                re.I
+            )
+
+            rev_lines = [l for l in lines if REVERSO_KEYWORDS.search(getattr(l, "text", ""))]
+            frt_lines = [l for l in lines if FRENTE_KEYWORDS.search(getattr(l, "text", ""))]
+
+            y_min_frente = 0.0
+            y_max_frente = 1.0
+
+            if rev_lines and frt_lines:
+                y_rev_avg = sum(getattr(l, "y", 0.0) for l in rev_lines) / len(rev_lines)
+                y_frt_avg = sum(getattr(l, "y", 0.0) for l in frt_lines) / len(frt_lines)
+                if y_rev_avg < y_frt_avg:
+                    # El reverso está arriba y el frente abajo (ej: cédula en mitad inferior)
+                    y_corte = (max(getattr(l, "y", 0.0) for l in rev_lines) + min(getattr(l, "y", 0.0) for l in frt_lines)) / 2.0
+                    y_min_frente = max(0.35, y_corte - 0.02)
+                    y_max_frente = 1.0
+                else:
+                    # El frente está arriba y el reverso abajo (layout estándar)
+                    y_corte = (max(getattr(l, "y", 0.0) for l in frt_lines) + min(getattr(l, "y", 0.0) for l in rev_lines)) / 2.0
+                    y_min_frente = 0.0
+                    y_max_frente = min(0.55, y_corte + 0.02)
+            elif not es_digital_o_ti:
+                y_max_frente = 0.68
+
             if es_digital_o_ti:
-                lineas_frente = [l for l in lines if getattr(l, "y", 0.0) < 0.55]
+                lineas_frente = [l for l in lines if y_min_frente <= getattr(l, "y", 0.0) <= max(0.55, y_max_frente)]
             else:
-                lineas_frente = [l for l in lines if getattr(l, "y", 0.0) < 0.68 and getattr(l, "x", 0.0) < 0.48]
+                lineas_frente = [
+                    l for l in lines 
+                    if y_min_frente <= getattr(l, "y", 0.0) <= y_max_frente 
+                    and getattr(l, "x", 0.0) < 0.48
+                    and not REVERSO_KEYWORDS.search(getattr(l, "text", ""))
+                ]
 
             # Ordenar por y para garantizar secuencia vertical correcta
             lineas_frente = sorted(lineas_frente, key=lambda l: getattr(l, "y", 0.0))
@@ -531,10 +581,19 @@ class SpatialFieldExtractor:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
                         cand_ape = []
-                        for i in range(idx_num + 1 if idx_num != -1 and idx_num < idx_ape else max(0, idx_ape - 3), idx_ape):
-                            limpio = self.limpiar_nombre(getattr(lineas_frente[i], "text", ""))
+                        y_ape = getattr(lineas_frente[idx_ape], "y", 0.0)
+                        for i in range(idx_ape - 1, -1, -1):
+                            l_i = lineas_frente[i]
+                            y_i = getattr(l_i, "y", 0.0)
+                            # Los apellidos están inmediatamente encima de APELLIDOS (máx 0.08 de distancia vertical)
+                            if y_ape - y_i > 0.08:
+                                break
+                            t_i = getattr(l_i, "text", "")
+                            if any(hdr in t_i.upper() for hdr in ["NUMERO", "NÚMERO", "CEDULA", "REPUBLICA", "IDENTIFICACION"]):
+                                break
+                            limpio = self.limpiar_nombre(t_i)
                             if limpio:
-                                cand_ape.append(limpio)
+                                cand_ape.insert(0, limpio)
                         if cand_ape and not resultado_campos["apellidos"]["value"]:
                             ape_val = " ".join(cand_ape[-2:])
                             resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}

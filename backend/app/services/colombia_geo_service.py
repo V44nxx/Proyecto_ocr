@@ -368,11 +368,23 @@ class ColombiaGeoService:
         if norm in deptos_set or norm in muns_set:
             return True
 
+        # Detección de prefijos o inicios de municipios compuestos (ej: 'BELEN DE LOS ANDA' para 'BELEN DE LOS ANDAQUIES')
+        for m in muns_set:
+            if len(m.split()) >= 2 and len(norm) >= 7 and (m.startswith(norm) or norm.startswith(m)):
+                return True
+
         # Analizar palabras individuales ignorando conectores comunes
         palabras = [w for w in re.sub(r"[^A-Z\s]", " ", norm).split() if len(w) >= 3 and w not in {"DE", "DEL", "LA", "LAS", "LOS", "EL", "SAN", "SANTA", "D.C", "DC"}]
         if palabras and len(palabras) <= 4:
             # Si todas las palabras útiles son departamentos o municipios (ej: 'CAQUETA SOLANO')
             if all(p in deptos_set or p in muns_set for p in palabras):
+                return True
+            # Si contiene palabras de municipios específicos no ambiguos (ej: 'ANDAQUIES', 'SOLANO', 'CURILLO', etc.)
+            TOPONIMOS_INCONFUNDIBLES = {
+                "ANDAQUIES", "CURILLO", "DONCELLO", "PAUJIL", "MONTAÑITA", "MONTANITA", "FRAGUA", "CAGUAN",
+                "SOLANO", "SOLITA", "VALPARAISO", "CHAIRA", "FLORENCIA", "CAQUETA"
+            }
+            if any(p in TOPONIMOS_INCONFUNDIBLES for p in palabras) and any(w in {"DE", "DEL", "LA", "LOS", "LAS"} for w in norm.split()):
                 return True
 
         return False

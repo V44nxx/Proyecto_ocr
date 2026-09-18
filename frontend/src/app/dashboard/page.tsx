@@ -336,7 +336,7 @@ export default function DashboardPage() {
                     </h2>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Haz clic en &quot;Visualizar Personas&quot; para abrir la tabla completa con cédula, nombres, edad, estado y visor de cada persona.
+                    Haz clic en el ícono del ojo para abrir la tabla completa con cédula, nombres, edad, estado y visor de cada persona.
                   </p>
                 </div>
 
@@ -442,11 +442,10 @@ export default function DashboardPage() {
                                     e.stopPropagation();
                                     abrirPersonasFicha(doc);
                                   }}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm hover:border-primary-500/50"
-                                  title="Visualizar personas de este archivo en una tabla independiente"
+                                  className="p-1.5 rounded-xl text-xs font-semibold transition-all inline-flex items-center justify-center cursor-pointer bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm hover:border-primary-500/50 active:scale-95"
+                                  title="Visualizar personas de este archivo"
                                 >
-                                  <Eye className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
-                                  <span>Visualizar Personas</span>
+                                  <Eye className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                                 </button>
                                 <button
                                   onClick={(e) => {

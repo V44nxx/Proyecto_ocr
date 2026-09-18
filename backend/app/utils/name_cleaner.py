@@ -14,13 +14,28 @@ JUNK_WORDS = {
     "POSTAL", "CUE", "DR", "CDI", "AAAS", "AAS", "NOMBRES", "APELLIDOS", 
     "NOMBRE", "APELLIDO", "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
     "PÚBLICA", "ICADE", "CADE", "MEIA", "DILOM", "COLOM", "COLOMS", "LICA",
-    "ELICA", "DILOMBIA", "LOM", "REPUBLI"
+    "ELICA", "DILOMBIA", "LOM", "REPUBLI", "NIMEPO", "EDULA", "NIMERO", "NUMEPO",
+    "NÚMEPO", "NVYMERO", "NVMERO", "NOMORO", "NRO", "CEDLA", "CEDUIA", "CEDUI",
+    "CFDULA", "CELDULA", "CIUDADAMA", "CIUDADANLA", "CIUDADANA", "CIUDADANÌA",
+    "IDENTIF", "IDENTIFICACI", "IDENTIFICACIONPERSONAL", "REPUBLICADECOLOMBIA",
+    "MOUSEES", "FMRMA", "FIRMAS", "FIRMADO"
 }
 
 ROMAN_NOISE = {
     "I", "II", "III", "IIII", "IIIII", "IIIIII", "IV", "V", "VI", "VII", 
     "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", 
     "XVIII", "XIX", "XX"
+}
+
+PALABRAS_ENCABEZADO_CANONICAS = (
+    "NUMERO", "CEDULA", "CIUDADANIA", "REPUBLICA", "IDENTIFICACION",
+    "PERSONAL", "COLOMBIA", "NACIONAL", "REGISTRADURIA", "APELLIDOS",
+    "NOMBRES", "EXPEDICION", "NACIMIENTO", "ESTATURA", "DERECHO", "INDICE", "FIRMA"
+)
+
+NOMBRES_LEGITIMOS_EXCEPCION = {
+    "HOMERO", "DANIEL", "DIEGO", "ANA", "DOLY", "VARGAS", "VILLA",
+    "ORTEGA", "RODRIGUEZ", "EDILMER", "LEONEL", "PEDRO", "JOSE", "MARIA"
 }
 
 VOCALES_VALIDAS = set("AEIOUÁÉÍÓÚÜY")
@@ -32,6 +47,37 @@ def normalizar_str(s: str) -> str:
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
     return s.upper().strip()
+
+
+def _distancia_levenshtein(s1: str, s2: str) -> int:
+    if len(s1) < len(s2):
+        return _distancia_levenshtein(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    return previous_row[-1]
+
+
+def es_token_ruido_difuso(t_alpha: str) -> bool:
+    """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA)."""
+    if not t_alpha or len(t_alpha) < 3:
+        return False
+    if t_alpha in NOMBRES_LEGITIMOS_EXCEPCION:
+        return False
+    for can in PALABRAS_ENCABEZADO_CANONICAS:
+        max_d = 1 if len(can) <= 5 else 2
+        d = _distancia_levenshtein(t_alpha, can)
+        if d <= max_d:
+            return True
+    return False
 
 
 def es_token_ruido(t_raw: str) -> bool:
@@ -50,6 +96,9 @@ def es_token_ruido(t_raw: str) -> bool:
         return True
     # Palabras de encabezado y etiquetas de cédula/TI
     if t_alpha in JUNK_WORDS:
+        return True
+    # Detección difusa de encabezados distorsionados por OCR (NIMEPO, EDULA, etc.)
+    if es_token_ruido_difuso(t_alpha):
         return True
     # Letras solas (excepto la conjunción válida 'Y')
     if len(t_alpha) <= 1 and t_alpha != "Y":

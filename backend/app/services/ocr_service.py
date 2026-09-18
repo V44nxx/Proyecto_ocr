@@ -744,7 +744,7 @@ class OCRService:
                                 # DISCREPANCIA REAL PDF VS EXCEL:
                                 # Se conserva el nombre oficial del Excel pero se genera alerta obligatoria de REVISAR con el porqué
                                 mot_disc = (
-                                    f"Discrepancia en nombre/apellidos: La Cédula física en PDF indica '{nom_ocr_cedula}' "
+                                    f"Discrepancia en Nombre Completo: La Cédula física en PDF indica '{nom_ocr_cedula}' "
                                     f"pero la Planilla Excel indica '{nombre_excel_candidato}'"
                                 )
                                 discrepancia_nombre_excel = {
@@ -873,12 +873,6 @@ class OCRService:
                     "source": "cedula_fisica",
                     "reason": discrepancia_nombre_excel["motivo"]
                 }
-                if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
-                    detalles_payload["nombres"]["status"] = "REVIEW_REQUIRED"
-                    detalles_payload["nombres"]["reason"] = discrepancia_nombre_excel["motivo"]
-                if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
-                    detalles_payload["apellidos"]["status"] = "REVIEW_REQUIRED"
-                    detalles_payload["apellidos"]["reason"] = discrepancia_nombre_excel["motivo"]
             elif encontrado_en_excel and nombre_completo_final:
                 detalles_payload["nombre_completo"] = {
                     "valor": nombre_completo_final,

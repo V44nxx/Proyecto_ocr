@@ -116,12 +116,12 @@ class SpatialFieldExtractor:
     # porque son válidas en nombres colombianos (ej: DE LA CRUZ, DEL CASTILLO).
     # Se filtran solo si aparecen como única palabra en limpiar_nombre().
     NO_NOMBRE_HEADER = re.compile(
-        r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|"
+        r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|RETUBEICA|"
         r"COLOMB|COLOMS|COL\b|BIA\b|"
-        r"CEDUL|CÉDUL|CEDUU|CEDUA|"
-        r"CIUDAD|CIUDAN|GIUDAD|"
-        r"IDENTIFIC|NUMERO|NÚMERO|NUIP|"
-        r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|TITULAR|DIGITAL|"
+        r"CEDUL|CÉDUL|CEDUU|CEDUA|EDULA|CEDLA|CEDUIA|CFDULA|CELDULA|"
+        r"CIUDAD|CIUDAN|GIUDAD|CIUDADAMA|CIUDADANLA|CIUDADANA|"
+        r"IDENTIFIC|IDENTIF|NUMERO|NÚMERO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|NVYMERO|NVMERO|NOMORO|"
+        r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|DIGITAL|"
         r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
@@ -146,8 +146,9 @@ class SpatialFieldExtractor:
     def limpiar_nombre(self, texto: str) -> Optional[str]:
         if not texto:
             return None
+        from app.utils.name_cleaner import es_token_ruido
         t_norm = str(texto).translate(validador.HOMOGLYPHS).replace("!", "I").replace("1", "I")
-        toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w)]
+        toks = [w for w in re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", t_norm.upper()).split() if len(w) >= 2 and not self.NO_NOMBRE_HEADER.search(w) and not es_token_ruido(w)]
         # Remover partículas huérfanas al inicio (ej: "DE" residual de "REPUBLICA DE" o "ICA DE")
         while toks and self._PARTICULAS_SOLAS.match(toks[0]) and len(toks) > 1:
             toks.pop(0)
@@ -464,7 +465,7 @@ class SpatialFieldExtractor:
 
             for idx, l in enumerate(lineas_frente):
                 t = getattr(l, "text", "").upper().strip()
-                if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP)\b", t) or re.search(r"\b\d{7,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
+                if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO)\b", t) or re.search(r"\b\d{6,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
                     idx_num = idx
                 if re.search(r"\bAPELL[I10]*D", t) and idx_ape == -1:
                     idx_ape = idx

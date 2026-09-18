@@ -499,17 +499,19 @@ class ValidadorColombia:
             pass
 
         # 5. Conflictos o estatus de campos primarios esenciales
+        # El único campo relevante de identidad es nombre_completo; nombres y apellidos se ignoran para no fragmentar ni duplicar alertas
         CAMPOS_IGNORAR_REVISION = {
-            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento", "discrepancia_excel"
+            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento", "discrepancia_excel", "nombres", "apellidos"
         }
         if detalles_campos and isinstance(detalles_campos, dict):
             # Discrepancia crítica explícita entre Cédula física y Planilla Excel
+            mot_disc = ""
             if "discrepancia_excel" in detalles_campos:
                 disc = detalles_campos["discrepancia_excel"]
                 if isinstance(disc, dict):
                     nom_c = disc.get("nombre_cedula", "")
                     nom_e = disc.get("nombre_excel", "")
-                    mot_disc = disc.get("motivo") or f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_c}' pero la Planilla Excel indica '{nom_e}'"
+                    mot_disc = disc.get("motivo") or f"Discrepancia en Nombre Completo: La Cédula física en PDF indica '{nom_c}' pero la Planilla Excel indica '{nom_e}'"
                 else:
                     mot_disc = str(disc)
                 if mot_disc not in motivos:
@@ -526,6 +528,9 @@ class ValidadorColombia:
                             motivos.append(mot)
                     elif st in ("REVIEW_REQUIRED", "CONFLICT", "INVALID"):
                         reason = info.get("reason") or "requiere revisión manual"
+                        # Si ya se agregó la discrepancia_excel, no repetir el mismo motivo en nombre_completo
+                        if mot_disc and campo == "nombre_completo" and (reason in mot_disc or mot_disc in reason):
+                            continue
                         mot = f"Conflicto en campo '{campo}': {reason}"
                         if mot not in motivos:
                             motivos.append(mot)

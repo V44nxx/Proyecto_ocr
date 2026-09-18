@@ -760,11 +760,16 @@ function PersonasContent() {
               const rawMotivos: string[] = Array.isArray((p.detalles_campos as any)?.motivos_revision)
                 ? (p.detalles_campos as any).motivos_revision
                 : [];
+              const tieneDiscrepanciaSuperior = Boolean((p.detalles_campos as any)?.discrepancia_excel);
               const motivosFiltrados = rawMotivos.filter((m: string) => {
                 const ml = m.toLowerCase();
-                return !ml.includes("expedici") && !ml.includes("sexo") && !ml.includes("lugar") && !ml.includes("genero");
+                if (ml.includes("expedici") || ml.includes("sexo") || ml.includes("lugar") || ml.includes("genero")) return false;
+                if (ml.includes("campo 'nombres'") || ml.includes("campo 'apellidos'")) return false;
+                // Si la tarjeta destacada de discrepancia ya se muestra arriba, no duplicar en las viñetas inferiores
+                if (tieneDiscrepanciaSuperior && (ml.includes("discrepancia") || ml.includes("campo 'nombre_completo'"))) return false;
+                return true;
               });
-              if (motivosFiltrados.length === 0 && !p.requiere_revision) return null;
+              if (motivosFiltrados.length === 0 && (!p.requiere_revision || tieneDiscrepanciaSuperior)) return null;
               return (
                 <div className="m-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

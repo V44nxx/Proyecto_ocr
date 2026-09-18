@@ -716,7 +716,7 @@ class ComparacionService:
                                 p_actualizar.estado_registro = "REVIEW_REQUIRED"
                                 detalles = dict(p_actualizar.detalles_campos or {})
                                 motivos = list(detalles.get("motivos_revision") or [])
-                                mot_disc = f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_bd}' pero la Planilla Excel indica '{nom_excel}'"
+                                mot_disc = f"Discrepancia en Nombre Completo: La Cédula física indica '{nom_bd}' pero la Planilla Excel indica '{nom_excel}'"
                                 if mot_disc not in motivos:
                                     motivos.append(mot_disc)
                                 detalles["motivos_revision"] = motivos

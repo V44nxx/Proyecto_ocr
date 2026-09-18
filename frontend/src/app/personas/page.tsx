@@ -168,8 +168,8 @@ function PersonasContent() {
       const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
       const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
       const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
-      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false || Boolean((p.detalles_campos as any)?.discrepancia_excel)).length;
-      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false && !Boolean((p.detalles_campos as any)?.discrepancia_excel)).length;
+      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
+      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -373,13 +373,11 @@ function PersonasContent() {
       const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      const tieneDiscrepanciaNombre = Boolean((p.detalles_campos as any)?.discrepancia_excel);
-      if (esRev || faltaPdf || faltaExcel || tieneDiscrepanciaNombre) return false;
+      if (esRev || faltaPdf || faltaExcel) return false;
     } else if (filtroEstado === "discrepancia") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      const tieneDiscrepanciaNombre = Boolean((p.detalles_campos as any)?.discrepancia_excel);
-      if (!faltaPdf && !faltaExcel && !tieneDiscrepanciaNombre) return false;
+      if (!faltaPdf && !faltaExcel) return false;
     } else if (filtroEstado === "falta_pdf") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       if (!faltaPdf) return false;

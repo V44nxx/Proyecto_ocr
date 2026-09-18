@@ -13,7 +13,8 @@ JUNK_WORDS = {
     "LUGAR", "FECHA", "NACIMIENTO", "SEXO", "ESTATURA", "RH", "VIGENCIA", 
     "POSTAL", "CUE", "DR", "CDI", "AAAS", "AAS", "NOMBRES", "APELLIDOS", 
     "NOMBRE", "APELLIDO", "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
-    "PÚBLICA", "ICADE", "CADE", "MEIA"
+    "PÚBLICA", "ICADE", "CADE", "MEIA", "DILOM", "COLOM", "COLOMS", "LICA",
+    "ELICA", "DILOMBIA", "LOM", "REPUBLI"
 }
 
 ROMAN_NOISE = {
@@ -62,6 +63,9 @@ def es_token_ruido(t_raw: str) -> bool:
     return False
 
 
+SUFIJOS_FONDO_SEGURIDAD = ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM")
+
+
 def limpiar_tokens_ruido(texto: str) -> str:
     if not texto:
         return ""
@@ -74,7 +78,14 @@ def limpiar_tokens_ruido(texto: str) -> str:
             continue
         # Limpiar cualquier caracter residual no alfabético del token
         t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\-]", "", t).strip()
-        if t_clean:
+        t_upper = t_clean.upper()
+        # Remover sufijos pegados de sellos de fondo (ej: PECHENELICA -> PECHENE)
+        for suf in SUFIJOS_FONDO_SEGURIDAD:
+            if t_upper.endswith(suf) and len(t_upper) - len(suf) >= 4:
+                t_clean = t_clean[:-len(suf)]
+                t_upper = t_clean.upper()
+                break
+        if t_clean and not es_token_ruido(t_clean):
             limpios.append(t_clean)
     # Quitar conectores al final o al inicio que queden huérfanos
     while limpios and limpios[-1].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "Y"}:

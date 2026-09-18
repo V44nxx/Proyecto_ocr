@@ -1702,16 +1702,6 @@ function PersonasContent() {
                                 </span>
                               )}
 
-                              {/* Alerta: Discrepancia de Nombre Cédula vs Excel */}
-                              {Boolean((p.detalles_campos as any)?.discrepancia_excel) && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
-                                  title={`Discrepancia crítica: Cédula física indica '${(p.detalles_campos as any)?.discrepancia_excel?.nombre_cedula || p.nombre_completo}' pero Excel indica '${(p.detalles_campos as any)?.discrepancia_excel?.nombre_excel || ""}'`}
-                                >
-                                  <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> DISCREPANCIA NOMBRE
-                                </span>
-                              )}
-
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span
@@ -1732,11 +1722,15 @@ function PersonasContent() {
                                 </span>
                               )}
 
-                              {/* Estado de validación de datos */}
+                              {/* Estado de validación de datos: REVISAR o VÁLIDO */}
                               {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                  title="Requiere revisión manual de datos incompletos"
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
+                                  title={
+                                    (p.detalles_campos as any)?.discrepancia_excel?.motivo
+                                      ? (p.detalles_campos as any).discrepancia_excel.motivo
+                                      : "Requiere revisión manual de datos"
+                                  }
                                 >
                                   <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
                                 </span>

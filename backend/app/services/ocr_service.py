@@ -724,10 +724,15 @@ class OCRService:
                     ape_excel = registro_excel.get("apellidos", "").strip()
                     nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
 
-                    # Validar consistencia estricta: La cédula física es la verdad documental irrefutable
+                    # Conservar el nombre que traiga el Excel; si el Excel no tiene nombre, sacarlo del PDF
                     if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
-                        tiene_nombre_cedula = bool(nom_ocr_cedula and len(nom_ocr_cedula) >= 3 and not _es_nombre_invalido(nom_ocr_cedula))
+                        encontrado_en_excel = True
+                        fuente_nombre = "excel_oficial"
+                        nombre_completo_final = nombre_excel_candidato
+                        nombres_final = nom_excel or nombre_completo_final
+                        apellidos_final = ape_excel or ""
 
+                        tiene_nombre_cedula = bool(nom_ocr_cedula and len(nom_ocr_cedula) >= 3 and not _es_nombre_invalido(nom_ocr_cedula))
                         if tiene_nombre_cedula:
                             coinciden_nombres = comparacion_service._son_nombres_equivalentes(
                                 nombres_bd=nom_ocr_cedula,
@@ -736,10 +741,10 @@ class OCRService:
                                 apellidos_excel=""
                             )
                             if not coinciden_nombres:
-                                # DISCREPANCIA CRÍTICA CÉDULA VS EXCEL
-                                # Nunca reemplazar la cédula física con un nombre incorrecto del Excel
+                                # DISCREPANCIA REAL PDF VS EXCEL:
+                                # Se conserva el nombre oficial del Excel pero se genera alerta obligatoria de REVISAR con el porqué
                                 mot_disc = (
-                                    f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_ocr_cedula}' "
+                                    f"Discrepancia en nombre/apellidos: La Cédula física en PDF indica '{nom_ocr_cedula}' "
                                     f"pero la Planilla Excel indica '{nombre_excel_candidato}'"
                                 )
                                 discrepancia_nombre_excel = {
@@ -747,36 +752,21 @@ class OCRService:
                                     "nombre_excel": nombre_excel_candidato,
                                     "motivo": mot_disc
                                 }
-                                fuente_nombre = "cedula_fisica"
-                                encontrado_en_excel = False
-                                nombre_completo_final = nom_ocr_cedula
                                 logger.warning(
-                                    f"[ExcelLookup] ID {id_limpio}: DISCREPANCIA DETECTADA Cédula vs Excel. "
-                                    f"Cédula='{nom_ocr_cedula}', Excel='{nombre_excel_candidato}'. "
-                                    f"Se preserva el nombre de la CÉDULA FÍSICA y se fuerza a REVISAR."
+                                    f"[ExcelLookup] ID {id_limpio}: Discrepancia PDF vs Excel detectada. "
+                                    f"PDF='{nom_ocr_cedula}' vs Excel='{nombre_excel_candidato}'. "
+                                    f"Se conserva nombre de Excel pero se marca para REVISIÓN con motivo detallado."
                                 )
                             else:
-                                encontrado_en_excel = True
-                                fuente_nombre = "excel_oficial"
-                                nombre_completo_final = nombre_excel_candidato
-                                nombres_final = nom_excel or nombre_completo_final
-                                apellidos_final = ape_excel or ""
                                 logger.info(
                                     f"[ExcelLookup] ID {id_limpio}: nombre completo verificado con planilla oficial -> '{nombre_completo_final}'"
                                 )
-                        else:
-                            encontrado_en_excel = True
-                            fuente_nombre = "excel_oficial"
-                            nombre_completo_final = nombre_excel_candidato
-                            nombres_final = nom_excel or nombre_completo_final
-                            apellidos_final = ape_excel or ""
-                            logger.info(
-                                f"[ExcelLookup] ID {id_limpio}: nombre adoptado desde planilla oficial (cédula con nombre ilegible) -> '{nombre_completo_final}'"
-                            )
                     else:
+                        # Si el Excel no tiene nombre válido, sacarlo del PDF
+                        nombre_completo_final = nom_ocr_cedula or f"{nombres_final} {apellidos_final}".strip()
+                        fuente_nombre = "cedula_fisica"
                         logger.info(
-                            f"[ExcelLookup] ID {id_limpio} encontrado en planilla oficial pero sin nombre válido. "
-                            f"Conservando nombre detectado por OCR del PDF: '{nombres_final} {apellidos_final}'"
+                            f"[ExcelLookup] ID {id_limpio}: sin nombre válido en Excel. Tomando nombre del PDF -> '{nombre_completo_final}'"
                         )
                 else:
                     logger.info(

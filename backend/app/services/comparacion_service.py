@@ -187,14 +187,42 @@ class ComparacionService:
             "REPUBLICA", "COLOMBIA", "DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "E",
             "CEDULA", "CIUDADANIA", "TARJETA", "IDENTIDAD", "PERSONAL", "NACIONAL",
             "REGISTRADURIA", "ESTADO", "CIVIL", "NUMERO", "NO", "DOC", "DOCUMENTO",
-            "POR", "REVISAR", "CAMSCANNER", "FIRMA", "INDICE", "TITULAR"
+            "POR", "REVISAR", "CAMSCANNER", "FIRMA", "INDICE", "TITULAR", "DILOM",
+            "COLOM", "COLOMS", "LICA", "BLICA", "ELICA", "DILOMBIA", "LOM"
         }
 
         nom_total_bd = f"{norm_nb} {norm_ab}".strip()
         nom_total_excel = f"{norm_ne} {norm_ae}".strip()
 
-        w_bd = [w for w in re.findall(r"[A-Z0-9]+", nom_total_bd) if w not in PALABRAS_RUIDO and len(w) > 1]
+        raw_w_bd = [w for w in re.findall(r"[A-Z0-9]+", nom_total_bd) if w not in PALABRAS_RUIDO and len(w) > 1]
         w_excel = [w for w in re.findall(r"[A-Z0-9]+", nom_total_excel) if w not in PALABRAS_RUIDO and len(w) > 1]
+
+        # Limpiar sufijos pegados de sellos de seguridad en BD (ej: PECHENELICA -> PECHENE)
+        w_bd = []
+        for w in raw_w_bd:
+            w_limpio = w
+            for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM"):
+                if w_limpio.endswith(suf) and len(w_limpio) - len(suf) >= 4:
+                    w_limpio = w_limpio[:-len(suf)]
+                    break
+            if w_limpio not in PALABRAS_RUIDO and len(w_limpio) > 1:
+                w_bd.append(w_limpio)
+
+        # Desglosar palabras compuestas/concatenadas por OCR (ej: PEREZSUAZO -> PEREZ + SUAZO si en Excel vienen separadas)
+        w_bd_desglosadas = []
+        for wb in w_bd:
+            dividido = False
+            for i in range(len(w_excel)):
+                for j in range(len(w_excel)):
+                    if i != j and wb == (w_excel[i] + w_excel[j]):
+                        w_bd_desglosadas.extend([w_excel[i], w_excel[j]])
+                        dividido = True
+                        break
+                if dividido:
+                    break
+            if not dividido:
+                w_bd_desglosadas.append(wb)
+        w_bd = w_bd_desglosadas
 
         # Se requieren al menos 2 palabras sustantivas en ambos lados para dar como válida la persona
         if len(w_bd) < 2 or len(w_excel) < 2:
@@ -202,14 +230,30 @@ class ComparacionService:
 
         # Verificación estructural de apellidos si ambos lados proporcionan apellidos separados
         if norm_ab and norm_ae:
-            w_ap_bd = [w for w in re.findall(r"[A-Z0-9]+", norm_ab) if w not in PALABRAS_RUIDO and len(w) > 1]
+            raw_ap_bd = [w for w in re.findall(r"[A-Z0-9]+", norm_ab) if w not in PALABRAS_RUIDO and len(w) > 1]
             w_ap_ex = [w for w in re.findall(r"[A-Z0-9]+", norm_ae) if w not in PALABRAS_RUIDO and len(w) > 1]
+            w_ap_bd = []
+            for wb in raw_ap_bd:
+                dividido = False
+                for i in range(len(w_ap_ex)):
+                    for j in range(len(w_ap_ex)):
+                        if i != j and wb == (w_ap_ex[i] + w_ap_ex[j]):
+                            w_ap_bd.extend([w_ap_ex[i], w_ap_ex[j]])
+                            dividido = True
+                            break
+                    if dividido:
+                        break
+                if not dividido:
+                    for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM"):
+                        if wb.endswith(suf) and len(wb) - len(suf) >= 4:
+                            wb = wb[:-len(suf)]
+                            break
+                    w_ap_bd.append(wb)
             if w_ap_bd and w_ap_ex:
-                # El primer apellido es crucial en Colombia. Si difiere por más de 1-2 letras (no es typo), no son equivalentes
                 primer_ap_bd = w_ap_bd[0]
                 primer_ap_ex = w_ap_ex[0]
                 max_d = 2 if max(len(primer_ap_bd), len(primer_ap_ex)) >= 6 else 1
-                if self._distancia_levenshtein(primer_ap_bd, primer_ap_ex) > max_d and primer_ap_bd != primer_ap_ex:
+                if self._distancia_levenshtein(primer_ap_bd, primer_ap_ex) > max_d and not primer_ap_bd.startswith(primer_ap_ex) and not primer_ap_ex.startswith(primer_ap_bd):
                     return False
 
         from collections import Counter

@@ -117,6 +117,10 @@ function PersonasContent() {
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
     cargarDocumentos();
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated()) return;
     cargarPersonas(true);
     const interval = setInterval(() => cargarPersonas(false), 4000);
     return () => clearInterval(interval);
@@ -134,11 +138,6 @@ function PersonasContent() {
       const res = await apiDocumentos.listar({ limit: 100 });
       const docs = Array.isArray(res.data) ? res.data : [];
       setDocumentos(docs);
-      // Si no viene en la URL y filtroDocumento es "todos", seleccionar por defecto el último archivo subido
-      // para cumplir: únicamente el total de personas en la sección solo sale del archivo subido
-      if (!docParam && docs.length > 0 && filtroDocumento === "todos") {
-        setFiltroDocumento(docs[0].id);
-      }
     } catch {
       // Ignorar
     }

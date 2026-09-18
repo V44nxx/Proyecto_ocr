@@ -104,6 +104,7 @@ export default function DashboardPage() {
 
   const abrirPersonasFicha = async (doc: Documento) => {
     setDocSeleccionadoModal(doc);
+    setPersonasFicha([]);
     setPersonaDetalleId(null);
     setBusquedaModal("");
     setCargandoPersonasFicha(true);

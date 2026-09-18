@@ -469,15 +469,20 @@ def estadisticas_dashboard(
     from app.models.comparacion import Comparacion
     from sqlalchemy import or_
 
-    query_docs = db.query(Documento).filter(Documento.usuario_id == usuario.id)
-    query_personas = db.query(Persona).outerjoin(Persona.documento).filter(
-        or_(
-            Persona.usuario_id == usuario.id,
-            Documento.usuario_id == usuario.id,
-            Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
+    query_docs = db.query(Documento)
+    query_personas = db.query(Persona).outerjoin(Persona.documento)
+    query_comparaciones = db.query(Comparacion)
+
+    if getattr(usuario, "rol", None) != "admin":
+        query_docs = query_docs.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+        query_personas = query_personas.filter(
+            or_(
+                Persona.usuario_id == usuario.id,
+                Documento.usuario_id == usuario.id,
+                Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
+            )
         )
-    )
-    query_comparaciones = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
+        query_comparaciones = query_comparaciones.filter(or_(Comparacion.usuario_id == usuario.id, Comparacion.usuario_id.is_(None)))
 
     total_docs = query_docs.count()
     completados = query_docs.filter(Documento.estado == "completado").count()

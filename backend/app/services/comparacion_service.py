@@ -200,40 +200,62 @@ class ComparacionService:
         if len(w_bd) < 2 or len(w_excel) < 2:
             return False
 
-        s_bd, s_excel = set(w_bd), set(w_excel)
-        if s_bd == s_excel:
+        # Verificación estructural de apellidos si ambos lados proporcionan apellidos separados
+        if norm_ab and norm_ae:
+            w_ap_bd = [w for w in re.findall(r"[A-Z0-9]+", norm_ab) if w not in PALABRAS_RUIDO and len(w) > 1]
+            w_ap_ex = [w for w in re.findall(r"[A-Z0-9]+", norm_ae) if w not in PALABRAS_RUIDO and len(w) > 1]
+            if w_ap_bd and w_ap_ex:
+                # El primer apellido es crucial en Colombia. Si difiere por más de 1-2 letras (no es typo), no son equivalentes
+                primer_ap_bd = w_ap_bd[0]
+                primer_ap_ex = w_ap_ex[0]
+                max_d = 2 if max(len(primer_ap_bd), len(primer_ap_ex)) >= 6 else 1
+                if self._distancia_levenshtein(primer_ap_bd, primer_ap_ex) > max_d and primer_ap_bd != primer_ap_ex:
+                    return False
+
+        from collections import Counter
+        c_bd = Counter(w_bd)
+        c_excel = Counter(w_excel)
+
+        if c_bd == c_excel:
             return True
 
-        inter = set(s_bd.intersection(s_excel))
-        diff_bd = set(s_bd - s_excel)
-        diff_ex = set(s_excel - s_bd)
+        # Intersección y diferencias multiconjunto respetando frecuencias de palabras
+        c_inter = c_bd & c_excel
+        c_diff_bd = c_bd - c_excel
+        c_diff_ex = c_excel - c_bd
+
+        diff_bd_words = list(c_diff_bd.elements())
+        diff_ex_words = list(c_diff_ex.elements())
 
         # Tratar de emparejar diferencias menores por error tipográfico de OCR (ej. BASTIDAZ vs BASTIDAS)
-        matched_bd = set()
-        matched_ex = set()
-        for d1 in diff_bd:
-            for d2 in diff_ex:
+        matched_bd = []
+        matched_ex = []
+        for d1 in diff_bd_words:
+            for d2 in diff_ex_words:
                 if d2 in matched_ex:
                     continue
                 max_dist = 2 if max(len(d1), len(d2)) >= 6 else 1
                 if self._distancia_levenshtein(d1, d2) <= max_dist:
-                    inter.add(d1)
-                    matched_bd.add(d1)
-                    matched_ex.add(d2)
+                    matched_bd.append(d1)
+                    matched_ex.append(d2)
                     break
 
-        diff_bd -= matched_bd
-        diff_ex -= matched_ex
+        for m in matched_bd:
+            diff_bd_words.remove(m)
+        for m in matched_ex:
+            diff_ex_words.remove(m)
 
         # Si en ambos lados quedan palabras sustantivas no coincidentes que no son errores tipográficos,
-        # significa que tienen apellidos o nombres contradictorios (ej. PEREZ vs RODRIGUEZ)
-        if diff_bd and diff_ex:
+        # significa que tienen apellidos o nombres contradictorios (ej. ORTEGA vs RODRIGUEZ)
+        if diff_bd_words and diff_ex_words:
             return False
 
-        # Si uno es subconjunto limpio del otro (ej. se omitió el segundo nombre en OCR)
-        if (not diff_bd or not diff_ex) and len(inter) >= 2:
-            ratio = len(inter) / max(len(s_bd), len(s_excel))
-            return ratio >= 0.65
+        # Si uno es subconjunto limpio del otro (ej. se omitió el segundo nombre)
+        inter_count = sum(c_inter.values()) + len(matched_bd)
+        total_words = max(len(w_bd), len(w_excel))
+        if (not diff_bd_words or not diff_ex_words) and inter_count >= 2:
+            ratio = inter_count / total_words
+            return ratio >= 0.70
 
         return False
 
@@ -636,6 +658,23 @@ class ComparacionService:
                                 valor_excel=nom_excel,
                                 tipo_diferencia="diferente",
                             ))
+                            # Forzar estado de revisión en la Persona por discrepancia con la planilla oficial
+                            p_actualizar = db.query(Persona).filter(Persona.numero_identificacion == id_comun).first()
+                            if p_actualizar:
+                                p_actualizar.requiere_revision = True
+                                p_actualizar.estado_registro = "REVIEW_REQUIRED"
+                                detalles = dict(p_actualizar.detalles_campos or {})
+                                motivos = list(detalles.get("motivos_revision") or [])
+                                mot_disc = f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_bd}' pero la Planilla Excel indica '{nom_excel}'"
+                                if mot_disc not in motivos:
+                                    motivos.append(mot_disc)
+                                detalles["motivos_revision"] = motivos
+                                detalles["discrepancia_excel"] = {
+                                    "nombre_cedula": nom_bd,
+                                    "nombre_excel": nom_excel,
+                                    "motivo": mot_disc
+                                }
+                                p_actualizar.detalles_campos = detalles
 
                     # Comparar los demás campos
                     campos_resto = ["fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]

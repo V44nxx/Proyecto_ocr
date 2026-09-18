@@ -685,9 +685,20 @@ class OCRService:
             apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
 
             # ── Enriquecimiento con planilla oficial Excel ──────────────────────
+            from app.utils.name_cleaner import resolver_nombre_completo
+            from app.services.comparacion_service import comparacion_service
+
+            # Nombre que el OCR leyó directamente de la cédula física
+            nom_ocr_cedula = resolver_nombre_completo(
+                nombres=nombres_final if nombres_final != "POR REVISAR" else "",
+                apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
+                actual=datos.get("nombre_completo") or ""
+            ).strip()
+
             fuente_nombre = "ocr"
             encontrado_en_excel = False
             nombre_completo_final = None
+            discrepancia_nombre_excel = None
 
             if not excel_lookup:
                 try:
@@ -713,17 +724,55 @@ class OCRService:
                     ape_excel = registro_excel.get("apellidos", "").strip()
                     nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
 
-                    # Solo reemplazar nombre si el Excel realmente provee un nombre válido
+                    # Validar consistencia estricta: La cédula física es la verdad documental irrefutable
                     if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
-                        encontrado_en_excel = True
-                        fuente_nombre = "excel_oficial"
-                        nombre_completo_final = nombre_excel_candidato
-                        nombres_final = nom_excel or nombre_completo_final
-                        apellidos_final = ape_excel or ""
+                        tiene_nombre_cedula = bool(nom_ocr_cedula and len(nom_ocr_cedula) >= 3 and not _es_nombre_invalido(nom_ocr_cedula))
 
-                        logger.info(
-                            f"[ExcelLookup] ID {id_limpio}: nombre completo desde planilla oficial -> '{nombre_completo_final}'"
-                        )
+                        if tiene_nombre_cedula:
+                            coinciden_nombres = comparacion_service._son_nombres_equivalentes(
+                                nombres_bd=nom_ocr_cedula,
+                                apellidos_bd="",
+                                nombres_excel=nombre_excel_candidato,
+                                apellidos_excel=""
+                            )
+                            if not coinciden_nombres:
+                                # DISCREPANCIA CRÍTICA CÉDULA VS EXCEL
+                                # Nunca reemplazar la cédula física con un nombre incorrecto del Excel
+                                mot_disc = (
+                                    f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_ocr_cedula}' "
+                                    f"pero la Planilla Excel indica '{nombre_excel_candidato}'"
+                                )
+                                discrepancia_nombre_excel = {
+                                    "nombre_cedula": nom_ocr_cedula,
+                                    "nombre_excel": nombre_excel_candidato,
+                                    "motivo": mot_disc
+                                }
+                                fuente_nombre = "cedula_fisica"
+                                encontrado_en_excel = False
+                                nombre_completo_final = nom_ocr_cedula
+                                logger.warning(
+                                    f"[ExcelLookup] ID {id_limpio}: DISCREPANCIA DETECTADA Cédula vs Excel. "
+                                    f"Cédula='{nom_ocr_cedula}', Excel='{nombre_excel_candidato}'. "
+                                    f"Se preserva el nombre de la CÉDULA FÍSICA y se fuerza a REVISAR."
+                                )
+                            else:
+                                encontrado_en_excel = True
+                                fuente_nombre = "excel_oficial"
+                                nombre_completo_final = nombre_excel_candidato
+                                nombres_final = nom_excel or nombre_completo_final
+                                apellidos_final = ape_excel or ""
+                                logger.info(
+                                    f"[ExcelLookup] ID {id_limpio}: nombre completo verificado con planilla oficial -> '{nombre_completo_final}'"
+                                )
+                        else:
+                            encontrado_en_excel = True
+                            fuente_nombre = "excel_oficial"
+                            nombre_completo_final = nombre_excel_candidato
+                            nombres_final = nom_excel or nombre_completo_final
+                            apellidos_final = ape_excel or ""
+                            logger.info(
+                                f"[ExcelLookup] ID {id_limpio}: nombre adoptado desde planilla oficial (cédula con nombre ilegible) -> '{nombre_completo_final}'"
+                            )
                     else:
                         logger.info(
                             f"[ExcelLookup] ID {id_limpio} encontrado en planilla oficial pero sin nombre válido. "
@@ -737,7 +786,7 @@ class OCRService:
             # Fallback y auto-corrección de identificación por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
             # Si el OCR ya obtuvo una cédula válida pero simplemente NO está en el Excel, se respeta la cédula del OCR ("sacar solo")
             id_original_ocr = str(num_doc) if num_doc else ""
-            if excel_lookup and not encontrado_en_excel:
+            if excel_lookup and not encontrado_en_excel and not discrepancia_nombre_excel:
                 from app.services.excel_lookup_service import excel_lookup_service
                 from app.services.comparacion_service import comparacion_service
                 nom_buscar = f"{nombres_final or ''} {apellidos_final or ''}".strip()
@@ -824,7 +873,23 @@ class OCRService:
                     "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {id_original_ocr})"
                 }
 
-            if encontrado_en_excel and nombre_completo_final:
+            if discrepancia_nombre_excel:
+                detalles_payload["discrepancia_excel"] = discrepancia_nombre_excel
+                detalles_payload["nombre_completo"] = {
+                    "valor": nombre_completo_final,
+                    "value": nombre_completo_final,
+                    "confidence": round(confianza / 100.0, 2),
+                    "status": "REVIEW_REQUIRED",
+                    "source": "cedula_fisica",
+                    "reason": discrepancia_nombre_excel["motivo"]
+                }
+                if "nombres" in detalles_payload and isinstance(detalles_payload["nombres"], dict):
+                    detalles_payload["nombres"]["status"] = "REVIEW_REQUIRED"
+                    detalles_payload["nombres"]["reason"] = discrepancia_nombre_excel["motivo"]
+                if "apellidos" in detalles_payload and isinstance(detalles_payload["apellidos"], dict):
+                    detalles_payload["apellidos"]["status"] = "REVIEW_REQUIRED"
+                    detalles_payload["apellidos"]["reason"] = discrepancia_nombre_excel["motivo"]
+            elif encontrado_en_excel and nombre_completo_final:
                 detalles_payload["nombre_completo"] = {
                     "valor": nombre_completo_final,
                     "value": nombre_completo_final,
@@ -928,7 +993,11 @@ class OCRService:
                     persona.pagina_reverso = datos.get("pagina_frente")
 
                 # Nombre Completo, Nombres y Apellidos
-                if fuente_nombre == "excel_oficial" and nombre_completo_final:
+                if discrepancia_nombre_excel:
+                    persona.nombre_completo = nombre_completo_final
+                    persona.nombres = nombres_final
+                    persona.apellidos = apellidos_final
+                elif fuente_nombre == "excel_oficial" and nombre_completo_final:
                     persona.nombre_completo = nombre_completo_final
                     persona.nombres = nombres_final
                     persona.apellidos = apellidos_final
@@ -959,6 +1028,8 @@ class OCRService:
                 for k, v in detalles_nuevos.items():
                     if k not in detalles_existentes or not detalles_existentes[k].get("valor"):
                         detalles_existentes[k] = v
+                if discrepancia_nombre_excel:
+                    detalles_existentes["discrepancia_excel"] = discrepancia_nombre_excel
                 persona.detalles_campos = detalles_existentes
 
                 # Unificar texto crudo

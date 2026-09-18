@@ -169,8 +169,8 @@ function PersonasContent() {
       const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
       const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
       const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
-      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
-      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false).length;
+      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false || Boolean((p.detalles_campos as any)?.discrepancia_excel)).length;
+      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false && !Boolean((p.detalles_campos as any)?.discrepancia_excel)).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -374,11 +374,13 @@ function PersonasContent() {
       const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      if (esRev || faltaPdf || faltaExcel) return false;
+      const tieneDiscrepanciaNombre = Boolean((p.detalles_campos as any)?.discrepancia_excel);
+      if (esRev || faltaPdf || faltaExcel || tieneDiscrepanciaNombre) return false;
     } else if (filtroEstado === "discrepancia") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      if (!faltaPdf && !faltaExcel) return false;
+      const tieneDiscrepanciaNombre = Boolean((p.detalles_campos as any)?.discrepancia_excel);
+      if (!faltaPdf && !faltaExcel && !tieneDiscrepanciaNombre) return false;
     } else if (filtroEstado === "falta_pdf") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       if (!faltaPdf) return false;
@@ -689,6 +691,40 @@ function PersonasContent() {
                 </p>
               </div>
             )}
+
+            {/* Alerta Destacada: Discrepancia Crítica de Nombre entre Cédula Física y Planilla Excel */}
+            {Boolean((p.detalles_campos as any)?.discrepancia_excel) && (() => {
+              const disc = (p.detalles_campos as any).discrepancia_excel;
+              const nombreCedula = typeof disc === "object" ? disc.nombre_cedula : "";
+              const nombreExcel = typeof disc === "object" ? disc.nombre_excel : "";
+              return (
+                <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500 dark:border-amber-500/70 text-amber-950 dark:text-amber-100 shadow-md min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Discrepancia Crítica de Nombre: Cédula Física vs Planilla Excel
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-950 dark:text-amber-100 ml-7 mb-2.5 font-medium leading-relaxed">
+                    El nombre extraído de la cédula física del PDF difiere del registrado en la planilla oficial de Excel. La cédula física es la verdad documental irrefutable; por tanto, se preservó el nombre de la cédula y se requiere revisión obligatoria.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 ml-7 text-xs">
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-emerald-400 dark:border-emerald-600/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Nombre en Cédula Física (PDF)
+                      </div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">{nombreCedula || p.nombre_completo}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-rose-300 dark:border-rose-700/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400 flex items-center gap-1">
+                        <FileSpreadsheet className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Nombre en Planilla Excel
+                      </div>
+                      <div className="font-extrabold text-rose-900 dark:text-rose-300 text-sm mt-0.5 line-through">{nombreExcel || "Diferente en Excel"}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Alerta: Falta en Planilla Excel */}
             {p.en_excel === false && (
@@ -1663,6 +1699,16 @@ function PersonasContent() {
                                   title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
                                 >
                                   <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
+                                </span>
+                              )}
+
+                              {/* Alerta: Discrepancia de Nombre Cédula vs Excel */}
+                              {Boolean((p.detalles_campos as any)?.discrepancia_excel) && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
+                                  title={`Discrepancia crítica: Cédula física indica '${(p.detalles_campos as any)?.discrepancia_excel?.nombre_cedula || p.nombre_completo}' pero Excel indica '${(p.detalles_campos as any)?.discrepancia_excel?.nombre_excel || ""}'`}
+                                >
+                                  <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> DISCREPANCIA NOMBRE
                                 </span>
                               )}
 

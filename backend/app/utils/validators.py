@@ -500,9 +500,21 @@ class ValidadorColombia:
 
         # 5. Conflictos o estatus de campos primarios esenciales
         CAMPOS_IGNORAR_REVISION = {
-            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento"
+            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento", "discrepancia_excel"
         }
         if detalles_campos and isinstance(detalles_campos, dict):
+            # Discrepancia crítica explícita entre Cédula física y Planilla Excel
+            if "discrepancia_excel" in detalles_campos:
+                disc = detalles_campos["discrepancia_excel"]
+                if isinstance(disc, dict):
+                    nom_c = disc.get("nombre_cedula", "")
+                    nom_e = disc.get("nombre_excel", "")
+                    mot_disc = disc.get("motivo") or f"Discrepancia en nombre/apellidos: La Cédula física indica '{nom_c}' pero la Planilla Excel indica '{nom_e}'"
+                else:
+                    mot_disc = str(disc)
+                if mot_disc not in motivos:
+                    motivos.append(mot_disc)
+
             for campo, info in detalles_campos.items():
                 if campo in CAMPOS_IGNORAR_REVISION:
                     continue

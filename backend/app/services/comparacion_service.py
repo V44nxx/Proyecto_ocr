@@ -219,6 +219,13 @@ class ComparacionService:
         if c_bd == c_excel:
             return True
 
+        # Si las palabras sustantivas únicas coinciden (ej. persona con apellidos repetidos legítimos
+        # como RODRIGUEZ RODRIGUEZ en ambos lados, o simplificado en uno de ellos sin apellidos foráneos)
+        s_bd = set(w_bd)
+        s_excel = set(w_excel)
+        if s_bd == s_excel and len(s_bd) >= 2:
+            return True
+
         # Intersección y diferencias multiconjunto respetando frecuencias de palabras
         c_inter = c_bd & c_excel
         c_diff_bd = c_bd - c_excel

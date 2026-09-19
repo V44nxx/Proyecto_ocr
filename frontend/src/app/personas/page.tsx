@@ -18,7 +18,15 @@ import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEda
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
-  const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
+  const t = (tipo || "").toUpperCase().trim();
+  if (!t || t === "UNKNOWN") {
+    return {
+      codigo: "?",
+      label: "Por verificar",
+      badge: "bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 font-bold shadow-sm",
+      pill: "bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 font-semibold shadow-sm",
+    };
+  }
   if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
     return {
       codigo: "CT",

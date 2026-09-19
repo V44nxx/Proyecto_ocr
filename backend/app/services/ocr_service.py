@@ -929,7 +929,7 @@ class OCRService:
                 confianza=confianza,
                 detalles_campos=detalles_payload,
                 motor_ocr=ocr_engine,
-                tipo_documento=datos.get("tipo_documento", "CEDULA_CIUDADANIA"),
+                tipo_documento=datos.get("tipo_documento") or "UNKNOWN",
             )
 
             requiere_revision = not tiene_datos_completos or bool(discrepancia_nombre_excel) or bool(detalles_payload.get("discrepancia_documento_edad"))
@@ -961,7 +961,7 @@ class OCRService:
                     lugar_expedicion=datos.get("lugar_expedicion"),
                     sexo=(datos.get("sexo") or "")[:10] if datos.get("sexo") else None,
                     pagina_numero=pagina_num,
-                    tipo_documento=datos.get("tipo_documento", "CEDULA_CIUDADANIA"),
+                    tipo_documento=datos.get("tipo_documento") or "UNKNOWN",
                     estado_registro=estado_reg,
                     motor_ocr=ocr_engine,
                     confianza_extraccion=confianza,
@@ -1015,8 +1015,14 @@ class OCRService:
                 if (not persona.lugar_expedicion or persona.lugar_expedicion in ["COLOMBIA", "REPUBLICA DE COLOMBIA"]) and datos.get("lugar_expedicion"):
                     persona.lugar_expedicion = datos["lugar_expedicion"]
 
-                if datos.get("tipo_documento") and datos["tipo_documento"] != "CEDULA_CIUDADANIA":
-                    persona.tipo_documento = datos["tipo_documento"]
+                # Resolver tipo_documento usando prioridad: TI > CC > UNKNOWN
+                # Nunca dejar que CEDULA_CIUDADANIA sobrescriba TARJETA_IDENTIDAD
+                from app.services.document_pairing_service import _resolver_tipo_documento as _res_tipo
+                nuevo_tipo = datos.get("tipo_documento") or "UNKNOWN"
+                actual_tipo = persona.tipo_documento or "UNKNOWN"
+                tipo_resuelto = _res_tipo(actual_tipo, nuevo_tipo)
+                if tipo_resuelto and tipo_resuelto != "UNKNOWN":
+                    persona.tipo_documento = tipo_resuelto
                 if not persona.sexo and datos.get("sexo"):
                     persona.sexo = str(datos["sexo"])[:10]
 
@@ -1158,7 +1164,7 @@ class OCRService:
                         "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else None,
                         "lugar_expedicion": p.lugar_expedicion,
                         "sexo": p.sexo,
-                        "tipo_documento": p.tipo_documento or "CEDULA_CIUDADANIA",
+                        "tipo_documento": p.tipo_documento or "UNKNOWN",
                         "estado_registro": p.estado_registro or "VALID",
                         "confianza_extraccion": float(p.confianza_extraccion or 0),
                         "requiere_revision": bool(p.requiere_revision),

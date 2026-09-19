@@ -18,6 +18,7 @@ import re
 from typing import Optional, Dict, Any, List, Tuple
 from app.utils.validators import validador
 from app.utils.logger import app_logger as logger
+from app.services.document_pairing_service import _resolver_tipo_documento
 from app.services.spatial_field_extractor import spatial_field_extractor
 from app.services.colombia_geo_service import colombia_geo
 
@@ -660,7 +661,9 @@ class ExtractorService:
         elif tipo_f == "PASAPORTE" or tipo_b == "PASAPORTE":
             tipo_doc_grupo = "PASAPORTE"
         else:
-            tipo_doc_grupo = tipo_f or tipo_b or getattr(group, "tipo_documento", "CEDULA_CIUDADANIA")
+            tipo_doc_grupo = _resolver_tipo_documento(tipo_f or "UNKNOWN", tipo_b or "UNKNOWN")
+            if tipo_doc_grupo == "UNKNOWN":
+                tipo_doc_grupo = getattr(group, "tipo_documento", "UNKNOWN") or "UNKNOWN"
 
         es_cedula_digital = (
             front_data.get("tipo_documento") == "CEDULA_DIGITAL"

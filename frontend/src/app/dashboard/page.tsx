@@ -17,7 +17,14 @@ import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
 import type { DashboardStats, Documento, Persona } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
-  const t = (tipo || "CEDULA_CIUDADANIA").toUpperCase();
+  const t = (tipo || "").toUpperCase().trim();
+  if (!t || t === "UNKNOWN") {
+    return {
+      codigo: "?",
+      label: "Por verificar",
+      badge: "bg-gray-100 dark:bg-gray-800/60 border-2 border-gray-400 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-black shadow-sm",
+    };
+  }
   if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
     return {
       codigo: "CT",

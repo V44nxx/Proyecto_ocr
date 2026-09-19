@@ -6,6 +6,31 @@ coincidencia de ID (MRZ vs NUIP), tipo documental, secuencia FRONT-BACK y proxim
 from typing import List, Dict, Any, Optional
 from app.utils.logger import app_logger as logger
 
+# Orden de prioridad para resolver conflictos entre las dos caras del documento.
+# Un tipo más específico (ej: TARJETA_IDENTIDAD) siempre gana frente a UNKNOWN.
+_PRIORIDAD_TIPO_DOC = {
+    "TARJETA_IDENTIDAD": 10,
+    "CEDULA_EXTRANJERIA": 8,
+    "PASAPORTE": 8,
+    "CEDULA_DIGITAL": 6,
+    "CEDULA_CIUDADANIA": 5,
+    "UNKNOWN": 0,
+}
+
+
+def _resolver_tipo_documento(tipo_a: str, tipo_b: str) -> str:
+    """
+    Devuelve el tipo de documento más específico entre dos caras del mismo documento.
+    Si uno es UNKNOWN, gana el otro. Si ambos son concretos y diferentes, gana el de mayor prioridad.
+    """
+    if not tipo_a or tipo_a == "UNKNOWN":
+        return tipo_b if (tipo_b and tipo_b != "UNKNOWN") else "UNKNOWN"
+    if not tipo_b or tipo_b == "UNKNOWN":
+        return tipo_a
+    prio_a = _PRIORIDAD_TIPO_DOC.get(tipo_a, 1)
+    prio_b = _PRIORIDAD_TIPO_DOC.get(tipo_b, 1)
+    return tipo_a if prio_a >= prio_b else tipo_b
+
 
 class DocumentGroup:
     """Representa un documento físico reconstruido a partir de 1 o más páginas/caras"""
@@ -18,7 +43,7 @@ class DocumentGroup:
         self.reasons: List[str] = []
         self.status: str = "VALID"
         self.numero_identificacion: Optional[str] = None
-        self.tipo_documento: str = "CEDULA_CIUDADANIA"
+        self.tipo_documento: str = "UNKNOWN"
 
     @property
     def pages(self) -> List[int]:
@@ -74,14 +99,17 @@ class DocumentPairingService:
         id_back = validador.limpiar_identificacion(b_page.get("numero_identificacion"))
 
         # 1. Validación de Tipo de Documento
-        tipo_f = f_page.get("tipo_documento", "CEDULA_CIUDADANIA")
-        tipo_b = b_page.get("tipo_documento", "CEDULA_CIUDADANIA")
-        if tipo_f != "UNKNOWN" and tipo_b != "UNKNOWN" and tipo_f != tipo_b:
+        tipo_f = f_page.get("tipo_documento") or "UNKNOWN"
+        tipo_b = b_page.get("tipo_documento") or "UNKNOWN"
+        # Normalizar: si uno es UNKNOWN no se puede contradecir
+        tipo_f_real = tipo_f if tipo_f != "UNKNOWN" else None
+        tipo_b_real = tipo_b if tipo_b != "UNKNOWN" else None
+        if tipo_f_real and tipo_b_real and tipo_f_real != tipo_b_real:
             # Tipos contradictorios (ej: Cédula vs Tarjeta de Identidad)
             return 0.10, [f"Conflicto de tipo documental: Front '{tipo_f}' vs Back '{tipo_b}'"]
-        elif tipo_f == tipo_b and tipo_f != "UNKNOWN":
+        elif tipo_f_real and tipo_b_real and tipo_f_real == tipo_b_real:
             score += 0.20
-            reasons.append(f"Mismo tipo de documento '{tipo_f}'")
+            reasons.append(f"Mismo tipo de documento '{tipo_f_real}'")
 
         # 2. Coincidencia de Número de Cédula (con tolerancia difusa para errores de OCR)
         if id_front and id_back:
@@ -153,7 +181,7 @@ class DocumentPairingService:
                 grp.back_page = p
             else:
                 grp.front_page = p
-            grp.tipo_documento = p.get("tipo_documento", "CEDULA_CIUDADANIA")
+            grp.tipo_documento = p.get("tipo_documento") or "UNKNOWN"
             grp.numero_identificacion = validador.limpiar_identificacion(p.get("numero_identificacion"))
             grp.grouping_confidence = 0.95 if grp.numero_identificacion else 0.40
             grp.status = "VALID" if (grp.numero_identificacion and "UNKNOWN" not in str(grp.tipo_documento)) else "REVIEW_REQUIRED"
@@ -240,7 +268,10 @@ class DocumentPairingService:
                     grp = DocumentGroup(f"DOC-{counter:03d}")
                     grp.front_page = f_p
                     grp.back_page = b_p
-                    grp.tipo_documento = f_p.get("tipo_documento", "CEDULA_CIUDADANIA")
+                    # Priorizar el tipo más específico: TI > CC/CE/PASAPORTE > UNKNOWN
+                    tipo_f_g = f_p.get("tipo_documento") or "UNKNOWN"
+                    tipo_b_g = b_p.get("tipo_documento") or "UNKNOWN"
+                    grp.tipo_documento = _resolver_tipo_documento(tipo_f_g, tipo_b_g)
                     grp.numero_identificacion = id_unificado
                     grp.grouping_confidence = round(aff, 2)
                     grp.reasons = reasons_matrix[f_idx][b_idx] or [f"Frente (Pág {f_p.get('pagina_numero')}) + Reverso (Pág {b_p.get('pagina_numero')}) emparejados globalmente"]
@@ -257,7 +288,7 @@ class DocumentPairingService:
                 id_f = validador.limpiar_identificacion(f_p.get("numero_identificacion"))
                 grp = DocumentGroup(f"DOC-{counter:03d}")
                 grp.front_page = f_p
-                grp.tipo_documento = f_p.get("tipo_documento", "CEDULA_CIUDADANIA")
+                grp.tipo_documento = f_p.get("tipo_documento") or "UNKNOWN"
                 grp.numero_identificacion = id_f
                 grp.grouping_confidence = 0.90 if id_f else 0.40
                 grp.reasons = [f"Pág {f_p.get('pagina_numero')} — frente sin reverso"]
@@ -270,7 +301,7 @@ class DocumentPairingService:
             id_s = validador.limpiar_identificacion(s_p.get("numero_identificacion"))
             grp = DocumentGroup(f"DOC-{counter:03d}")
             grp.front_page = s_p
-            grp.tipo_documento = s_p.get("tipo_documento", "CEDULA_CIUDADANIA")
+            grp.tipo_documento = s_p.get("tipo_documento") or "UNKNOWN"
             grp.numero_identificacion = id_s
             grp.grouping_confidence = 0.99
             grp.reasons = [f"Pág {s_p.get('pagina_numero')} contiene ambas caras (AMBOS_LADOS)"]

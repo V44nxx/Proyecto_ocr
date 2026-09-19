@@ -41,10 +41,12 @@ NO_NOMBRE_HEADER = re.compile(
     r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
     r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
     r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b|"
-    r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b)",
+    r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b|"
+    # Ciudades/departamentos colombianos fusionados por OCR en membretes
+    r"FLORENCIACAQUET|FLORENCIA[\-]CAQUET|ARMENIA[\-]?QUIND|NEIVA[\-]?HUILA|MOCOA[\-]?PUTUMAYO|"
+    r"LETICIA[\-]?AMAZON|TUNJA[\-]?BOYAC|YOPAL[\-]?CASAR|ARAUCA[\-]?ARAUCA)",
     re.IGNORECASE
 )
-
 
 
 class ExtractorService:
@@ -968,16 +970,21 @@ class ExtractorService:
                     logger.debug(f"Cédula por código de barras reverso: {num_bar}")
                     return num_bar
 
-        # Estrategia 1: Por keyword (en misma línea o línea adyacente)
+        # Estrategia 1: Por keyword (en misma línea o líneas adyacentes)
+        # Regex ampliado: captura formatos con espacios entre grupos: 1. 125. 182. 543
         patron_num = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
         for idx_l, l in enumerate(lineas):
             for keyword in self.KEYWORDS_IDENTIFICACION:
                 if re.search(rf"\b{keyword}\b", l, re.IGNORECASE):
                     # Revisar línea actual
                     m = patron_num.search(l)
-                    # Si no hay dígitos en la línea del label, revisar línea siguiente
-                    if not m and idx_l + 1 < len(lineas):
-                        m = patron_num.search(lineas[idx_l + 1])
+                    # Si no hay dígitos en la línea del label, revisar hasta 3 líneas siguientes
+                    if not m:
+                        for offset in range(1, 4):
+                            if idx_l + offset < len(lineas):
+                                m = patron_num.search(lineas[idx_l + offset])
+                                if m:
+                                    break
                     if m:
                         numero = re.sub(r"[\s\.,]", "", m.group(1))
                         valido, numero_limpio = validador.validar_cedula(numero)

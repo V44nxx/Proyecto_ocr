@@ -134,7 +134,10 @@ class SpatialFieldExtractor:
         r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
         r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
         r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b|"
-        r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b)",
+        r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b|"
+        # Ciudades/departamentos colombianos fusionados por OCR en membretes institucionales
+        r"FLORENCIACAQUET|FLORENCIA[\-]CAQUET|ARMENIA[\-]?QUIND|NEIVA[\-]?HUILA|MOCOA[\-]?PUTUMAYO|"
+        r"LETICIA[\-]?AMAZON|TUNJA[\-]?BOYAC|YOPAL[\-]?CASAR|ARAUCA[\-]?ARAUCA)",
         re.IGNORECASE
     )
 

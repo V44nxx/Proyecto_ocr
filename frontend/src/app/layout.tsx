@@ -3,6 +3,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { SidebarProvider } from "@/context/SidebarContext";
+import BannerProcesoActivo from "@/components/ui/BannerProcesoActivo";
 
 export const metadata: Metadata = {
   title: "Sistema OCR | Documentos Colombianos",
@@ -42,6 +43,7 @@ export default function RootLayout({
         <ThemeProvider>
           <SidebarProvider>
             {children}
+            <BannerProcesoActivo />
             <Toaster
               position="top-right"
               toastOptions={{

@@ -51,10 +51,35 @@ export default function DocumentosPage() {
   const [comparacionEnProgreso, setComparacionEnProgreso] = useState(false);
   const [cargando, setCargando] = useState(true);
 
+  // ─── Constante para persistencia de progreso en localStorage ───────────────
+  const LS_DOCS_EN_PROCESO = "ocr_docs_en_proceso";
+  const LS_FASE_ACTUAL = "ocr_fase_actual";
+
+  // Cargar estado previo de localStorage (si el usuario navegó y vuelve)
+  const _leerEstadoPersistido = (): { docs: DocTracking[]; fase: string } => {
+    if (typeof window === "undefined") return { docs: [], fase: "inactivo" };
+    try {
+      const rawDocs = localStorage.getItem(LS_DOCS_EN_PROCESO);
+      const rawFase = localStorage.getItem(LS_FASE_ACTUAL);
+      const docs: DocTracking[] = rawDocs ? JSON.parse(rawDocs) : [];
+      const fase = rawFase || "inactivo";
+      // Solo restaurar si hay docs en proceso real (procesando/pendiente)
+      const tieneActivos = docs.some((d) => d.estado === "procesando" || d.estado === "pendiente");
+      if (!tieneActivos) return { docs: [], fase: "inactivo" };
+      return { docs, fase };
+    } catch {
+      return { docs: [], fase: "inactivo" };
+    }
+  };
+
+  const estadoPersistido = typeof window !== "undefined" ? _leerEstadoPersistido() : { docs: [], fase: "inactivo" };
+
   // Estado para el seguimiento de subida y extracción OCR en vivo
-  const [docsEnProceso, setDocsEnProceso] = useState<DocTracking[]>([]);
-  const [mostrandoProgreso, setMostrandoProgreso] = useState(false);
-  const [faseActual, setFaseActual] = useState<"inactivo" | "subiendo" | "procesando" | "completado" | "error">("inactivo");
+  const [docsEnProceso, setDocsEnProceso] = useState<DocTracking[]>(estadoPersistido.docs);
+  const [mostrandoProgreso, setMostrandoProgreso] = useState(estadoPersistido.docs.length > 0);
+  const [faseActual, setFaseActual] = useState<"inactivo" | "subiendo" | "procesando" | "completado" | "error">(
+    (estadoPersistido.fase as any) || "inactivo"
+  );
   const [progresoSubida, setProgresoSubida] = useState(0);
   const [bytesSubidos, setBytesSubidos] = useState(0);
   const [bytesTotales, setBytesTotales] = useState(0);
@@ -67,6 +92,20 @@ export default function DocumentosPage() {
   const [cuentaAtrasRedireccion, setCuentaAtrasRedireccion] = useState<number | null>(null);
   const canceladoRedireccionRef = useRef<boolean>(false);
   const redireccionIniciadaRef = useRef<boolean>(false);
+
+  // Persistir docsEnProceso y faseActual en localStorage siempre que cambien
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tieneActivos = docsEnProceso.some((d) => d.estado === "procesando" || d.estado === "pendiente");
+    if (tieneActivos) {
+      localStorage.setItem(LS_DOCS_EN_PROCESO, JSON.stringify(docsEnProceso));
+      localStorage.setItem(LS_FASE_ACTUAL, faseActual);
+    } else {
+      // Limpiar si ya no hay nada activo
+      localStorage.removeItem(LS_DOCS_EN_PROCESO);
+      localStorage.removeItem(LS_FASE_ACTUAL);
+    }
+  }, [docsEnProceso, faseActual]);
 
   const cargarDocumentos = async () => {
     try {

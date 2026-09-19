@@ -667,14 +667,23 @@ function PersonasContent() {
 
           {/* Imagen */}
           <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-200/50 dark:bg-slate-950/50 min-h-[260px] max-h-[480px]">
-            {!docId ? (
-              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center">
-                <ImageOff className="w-8 h-8 text-slate-700" />
-                <p className="text-xs text-slate-500">Sin documento PDF asociado</p>
+            {!docId || p.en_pdf === false ? (
+              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center px-4">
+                <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center border border-amber-500/30">
+                  <ImageOff className="w-6 h-6 text-amber-500" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                    No se encontró en el PDF
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
+                    Esta persona figura en la planilla oficial de Excel pero no fue detectada en las páginas del PDF adjunto. Puede asociar o subir su cédula en PDF individualmente si la tiene disponible.
+                  </p>
+                </div>
                 <button
                   onClick={() => abrirSubirPdf(p)}
                   disabled={subiendoPdfId === p.id}
-                  className="px-3 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                  className="px-3 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
                   title="Subir documento PDF de la cédula para extraer datos automáticamente"
                 >
                   {subiendoPdfId === p.id ? (
@@ -897,17 +906,17 @@ function PersonasContent() {
               </div>
             )}
 
-            {/* Alerta: Sin Documento PDF */}
+            {/* Alerta: Sin Documento PDF / No se encontró en el PDF */}
             {(!p.documento_id || p.en_pdf === false) && (
-              <div className="m-2.5 p-3.5 rounded-xl bg-sky-100/90 dark:bg-sky-950/60 border-2 border-sky-600 dark:border-sky-500 text-sky-950 dark:text-sky-100 min-w-0 shadow-sm">
+              <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500/70 text-amber-950 dark:text-amber-100 min-w-0 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <FileText className="w-4 h-4 text-sky-900 dark:text-sky-300 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider text-sky-950 dark:text-sky-200">
-                    Alerta: Sin Documento PDF Asociado
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                    Alerta: No se encontró en el PDF
                   </span>
                 </div>
-                <p className="text-xs text-sky-950 dark:text-sky-100 ml-6 break-words font-semibold leading-relaxed">
-                  Este registro fue creado manualmente o desde Excel y no cuenta con un archivo PDF vinculado. Puede subirlo con el botón &quot;Subir PDF Cédula&quot;.
+                <p className="text-xs text-amber-900 dark:text-amber-100 ml-6 break-words font-semibold leading-relaxed">
+                  Esta persona figura en la planilla oficial de Excel pero no fue encontrada en el documento PDF adjunto. Se cargaron los datos provistos en el Excel para su verificación.
                 </p>
               </div>
             )}
@@ -1963,10 +1972,10 @@ function PersonasContent() {
                               {/* Alerta: Falta en PDF */}
                               {(!p.documento_id || p.en_pdf === false) && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                  title="No tiene documento PDF de cédula asociado"
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
+                                  title="No se encontró en el PDF (datos cargados desde la planilla Excel)"
                                 >
-                                  <FileText className="w-2.5 h-2.5" /> NO EN PDF
+                                  <FileText className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> NO EN PDF
                                 </span>
                               )}
 
@@ -1985,7 +1994,7 @@ function PersonasContent() {
                                 const esRevRow = esPersonaEnRevision(p);
                                 const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
                                 const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
-                                const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || "Requiere revisión manual de datos";
+                                const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || (p.detalles_campos as any)?.motivo_no_en_pdf || (p.detalles_campos as any)?.motivos_revision?.[0] || "Requiere revisión manual de datos";
 
                                 if (esRevRow) {
                                   return (

@@ -36,6 +36,256 @@ def _validar_pdf(file: UploadFile):
         )
 
 
+def _registrar_personas_excel_faltantes(
+    items: List[dict],
+    excel_path: str,
+    db: Session,
+):
+    """
+    Identifica las personas que se encuentran en la planilla oficial de Excel
+    pero que no aparecieron en ninguno de los PDFs procesados en este lote.
+    Inserta o actualiza dichos registros en la base de datos con los datos de la
+    planilla, marcándolos en estado de revisión y con la alerta de que no se encontraron en el PDF.
+    """
+    from decimal import Decimal
+    from app.models.persona import Persona
+    from app.models.documento import Documento
+    from app.services.comparacion_service import comparacion_service
+    from app.utils.validators import validador
+
+    if not items or not excel_path or not Path(excel_path).exists():
+        return
+
+    doc_ids = [item["documento_id"] for item in items]
+    doc_principal = db.query(Documento).filter(Documento.id == doc_ids[0]).first()
+    if not doc_principal:
+        return
+    doc_principal_id = doc_principal.id
+    usuario_id = doc_principal.usuario_id
+
+    # 1. Cargar todas las personas de la planilla Excel
+    try:
+        df_excel = comparacion_service.cargar_excel(excel_path)
+    except Exception as e:
+        logger.warning(f"[PersonasFaltantesExcel] No se pudo leer Excel {excel_path}: {e}")
+        return
+
+    if df_excel is None or df_excel.empty or "numero_identificacion" not in df_excel.columns:
+        return
+
+    # 2. Obtener las personas que SÍ fueron detectadas/guardadas en los PDFs de este lote
+    personas_lote = db.query(Persona).filter(Persona.documento_id.in_(doc_ids)).all()
+    ids_detectados_ocr = {
+        comparacion_service._limpiar_numero_id(p.numero_identificacion)
+        for p in personas_lote
+        if p.numero_identificacion
+    }
+    nombres_detectados_ocr = [
+        (p.nombre_completo or f"{p.nombres or ''} {p.apellidos or ''}").strip()
+        for p in personas_lote
+    ]
+
+    personas_agregadas = 0
+
+    # 3. Iterar registros del Excel y cotejar
+    for _, row in df_excel.iterrows():
+        id_excel = comparacion_service._limpiar_numero_id(row.get("numero_identificacion"))
+        if not id_excel or len(id_excel) < 5:
+            continue
+
+        if id_excel in ids_detectados_ocr:
+            continue
+
+        nom_excel = str(row.get("nombre_completo") or "").strip()
+        if not nom_excel:
+            nom_p = str(row.get("nombres") or "").strip()
+            ape_p = str(row.get("apellidos") or "").strip()
+            nom_excel = f"{nom_p} {ape_p}".strip()
+
+        coincide_por_nombre = False
+        if nom_excel and len(nom_excel) >= 4:
+            for nom_ocr in nombres_detectados_ocr:
+                if nom_ocr and comparacion_service._son_nombres_equivalentes(
+                    nombres_bd=nom_ocr,
+                    apellidos_bd="",
+                    nombres_excel=nom_excel,
+                    apellidos_excel=""
+                ):
+                    coincide_por_nombre = True
+                    break
+
+        if coincide_por_nombre:
+            continue
+
+        # Esta persona ESTÁ en el Excel pero NO en el PDF.
+        nombres_val = str(row.get("nombres") or "").strip() or nom_excel
+        apellidos_val = str(row.get("apellidos") or "").strip()
+        lugar_exp = str(row.get("lugar_expedicion") or "").strip() or None
+        sexo_raw = str(row.get("sexo") or "").strip()
+        sexo_val = validador.normalizar_sexo(sexo_raw) if sexo_raw else None
+
+        fecha_nac = None
+        if row.get("fecha_nacimiento"):
+            fecha_nac = validador.parsear_fecha(str(row["fecha_nacimiento"]))
+
+        fecha_exp = None
+        if row.get("fecha_expedicion"):
+            fecha_exp = validador.parsear_fecha(str(row["fecha_expedicion"]))
+
+        tipo_doc_raw = str(row.get("tipo_documento") or "").strip().upper()
+        if tipo_doc_raw:
+            tipo_doc = tipo_doc_raw
+        elif fecha_nac:
+            edad = validador.calcular_edad(fecha_nac)
+            tipo_doc = "TARJETA_IDENTIDAD" if (edad is not None and edad < 18) else "CEDULA_CIUDADANIA"
+        else:
+            tipo_doc = "CEDULA_CIUDADANIA"
+
+        motivo_alerta = (
+            "No se encontró en el PDF: Esta persona figura en la planilla oficial de Excel "
+            "pero no fue detectada en el documento PDF adjunto."
+        )
+
+        detalles_payload = {
+            "en_pdf": False,
+            "origen": "excel_no_encontrado_en_pdf",
+            "motivo_no_en_pdf": "No se encontró en el PDF",
+            "motivos_revision": [motivo_alerta],
+            "numero_identificacion": {
+                "valor": id_excel,
+                "confidence": 1.0,
+                "status": "VALID",
+                "source": "excel_oficial",
+            },
+            "nombre_completo": {
+                "valor": nom_excel,
+                "confidence": 1.0,
+                "status": "VALID",
+                "source": "excel_oficial",
+            },
+        }
+        if nombres_val:
+            detalles_payload["nombres"] = {"valor": nombres_val, "status": "VALID", "source": "excel_oficial"}
+        if apellidos_val:
+            detalles_payload["apellidos"] = {"valor": apellidos_val, "status": "VALID", "source": "excel_oficial"}
+        if fecha_nac:
+            detalles_payload["fecha_nacimiento"] = {"valor": fecha_nac.isoformat(), "status": "VALID", "source": "excel_oficial"}
+        if fecha_exp:
+            detalles_payload["fecha_expedicion"] = {"valor": fecha_exp.isoformat(), "status": "VALID", "source": "excel_oficial"}
+        if lugar_exp:
+            detalles_payload["lugar_expedicion"] = {"valor": lugar_exp, "status": "VALID", "source": "excel_oficial"}
+        if sexo_val:
+            detalles_payload["sexo"] = {"valor": sexo_val, "status": "VALID", "source": "excel_oficial"}
+
+        query_p = db.query(Persona).filter(Persona.numero_identificacion == id_excel)
+        if usuario_id:
+            query_p = query_p.filter(Persona.usuario_id == usuario_id)
+        persona_db = query_p.first()
+
+        if persona_db:
+            persona_db.documento_id = doc_principal_id
+            persona_db.nombre_completo = nom_excel
+            persona_db.nombres = nombres_val
+            persona_db.apellidos = apellidos_val
+            if fecha_nac:
+                persona_db.fecha_nacimiento = fecha_nac
+            if fecha_exp:
+                persona_db.fecha_expedicion = fecha_exp
+            if lugar_exp:
+                persona_db.lugar_expedicion = lugar_exp
+            if sexo_val:
+                persona_db.sexo = sexo_val
+            persona_db.tipo_documento = tipo_doc
+            persona_db.requiere_revision = True
+            persona_db.estado_registro = "REVIEW_REQUIRED"
+            persona_db.motor_ocr = "excel"
+            persona_db.pagina_frente = None
+            persona_db.pagina_reverso = None
+            persona_db.pagina_numero = None
+            persona_db.detalles_campos = detalles_payload
+            persona_db.texto_ocr_crudo = "[Registro cargado desde planilla Excel - No encontrado en PDF]"
+            logger.info(
+                f"[PersonasFaltantesExcel] Actualizada persona existente {id_excel} ({nom_excel}) como faltante en PDF"
+            )
+        else:
+            import uuid as uuid_pkg
+            ahora = datetime.utcnow()
+            nueva_p = Persona(
+                id=uuid_pkg.uuid4(),
+                documento_id=doc_principal_id,
+                usuario_id=usuario_id,
+                grupo_documento_id="EXCEL-SIN-PDF",
+                pagina_frente=None,
+                pagina_reverso=None,
+                pagina_numero=None,
+                numero_identificacion=id_excel,
+                nombre_completo=nom_excel,
+                nombres=nombres_val,
+                apellidos=apellidos_val,
+                fecha_nacimiento=fecha_nac,
+                fecha_expedicion=fecha_exp,
+                lugar_expedicion=lugar_exp,
+                sexo=sexo_val,
+                tipo_documento=tipo_doc,
+                estado_registro="REVIEW_REQUIRED",
+                motor_ocr="excel",
+                confianza_extraccion=Decimal("100.00"),
+                requiere_revision=True,
+                detalles_campos=detalles_payload,
+                texto_ocr_crudo="[Registro cargado desde planilla Excel - No encontrado en PDF]",
+                fecha_registro=ahora,
+                fecha_actualizacion=ahora,
+            )
+            db.add(nueva_p)
+            logger.info(
+                f"[PersonasFaltantesExcel] Creada nueva persona {id_excel} ({nom_excel}) con datos de Excel y alerta 'No se encontró en el PDF'"
+            )
+
+        personas_agregadas += 1
+
+    db.commit()
+
+    if personas_agregadas > 0:
+        personas_todas = db.query(Persona).filter(Persona.documento_id == doc_principal_id).all()
+        snapshot_personas = []
+        for p in personas_todas:
+            snapshot_personas.append({
+                "id": str(p.id),
+                "documento_id": str(doc_principal_id),
+                "nombre_documento": doc_principal.nombre_original,
+                "numero_identificacion": p.numero_identificacion,
+                "nombre_completo": p.nombre_completo,
+                "nombres": p.nombres,
+                "apellidos": p.apellidos,
+                "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else None,
+                "edad": p.edad,
+                "fecha_expedicion": p.fecha_expedicion.isoformat() if p.fecha_expedicion else None,
+                "lugar_expedicion": p.lugar_expedicion,
+                "sexo": p.sexo,
+                "tipo_documento": p.tipo_documento or "UNKNOWN",
+                "estado_registro": p.estado_registro or "VALID",
+                "confianza_extraccion": float(p.confianza_extraccion or 0),
+                "requiere_revision": bool(p.requiere_revision),
+                "pagina_frente": p.pagina_frente,
+                "pagina_reverso": p.pagina_reverso,
+                "pagina_numero": p.pagina_numero,
+                "motor_ocr": p.motor_ocr,
+                "detalles_campos": p.detalles_campos,
+            })
+
+        meta = dict(doc_principal.metadatos or {})
+        meta.update({
+            "personas_extraidas": len(snapshot_personas),
+            "personas_extraidas_datos": snapshot_personas,
+            "paso": f"Extracción completada con éxito ({len(snapshot_personas)} personas totales)",
+        })
+        doc_principal.metadatos = meta
+        db.commit()
+        logger.info(
+            f"[PersonasFaltantesExcel] {personas_agregadas} persona(s) de Excel sin PDF registradas. Total documento: {len(snapshot_personas)}"
+        )
+
+
 def _procesar_batch_ocr_y_comparacion(
     items: List[dict],
     comparacion_id: Optional[str] = None,
@@ -45,6 +295,7 @@ def _procesar_batch_ocr_y_comparacion(
     Tarea en segundo plano que procesa el OCR de un lote de documentos secuencialmente.
     - Carga la planilla Excel para enriquecer nombres oficiales de las personas durante OCR.
     - Procesa cada documento PDF del lote.
+    - Registra personas que estén en el Excel pero no en el PDF marcándolas para revisión.
     - Al finalizar el OCR de todos los documentos del lote, ejecuta la comparacion automatica
       en el módulo de Comparación una sola vez con todos los datos consolidados.
     """
@@ -82,6 +333,18 @@ def _procesar_batch_ocr_y_comparacion(
                 logger.info(f"[OCR Batch Background] OCR completado para Doc ID: {doc_id}")
             except Exception as e_ocr:
                 logger.error(f"[OCR Batch Background] Error procesando OCR Doc ID {doc_id}: {e_ocr}")
+
+        # ── Registrar personas en Excel que NO están en los PDFs del lote ──
+        if excel_path and items:
+            try:
+                logger.info(f"[OCR Batch Background] Verificando personas de Excel no encontradas en PDF...")
+                _registrar_personas_excel_faltantes(
+                    items=items,
+                    excel_path=excel_path,
+                    db=db,
+                )
+            except Exception as e_falt:
+                logger.error(f"[OCR Batch Background] Error registrando personas faltantes de Excel: {e_falt}")
 
         # ── Ejecutar comparación automática si se adjuntó planilla Excel ─
         if comparacion_id and excel_path:
@@ -327,7 +590,14 @@ def listar_personas_documento(
                 )
 
             p_data = dict(s)
-            p_data["en_pdf"] = True
+            det_s = dict(s.get("detalles_campos") or {})
+            if det_s.get("en_pdf") is False or s.get("motor_ocr") == "excel":
+                p_data["en_pdf"] = False
+                p_data["requiere_revision"] = True
+                if not p_data.get("estado_registro") or p_data.get("estado_registro") == "VALID":
+                    p_data["estado_registro"] = "REVIEW_REQUIRED"
+            else:
+                p_data["en_pdf"] = True
             p_data["en_excel"] = en_excel
             if "fecha_registro" not in p_data or not p_data["fecha_registro"]:
                 p_data["fecha_registro"] = documento.fecha_carga

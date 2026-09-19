@@ -175,9 +175,18 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     r = PersonaResponse.model_validate(p)
     if r.numero_identificacion and r.numero_identificacion.startswith("SIN_ID"):
         r.numero_identificacion = ""
-    r.en_pdf = p.documento_id is not None
 
     detalles = dict(p.detalles_campos or {})
+
+    # Evaluar presencia real en el documento PDF
+    if detalles.get("en_pdf") is False or p.motor_ocr == "excel":
+        r.en_pdf = False
+        r.requiere_revision = True
+        if not r.estado_registro or r.estado_registro == "VALID":
+            r.estado_registro = "REVIEW_REQUIRED"
+    else:
+        r.en_pdf = p.documento_id is not None
+
     disc_excel = detalles.get("discrepancia_excel")
     if isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
         nom_ex_ofic = disc_excel["nombre_excel"].strip()

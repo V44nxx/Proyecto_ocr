@@ -115,6 +115,12 @@ class ComparacionService:
         "sexo": "sexo",
         "genero": "sexo",
         "sex": "sexo",
+
+        # Tipo de Documento
+        "tipo_documento": "tipo_documento",
+        "tipo_de_documento": "tipo_documento",
+        "tipo_doc": "tipo_documento",
+        "tipo": "tipo_documento",
     }
 
     def _normalizar_nombre_columna(self, col: Any) -> str:
@@ -491,6 +497,13 @@ class ComparacionService:
             else:
                 personas_bd = db.query(Persona).all()
 
+            # Excluir registros que provienen exclusivamente del Excel y no del PDF físico
+            personas_bd_pdf = [
+                p for p in personas_bd
+                if not (isinstance(p.detalles_campos, dict) and p.detalles_campos.get("en_pdf") is False)
+                and p.motor_ocr != "excel"
+            ]
+
             df_bd = pd.DataFrame([{
                 "numero_identificacion": self._limpiar_numero_id(p.numero_identificacion),
                 "nombre_completo": getattr(p, "nombre_completo", None) if isinstance(getattr(p, "nombre_completo", None), str) else f"{getattr(p, 'nombres', '') or ''} {getattr(p, 'apellidos', '') or ''}".strip(),
@@ -503,7 +516,7 @@ class ComparacionService:
                 "pagina_numero": p.pagina_numero or 1,
                 "confianza_extraccion": float(p.confianza_extraccion or 0.0),
                 "estado_registro": p.estado_registro or "VALID",
-            } for p in personas_bd])
+            } for p in personas_bd_pdf])
 
             # Filtrar registros vacíos de BD
             if len(df_bd) > 0:

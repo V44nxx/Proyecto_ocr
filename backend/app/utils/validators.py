@@ -74,6 +74,8 @@ class ValidadorColombia:
         if not numero:
             return ""
         txt = str(numero).strip()
+        if txt.upper().startswith("SIN_ID"):
+            return ""
         txt = re.sub(r"^(C\.?C\.?|NUIP|NO\.?|N[UÚ]MERO|CEDULA|C[EÉ]DULA)\s*:?", "", txt, flags=re.IGNORECASE)
         txt = txt.replace(" ", "").replace(".", "").replace(",", "").replace("-", "").replace("_", "")
         m = re.search(r"\d{6,10}", txt)
@@ -499,13 +501,17 @@ class ValidadorColombia:
         motivos: List[str] = []
 
         # 1. Identificación
-        id_limpio = cls.limpiar_identificacion(str(numero_identificacion or ""))
-        if not id_limpio or id_limpio.startswith("SIN_ID"):
-            motivos.append("Número de identificación no reconocido o ausente")
+        id_str = str(numero_identificacion or "").strip()
+        if not id_str or id_str.upper().startswith("SIN_ID"):
+            motivos.append("Número de identificación no detectado en el documento (Requiere digitación manual)")
         else:
-            valida, msg_ced = cls.validar_cedula(id_limpio)
-            if not valida:
-                motivos.append(f"Número de identificación dudoso ({id_limpio}): {msg_ced}")
+            id_limpio = cls.limpiar_identificacion(id_str)
+            if not id_limpio:
+                motivos.append("Número de identificación no detectado en el documento (Requiere digitación manual)")
+            else:
+                valida, msg_ced = cls.validar_cedula(id_limpio)
+                if not valida:
+                    motivos.append(f"Número de identificación dudoso ({id_limpio}): {msg_ced}")
 
         # 2. Nombre Completo Unificado (Criterio Estricto)
         nom_c_str = str(nombre_completo or "").strip()

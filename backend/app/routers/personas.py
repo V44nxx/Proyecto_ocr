@@ -173,6 +173,8 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     from app.utils.validators import validador
 
     r = PersonaResponse.model_validate(p)
+    if r.numero_identificacion and r.numero_identificacion.startswith("SIN_ID"):
+        r.numero_identificacion = ""
     r.en_pdf = p.documento_id is not None
 
     detalles = dict(p.detalles_campos or {})

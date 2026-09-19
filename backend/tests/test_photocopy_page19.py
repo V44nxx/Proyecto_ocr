@@ -134,3 +134,66 @@ def test_deteccion_ti_multilinea_y_alerta_mayor_de_edad():
     assert "sola corresponde a menores de edad" in disc["motivo"] or "solo corresponde a menores de edad" in disc["motivo"]
 
 
+def test_cero_descarte_y_sin_id_en_blanco():
+    from unittest.mock import MagicMock
+    from app.services.ocr_service import ocr_service
+    from app.models.persona import Persona
+    import uuid
+
+    mock_db = MagicMock()
+    mock_db.query().filter().first.return_value = None
+
+    # Datos incompletos sin ID y sin nombres válidos
+    datos_incompletos = {
+        "grupo_documento_id": "DOC-002",
+        "pagina_frente": 2,
+        "pagina_reverso": None,
+        "identificacion": None,
+        "nombres": None,
+        "apellidos": None,
+        "nombre_completo": None,
+        "confianza_extraccion": 40.0,
+        "tipo_documento": "TARJETA_IDENTIDAD"
+    }
+
+    persona_dict = ocr_service._guardar_persona(
+        datos=datos_incompletos,
+        texto_ocr="Frente Pag 2 | Reverso None",
+        documento_id=str(uuid.uuid4()),
+        db=mock_db,
+        ocr_engine="google_document_ai",
+        pagina_num=2
+    )
+
+    # 1. Regla Cero Descarte: NUNCA debe retornar None
+    assert persona_dict is not None
+    # 2. No generar códigos artificiales SIN_ID_..., debe ser cadena vacía para edición limpia
+    assert persona_dict["numero_identificacion"] == ""
+    assert "SIN_ID" not in persona_dict["numero_identificacion"]
+    # 3. Requiere revisión obligatoria
+    assert persona_dict["requiere_revision"] is True
+    assert persona_dict["estado_registro"] == "REVIEW_REQUIRED"
+
+
+def test_evaluar_persona_completa_sin_id_no_genera_falsos_6_digitos():
+    from app.utils.validators import validador
+
+    completo, motivos = validador.evaluar_persona_completa(
+        numero_identificacion="",
+        nombres="NADIA YULIETH",
+        apellidos="QUIÑONES GOMEZ",
+        nombre_completo="NADIA YULIETH QUIÑONES GOMEZ",
+        fecha_nacimiento="2010-01-13",
+        fecha_expedicion="2017-06-29",
+        confianza=80.0,
+        tipo_documento="TARJETA_IDENTIDAD"
+    )
+
+    assert completo is False
+    assert any("no detectado" in m for m in motivos)
+    # NUNCA debe decir "Muy corto (6 dígitos)" por códigos hexadecimales de UUID
+    assert not any("Muy corto (6 dígitos)" in m for m in motivos)
+    assert not any("dudoso" in m for m in motivos)
+
+
+

@@ -455,11 +455,16 @@ class SpatialFieldExtractor:
                     if resultado_campos["identificacion"]["value"]:
                         break
 
-            # Fase 2.3: Búsqueda por escaneo posicional (descartando líneas de barcode y fechas)
+            # Fase 2.3: Búsqueda por escaneo posicional (descartando líneas de barcode, fechas y membretes administrativos)
             if not resultado_campos["identificacion"]["value"]:
+                from app.utils.name_cleaner import es_linea_ruido_administrativo
                 for l in lines:
                     t = getattr(l, "text", "").upper().strip()
-                    if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b\d{1,2}[\s/\-\.][A-Z]{3}[\s/\-\.]\d{4}\b", t):
+                    if es_linea_ruido_administrativo(t):
+                        continue
+                    if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO"]):
+                        continue
+                    if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b\d{1,2}[\s/\-\.](?:[A-Z]{3}|\d{1,2})[\s/\-\.]\d{2,4}\b", t):
                         continue
                     matches = patron_num_general.finditer(t)
                     for m in matches:
@@ -497,12 +502,18 @@ class SpatialFieldExtractor:
                 re.I
             )
 
+            from app.utils.name_cleaner import es_linea_ruido_administrativo
+
             rev_lines = [l for l in lines if REVERSO_KEYWORDS.search(getattr(l, "text", ""))]
             frt_lines = [l for l in lines if FRENTE_KEYWORDS.search(getattr(l, "text", ""))]
             frt_header_lines = [
                 l for l in lines 
                 if HEADER_FRENTE_KEYWORDS.search(getattr(l, "text", ""))
-                and not any(rw in getattr(l, "text", "").upper() for rw in ["FOTOCOPIA", "OFICINA", "PROCESO", "MATRICULA", "INSCRIPCION"])
+                and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+                and not any(rw in getattr(l, "text", "").upper() for rw in [
+                    "FOTOCOPIA", "OFICINA", "PROCESO", "MATRICULA", "MATRÍCULA", "INSCRIPCION", "INSCRIPCIÓN",
+                    "CAMPESINA", "CAMPESENA", "FULLPOPULAR", "MUJER", "EMPRENDEDORA", "DEPARTAMENTAL"
+                ])
             ]
 
             y_min_frente = 0.0
@@ -528,13 +539,18 @@ class SpatialFieldExtractor:
                 y_max_frente = 0.72
 
             if es_digital_o_ti:
-                lineas_frente = [l for l in lines if y_min_frente <= getattr(l, "y", 0.0) <= max(0.65, y_max_frente)]
+                lineas_frente = [
+                    l for l in lines 
+                    if y_min_frente <= getattr(l, "y", 0.0) <= max(0.65, y_max_frente)
+                    and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+                ]
             else:
                 lineas_frente = [
                     l for l in lines 
                     if y_min_frente <= getattr(l, "y", 0.0) <= y_max_frente 
                     and getattr(l, "x", 0.0) < 0.60
                     and not REVERSO_KEYWORDS.search(getattr(l, "text", ""))
+                    and not es_linea_ruido_administrativo(getattr(l, "text", ""))
                 ]
 
             # Ordenar por y para garantizar secuencia vertical correcta
@@ -685,7 +701,14 @@ class SpatialFieldExtractor:
                 for l in lineas_frente:
                     y_pos = getattr(l, "y", 0.0)
                     t_val = getattr(l, "text", "")
-                    if 0.08 < y_pos < 0.65:  # Ampliado para cubrir cédulas digitales y Tarjetas de Identidad
+                    if es_linea_ruido_administrativo(t_val):
+                        continue
+                    if max(y_min_frente, 0.08) <= y_pos <= y_max_frente:
+                        # Si se detectó el número de cédula, los nombres/apellidos nunca están por encima del número
+                        if idx_num != -1 and idx_num < len(lineas_frente):
+                            y_num_line = getattr(lineas_frente[idx_num], "y", 0.0)
+                            if y_pos < y_num_line - 0.01:
+                                continue
                         # En Cédula Amarilla, los nombres están estrictamente por encima de la etiqueta NOMBRES (y < y_nom).
                         # Todo lo que esté por debajo de NOMBRES es el área de firma/rúbrica del ciudadano (ej: DR CDI).
                         if not es_digital_o_ti and idx_nom != -1:

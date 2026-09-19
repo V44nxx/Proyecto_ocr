@@ -359,8 +359,9 @@ function PersonasContent() {
       setZoom(1);
     }
     const nomCompleto = formatNombreCompleto(p);
+    const numIdLimpio = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     setEditForm({
-      numero_identificacion: p.numero_identificacion || "",
+      numero_identificacion: numIdLimpio,
       tipo_documento: p.tipo_documento || "CEDULA_CIUDADANIA",
       nombre_completo: nomCompleto,
       nombres: p.nombres || "",
@@ -568,9 +569,10 @@ function PersonasContent() {
     const nomCompleto = formatNombreCompleto(p);
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
     const esMenor14Detalle = edadCalculada !== null && edadCalculada < 14;
+    const numIdVisible = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
 
     const campos = [
-      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: p.numero_identificacion },
+      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
       { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
       {
         key: "fecha_nacimiento",
@@ -876,11 +878,21 @@ function PersonasContent() {
                 <div className="flex items-center gap-2 mb-1.5">
                   <FileSpreadsheet className="w-4 h-4 text-purple-900 dark:text-purple-300 shrink-0" />
                   <span className="text-xs font-black uppercase tracking-wider text-purple-950 dark:text-purple-200">
-                    Alerta: No se encuentra en la Planilla Excel
+                    {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID")
+                      ? "Alerta: No se encuentra en la Planilla Excel"
+                      : "Alerta: Documento Sin Número de Identificación"}
                   </span>
                 </div>
                 <p className="text-xs text-purple-950 dark:text-purple-100 ml-6 break-words font-semibold leading-relaxed">
-                  El número de identificación <strong className="font-mono text-purple-950 dark:text-white font-black bg-purple-300/80 dark:bg-purple-900 px-2 py-0.5 rounded border border-purple-500 dark:border-purple-600">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
+                  {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
+                    <>
+                      El número de identificación <strong className="font-mono text-purple-950 dark:text-white font-black bg-purple-300/80 dark:bg-purple-900 px-2 py-0.5 rounded border border-purple-500 dark:border-purple-600">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
+                    </>
+                  ) : (
+                    <>
+                      No se detectó el número de identificación en el documento PDF para cotejar con la planilla oficial de Excel. Ingrese el número haciendo clic en <strong>Editar Datos</strong>.
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -1843,7 +1855,11 @@ function PersonasContent() {
                                 {tipoInfo.codigo}
                               </span>
                               <span className="font-mono text-blue-900 dark:text-primary-300 font-extrabold text-sm tracking-wide shrink-0">
-                                {p.numero_identificacion}
+                                {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
+                                  p.numero_identificacion
+                                ) : (
+                                  <span className="italic text-rose-500 dark:text-rose-400 font-medium text-xs">Sin documento</span>
+                                )}
                               </span>
                               {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
                                 <span className="text-[9px] bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>

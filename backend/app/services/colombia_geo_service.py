@@ -368,6 +368,22 @@ class ColombiaGeoService:
         if norm in deptos_set or norm in muns_set:
             return True
 
+        # Detección de municipio + departamento fusionados por OCR sin espacios o con guión (ej: FLORENCIACAQUETA, ARMENIAQUINDIO)
+        norm_sin_espacios = re.sub(r"[^A-Z]", "", norm)
+        if len(norm_sin_espacios) >= 8:
+            for d in deptos_set:
+                d_clean = re.sub(r"[^A-Z]", "", d)
+                if len(d_clean) >= 4 and d_clean in norm_sin_espacios:
+                    resto = norm_sin_espacios.replace(d_clean, "")
+                    if len(resto) >= 3 and any(re.sub(r"[^A-Z]", "", m) == resto for m in muns_set):
+                        return True
+            for m in muns_set:
+                m_clean = re.sub(r"[^A-Z]", "", m)
+                if len(m_clean) >= 4 and m_clean in norm_sin_espacios:
+                    resto = norm_sin_espacios.replace(m_clean, "")
+                    if len(resto) >= 3 and any(re.sub(r"[^A-Z]", "", d) == resto for d in deptos_set):
+                        return True
+
         # Detección de prefijos o inicios de municipios compuestos (ej: 'BELEN DE LOS ANDA' para 'BELEN DE LOS ANDAQUIES')
         for m in muns_set:
             if len(m.split()) >= 2 and len(norm) >= 7 and (m.startswith(norm) or norm.startswith(m)):

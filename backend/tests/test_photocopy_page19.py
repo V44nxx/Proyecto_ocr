@@ -80,3 +80,14 @@ def test_resolver_nombre_completo_sin_ruido_administrativo():
         actual="FOTOCOPIA DE PARA PROCESO INSCRIPCION EMPRENDEDORA"
     )
     assert nom_res == "NADIA YULIETH QUIÑONES GOMEZ"
+
+
+def test_filtro_geografico_fused():
+    from app.services.colombia_geo_service import colombia_geo
+    assert colombia_geo.es_geografico("FLORENCIACAQUETÁ") is True
+    assert colombia_geo.es_geografico("FLORENCIA-CAQUETÁ") is True
+    assert colombia_geo.es_geografico("ARMENIAQUINDIO") is True
+    assert colombia_geo.es_geografico("NEIVAHUILA") is True
+    assert colombia_geo.es_geografico("NADIA YULIETH") is False
+    assert colombia_geo.es_geografico("QUIÑONES GOMEZ") is False
+

@@ -154,6 +154,7 @@ export const apiDocumentos = {
     files: File[],
     onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
     excelFile?: File | null,
+    signal?: AbortSignal,
   ) => {
     const formData = new FormData();
     files.forEach((file) => {
@@ -164,8 +165,19 @@ export const apiDocumentos = {
     }
     return apiClient.post("/api/documentos/upload", formData, {
       onUploadProgress,
+      signal,
     });
   },
+
+  cancelar: (datos: {
+    documento_ids?: string[];
+    comparacion_id?: string | null;
+    todos_en_proceso?: boolean;
+  }) =>
+    apiClient.post<{ ok: boolean; eliminados: number; mensaje: string }>(
+      "/api/documentos/cancelar",
+      datos
+    ),
 
   listar: (params?: { skip?: number; limit?: number; estado?: string; solo_subida?: boolean }) =>
     apiClient.get<Documento[]>("/api/documentos", { params }),

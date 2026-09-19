@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Loader2, ArrowRight, X, Cpu } from "lucide-react";
+import { Loader2, ArrowRight, X, Cpu, XCircle } from "lucide-react";
+import toast from "react-hot-toast";
+import { apiDocumentos } from "@/lib/api";
 
 interface DocTracking {
   id: string;
@@ -86,6 +88,33 @@ export default function BannerProcesoActivo() {
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 transition-colors border border-white/20">
           Ver progreso
           <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={async () => {
+            if (!window.confirm("¿Deseas cancelar la subida y procesamiento de los documentos?\n\nLos archivos serán removidos por completo del sistema.")) return;
+            try {
+              const ids = docs.map((d) => d.id).filter((id) => !id.startsWith("prep-") && !id.startsWith("doc-"));
+              await apiDocumentos.cancelar({
+                documento_ids: ids.length > 0 ? ids : undefined,
+                todos_en_proceso: true,
+              });
+              if (typeof window !== "undefined") {
+                localStorage.removeItem(LS_DOCS_EN_PROCESO);
+                localStorage.removeItem("ocr_fase_actual");
+                localStorage.removeItem("ultimo_documento_id");
+              }
+              setDocs([]);
+              setVisible(false);
+              toast.success("Subida cancelada y archivos removidos.");
+            } catch {
+              toast.error("No se pudo cancelar el proceso.");
+            }
+          }}
+          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/30 hover:bg-rose-500/40 text-rose-100 transition-colors border border-rose-400/40"
+          title="Cancelar proceso y remover archivos"
+        >
+          <XCircle className="w-3.5 h-3.5 text-rose-300" />
+          <span>Cancelar</span>
         </button>
         <button onClick={() => setDescartado(true)}
           className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/20 transition-colors"

@@ -3,13 +3,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import toast from "react-hot-toast";
+import axios from "axios";
 import {
   Upload, FileText, CheckCircle, AlertTriangle,
   Clock, Trash2, RefreshCw, Eye, Sparkles,
   ArrowRight, Users, CheckCircle2, ChevronRight,
   Layers, Timer, X, AlertCircle, Cpu, FileCheck2,
   Hourglass, ArrowUpCircle, Check, FileSpreadsheet,
-  BarChart2, PlusCircle
+  BarChart2, PlusCircle, XCircle
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
@@ -87,6 +88,8 @@ export default function DocumentosPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const uploadStartTimeRef = useRef<number>(0);
   const panelProgresoRef = useRef<HTMLDivElement | null>(null);
+  const [cancelando, setCancelando] = useState(false);
+  const uploadAbortControllerRef = useRef<AbortController | null>(null);
 
   // Redirección automática a la tabla de personas al finalizar
   const [cuentaAtrasRedireccion, setCuentaAtrasRedireccion] = useState<number | null>(null);
@@ -334,6 +337,7 @@ export default function DocumentosPage() {
       return;
     }
 
+    uploadAbortControllerRef.current = new AbortController();
     setSubiendo(true);
     setFaseActual("subiendo");
     setProgresoSubida(0);
@@ -374,21 +378,26 @@ export default function DocumentosPage() {
     }, 50);
 
     try {
-      const res = await apiDocumentos.upload(archivosSeleccionados, (progressEvent) => {
-        if (progressEvent.total) {
-          const pct = Math.min(100, Math.round((progressEvent.loaded * 100) / progressEvent.total));
-          setProgresoSubida(pct);
-          setBytesSubidos(progressEvent.loaded);
-          setBytesTotales(progressEvent.total);
-          setDocsEnProceso((prev) =>
-            prev.map((d) => ({
-              ...d,
-              progreso: Math.max(5, Math.min(99, Math.round((pct * 0.9)))),
-              paso: `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
-            }))
-          );
-        }
-      }, excelSeleccionado);
+      const res = await apiDocumentos.upload(
+        archivosSeleccionados,
+        (progressEvent) => {
+          if (progressEvent.total) {
+            const pct = Math.min(100, Math.round((progressEvent.loaded * 100) / progressEvent.total));
+            setProgresoSubida(pct);
+            setBytesSubidos(progressEvent.loaded);
+            setBytesTotales(progressEvent.total);
+            setDocsEnProceso((prev) =>
+              prev.map((d) => ({
+                ...d,
+                progreso: Math.max(5, Math.min(99, Math.round(pct * 0.9))),
+                paso: `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
+              }))
+            );
+          }
+        },
+        excelSeleccionado,
+        uploadAbortControllerRef.current.signal
+      );
 
       setFaseActual("procesando");
       const docsResp = res.data?.documentos || [];
@@ -432,10 +441,96 @@ export default function DocumentosPage() {
 
       toast.success("Documento(s) recibido(s). Iniciando extracción OCR...");
     } catch (err: unknown) {
+      if (axios.isCancel(err) || (err as any)?.name === "CanceledError" || (err as any)?.name === "AbortError") {
+        return;
+      }
       setFaseActual("error");
       toast.error(getErrorMessage(err, "Error subiendo archivos"));
     } finally {
       setSubiendo(false);
+      uploadAbortControllerRef.current = null;
+    }
+  };
+
+  const cancelarSubidaOProceso = async () => {
+    const esSubiendo = faseActual === "subiendo";
+    const mensajeConfirm = esSubiendo
+      ? "¿Deseas cancelar la subida de los archivos?\n\nLa transferencia se detendrá inmediatamente y no se procesará ningún documento."
+      : "¿Deseas cancelar el procesamiento de los documentos?\n\nLos archivos y sus datos serán removidos por completo del sistema y no quedarán en proceso.";
+
+    if (!window.confirm(mensajeConfirm)) return;
+
+    setCancelando(true);
+    try {
+      // 1. Abortar transferencia de red si aún está en subida
+      if (uploadAbortControllerRef.current) {
+        uploadAbortControllerRef.current.abort();
+        uploadAbortControllerRef.current = null;
+      }
+
+      // 2. Extraer IDs de documentos para cancelar en backend
+      const idsValidos = docsEnProceso
+        .map((d) => d.id)
+        .filter((id) => id && !id.startsWith("prep-") && !id.startsWith("doc-"));
+
+      await apiDocumentos.cancelar({
+        documento_ids: idsValidos.length > 0 ? idsValidos : undefined,
+        comparacion_id: comparacionId,
+        todos_en_proceso: true,
+      });
+
+      // 3. Limpiar estado local y storage
+      setSubiendo(false);
+      setFaseActual("inactivo");
+      setMostrandoProgreso(false);
+      setDocsEnProceso([]);
+      setProgresoSubida(0);
+      setBytesSubidos(0);
+      setBytesTotales(0);
+      setTiempoTranscurrido(0);
+      setComparacionId(null);
+      setComparacionEnProgreso(false);
+      setCuentaAtrasRedireccion(null);
+      canceladoRedireccionRef.current = true;
+
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(LS_DOCS_EN_PROCESO);
+        localStorage.removeItem(LS_FASE_ACTUAL);
+        localStorage.removeItem("ultimo_documento_id");
+      }
+
+      toast.success("Subida cancelada y archivos en proceso removidos.");
+      await cargarDocumentos();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Error al cancelar la subida"));
+    } finally {
+      setCancelando(false);
+    }
+  };
+
+  const cancelarDocumentoIndividual = async (id: string, nombre: string) => {
+    if (!window.confirm(`¿Cancelar el proceso de "${nombre}" y removerlo por completo del sistema?`)) return;
+    try {
+      await apiDocumentos.cancelar({ documento_ids: [id] });
+      toast.success(`Proceso cancelado. "${nombre}" fue removido.`);
+
+      // Removerlo también de docsEnProceso si estuviera en la tarjeta
+      setDocsEnProceso((prev) => {
+        const nuevos = prev.filter((d) => d.id !== id);
+        if (nuevos.length === 0) {
+          setMostrandoProgreso(false);
+          setFaseActual("inactivo");
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(LS_DOCS_EN_PROCESO);
+            localStorage.removeItem(LS_FASE_ACTUAL);
+          }
+        }
+        return nuevos;
+      });
+
+      cargarDocumentos();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Error al cancelar el documento"));
     }
   };
 
@@ -614,6 +709,19 @@ export default function DocumentosPage() {
                     <Hourglass className="w-3.5 h-3.5 text-primary-400" />
                     <span>Estimado: <strong className="text-white">{calcularTiempoEstimado()}</strong></span>
                   </div>
+                )}
+
+                {!procesoFinalizado && (
+                  <button
+                    type="button"
+                    onClick={cancelarSubidaOProceso}
+                    disabled={cancelando}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    title="Cancelar subida y remover archivos del sistema"
+                  >
+                    <XCircle className="w-4 h-4 text-rose-400" />
+                    <span>{cancelando ? "Cancelando..." : "Cancelar subida"}</span>
+                  </button>
                 )}
 
                 <button
@@ -1261,13 +1369,24 @@ export default function DocumentosPage() {
                           {formatDate(doc.fecha_carga)}
                         </td>
                         <td className="text-right">
-                          <button
-                            onClick={() => eliminarDocumento(doc.id, doc.nombre_original)}
-                            className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-dark-800"
-                            title="Eliminar documento"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {doc.estado === "procesando" || doc.estado === "pendiente" ? (
+                            <button
+                              onClick={() => cancelarDocumentoIndividual(doc.id, doc.nombre_original)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-medium transition-all shadow-sm"
+                              title="Cancelar procesamiento y remover archivo por completo"
+                            >
+                              <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Cancelar</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => eliminarDocumento(doc.id, doc.nombre_original)}
+                              className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-dark-800"
+                              title="Eliminar documento"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

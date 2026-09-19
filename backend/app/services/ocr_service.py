@@ -109,6 +109,12 @@ class OCRService:
         }
 
         try:
+            from app.models.documento import Documento
+            doc_inicial = db.query(Documento).filter(Documento.id == documento_id).first()
+            if not doc_inicial or doc_inicial.estado == "cancelado":
+                logger.info(f"[OCR] Documento {documento_id} cancelado o no encontrado antes de iniciar. Abortando OCR.")
+                return resultado
+
             if not os.path.exists(ruta_pdf):
                 raise FileNotFoundError(f"No existe el archivo: {ruta_pdf}")
 
@@ -197,6 +203,14 @@ class OCRService:
             # Reordenar en orden estricto de página
             paginas_clasificadas = sorted(resultados_desordenados, key=lambda x: x["pagina_numero"])
 
+            # ── Verificar si fue cancelado durante el OCR de páginas ───────────
+            doc_en_proceso = db.query(Documento).filter(Documento.id == documento_id).first()
+            if not doc_en_proceso or doc_en_proceso.estado == "cancelado":
+                logger.info(f"[OCR] Documento {documento_id} cancelado o removido durante OCR de páginas. Deteniendo.")
+                if not doc.is_closed:
+                    doc.close()
+                return resultado
+
             # ── Paso 2: Agrupar páginas en documentos físicos (Frente + Reverso) ──
             self._actualizar_progreso(
                 documento_id=documento_id,
@@ -279,7 +293,7 @@ class OCRService:
             try:
                 from app.models.documento import Documento
                 doc_db = db.query(Documento).filter(Documento.id == documento_id).first()
-                if doc_db:
+                if doc_db and doc_db.estado != "cancelado":
                     doc_db.estado = "error"
                     doc_db.mensaje_error = f"{error_msg}\n{tb_str[-500:]}"
                     meta = dict(doc_db.metadatos or {})
@@ -1157,7 +1171,7 @@ class OCRService:
         try:
             from app.models.documento import Documento
             doc = db.query(Documento).filter(Documento.id == documento_id).first()
-            if doc:
+            if doc and doc.estado != "cancelado":
                 meta = dict(doc.metadatos or {})
                 meta.update({
                     "progreso": progreso,
@@ -1187,7 +1201,7 @@ class OCRService:
             from datetime import datetime
 
             doc = db.query(Documento).filter(Documento.id == documento_id).first()
-            if doc:
+            if doc and doc.estado != "cancelado":
                 from app.models.persona import Persona
                 personas_db = db.query(Persona).filter(Persona.documento_id == doc.id).all()
                 snapshot_personas = []

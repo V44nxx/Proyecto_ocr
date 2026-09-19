@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 from datetime import datetime
 import threading
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, Query, status
 from fastapi.responses import StreamingResponse
@@ -322,6 +323,13 @@ def _procesar_batch_ocr_y_comparacion(
         for item in items:
             pdf_path = item["pdf_path"]
             doc_id = item["documento_id"]
+
+            # Verificar si el documento fue cancelado o eliminado antes de iniciar OCR
+            doc_db = db.query(Documento).filter(Documento.id == doc_id).first()
+            if not doc_db or doc_db.estado == "cancelado":
+                logger.info(f"[OCR Batch Background] Documento {doc_id} cancelado o removido. Omitiendo OCR.")
+                continue
+
             try:
                 logger.info(f"[OCR Batch Background] Procesando PDF: {pdf_path} (Doc ID: {doc_id})")
                 ocr_service.procesar_pdf(
@@ -333,6 +341,29 @@ def _procesar_batch_ocr_y_comparacion(
                 logger.info(f"[OCR Batch Background] OCR completado para Doc ID: {doc_id}")
             except Exception as e_ocr:
                 logger.error(f"[OCR Batch Background] Error procesando OCR Doc ID {doc_id}: {e_ocr}")
+
+        # ── Verificar si quedan documentos activos del lote antes de continuar ──
+        from app.models.comparacion import Comparacion
+        docs_activos = db.query(Documento).filter(
+            Documento.id.in_([it["documento_id"] for it in items]),
+            Documento.estado != "cancelado"
+        ).count()
+        if docs_activos == 0:
+            logger.info("[OCR Batch Background] Todos los documentos del lote fueron cancelados o removidos. Abortando lote.")
+            if comparacion_id:
+                try:
+                    comp_act = db.query(Comparacion).filter(
+                        Comparacion.id == comparacion_id,
+                        Comparacion.estado == "pendiente"
+                    ).first()
+                    if comp_act:
+                        if comp_act.ruta_archivo and Path(comp_act.ruta_archivo).exists():
+                            Path(comp_act.ruta_archivo).unlink()
+                        db.delete(comp_act)
+                        db.commit()
+                except Exception as e_c:
+                    logger.warning(f"[OCR Batch Background] Error limpiando comparacion pendiente: {e_c}")
+            return
 
         # ── Registrar personas en Excel que NO están en los PDFs del lote ──
         if excel_path and items:
@@ -350,13 +381,21 @@ def _procesar_batch_ocr_y_comparacion(
         if comparacion_id and excel_path:
             try:
                 from app.services.comparacion_service import comparacion_service
-                logger.info(
-                    f"OCR finalizado para todos los {len(items)} documento(s). Iniciando comparación automática: {comparacion_id}"
-                )
-                comparacion_service.ejecutar_comparacion(
-                    comparacion_id, excel_path, db
-                )
-                logger.info(f"Comparación automática completada con éxito: {comparacion_id}")
+                # Verificar que la comparación no haya sido cancelada
+                comp_verif = db.query(Comparacion).filter(
+                    Comparacion.id == comparacion_id,
+                    Comparacion.estado != "cancelado"
+                ).first()
+                if comp_verif:
+                    logger.info(
+                        f"OCR finalizado para todos los {len(items)} documento(s). Iniciando comparación automática: {comparacion_id}"
+                    )
+                    comparacion_service.ejecutar_comparacion(
+                        comparacion_id, excel_path, db
+                    )
+                    logger.info(f"Comparación automática completada con éxito: {comparacion_id}")
+                else:
+                    logger.info(f"Comparación {comparacion_id} no encontrada o cancelada. Omitiendo.")
             except Exception as e_cmp:
                 logger.error(
                     f"Error en comparación automática {comparacion_id}: {e_cmp}"
@@ -366,8 +405,126 @@ def _procesar_batch_ocr_y_comparacion(
 
 
 # ──────────────────────────────────────────
+# MODELOS DE CANCELACIÓN Y ESQUEMAS
+# ──────────────────────────────────────────
+class CancelarSubidaRequest(BaseModel):
+    documento_ids: Optional[List[str]] = None
+    comparacion_id: Optional[str] = None
+    todos_en_proceso: bool = False
+
+
+# ──────────────────────────────────────────
 # ENDPOINTS
 # ──────────────────────────────────────────
+@router.post(
+    "/cancelar",
+    summary="Cancelar subida o procesamiento y remover archivos en proceso",
+    status_code=200
+)
+def cancelar_subida_o_procesamiento(
+    payload: CancelarSubidaRequest,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """
+    Cancela de forma inmediata la subida o procesamiento OCR de los documentos seleccionados
+    o de todos los documentos en estado 'procesando' o 'pendiente' del usuario.
+    Remueve por completo los registros de la base de datos, personas asociadas y archivos en disco.
+    """
+    from app.models.persona import Persona
+    from app.models.comparacion import Comparacion
+
+    docs_a_eliminar = []
+    if payload.documento_ids:
+        docs_a_eliminar = db.query(Documento).filter(
+            Documento.usuario_id == usuario.id,
+            Documento.id.in_(payload.documento_ids)
+        ).all()
+
+    if payload.todos_en_proceso or not docs_a_eliminar:
+        docs_activos = db.query(Documento).filter(
+            Documento.usuario_id == usuario.id,
+            Documento.estado.in_(["pendiente", "procesando"])
+        ).all()
+        existentes_ids = {d.id for d in docs_a_eliminar}
+        for d in docs_activos:
+            if d.id not in existentes_ids:
+                docs_a_eliminar.append(d)
+
+    eliminados_count = 0
+    for doc in docs_a_eliminar:
+        doc_id = doc.id
+        doc_nombre = doc.nombre_original
+        ruta = doc.ruta_archivo
+
+        # 1. Marcar estado como cancelado inmediatamente para que cualquier hilo OCR en curso se detenga
+        doc.estado = "cancelado"
+        meta = dict(doc.metadatos or {})
+        meta["cancelado"] = True
+        meta["paso"] = "Cancelado por el usuario"
+        doc.metadatos = meta
+        db.flush()
+
+        # 2. Eliminar personas asociadas a este documento
+        db.query(Persona).filter(
+            Persona.documento_id == doc_id,
+            Persona.usuario_id == usuario.id
+        ).delete(synchronize_session=False)
+
+        # 3. Eliminar archivo físico de disco
+        if ruta:
+            try:
+                p = Path(ruta)
+                if p.exists():
+                    p.unlink()
+            except Exception as e_f:
+                logger.warning(f"No se pudo eliminar archivo físico {ruta}: {e_f}")
+
+        # 4. Eliminar documento de la base de datos
+        db.delete(doc)
+        eliminados_count += 1
+        logger.info(f"[Cancelar] Documento {doc_nombre} (ID: {doc_id}) cancelado y removido permanentemente.")
+
+    # 5. Cancelar y remover comparación asociada si aplica
+    if payload.comparacion_id:
+        comp = db.query(Comparacion).filter(
+            Comparacion.id == payload.comparacion_id,
+            Comparacion.usuario_id == usuario.id
+        ).first()
+        if comp:
+            if comp.ruta_archivo:
+                try:
+                    cp = Path(comp.ruta_archivo)
+                    if cp.exists():
+                        cp.unlink()
+                except Exception:
+                    pass
+            db.delete(comp)
+            logger.info(f"[Cancelar] Comparación {payload.comparacion_id} removida.")
+
+    if payload.todos_en_proceso:
+        comps_pendientes = db.query(Comparacion).filter(
+            Comparacion.usuario_id == usuario.id,
+            Comparacion.estado == "pendiente"
+        ).all()
+        for comp in comps_pendientes:
+            if comp.ruta_archivo:
+                try:
+                    cp = Path(comp.ruta_archivo)
+                    if cp.exists():
+                        cp.unlink()
+                except Exception:
+                    pass
+            db.delete(comp)
+            logger.info(f"[Cancelar] Comparación pendiente {comp.id} removida.")
+
+    db.commit()
+
+    return {
+        "ok": True,
+        "eliminados": eliminados_count,
+        "mensaje": f"Se canceló el proceso y se removieron {eliminados_count} documento(s) correctamente."
+    }
 @router.post(
     "/upload",
     summary="Subir PDF(s) para procesamiento OCR con planilla oficial Excel",

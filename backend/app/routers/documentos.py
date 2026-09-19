@@ -507,11 +507,7 @@ def listar_documentos(
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """Lista los documentos propios del usuario actual (o todos si es admin)"""
-    from sqlalchemy import or_
-
-    query = db.query(Documento)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
+    query = db.query(Documento).filter(Documento.usuario_id == usuario.id)
 
     if solo_subida:
         query = query.filter(or_(Documento.visible_en_subida == True, Documento.visible_en_subida.is_(None)))
@@ -529,12 +525,10 @@ def obtener_documento(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Obtiene el detalle de un documento específico propio"""
-    from sqlalchemy import or_
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-    documento = query.first()
+    documento = db.query(Documento).filter(
+        Documento.id == documento_id,
+        Documento.usuario_id == usuario.id
+    ).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -557,12 +551,10 @@ def listar_personas_documento(
     from sqlalchemy import or_
     from app.models.persona import Persona
     from app.routers.personas import _obtener_ids_en_excel, _enriquecer_persona_response
-    import re
-
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-    documento = query.first()
+    documento = db.query(Documento).filter(
+        Documento.id == documento_id,
+        Documento.usuario_id == usuario.id
+    ).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -617,12 +609,10 @@ def estado_documento(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
-    """Consulta el estado actual del procesamiento OCR de un documento propio"""
-    from sqlalchemy import or_
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-    documento = query.first()
+    documento = db.query(Documento).filter(
+        Documento.id == documento_id,
+        Documento.usuario_id == usuario.id
+    ).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -683,11 +673,10 @@ def eliminar_documento(
     """
     from app.models.persona import Persona
 
-    from sqlalchemy import or_
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-    documento = query.first()
+    documento = db.query(Documento).filter(
+        Documento.id == documento_id,
+        Documento.usuario_id == usuario.id
+    ).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado o no pertenece a su cuenta")
@@ -707,11 +696,10 @@ def eliminar_documento(
         }
 
     # 1. Si es eliminación permanente explícita: eliminar personas asociadas
-    personas_query = db.query(Persona).filter(Persona.documento_id == documento.id)
-    if getattr(usuario, "rol", None) != "admin":
-        personas_query = personas_query.filter(
-            (Persona.usuario_id == usuario.id) | (Persona.usuario_id.is_(None))
-        )
+    personas_query = db.query(Persona).filter(
+        Persona.documento_id == documento.id,
+        Persona.usuario_id == usuario.id
+    )
     personas_eliminadas = personas_query.delete(synchronize_session=False)
     if personas_eliminadas:
         logger.info(f"Eliminadas {personas_eliminadas} persona(s) asociadas al documento {documento.nombre_original}")
@@ -741,20 +729,15 @@ def estadisticas_dashboard(
     from app.models.comparacion import Comparacion
     from sqlalchemy import or_
 
-    query_docs = db.query(Documento)
-    query_personas = db.query(Persona).outerjoin(Persona.documento)
-    query_comparaciones = db.query(Comparacion)
-
-    if getattr(usuario, "rol", None) != "admin":
-        query_docs = query_docs.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-        query_personas = query_personas.filter(
-            or_(
-                Persona.usuario_id == usuario.id,
-                Documento.usuario_id == usuario.id,
-                Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
-            )
+    query_docs = db.query(Documento).filter(Documento.usuario_id == usuario.id)
+    query_personas = db.query(Persona).outerjoin(Persona.documento).filter(
+        or_(
+            Persona.usuario_id == usuario.id,
+            Documento.usuario_id == usuario.id,
+            Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
         )
-        query_comparaciones = query_comparaciones.filter(or_(Comparacion.usuario_id == usuario.id, Comparacion.usuario_id.is_(None)))
+    )
+    query_comparaciones = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
 
     total_docs = query_docs.count()
     completados = query_docs.filter(Documento.estado == "completado").count()
@@ -825,11 +808,10 @@ def preview_pagina_pdf(
     y la devuelve como imagen PNG. Permite al frontend mostrar una vista
     previa de la página exacta donde se detectó la persona.
     """
-    from sqlalchemy import or_
-    query = db.query(Documento).filter(Documento.id == documento_id)
-    if getattr(usuario, "rol", None) != "admin":
-        query = query.filter(or_(Documento.usuario_id == usuario.id, Documento.usuario_id.is_(None)))
-    documento = query.first()
+    documento = db.query(Documento).filter(
+        Documento.id == documento_id,
+        Documento.usuario_id == usuario.id
+    ).first()
 
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")

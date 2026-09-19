@@ -495,7 +495,7 @@ class ComparacionService:
                     )
                 ).all()
             else:
-                personas_bd = db.query(Persona).all()
+                personas_bd = []
 
             # Excluir registros que provienen exclusivamente del Excel y no del PDF físico
             personas_bd_pdf = [

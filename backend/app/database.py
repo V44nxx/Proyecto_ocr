@@ -100,7 +100,10 @@ def create_tables():
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS visible_en_subida BOOLEAN DEFAULT TRUE;",
                 "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;",
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
-                "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;"
+                "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
+                "UPDATE documentos SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
+                "UPDATE comparaciones SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
+                "UPDATE personas SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');"
             ]
             for q in queries:
                 try:

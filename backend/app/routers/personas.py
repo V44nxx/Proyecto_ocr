@@ -18,17 +18,14 @@ router = APIRouter(prefix="/api/personas", tags=["Personas"])
 
 
 def _filtrar_persona_por_usuario(query, usuario: Usuario):
-    """Filtra la consulta de personas para que cada usuario solo vea sus propios registros (o todos si es admin)"""
-    if getattr(usuario, "rol", None) == "admin":
-        return query
+    """Filtra la consulta de personas para que cada usuario solo vea sus propios registros estrictamente"""
+    from app.models.documento import Documento
     from sqlalchemy import or_
     return query.outerjoin(Persona.documento).filter(
         or_(
             Persona.usuario_id == usuario.id,
             Documento.usuario_id == usuario.id,
-            Persona.detalles_campos["usuario_id"].astext == str(usuario.id),
-            Persona.usuario_id.is_(None),
-            Documento.usuario_id.is_(None)
+            Persona.detalles_campos["usuario_id"].astext == str(usuario.id)
         )
     )
 
@@ -110,15 +107,6 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
         )
         comparaciones = comp_query.all()
         if not comparaciones:
-            # Fallback a comparaciones legacy sin usuario_id
-            comparaciones = (
-                db.query(Comparacion)
-                .filter(Comparacion.usuario_id.is_(None))
-                .order_by(Comparacion.fecha_carga.desc())
-                .all()
-            )
-
-        if not comparaciones:
             return set(), False
 
         ids_totales: Set[str] = set()
@@ -181,8 +169,7 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
         from app.models.persona import Persona
         p_query = db.query(Persona)
         if usuario_id:
-            from sqlalchemy import or_
-            p_query = p_query.filter(or_(Persona.usuario_id == usuario_id, Persona.usuario_id.is_(None)))
+            p_query = p_query.filter(Persona.usuario_id == usuario_id)
         personas_bd = p_query.all()
 
         for p in personas_bd:

@@ -10,6 +10,13 @@ const USER_KEY = "ocr_user";
 export const auth = {
   guardarSesion(data: TokenResponse): void {
     if (typeof window !== "undefined") {
+      // Limpiar cualquier residuo de sesión previa de otro usuario
+      localStorage.removeItem("ultimo_documento_id");
+      localStorage.removeItem("nuevo_archivo_enviado");
+      localStorage.removeItem("ocr_docs_en_proceso");
+      localStorage.removeItem("ocr_fase_actual");
+      sessionStorage.clear();
+
       localStorage.setItem(TOKEN_KEY, data.access_token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.usuario));
     }
@@ -44,6 +51,11 @@ export const auth = {
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem("ultimo_documento_id");
+      localStorage.removeItem("nuevo_archivo_enviado");
+      localStorage.removeItem("ocr_docs_en_proceso");
+      localStorage.removeItem("ocr_fase_actual");
+      sessionStorage.clear();
     }
   },
 };

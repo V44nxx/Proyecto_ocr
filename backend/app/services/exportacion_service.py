@@ -62,15 +62,14 @@ class ExportacionService:
         nombre_doc_especifico = None
 
         if filtros:
-            if filtros.get("usuario_id") and not filtros.get("es_admin"):
+            if filtros.get("usuario_id"):
                 from sqlalchemy import or_
                 uid = filtros["usuario_id"]
                 query = query.outerjoin(Persona.documento).filter(
                     or_(
                         Persona.usuario_id == uid,
                         Documento.usuario_id == uid,
-                        Persona.detalles_campos["usuario_id"].astext == str(uid),
-                        Persona.usuario_id.is_(None)
+                        Persona.detalles_campos["usuario_id"].astext == str(uid)
                     )
                 )
 

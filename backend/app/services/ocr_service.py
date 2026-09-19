@@ -73,32 +73,26 @@ class OCRService:
             try:
                 from app.services.excel_lookup_service import excel_lookup_service
                 from app.models.comparacion import Comparacion
-                from app.config import settings
+                from app.models.documento import Documento
 
-                comp = (
-                    db.query(Comparacion)
-                    .filter(Comparacion.ruta_archivo.isnot(None))
-                    .order_by(Comparacion.fecha_carga.desc())
-                    .first()
-                )
-                if comp:
-                    ruta_comp = comp.obtener_ruta_o_restaurar(db)
-                    if ruta_comp and ruta_comp.exists():
-                        excel_lookup = excel_lookup_service.cargar_lookup(str(ruta_comp))
-                        logger.info(
-                            f"[OCR] Lookup Excel cargado automáticamente desde Comparación '{comp.nombre_original}' ({len(excel_lookup)} personas)"
+                doc_obj = db.query(Documento).filter(Documento.id == documento_id).first()
+                if doc_obj and doc_obj.usuario_id:
+                    comp = (
+                        db.query(Comparacion)
+                        .filter(
+                            Comparacion.usuario_id == doc_obj.usuario_id,
+                            Comparacion.ruta_archivo.isnot(None)
                         )
-                else:
-                    archivos_excel = sorted(
-                        [p for p in settings.upload_path.glob("*.xls*") if not p.name.startswith("reporte_")],
-                        key=lambda p: p.stat().st_mtime,
-                        reverse=True,
+                        .order_by(Comparacion.fecha_carga.desc())
+                        .first()
                     )
-                    if archivos_excel:
-                        excel_lookup = excel_lookup_service.cargar_lookup(str(archivos_excel[0]))
-                        logger.info(
-                            f"[OCR] Lookup Excel cargado automáticamente desde '{archivos_excel[0].name}' ({len(excel_lookup)} personas)"
-                        )
+                    if comp:
+                        ruta_comp = comp.obtener_ruta_o_restaurar(db)
+                        if ruta_comp and ruta_comp.exists():
+                            excel_lookup = excel_lookup_service.cargar_lookup(str(ruta_comp))
+                            logger.info(
+                                f"[OCR] Lookup Excel cargado para usuario {doc_obj.usuario_id} desde '{comp.nombre_original}' ({len(excel_lookup)} personas)"
+                            )
             except Exception as e_auto:
                 logger.warning(f"[OCR] No se pudo cargar Excel automático: {e_auto}")
 
@@ -758,10 +752,9 @@ class OCRService:
                     from app.models.comparacion import Comparacion
                     comp_q = db.query(Comparacion).filter(Comparacion.ruta_archivo.isnot(None))
                     if doc_usuario_id:
-                        comp_user = comp_q.filter(Comparacion.usuario_id == doc_usuario_id).order_by(Comparacion.fecha_carga.desc()).first()
-                        comp = comp_user or comp_q.order_by(Comparacion.fecha_carga.desc()).first()
+                        comp = comp_q.filter(Comparacion.usuario_id == doc_usuario_id).order_by(Comparacion.fecha_carga.desc()).first()
                     else:
-                        comp = comp_q.order_by(Comparacion.fecha_carga.desc()).first()
+                        comp = None
                     if comp:
                         ruta_comp = comp.obtener_ruta_o_restaurar(db)
                         if ruta_comp and ruta_comp.exists():

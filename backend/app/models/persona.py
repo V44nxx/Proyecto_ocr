@@ -13,6 +13,7 @@ class Persona(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     documento_id = Column(UUID(as_uuid=True), ForeignKey("documentos.id", ondelete="SET NULL"), nullable=True)
+    documento_pdf_id = Column(UUID(as_uuid=True), ForeignKey("documentos.id", ondelete="SET NULL"), nullable=True)
     usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Datos extraídos
@@ -44,13 +45,22 @@ class Persona(Base):
     fecha_actualizacion = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relaciones
-    documento = relationship("Documento", back_populates="personas")
+    documento = relationship("Documento", foreign_keys=[documento_id], back_populates="personas")
+    documento_pdf = relationship("Documento", foreign_keys=[documento_pdf_id])
     usuario = relationship("Usuario", backref="personas")
 
     @property
     def nombre_documento(self):
         if self.documento:
             return self.documento.nombre_original
+        return None
+
+    @property
+    def nombre_documento_pdf(self):
+        if self.documento_pdf:
+            return self.documento_pdf.nombre_original
+        if self.detalles_campos and isinstance(self.detalles_campos, dict):
+            return self.detalles_campos.get("nombre_documento_pdf")
         return None
 
     @property

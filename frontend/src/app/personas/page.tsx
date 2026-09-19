@@ -8,7 +8,8 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, EyeOff,
   ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check
+  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
+  FileCheck2
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
@@ -311,19 +312,30 @@ function PersonasContent() {
     try {
       const res = await apiPersonas.subirPdfCedula(targetPersona.id, file);
       const personaActualizada = res.data;
+
+      // 1. Asegurar que la persona se mantenga expandida y abierta en la vista
+      setExpandidoId(targetPersona.id);
+
+      // 2. Actualizar inmediatamente en el estado local de personas
       setPersonas((prev) =>
         prev.map((p) => (p.id === personaActualizada.id ? personaActualizada : p))
       );
+
+      // 3. Inicializar vista previa de la página del PDF individual
+      const pagInicial = personaActualizada.pagina_frente || personaActualizada.pagina_numero || 1;
+      setPaginaPrevia(pagInicial);
+      setImgCargando(true);
+      setImgError(false);
+      setZoom(1);
+
       toast.success(
-        `¡Datos extraídos exitosamente para ${personaActualizada.numero_identificacion}!`,
+        `¡PDF individual vinculado y datos extraídos exitosamente para ${personaActualizada.numero_identificacion}!`,
         { id: toastId }
       );
 
-      if (expandidoId === targetPersona.id) {
-        setPaginaPrevia(personaActualizada.pagina_frente || 1);
-        setImgCargando(true);
-        setImgError(false);
-      }
+      // 4. Sincronizar estadísticas y datos del backend manteniendo la vista activa
+      await cargarPersonas(false);
+      setExpandidoId(targetPersona.id);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, "Error al procesar el PDF de la cédula");
       toast.error(msg, { id: toastId });
@@ -562,6 +574,8 @@ function PersonasContent() {
 
   // ─── Panel de detalle inline (acordeón) ───────────────────────────────────
   const renderPanelDetalle = (p: Persona) => {
+    const docIdParaImagen = p.documento_pdf_id || (p.detalles_campos as any)?.documento_pdf_id || (p.en_pdf !== false ? p.documento_id : null);
+    const tienePdfValido = !!docIdParaImagen && p.en_pdf !== false;
     const docId = p.documento_id ? String(p.documento_id) : null;
     const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
     const estaEditando = editando === p.id;
@@ -632,11 +646,15 @@ function PersonasContent() {
             <div className="flex items-center gap-1.5 min-w-0">
               <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider shrink-0">Vista Documento</span>
-              {p.nombre_documento && (
-                <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 truncate max-w-[130px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 ml-1 shrink shadow-sm" title={`Archivo origen: ${p.nombre_documento}`}>
+              {p.nombre_documento_pdf ? (
+                <span className="text-[10px] font-mono text-emerald-800 dark:text-emerald-300 truncate max-w-[150px] bg-emerald-100 dark:bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-500/30 ml-1 shrink shadow-sm" title={`PDF Individual de cédula: ${p.nombre_documento_pdf}`}>
+                  📄 {p.nombre_documento_pdf}
+                </span>
+              ) : p.nombre_documento ? (
+                <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 truncate max-w-[130px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 ml-1 shrink shadow-sm" title={`Archivo origen del lote: ${p.nombre_documento}`}>
                   {p.nombre_documento}
                 </span>
-              )}
+              ) : null}
               {tieneDosLados && (
                 <div className="flex items-center gap-1 ml-1.5 shrink-0">
                   <button
@@ -667,7 +685,7 @@ function PersonasContent() {
 
           {/* Imagen */}
           <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-200/50 dark:bg-slate-950/50 min-h-[260px] max-h-[480px]">
-            {!docId || p.en_pdf === false ? (
+            {!tienePdfValido ? (
               <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center px-4">
                 <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center border border-amber-500/30">
                   <ImageOff className="w-6 h-6 text-amber-500" />
@@ -722,8 +740,8 @@ function PersonasContent() {
                 )}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  key={`${docId}-${paginaPrevia}`}
-                  src={apiDocumentos.paginaPdfUrl(docId, paginaPrevia, 130)}
+                  key={`${docIdParaImagen}-${paginaPrevia}`}
+                  src={apiDocumentos.paginaPdfUrl(String(docIdParaImagen), paginaPrevia, 130)}
                   alt={`Página ${paginaPrevia}`}
                   className="rounded-lg shadow-xl max-w-full border border-slate-700/30"
                   style={{ display: imgCargando ? "none" : "block" }}
@@ -745,10 +763,17 @@ function PersonasContent() {
                   {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
                 </span>
                 {p.nombre_documento && (
-                  <span className="flex items-center gap-1 text-slate-800 dark:text-slate-300 font-mono text-[10px] bg-blue-100 dark:bg-primary-500/10 border border-blue-300 dark:border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`Archivo PDF origen: ${p.nombre_documento}`}>
+                  <span className="flex items-center gap-1 text-slate-800 dark:text-slate-300 font-mono text-[10px] bg-blue-100 dark:bg-primary-500/10 border border-blue-300 dark:border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`Archivo origen del lote: ${p.nombre_documento}`}>
                     <FileText className="w-3 h-3 text-blue-700 dark:text-primary-400 shrink-0" />
-                    <span className="text-blue-800 dark:text-primary-400 font-bold shrink-0">PDF:</span>
+                    <span className="text-blue-800 dark:text-primary-400 font-bold shrink-0">Lote:</span>
                     <span className="truncate">{p.nombre_documento}</span>
+                  </span>
+                )}
+                {p.nombre_documento_pdf && (
+                  <span className="flex items-center gap-1 text-emerald-800 dark:text-emerald-300 font-mono text-[10px] bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`PDF individual de cédula: ${p.nombre_documento_pdf}`}>
+                    <FileCheck2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-emerald-800 dark:text-emerald-400 font-bold shrink-0">PDF:</span>
+                    <span className="truncate">{p.nombre_documento_pdf}</span>
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">{p.motor_ocr || "google_document_ai"}</span></span>
@@ -907,7 +932,7 @@ function PersonasContent() {
             )}
 
             {/* Alerta: Sin Documento PDF / No se encontró en el PDF */}
-            {(!p.documento_id || p.en_pdf === false) && (
+            {(!tienePdfValido || p.en_pdf === false) && (
               <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500/70 text-amber-950 dark:text-amber-100 min-w-0 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -1925,10 +1950,10 @@ function PersonasContent() {
                           <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
                             <div className="inline-flex items-center justify-center gap-1 whitespace-nowrap">
                               {/* PDF badge */}
-                              {p.documento_id ? (
+                              {(p.documento_id || p.documento_pdf_id) && p.en_pdf !== false ? (
                                 <span
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/25 dark:border-rose-400/25 text-rose-700 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
-                                  title="Extraído de documento PDF por OCR"
+                                  title={p.nombre_documento_pdf ? `Cédula PDF individual: ${p.nombre_documento_pdf}` : "Extraído de documento PDF por OCR"}
                                 >
                                   <FileText className="w-2.5 h-2.5 shrink-0 text-rose-600 dark:text-rose-400" /> PDF
                                 </span>
@@ -1970,7 +1995,7 @@ function PersonasContent() {
                               )}
 
                               {/* Alerta: Falta en PDF */}
-                              {(!p.documento_id || p.en_pdf === false) && (
+                              {((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false) && (
                                 <span
                                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
                                   title="No se encontró en el PDF (datos cargados desde la planilla Excel)"

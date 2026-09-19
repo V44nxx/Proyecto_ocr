@@ -161,3 +161,76 @@ def test_registrar_personas_excel_faltantes(tmp_path):
     assert resp2.en_excel is True
     assert resp2.requiere_revision is True
     assert resp2.estado_registro == "REVIEW_REQUIRED"
+
+
+def test_subir_pdf_individual_mantiene_documento_padre():
+    """
+    Verifica que al asociar un PDF individual a una persona que faltaba en el PDF:
+    - La persona permanezca en su documento padre del lote (documento_id).
+    - El nuevo PDF se asigne a documento_pdf_id.
+    - en_pdf cambie a True.
+    - PersonaResponse retorne documento_id del lote y documento_pdf_id del archivo individual.
+    """
+    doc_lote_id = uuid.uuid4()
+    doc_ind_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+
+    doc_lote = Documento(
+        id=doc_lote_id,
+        usuario_id=user_id,
+        nombre_original="cedulas_nuevas.pdf",
+        nombre_archivo="cedulas_nuevas.pdf",
+        ruta_archivo="/tmp/cedulas_nuevas.pdf",
+        estado="completado"
+    )
+
+    doc_individual = Documento(
+        id=doc_ind_id,
+        usuario_id=user_id,
+        nombre_original="cedulafaltante.pdf",
+        nombre_archivo="cedula_1002345678_abcd.pdf",
+        ruta_archivo="/tmp/cedulafaltante.pdf",
+        estado="completado",
+        visible_en_subida=False,
+        metadatos={"es_pdf_individual": True, "documento_padre_id": str(doc_lote_id)}
+    )
+
+    p = Persona(
+        id=uuid.uuid4(),
+        documento_id=doc_lote_id,
+        usuario_id=user_id,
+        numero_identificacion="1002345678",
+        nombre_completo="MARIA ELENA GOMEZ DIAZ",
+        estado_registro="REVIEW_REQUIRED",
+        motor_ocr="excel",
+        requiere_revision=True,
+        detalles_campos={"en_pdf": False, "origen": "excel_no_encontrado_en_pdf"},
+        fecha_registro=datetime.utcnow(),
+        fecha_actualizacion=datetime.utcnow()
+    )
+    p.documento = doc_lote
+
+    # Simular la asociación de PDF individual según la nueva lógica
+    doc_padre_id = p.documento_id
+    p.documento_id = doc_padre_id
+    p.documento_pdf_id = doc_ind_id
+    p.documento_pdf = doc_individual
+    p.motor_ocr = "google_document_ai"
+    p.pagina_frente = 1
+    p.detalles_campos = {
+        "en_pdf": True,
+        "documento_pdf_id": str(doc_ind_id),
+        "nombre_documento_pdf": "cedulafaltante.pdf",
+        "documento_padre_id": str(doc_lote_id)
+    }
+
+    # Enriquecer respuesta
+    resp = _enriquecer_persona_response(p, ids_en_excel={"1002345678"}, hay_excel=True)
+
+    # Verificaciones
+    assert resp.en_pdf is True
+    assert resp.documento_id == doc_lote_id
+    assert resp.nombre_documento == "cedulas_nuevas.pdf"
+    assert resp.documento_pdf_id == doc_ind_id
+    assert resp.nombre_documento_pdf == "cedulafaltante.pdf"
+

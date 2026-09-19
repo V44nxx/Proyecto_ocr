@@ -211,8 +211,17 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
 
     detalles = dict(p.detalles_campos or {})
 
+    # Asignar documento PDF individual si existe
+    r.documento_pdf_id = getattr(p, "documento_pdf_id", None) or detalles.get("documento_pdf_id")
+    if getattr(p, "documento_pdf", None):
+        r.nombre_documento_pdf = p.documento_pdf.nombre_original
+    elif detalles.get("nombre_documento_pdf"):
+        r.nombre_documento_pdf = detalles.get("nombre_documento_pdf")
+
     # Evaluar presencia real en el documento PDF
-    if detalles.get("en_pdf") is False or p.motor_ocr == "excel":
+    if detalles.get("en_pdf") is True or r.documento_pdf_id is not None:
+        r.en_pdf = True
+    elif detalles.get("en_pdf") is False or p.motor_ocr == "excel":
         r.en_pdf = False
         r.requiere_revision = True
         if not r.estado_registro or r.estado_registro == "VALID":
@@ -337,7 +346,10 @@ def listar_personas(
     query = _filtrar_persona_por_usuario(query, usuario)
 
     if documento_id and isinstance(documento_id, str):
-        query = query.filter(Persona.documento_id == documento_id)
+        query = query.filter(
+            (Persona.documento_id == documento_id) |
+            (Persona.documento_pdf_id == documento_id)
+        )
 
     if requiere_revision is True:
         query = query.filter(
@@ -670,13 +682,22 @@ async def subir_pdf_persona(
             detail=f"Solo se aceptan archivos PDF. Recibido: {extension}"
         )
 
+    # Determinar documento padre (lote original al que pertenece la persona)
+    doc_padre_id = persona.documento_id
+    if persona.detalles_campos and isinstance(persona.detalles_campos, dict):
+        if persona.detalles_campos.get("documento_padre_id"):
+            doc_padre_id = persona.detalles_campos.get("documento_padre_id")
+    elif persona.documento and persona.documento.metadatos and isinstance(persona.documento.metadatos, dict):
+        if persona.documento.metadatos.get("documento_padre_id"):
+            doc_padre_id = persona.documento.metadatos.get("documento_padre_id")
+
     # Guardar archivo PDF en la carpeta de subidas
     nombre_guardado = f"cedula_{persona.numero_identificacion}_{uuid.uuid4().hex[:8]}.pdf"
     ruta_guardada = settings.upload_path / nombre_guardado
     content = await file.read()
     ruta_guardada.write_bytes(content)
 
-    # Crear registro de documento
+    # Crear registro de documento individual
     doc = Documento(
         usuario_id=usuario.id,
         nombre_archivo=nombre_guardado,
@@ -685,6 +706,12 @@ async def subir_pdf_persona(
         archivo_binario=content,
         estado="procesando",
         tamano_bytes=len(content),
+        visible_en_subida=False,
+        metadatos={
+            "es_pdf_individual": True,
+            "persona_id": str(persona.id),
+            "documento_padre_id": str(doc_padre_id) if doc_padre_id else None,
+        }
     )
     db.add(doc)
     db.commit()
@@ -737,16 +764,43 @@ async def subir_pdf_persona(
             # Eliminar la persona duplicada que creó el OCR
             db.delete(otra)
 
-        # Asociar explícitamente el documento y usuario a la persona
-        persona.documento_id = str(doc.id)
+        # Asociar explícitamente el documento y usuario a la persona:
+        # El documento principal (documento_id) se mantiene como el lote original (ej: cedulas nuevas.pdf)
+        # para que la persona permanezca en la lista de ese archivo. El PDF individual se asocia a documento_pdf_id.
+        if doc_padre_id and str(doc_padre_id) != str(doc.id):
+            persona.documento_id = doc_padre_id
+            persona.documento_pdf_id = doc.id
+        else:
+            persona.documento_id = doc.id
+            persona.documento_pdf_id = doc.id
         persona.usuario_id = usuario.id
+
+        # Asegurar página inicial para previsualización
+        if not persona.pagina_frente:
+            persona.pagina_frente = 1
+        if not persona.motor_ocr or persona.motor_ocr == "excel":
+            persona.motor_ocr = "google_document_ai"
 
         # Reevaluar completitud
         det = dict(persona.detalles_campos or {})
-        # Quitar motivo de "Registro creado desde Excel (pendiente de cargar documento PDF)"
+        det["en_pdf"] = True
+        det["documento_pdf_id"] = str(doc.id)
+        det["nombre_documento_pdf"] = file.filename
+        if doc_padre_id:
+            det["documento_padre_id"] = str(doc_padre_id)
+        det.pop("motivo_no_en_pdf", None)
+        if det.get("origen") == "excel_no_encontrado_en_pdf":
+            det["origen"] = "excel_con_pdf_individual"
+
+        # Quitar motivos de no encontrado en PDF o pendiente de PDF
         motivos_anteriores = det.get("motivos_revision") or []
         if isinstance(motivos_anteriores, list):
-            motivos_anteriores = [m for m in motivos_anteriores if "pendiente de cargar documento" not in m]
+            motivos_anteriores = [
+                m for m in motivos_anteriores
+                if "pendiente de cargar documento" not in m
+                and "No se encontró en el PDF" not in m
+                and "no fue detectada en el documento PDF" not in m
+            ]
             det["motivos_revision"] = motivos_anteriores
 
         tiene_datos, motivos_rev = validador.evaluar_persona_completa(

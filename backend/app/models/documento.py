@@ -30,7 +30,7 @@ class Documento(Base):
 
     # Relaciones
     usuario = relationship("Usuario", back_populates="documentos")
-    personas = relationship("Persona", back_populates="documento", cascade="all, delete-orphan")
+    personas = relationship("Persona", back_populates="documento", cascade="all, delete-orphan", foreign_keys="[Persona.documento_id]")
 
     @property
     def total_personas(self) -> int:

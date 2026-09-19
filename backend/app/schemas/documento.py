@@ -105,7 +105,9 @@ class PersonaUpdate(BaseModel):
 class PersonaResponse(PersonaBase):
     id: uuid.UUID
     documento_id: Optional[uuid.UUID]
+    documento_pdf_id: Optional[uuid.UUID] = None
     nombre_documento: Optional[str] = None
+    nombre_documento_pdf: Optional[str] = None
     edad: Optional[int] = None
     grupo_documento_id: Optional[str] = None
     pagina_frente: Optional[int] = None

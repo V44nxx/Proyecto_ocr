@@ -51,7 +51,9 @@ export interface DocumentoEstadoResponse {
 export interface Persona {
   id: string;
   documento_id: string | null;
+  documento_pdf_id?: string | null;
   nombre_documento?: string | null;
+  nombre_documento_pdf?: string | null;
   grupo_documento_id?: string | null;
   pagina_frente?: number | null;
   pagina_reverso?: number | null;

@@ -103,7 +103,8 @@ def create_tables():
                 "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "UPDATE documentos SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
                 "UPDATE comparaciones SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
-                "UPDATE personas SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');"
+                "UPDATE personas SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;"
             ]
             for q in queries:
                 try:
@@ -114,6 +115,75 @@ def create_tables():
             logger.info("Migraciones automáticas de esquema completadas con éxito.")
     except Exception as mig_err:
         logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
+
+    # ── Auto-curación de personas con PDF individual desvinculadas de su lote principal ──
+    try:
+        from app.models.persona import Persona
+        from app.models.documento import Documento
+        db_s = SessionLocal()
+        try:
+            # 1. Por snapshot en metadatos de documentos
+            docs_lote = db_s.query(Documento).filter(Documento.metadatos.isnot(None)).all()
+            for d_padre in docs_lote:
+                snap = d_padre.metadatos.get("personas_extraidas_datos") if isinstance(d_padre.metadatos, dict) else None
+                if snap and isinstance(snap, list):
+                    for item in snap:
+                        pid = item.get("id")
+                        if pid:
+                            pers = db_s.query(Persona).filter(Persona.id == pid).first()
+                            if pers and pers.documento_id != d_padre.id:
+                                pers.documento_pdf_id = pers.documento_id
+                                pers.documento_id = d_padre.id
+                                det = dict(pers.detalles_campos or {})
+                                det["en_pdf"] = True
+                                det["documento_pdf_id"] = str(pers.documento_pdf_id)
+                                det["documento_padre_id"] = str(d_padre.id)
+                                det.pop("motivo_no_en_pdf", None)
+                                pers.detalles_campos = det
+                                doc_ind = db_s.query(Documento).filter(Documento.id == pers.documento_pdf_id).first()
+                                if doc_ind:
+                                    doc_ind.visible_en_subida = False
+                                    meta = dict(doc_ind.metadatos or {})
+                                    meta["es_pdf_individual"] = True
+                                    meta["documento_padre_id"] = str(d_padre.id)
+                                    doc_ind.metadatos = meta
+
+            # 2. Por coincidencia en lotes de usuario (documentos individuales cedula_... o cedulafaltante...)
+            personas_ind = db_s.query(Persona).join(Documento, Persona.documento_id == Documento.id).filter(
+                (Documento.nombre_archivo.ilike("cedula_%")) | (Documento.nombre_original.ilike("cedulafaltante%")) | (Documento.total_paginas <= 2)
+            ).all()
+            for p_ind in personas_ind:
+                if p_ind.documento and not p_ind.documento_pdf_id:
+                    # Buscar documento lote principal del usuario
+                    lote_cand = db_s.query(Documento).filter(
+                        Documento.usuario_id == p_ind.usuario_id,
+                        Documento.id != p_ind.documento_id,
+                        Documento.visible_en_subida == True,
+                        Documento.total_paginas > 2
+                    ).order_by(Documento.fecha_carga.desc()).first()
+                    if lote_cand:
+                        p_ind.documento_pdf_id = p_ind.documento_id
+                        p_ind.documento_id = lote_cand.id
+                        det = dict(p_ind.detalles_campos or {})
+                        det["en_pdf"] = True
+                        det["documento_pdf_id"] = str(p_ind.documento_pdf_id)
+                        det["documento_padre_id"] = str(lote_cand.id)
+                        det.pop("motivo_no_en_pdf", None)
+                        p_ind.detalles_campos = det
+                        doc_ind = db_s.query(Documento).filter(Documento.id == p_ind.documento_pdf_id).first()
+                        if doc_ind:
+                            doc_ind.visible_en_subida = False
+                            meta = dict(doc_ind.metadatos or {})
+                            meta["es_pdf_individual"] = True
+                            meta["documento_padre_id"] = str(lote_cand.id)
+                            doc_ind.metadatos = meta
+
+            db_s.commit()
+            logger.info("Auto-curación de documentos individuales completada con éxito.")
+        finally:
+            db_s.close()
+    except Exception as heal_err:
+        logger.warning(f"Aviso en curación de personas/documentos: {heal_err}")
 
     # ── Saneamiento de nombres y reevaluación de estado de revisión ──
     try:

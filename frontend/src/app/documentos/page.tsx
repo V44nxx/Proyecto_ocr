@@ -64,10 +64,17 @@ export default function DocumentosPage() {
       const rawFase = localStorage.getItem(LS_FASE_ACTUAL);
       const docs: DocTracking[] = rawDocs ? JSON.parse(rawDocs) : [];
       const fase = rawFase || "inactivo";
-      // Solo restaurar si hay docs en proceso real (procesando/pendiente)
-      const tieneActivos = docs.some((d) => d.estado === "procesando" || d.estado === "pendiente");
-      if (!tieneActivos) return { docs: [], fase: "inactivo" };
-      return { docs, fase };
+      // Filtrar y descartar IDs temporales (prep- o doc-) que no son UUIDs reales en BD
+      const docsValidos = docs.filter(
+        (d) => d.id && !d.id.startsWith("prep-") && !d.id.startsWith("doc-")
+      );
+      const tieneActivos = docsValidos.some((d) => d.estado === "procesando" || d.estado === "pendiente");
+      if (!tieneActivos || docsValidos.length === 0) {
+        localStorage.removeItem(LS_DOCS_EN_PROCESO);
+        localStorage.removeItem(LS_FASE_ACTUAL);
+        return { docs: [], fase: "inactivo" };
+      }
+      return { docs: docsValidos, fase: fase === "subiendo" ? "procesando" : fase };
     } catch {
       return { docs: [], fase: "inactivo" };
     }
@@ -166,10 +173,11 @@ export default function DocumentosPage() {
 
   // Polling de estado detallado de extracción OCR
   useEffect(() => {
-    if (faseActual === "subiendo") return;
+    if (faseActual === "subiendo" || faseActual === "inactivo") return;
 
     const docsPendientes = docsEnProceso.filter(
-      (d) => d.estado === "procesando" || d.estado === "pendiente"
+      (d) => (d.estado === "procesando" || d.estado === "pendiente") &&
+             d.id && !d.id.startsWith("prep-") && !d.id.startsWith("doc-")
     );
 
     if (docsPendientes.length === 0) return;
@@ -180,6 +188,10 @@ export default function DocumentosPage() {
       const updates = await Promise.all(
         docsEnProceso.map(async (doc) => {
           if (doc.estado === "completado" || doc.estado === "error") {
+            return doc;
+          }
+
+          if (!doc.id || doc.id.startsWith("prep-") || doc.id.startsWith("doc-")) {
             return doc;
           }
 
@@ -201,7 +213,16 @@ export default function DocumentosPage() {
               tiempo_procesamiento_ms: data.tiempo_procesamiento_ms,
               mensaje_error: data.mensaje_error,
             };
-          } catch {
+          } catch (err: any) {
+            if (err?.response?.status === 404) {
+              huboCambios = true;
+              return {
+                ...doc,
+                estado: "error" as const,
+                progreso: 100,
+                paso: "Documento cancelado o no encontrado en el servidor",
+              };
+            }
             return doc;
           }
         })
@@ -390,7 +411,9 @@ export default function DocumentosPage() {
               prev.map((d) => ({
                 ...d,
                 progreso: Math.max(5, Math.min(99, Math.round(pct * 0.9))),
-                paso: `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
+                paso: pct >= 100
+                  ? "Archivo recibido en el servidor. Iniciando extracción OCR..."
+                  : `Transfiriendo archivo al servidor (${formatSize(progressEvent.loaded)} de ${formatSize(progressEvent.total)} - ${pct}%)...`,
               }))
             );
           }
@@ -399,6 +422,7 @@ export default function DocumentosPage() {
         uploadAbortControllerRef.current.signal
       );
 
+      setProgresoSubida(100);
       setFaseActual("procesando");
       const docsResp = res.data?.documentos || [];
 
@@ -426,7 +450,7 @@ export default function DocumentosPage() {
         id: d.id,
         nombre: d.nombre_original || d.nombre || "Documento PDF",
         estado: (d.estado as any) || "procesando",
-        progreso: 12,
+        progreso: 15,
         paso: "Iniciando lectura y OCR con Google Document AI...",
         total_paginas: 0,
         pagina_actual: 0,
@@ -445,6 +469,14 @@ export default function DocumentosPage() {
         return;
       }
       setFaseActual("error");
+      setDocsEnProceso((prev) =>
+        prev.map((d) => ({
+          ...d,
+          estado: "error",
+          progreso: 100,
+          paso: `Error: ${getErrorMessage(err, "Error subiendo archivo al servidor")}`,
+        }))
+      );
       toast.error(getErrorMessage(err, "Error subiendo archivos"));
     } finally {
       setSubiendo(false);
@@ -642,9 +674,9 @@ export default function DocumentosPage() {
             <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
             {/* Cabecera del Progreso */}
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.08] relative z-10">
-              <div className="flex items-center gap-3">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/[0.08] relative z-10">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
                   procesoFinalizado
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                     : faseActual === "subiendo"
@@ -659,9 +691,9 @@ export default function DocumentosPage() {
                     <Cpu className="w-6 h-6" />
                   )}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <h3 className="text-lg font-bold text-white">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                       {procesoFinalizado
                         ? `¡Extracción Completada en ${tiempoProcesamientoTexto}!`
                         : faseActual === "subiendo"
@@ -674,7 +706,7 @@ export default function DocumentosPage() {
                         : faseActual === "subiendo"
                         ? "badge-info"
                         : "badge-warning"
-                    } text-xs px-2.5 py-0.5`}>
+                    } text-xs px-2.5 py-0.5 whitespace-nowrap shrink-0`}>
                       {procesoFinalizado
                         ? "Finalizado"
                         : faseActual === "subiendo"
@@ -682,7 +714,7 @@ export default function DocumentosPage() {
                         : "En progreso"}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 mt-0.5">
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                     {procesoFinalizado
                       ? `Se estructuraron ${totalPersonasDetectadas} personas y se guardaron en la base de datos.`
                       : faseActual === "subiendo"
@@ -692,45 +724,56 @@ export default function DocumentosPage() {
                 </div>
               </div>
 
-              {/* Indicadores de Cronómetro y Tiempo Estimado */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-800/80 border border-slate-300 dark:border-white/[0.08] text-xs font-mono text-slate-700 dark:text-slate-300 shadow-sm">
-                  <Timer className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
+              {/* Indicadores de Cronómetro, Tiempo Estimado y Botones de Control */}
+              <div className="flex items-center flex-wrap gap-2 sm:gap-2.5 shrink-0 self-start lg:self-center">
+                {/* Tiempo Transcurrido */}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-dark-800/90 border border-slate-300 dark:border-white/10 text-xs font-mono text-slate-700 dark:text-slate-300 shadow-sm whitespace-nowrap shrink-0">
+                  <Timer className="w-3.5 h-3.5 text-primary-500 shrink-0" />
                   <span>
                     {procesoFinalizado ? "Tiempo total:" : "Transcurrido:"}{" "}
-                    <strong className="text-slate-900 dark:text-white">
+                    <strong className="text-slate-900 dark:text-white font-bold">
                       {procesoFinalizado ? tiempoProcesamientoTexto : formatTimer(tiempoTranscurrido)}
                     </strong>
                   </span>
                 </div>
 
+                {/* Tiempo Estimado */}
                 {!procesoFinalizado && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-xs font-mono text-primary-300">
-                    <Hourglass className="w-3.5 h-3.5 text-primary-400" />
-                    <span>Estimado: <strong className="text-white">{calcularTiempoEstimado()}</strong></span>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-500/10 border border-primary-500/25 text-xs font-mono text-primary-600 dark:text-primary-300 shadow-sm whitespace-nowrap shrink-0">
+                    <Hourglass className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0 animate-pulse" />
+                    <span>
+                      Estimado: <strong className="text-slate-900 dark:text-white font-bold">{calcularTiempoEstimado()}</strong>
+                    </span>
                   </div>
                 )}
 
+                {/* Botón Cancelar / Eliminar Subida */}
                 {!procesoFinalizado && (
                   <button
                     type="button"
                     onClick={cancelarSubidaOProceso}
                     disabled={cancelando}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/30 text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-100 border border-rose-500/30 hover:border-rose-500/50 text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                     title="Cancelar subida y remover archivos del sistema"
                   >
-                    <XCircle className="w-4 h-4 text-rose-400" />
+                    {cancelando ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-500 shrink-0" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    )}
                     <span>{cancelando ? "Cancelando..." : "Cancelar subida"}</span>
                   </button>
                 )}
 
+                {/* Botón Minimizar / Cerrar Panel */}
                 <button
+                  type="button"
                   onClick={() => {
                     canceladoRedireccionRef.current = true;
                     setCuentaAtrasRedireccion(null);
                     setMostrandoProgreso(false);
                   }}
-                  className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-dark-800 transition-colors"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-dark-800 border border-transparent hover:border-slate-300 dark:hover:border-white/10 transition-colors shrink-0 cursor-pointer"
                   title="Minimizar panel de progreso"
                 >
                   <X className="w-5 h-5" />
@@ -880,7 +923,7 @@ export default function DocumentosPage() {
                   Carga del PDF
                 </div>
                 <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
-                  {progresoSubida >= 100 ? "Subida completada" : `${progresoSubida}% cargado`}
+                  {progresoSubida >= 100 || faseActual === "procesando" || procesoFinalizado ? "Subida completada" : `${progresoSubida}% cargado`}
                 </p>
               </div>
 
@@ -961,7 +1004,7 @@ export default function DocumentosPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end sm:self-center flex-shrink-0">
+                  <div className="flex items-center gap-2.5 self-end sm:self-center flex-shrink-0">
                     {doc.personas_count > 0 && (
                       <span className="badge badge-info text-xs flex items-center gap-1 font-bold">
                         <Users className="w-3 h-3" />
@@ -973,9 +1016,28 @@ export default function DocumentosPage() {
                         {getConfianzaDisplay(doc.confianza_ocr)}% conf.
                       </span>
                     )}
-                    <span className="text-xs font-mono font-bold text-primary-700 dark:text-primary-400 w-10 text-right">
+                    <span className="text-xs font-mono font-bold text-primary-700 dark:text-primary-400 w-12 text-right">
                       {faseActual === "subiendo" ? `${progresoSubida}%` : `${doc.progreso}%`}
                     </span>
+
+                    {/* Botón Eliminar / Cancelar por documento individual */}
+                    {!procesoFinalizado && doc.estado !== "completado" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (doc.id.startsWith("prep-") || doc.id.startsWith("doc-")) {
+                            cancelarSubidaOProceso();
+                          } else {
+                            cancelarDocumentoIndividual(doc.id, doc.nombre);
+                          }
+                        }}
+                        disabled={cancelando}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer shrink-0"
+                        title={doc.estado === "error" ? "Remover documento con error" : "Cancelar y eliminar este documento"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

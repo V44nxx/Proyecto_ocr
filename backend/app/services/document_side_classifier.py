@@ -57,7 +57,10 @@ class DocumentSideClassifier:
                 "reasons": ["Texto nulo o insuficiente"]
             }
 
-        texto_up = texto.upper()
+        from app.utils.name_cleaner import es_linea_ruido_administrativo
+        lineas_limpias = [l for l in texto.splitlines() if not es_linea_ruido_administrativo(l)]
+        texto_util = "\n".join(lineas_limpias) if lineas_limpias else texto
+        texto_up = texto_util.upper()
         reasons = []
 
         # Puntuaciones

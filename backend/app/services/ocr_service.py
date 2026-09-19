@@ -142,7 +142,7 @@ class OCRService:
                 p_num = i + 1
                 pag = doc[i]
                 txt_nat = pag.get_text("text")
-                nec_ocr = self._necesita_ocr_imagen(txt_nat)
+                nec_ocr = self._necesita_ocr_imagen(txt_nat, pag=pag)
                 img_arr = None
                 if nec_ocr:
                     # 200 DPI: resolución óptima para OCR documental, 56% más ligero y 2.5x más rápido que 300 DPI
@@ -306,39 +306,76 @@ class OCRService:
     # ──────────────────────────────────────────
     # DETECCIÓN DE PDF ESCANEADO
     # ──────────────────────────────────────────
-    def _necesita_ocr_imagen(self, texto: str) -> bool:
+    def _necesita_ocr_imagen(self, texto: str, pag=None) -> bool:
         """
         Determina si una página necesita OCR de imagen.
 
-        FIX: umbral anterior (< 15 chars) era demasiado permisivo.
-        Un PDF con solo el encabezado 'COLOMBIA' incrustado pasaba
-        el umbral pero sin datos útiles.
+        En fotocopias escaneadas o digitalizadas (Word/Canva/PDF editor):
+        - El encabezado o pie de página suele ser texto nativo (membretes de trámite, fotocopia, etc.).
+        - La cédula física en sí es una IMAGEN escaneada incrustada en la página.
 
-        Ahora busca palabras alfanuméricas de ≥ 3 caracteres.
-        Si hay menos de 5 palabras útiles o menos de 50 chars,
-        se considera página escaneada.
-
-        FIX v2: Aunque el texto nativo tenga ≥5 palabras, si NO contiene
-        ninguna keyword de cédula (NUIP, APELLIDOS, NOMBRES, CEDULA,
-        CIUDADANIA, etc.) se fuerza OCR de imagen ya que el PDF puede
-        tener texto vectorial genérico mezclado con la imagen escaneada.
+        Reglas estrictas:
+        1. Si la página contiene imágenes incrustadas (fotos de cédulas en fotocopias),
+           SE DEBE forzar OCR de imagen a menos que el texto nativo ya contenga una cédula completa
+           (número válido Y nombres de ciudadano que no sean solo membrete).
+        2. Si todo el texto nativo es membrete administrativo/trámite, forzar OCR.
+        3. Si el texto nativo no contiene un número de identificación válido (6-10 dígitos), forzar OCR.
+        4. Si no tiene etiquetas clave de cédula, forzar OCR.
         """
         if not texto or not texto.strip():
             return True
+
+        from app.utils.name_cleaner import es_linea_ruido_administrativo
+        from app.utils.validators import validador
+
+        lineas_no_vacias = [l.strip() for l in texto.splitlines() if l.strip()]
+
+        # 1. Si todo el texto nativo corresponde a membretes administrativos o fotocopias
+        if lineas_no_vacias and all(es_linea_ruido_administrativo(l) for l in lineas_no_vacias):
+            logger.info("[OCR] Todo el texto nativo es membrete administrativo/fotocopia -> Forzando OCR de imagen")
+            return True
+
+        # 2. Si hay imágenes incrustadas en la página (cédulas escaneadas en fotocopias)
+        if pag is not None:
+            try:
+                imgs = pag.get_images()
+                if imgs and len(imgs) > 0:
+                    # En fotocopias de cédula, la imagen contiene los datos del ciudadano
+                    if not re.search(r"\b(APELLIDOS?|NOMBRES?|NUIP)\b", texto, re.I):
+                        logger.info(f"[OCR] Página con {len(imgs)} imagen(es) incrustada(s) -> Forzando OCR de imagen")
+                        return True
+            except Exception:
+                pass
+
+        # 3. Verificar si el texto nativo contiene un número de cédula válido (6 a 10 dígitos)
+        patron_id = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
+        tiene_id_valido = False
+        for m in patron_id.finditer(texto):
+            clean_num = re.sub(r"[^\d]", "", m.group(1))
+            valido, _ = validador.validar_cedula(clean_num)
+            if valido:
+                tiene_id_valido = True
+                break
+
+        if not tiene_id_valido:
+            logger.info("[OCR] Texto nativo no contiene número de identificación válido -> Forzando OCR de imagen")
+            return True
+
+        # 4. Longitud mínima y keywords
         texto_limpio = re.sub(r"\s+", " ", texto.strip())
         palabras_validas = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{3,}", texto_limpio)
         if len(palabras_validas) < 5 or len(texto_limpio) < 50:
             return True
-        # Si hay palabras pero ninguna es keyword de documento de identidad,
-        # probablemente el PDF tiene texto genérico superpuesto a la imagen
+
+        # 5. Keywords estructurales obligatorias de cédula
         KEYWORDS_CEDULA = re.compile(
-            r"\b(NUIP|APELLIDOS?|NOMBRES?|CEDULA|CÉDULA|CIUDADAN[IÍ]A|IDENTIF|NUMERO|NÚMERO|"
-            r"EXPEDICI[OÓ]N|NACIMIENTO|REGISTRAD|FIRMA|TARJETA)\b",
+            r"\b(NUIP|APELLIDOS?|NOMBRES?|CEDULA\s+DE\s+CIUDADAN|TARJETA\s+DE\s+IDENTIDAD)\b",
             re.IGNORECASE
         )
         if not KEYWORDS_CEDULA.search(texto_limpio):
-            logger.info("[OCR] Texto nativo sin keywords de cédula — forzando OCR de imagen")
+            logger.info("[OCR] Texto nativo sin keywords estructurales de cédula — forzando OCR de imagen")
             return True
+
         return False
 
     # ──────────────────────────────────────────

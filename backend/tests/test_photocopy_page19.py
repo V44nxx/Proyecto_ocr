@@ -196,4 +196,51 @@ def test_evaluar_persona_completa_sin_id_no_genera_falsos_6_digitos():
     assert not any("dudoso" in m for m in motivos)
 
 
+def test_necesita_ocr_en_fotocopias_con_membrete():
+    from app.services.ocr_service import ocr_service
+
+    texto_fotocopia = """OFICINA DEPARTAMENTAL DE LA MUJER
+EMPRENDEDORA
+FLORENCIA-CAQUETÁ
+FOTOCOPIA CÉDULA PARA PROCESO DE INSCRIPCION/MATRÍCULA
+CAMPESENA – FULLPOPULAR
+Documento de identidad facilitado para proceso de inscripción y 
+matrícula en el SENA CAQUETA en el Centro Tecnológico de la 
+Amazonía en la Estrategia CAMPESENA-FULL POPULAR
+Septiembre de 2026"""
+
+    # Debe retornar True porque el texto nativo es solo membrete administrativo sin cédula del ciudadano
+    assert ocr_service._necesita_ocr_imagen(texto_fotocopia) is True
+
+
+def test_clasificar_cara_ignora_membrete_tarjeta_cuando_es_cedula():
+    from app.services.document_side_classifier import document_side_classifier
+
+    # Caso Página 20: Membrete dice 'FOTOCOPIA TARJETA DE IDENTIDAD', pero la cédula escaneada es 'CEDULA DE CIUDADANIA'
+    texto_pagina_20 = """OFICINA DEPARTAMENTAL DE LA MUJER
+EMPRENDEDORA
+FLORENCIA-CAQUETÁ
+FOTOCOPIA TARJETA DE IDENTIDAD PARA PROCESO DE INSCRIPCION/MATRÍCULA
+CAMPESENA – FULLPOPULAR
+REPUBLICA DE COLOMBIA
+IDENTIFICACION PERSONAL
+CEDULA DE CIUDADANIA
+NUMERO 40.622.359
+CUELLAR
+NORALBA
+Documento de identidad facilitado para proceso de inscripción y matrícula
+Septiembre de 2026
+FECHA DE NACIMIENTO 18-DIC-1979
+CURILLO (CAQUETA)
+1.51 A+ F
+11-JUL-2000 CURILLO
+REGISTRADOR NACIONAL"""
+
+    clasif = document_side_classifier.clasificar_cara(texto_pagina_20)
+    assert clasif["cara"] == "CEDULA_AMBOS_LADOS"
+    assert clasif["tipo_documento"] == "CEDULA_CIUDADANIA"
+
+
+
+
 

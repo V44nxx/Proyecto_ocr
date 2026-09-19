@@ -91,10 +91,10 @@ class SpatialFieldExtractor:
             r"\bNO\.\s*\d", r"\bNO\.\b", r"\bC\.C\.?\b"
         ],
         "apellidos": [
-            r"APEL+I*[10]*D[O0]?S?", r"PRIMER\s+APEL", r"SEGUNDO\s+APEL", r"SURNAMES?"
+            r"AP[EÉI1]+L+[I10]*D[O0]?S?", r"PRIMER\s+APEL", r"SEGUNDO\s+APEL", r"SURNAMES?"
         ],
         "nombres": [
-            r"N[O0]?[MRD]+[BDR]*[EÉ]S?", r"PRIMER\s+N[O0]?MBRE", r"SEGUNDO\s+N[O0]?MBRE", r"GIVEN\s+NAMES?"
+            r"\b(?:N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", r"PRIMER\s+N[O0]?MBRE", r"SEGUNDO\s+N[O0]?MBRE", r"GIVEN\s+NAMES?"
         ],
         "fecha_nacimiento": [
             r"FECHA\s+DE\s+NAC[I1]M[I1]ENT[O0]?", r"NAC[I1]M[I1]ENT[O0]?", r"DATE\s+OF\s+B[I1]RTH"
@@ -494,7 +494,7 @@ class SpatialFieldExtractor:
                 re.I
             )
             FRENTE_KEYWORDS = re.compile(
-                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|NUMERO|N[UÚ]MERO|APELL[I10]*D|N[O0]?[MRD]+[BDR]*[EÉ]S?)\b",
+                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|NUMERO|N[UÚ]MERO|AP[EÉI1]+L+[I10]*D|N[O0]?M[BDRPE]*[EÉ]S?|MOUSEES)\b",
                 re.I
             )
             HEADER_FRENTE_KEYWORDS = re.compile(
@@ -564,9 +564,9 @@ class SpatialFieldExtractor:
                 t = getattr(l, "text", "").upper().strip()
                 if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO)\b", t) or re.search(r"\b\d{6,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
                     idx_num = idx
-                if re.search(r"\bAPELL[I10]*D", t) and idx_ape == -1:
+                if re.search(r"\bAP[EÉI1]+L+[I10]*D", t) and idx_ape == -1:
                     idx_ape = idx
-                if re.search(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", t) and idx_nom == -1:
+                if re.search(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", t) and idx_nom == -1:
                     idx_nom = idx
 
             if idx_ape != -1 and idx_nom != -1:
@@ -579,7 +579,7 @@ class SpatialFieldExtractor:
                     # Layout Cédula Digital / Tarjeta Identidad:
                     # APELLIDOS_LABEL -> APELLIDOS_VAL -> NOMBRES_LABEL -> NOMBRES_VAL
                     # 1. Apellidos: después de APELLIDOS_LABEL y antes de NOMBRES_LABEL
-                    inline_ape = self.limpiar_nombre(re.sub(r"\bAPELL[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
@@ -623,7 +623,7 @@ class SpatialFieldExtractor:
                     # Layout Cédula Amarilla:
                     # NUMERO -> APELLIDOS_VAL -> APELLIDOS_LABEL -> NOMBRES_VAL -> NOMBRES_LABEL
                     # 1. Verificar si hay valor inline en la misma línea de APELLIDOS
-                    inline_ape = self.limpiar_nombre(re.sub(r"\bAPELL[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
@@ -646,7 +646,7 @@ class SpatialFieldExtractor:
                             resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
 
                     # 2. Verificar si hay valor inline en la misma línea de NOMBRES
-                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
+                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
                     if inline_nom:
                         resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
                     else:
@@ -660,7 +660,7 @@ class SpatialFieldExtractor:
                             resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                 else:
                     # Layout Inverso: NOMBRES_LABEL -> NOMBRES_VAL -> APELLIDOS_LABEL -> APELLIDOS_VAL
-                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
+                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
                     if inline_nom:
                         resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
                     else:
@@ -672,7 +672,7 @@ class SpatialFieldExtractor:
                         if cand_nom and not resultado_campos["nombres"]["value"]:
                             resultado_campos["nombres"] = {"value": " ".join(cand_nom), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES"}
 
-                    inline_ape = self.limpiar_nombre(re.sub(r"\b(APELL[I10]*D[O0]?S?|APELLIDORAJONAL)\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\b(AP[EÉI1]+L+[I10]*D[O0]?S?|APELLIDORAJONAL)\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
                     else:
@@ -784,6 +784,8 @@ class SpatialFieldExtractor:
         fechas_doc = set()
         for l in lines:
             t = getattr(l, "text", "").strip()
+            if es_linea_ruido_administrativo(t):
+                continue
             # Intentar parsear línea completa
             dt_full = validador.parsear_fecha(t)
             if dt_full and 1930 <= dt_full.year <= 2026:
@@ -842,6 +844,8 @@ class SpatialFieldExtractor:
         # ── 6. Sexo ──
         for idx_l, l in enumerate(lines):
             t = getattr(l, "text", "").upper().strip()
+            if es_linea_ruido_administrativo(t):
+                continue
             y_pos = getattr(l, "y", 0.0)
             x_pos = getattr(l, "x", 0.0)
 

@@ -70,7 +70,7 @@ export default function BannerProcesoActivo() {
           <div className="flex items-center gap-2 mb-1">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-200 flex-shrink-0" />
             <p className="text-sm font-semibold text-white truncate">
-              OCR en proceso — {docs.length} {docs.length === 1 ? "archivo" : "archivos"}
+              OCR en proceso â€” {docs.length} {docs.length === 1 ? "archivo" : "archivos"}
             </p>
             <span className="ml-auto flex-shrink-0 text-xs font-bold text-blue-100 bg-white/15 px-2 py-0.5 rounded-full">
               {progresoPromedio}%

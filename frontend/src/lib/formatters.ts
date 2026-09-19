@@ -180,8 +180,8 @@ export function verificarInconsistenciaDocumentoEdad(
   if (edad === null) return { esInvalido: false, edad: null };
 
   const tipo = (tipoDocumento || "").toUpperCase().trim();
-  const esTI = tipo === "TARJETA_IDENTIDAD" || tipo === "TI";
-  const esCC = tipo === "CEDULA_CIUDADANIA" || tipo === "CC";
+  const esTI = tipo.includes("TARJETA") || tipo === "TI";
+  const esCC = (tipo.includes("CEDULA") || tipo.includes("CÉDULA") || tipo === "CC") && !esTI;
 
   if (edad >= 18 && esTI) {
     return {

@@ -249,17 +249,64 @@ class ExtractorService:
     # MÉTODO PRINCIPAL DE EXTRACCIÓN
     # ──────────────────────────────────────────
     def detectar_tipo_documento(self, texto: str) -> str:
-        """Determina si el texto corresponde a Cédula de Ciudadanía, Tarjeta de Identidad, Cédula de Extranjería o Pasaporte."""
+        """Determina con alta precisión si el texto corresponde a Tarjeta de Identidad, Cédula de Ciudadanía, Cédula de Extranjería o Pasaporte."""
         if not texto:
-            return "CEDULA_CIUDADANIA"
+            return "UNKNOWN"
         texto_up = texto.upper()
-        if re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|TARJETA DE IDENTIFICACION|T\.I\b|T\.I\.)\b", texto_up):
+
+        # 1. Tarjeta de Identidad (TI)
+        # Una Cédula de Ciudadanía NUNCA contiene 'TARJETA' o 'T.I.'.
+        # Soporta saltos de línea (\s+), OCR fusionado, typos y reverso característico de TI.
+        es_tarjeta = bool(
+            re.search(
+                r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|"
+                r"\bTARJETADEIDENTIDAD\b|\bTARJETADE\s*IDENTIDAD\b|\bTARJETA\s*DEIDENTIDAD\b|"
+                r"\bTARJETA\b|"
+                r"\bT\.?\s*I\.?\b",
+                texto_up
+            )
+            or (
+                re.search(r"\bFECHA\s+DE\s+VENCIMIENTO\b", texto_up)
+                and re.search(r"\bLUGAR\s+DE\s+NACIMIENTO\b", texto_up)
+                and not re.search(r"I<COL|C<COL", texto_up)
+            )
+        )
+
+        es_extranjeria = bool(re.search(r"\b(CEDULA\s+DE\s+EXTRANJERIA|CEDULA\s+EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
+        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
+
+        # 2. Cédula de Ciudadanía (CC)
+        # Requiere explícitamente palabras de CÉDULA o CIUDADANÍA (o formato MRZ I<COL / C<COL).
+        # NOTA: NO usar 'REPUBLICA DE COLOMBIA' o 'IDENTIFICACION PERSONAL' como prueba única de CC porque las TI también lo tienen.
+        es_cedula = bool(
+            re.search(
+                r"\b(CEDULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
+                r"C[EÉ]DULA\s+CIUDADAN[IÍ]A|CEDULADECIUDADANIA|"
+                r"CEDULA|C[EÉ]DULA|CIUDADAN[IÍ]A|C\.C\.?\b)\b|"
+                r"I<COL|C<COL",
+                texto_up
+            )
+        )
+
+        if es_tarjeta and not es_cedula:
             return "TARJETA_IDENTIDAD"
-        elif re.search(r"\b(CEDULA DE EXTRANJERIA|CEDULA EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up):
+        elif es_tarjeta and es_cedula:
+            # Si ambas aparecen (ej: fotocopia de trámite que menciona Cédula y Tarjeta)
+            if re.search(r"\bTARJETA\s+(?:DE\s+)?IDENTIDAD\b", texto_up):
+                return "TARJETA_IDENTIDAD"
+            elif re.search(r"\bC[EÉ]DULA\s+(?:DE\s+)?CIUDADAN[IÍ]A\b", texto_up):
+                return "CEDULA_CIUDADANIA"
+            return "TARJETA_IDENTIDAD"
+        elif es_extranjeria:
             return "CEDULA_EXTRANJERIA"
-        elif re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up):
+        elif es_pasaporte:
             return "PASAPORTE"
-        elif re.search(r"\b(CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|REPUBLICA DE COLOMBIA|REPÚBLICA DE COLOMBIA|NUIP|IDENTIFICACION PERSONAL)\b", texto_up):
+        elif es_cedula:
+            return "CEDULA_CIUDADANIA"
+        elif re.search(r"\b(REPUBLICA\s+DE\s+COLOMBIA|REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|NUIP)\b", texto_up):
+            # Formato de documento de identidad oficial colombiano sin etiqueta explícita: si tiene indicios de TI, priorizar TI
+            if es_tarjeta:
+                return "TARJETA_IDENTIDAD"
             return "CEDULA_CIUDADANIA"
         else:
             return "UNKNOWN"

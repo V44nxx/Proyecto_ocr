@@ -15,15 +15,17 @@ class DocumentDetector:
     """
 
     PATRONES_CEDULA = [
-        r"\bREPUBLICA DE COLOMBIA\b", r"\bREPÚBLICA DE COLOMBIA\b",
-        r"\bCEDULA DE CIUDADANIA\b", r"\bCÉDULA DE CIUDADANÍA\b",
-        r"\bIDENTIFICACION PERSONAL\b", r"\bIDENTIFICACIÓN PERSONAL\b",
-        r"\bNUIP\b"
+        r"\bCEDULA\s+DE\s+CIUDADAN[IÍ]A\b", r"\bC[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A\b",
+        r"\bCEDULA\s+CIUDADAN[IÍ]A\b", r"\bC[EÉ]DULA\s+CIUDADAN[IÍ]A\b",
+        r"\bCEDULA\b", r"\bC[EÉ]DULA\b", r"\bCIUDADAN[IÍ]A\b",
+        r"I<COL", r"C<COL"
     ]
 
     PATRONES_TARJETA = [
-        r"\bTARJETA DE IDENTIDAD\b", r"\bTARJETA IDENTIDAD\b",
-        r"\bTARJETA DE IDENTIF\b", r"\bT\.I\b"
+        r"\bTARJETA\s+(?:DE\s+)?IDENTIDAD\b", r"\bTARJETA\s+IDENTIDAD\b",
+        r"\bTARJETADEIDENTIDAD\b|\bTARJETADE\s*IDENTIDAD\b|\bTARJETA\s*DEIDENTIDAD\b",
+        r"\bTARJETA\s+DE\s+IDENTIF[A-Z]*\b", r"\bTARJETA\b", r"\bT\.?\s*I\.?\b",
+        r"\bFECHA\s+DE\s+VENCIMIENTO\b"
     ]
 
     PATRONES_ETIQUETAS_CEDULA = [

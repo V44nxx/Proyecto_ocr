@@ -66,12 +66,51 @@ class DocumentSideClassifier:
         score_front_t = 0
         score_back_t = 0
 
-        es_tarjeta = bool(re.search(r"\b(TARJETA DE IDENTIDAD|TARJETA IDENTIDAD|TARJETA DE IDENTIF|T\.I\b|T\.I\.)\b", texto_up))
-        es_extranjeria = bool(re.search(r"\b(CEDULA DE EXTRANJERIA|CEDULA EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
+        es_tarjeta = bool(
+            re.search(
+                r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|"
+                r"\bTARJETADEIDENTIDAD\b|\bTARJETADE\s*IDENTIDAD\b|\bTARJETA\s*DEIDENTIDAD\b|"
+                r"\bTARJETA\b|"
+                r"\bT\.?\s*I\.?\b",
+                texto_up
+            )
+            or (
+                re.search(r"\bFECHA\s+DE\s+VENCIMIENTO\b", texto_up)
+                and re.search(r"\bLUGAR\s+DE\s+NACIMIENTO\b", texto_up)
+                and not re.search(r"I<COL|C<COL", texto_up)
+            )
+        )
+        es_extranjeria = bool(re.search(r"\b(CEDULA\s+DE\s+EXTRANJERIA|CEDULA\s+EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
         es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
-        es_cedula_digital = "NUIP" in texto_up
+        es_cedula_digital = "NUIP" in texto_up and not es_tarjeta
 
-        tipo_doc_base = "TARJETA_IDENTIDAD" if es_tarjeta else ("CEDULA_EXTRANJERIA" if es_extranjeria else ("PASAPORTE" if es_pasaporte else "CEDULA_CIUDADANIA"))
+        es_cedula = bool(
+            re.search(
+                r"\b(CEDULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
+                r"C[EÉ]DULA\s+CIUDADAN[IÍ]A|CEDULADECIUDADANIA|"
+                r"CEDULA|C[EÉ]DULA|CIUDADAN[IÍ]A|C\.C\.?\b)\b|"
+                r"I<COL|C<COL",
+                texto_up
+            )
+        )
+
+        if es_tarjeta and not es_cedula:
+            tipo_doc_base = "TARJETA_IDENTIDAD"
+        elif es_tarjeta and es_cedula:
+            if re.search(r"\bTARJETA\s+(?:DE\s+)?IDENTIDAD\b", texto_up):
+                tipo_doc_base = "TARJETA_IDENTIDAD"
+            elif re.search(r"\bC[EÉ]DULA\s+(?:DE\s+)?CIUDADAN[IÍ]A\b", texto_up):
+                tipo_doc_base = "CEDULA_CIUDADANIA"
+            else:
+                tipo_doc_base = "TARJETA_IDENTIDAD"
+        elif es_extranjeria:
+            tipo_doc_base = "CEDULA_EXTRANJERIA"
+        elif es_pasaporte:
+            tipo_doc_base = "PASAPORTE"
+        elif es_cedula:
+            tipo_doc_base = "CEDULA_CIUDADANIA"
+        else:
+            tipo_doc_base = "TARJETA_IDENTIDAD" if es_tarjeta else "CEDULA_CIUDADANIA"
 
         # 1. Evaluar FRONT Cédula / Tarjeta (exclusivos del anverso)
         for pat in self.PATRONES_FRONT_CEDULA:
@@ -90,9 +129,9 @@ class DocumentSideClassifier:
 
         # 3. Evaluar Tarjetas específicamente
         if es_tarjeta:
-            if re.search(r"\b(FECHA DE NACIMIENTO|NOMBRES?|APELLIDOS?|NACIONALIDAD)\b", texto_up):
+            if re.search(r"\b(NOMBRES?|APELLIDOS?|NUMERO|NUIP|NACIONALIDAD)\b", texto_up):
                 score_front_t += 5
-            if re.search(r"\b(EXPEDICION|REGISTRADOR|INDICE DERECHO|ÍNDICE DERECHO|HUELLA)\b", texto_up):
+            if re.search(r"\b(EXPEDICI[OÓ]N|REGISTRADOR|INDICE\s+DERECHO|ÍNDICE\s+DERECHO|HUELLA|FECHA\s+DE\s+VENCIMIENTO|LUGAR\s+DE\s+NACIMIENTO|FECHA\s+DE\s+NACIMIENTO)\b", texto_up):
                 score_back_t += 5
 
         # Detección estricta de 2 caras en 1 sola página:

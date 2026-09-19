@@ -539,8 +539,8 @@ class ValidadorColombia:
 
             edad = cls.calcular_edad(fecha_nacimiento)
             tipo_norm = str(tipo_doc_eval or "").upper().strip()
-            es_ti = tipo_norm in ("TARJETA_IDENTIDAD", "TI")
-            es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC")
+            es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
+            es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti)
 
             if edad is not None:
                 if edad >= 18 and es_ti:

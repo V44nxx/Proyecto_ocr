@@ -185,8 +185,30 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     # Evaluación de mayoría de edad vs tipo de documento
     edad_val = p.edad or validador.calcular_edad(p.fecha_nacimiento)
     tipo_norm = str(p.tipo_documento or "").upper().strip()
-    es_ti = tipo_norm in ("TARJETA_IDENTIDAD", "TI")
-    es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC")
+
+    # Si en el texto OCR crudo se evidencia que es Tarjeta de Identidad, rectificar la clasificación
+    texto_ocr = str(p.texto_ocr_crudo or "").upper()
+    es_tarjeta_en_texto = bool(
+        re.search(
+            r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|"
+            r"\bTARJETADEIDENTIDAD\b|\bTARJETADE\s*IDENTIDAD\b|\bTARJETA\s*DEIDENTIDAD\b|"
+            r"\bTARJETA\b|\bT\.?\s*I\.?\b",
+            texto_ocr
+        )
+        or (
+            re.search(r"\bFECHA\s+DE\s+VENCIMIENTO\b", texto_ocr)
+            and re.search(r"\bLUGAR\s+DE\s+NACIMIENTO\b", texto_ocr)
+            and not re.search(r"I<COL|C<COL", texto_ocr)
+        )
+    )
+    if es_tarjeta_en_texto and not re.search(r"\bCEDULA\s+DE\s+CIUDADAN[IÍ]A\b", texto_ocr):
+        tipo_norm = "TARJETA_IDENTIDAD"
+        r.tipo_documento = "TARJETA_IDENTIDAD"
+        if p.tipo_documento != "TARJETA_IDENTIDAD":
+            p.tipo_documento = "TARJETA_IDENTIDAD"
+
+    es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
+    es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti)
 
     if edad_val is not None:
         if edad_val >= 18 and es_ti:

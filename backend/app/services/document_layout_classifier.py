@@ -32,7 +32,16 @@ class DocumentLayoutClassifier:
         tiene_cedula_amarilla_hdr = bool(re.search(r"\bCEDULA\s+DE\s+CIUDADANIA\b|\bREP[UÚ]BLICA\s+DE\s+COLOMBIA\b", texto_completo))
         tiene_reverso_exp = bool(re.search(r"\bFECHA\s+Y\s+LUGAR\s+DE\s+EXPEDIC[I1][OÓ]N\b|\bFECHA\s+EXPEDIC[I1][OÓ]N\b", texto_completo))
         tiene_mrz = bool(re.search(r"I<COL|C<COL|PUBLICA", texto_completo))
-        tiene_ti = bool(re.search(r"\bTARJETA\s+DE\s+IDENTIDAD\b|\bTARJETA\s+IDENTIDAD\b", texto_completo))
+        tiene_ti = bool(re.search(r"\bTARJETA\s*(?:DE\s*)?IDENTIDAD\b|\bTARJETADEIDENTIDAD\b|\bTARJETA\b|\bT\.I\b", texto_completo))
+
+        # Tarjeta de Identidad: evaluar primero porque también contiene APELLIDOS y NOMBRES
+        if tiene_ti:
+            return {
+                "layout_type": "TARJETA_IDENTIDAD",
+                "expected_direction": "VALUE_ABOVE_LABEL",
+                "confidence": 0.95,
+                "reasons": ["Encabezado o señales de Tarjeta de Identidad detectadas"]
+            }
 
         # Cédula Amarilla Frente: contiene APELLIDOS, NOMBRES e identificador de cédula de ciudadanía
         if (tiene_apellidos and tiene_nombres) or (tiene_cedula_amarilla_hdr and not tiene_reverso_exp):
@@ -50,15 +59,6 @@ class DocumentLayoutClassifier:
                 "expected_direction": "VALUE_ABOVE_LABEL",
                 "confidence": 0.95,
                 "reasons": ["Rótulos o MRZ de reverso detectados"]
-            }
-
-        # Tarjeta de Identidad
-        if tiene_ti:
-            return {
-                "layout_type": "TARJETA_IDENTIDAD",
-                "expected_direction": "VALUE_BELOW_LABEL",
-                "confidence": 0.90,
-                "reasons": ["Encabezado de Tarjeta de Identidad detectado"]
             }
 
         # Default fallback

@@ -91,3 +91,46 @@ def test_filtro_geografico_fused():
     assert colombia_geo.es_geografico("NADIA YULIETH") is False
     assert colombia_geo.es_geografico("QUIÑONES GOMEZ") is False
 
+
+def test_deteccion_ti_multilinea_y_alerta_mayor_de_edad():
+    extractor = ExtractorService()
+    # Texto con salto de línea entre TARJETA y DE IDENTIDAD y con IDENTIFICACION PERSONAL
+    texto_ti_multilinea = """
+    REPÚBLICA DE COLOMBIA
+    IDENTIFICACIÓN PERSONAL
+    TARJETA
+    DE IDENTIDAD
+    NUMERO 1.005.123.456
+    GOMEZ PEREZ
+    JUAN CAMILO
+    FECHA DE NACIMIENTO 10-MAY-2006
+    """
+    # Debe detectar TARJETA_IDENTIDAD y NO CEDULA_CIUDADANIA
+    tipo = extractor.detectar_tipo_documento(texto_ti_multilinea)
+    assert tipo == "TARJETA_IDENTIDAD"
+
+    # Clasificador de caras debe clasificarlo como TARJETA_IDENTIDAD
+    clasif = document_side_classifier.clasificar_cara(texto_ti_multilinea)
+    assert clasif.get("tipo_documento") == "TARJETA_IDENTIDAD"
+
+    # Si la persona tiene 18 años o más y tiene Tarjeta de Identidad, debe disparar la alerta
+    from app.utils.validators import validador
+    detalles = {}
+    completo, motivos = validador.evaluar_persona_completa(
+        numero_identificacion="1005123456",
+        nombres="JUAN CAMILO",
+        apellidos="GOMEZ PEREZ",
+        nombre_completo="JUAN CAMILO GOMEZ PEREZ",
+        fecha_nacimiento="2006-05-10",
+        fecha_expedicion="2020-05-10",
+        confianza=95.0,
+        detalles_campos=detalles,
+        tipo_documento=tipo
+    )
+    assert completo is False
+    assert "discrepancia_documento_edad" in detalles
+    disc = detalles["discrepancia_documento_edad"]
+    assert disc["tipo"] == "MAYOR_CON_TI"
+    assert "sola corresponde a menores de edad" in disc["motivo"] or "solo corresponde a menores de edad" in disc["motivo"]
+
+

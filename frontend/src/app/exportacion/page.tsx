@@ -11,8 +11,19 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad } from "@/lib/formatters";
 import type { Persona, Documento } from "@/types";
+
+const esPersonaEnRevision = (p: Persona) => {
+  const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
+  const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
+  return Boolean(
+    p.requiere_revision || 
+    (p.estado_registro && p.estado_registro !== "VALID") || 
+    inc.esInvalido || 
+    (p.detalles_campos as any)?.discrepancia_documento_edad
+  );
+};
 
 export default function ExportacionPage() {
   const router = useRouter();
@@ -63,7 +74,7 @@ export default function ExportacionPage() {
         return false;
       }
       // Filtro por revisión o menores
-      const esRev = p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID");
+      const esRev = esPersonaEnRevision(p);
       const edadNum = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
       const esMenor = edadNum !== null && edadNum < 14;
 
@@ -149,8 +160,8 @@ export default function ExportacionPage() {
 
   const stats = {
     total: personas.length,
-    ok: personas.filter((p) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID")).length,
-    revision: personas.filter((p) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length,
+    ok: personas.filter((p) => !esPersonaEnRevision(p)).length,
+    revision: personas.filter(esPersonaEnRevision).length,
     menores: personas.filter((p) => {
       const ed = p.edad ?? (p.fecha_nacimiento ? calcularEdad(p.fecha_nacimiento) : null);
       return ed !== null && ed < 14;
@@ -446,7 +457,7 @@ export default function ExportacionPage() {
                       {personasFiltradas.map((p) => {
                         const isSelected = seleccionados.has(p.id);
                         const nomCompleto = formatNombreCompleto(p);
-                        const esRev = p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID");
+                        const esRev = esPersonaEnRevision(p);
 
                         return (
                           <tr

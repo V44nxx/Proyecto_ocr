@@ -110,6 +110,53 @@ class TestDefinitivePipeline(unittest.TestCase):
         ruta = exportacion_service.exportar_reporte_diferencias(mock_db, "comp-123")
         self.assertTrue(ruta.endswith(".xlsx"))
 
+    def test_11_mayor_de_edad_con_tarjeta_identidad_requiere_revision(self):
+        from app.utils.validators import validador
+        detalles = {}
+        # 18 años cumplidos con Tarjeta de Identidad
+        valido, motivos = validador.evaluar_persona_completa(
+            numero_identificacion="1118471396",
+            nombre_completo="SANTIAGO DE JESUS POSADA MAYOR",
+            fecha_nacimiento="2008-08-14",
+            tipo_documento="TARJETA_IDENTIDAD",
+            detalles_campos=detalles,
+        )
+        self.assertFalse(valido)
+        self.assertTrue(any("mayor de edad" in m.lower() and "tarjeta de identidad" in m.lower() for m in motivos))
+        self.assertIn("discrepancia_documento_edad", detalles)
+        self.assertEqual(detalles["discrepancia_documento_edad"]["tipo"], "MAYOR_CON_TI")
+
+    def test_12_menor_de_edad_con_tarjeta_identidad_es_valido(self):
+        from app.utils.validators import validador
+        detalles = {}
+        # 16 años con Tarjeta de Identidad
+        valido, motivos = validador.evaluar_persona_completa(
+            numero_identificacion="1147687188",
+            nombre_completo="STHEFANY YULIED RAMOS DIAZ",
+            fecha_nacimiento="2010-05-20",
+            tipo_documento="TARJETA_IDENTIDAD",
+            detalles_campos=detalles,
+        )
+        self.assertTrue(valido)
+        self.assertEqual(len(motivos), 0)
+        self.assertNotIn("discrepancia_documento_edad", detalles)
+
+    def test_13_menor_de_edad_con_cedula_requiere_revision(self):
+        from app.utils.validators import validador
+        detalles = {}
+        # 16 años presentando Cédula
+        valido, motivos = validador.evaluar_persona_completa(
+            numero_identificacion="1147687188",
+            nombre_completo="STHEFANY YULIED RAMOS DIAZ",
+            fecha_nacimiento="2010-05-20",
+            tipo_documento="CEDULA_CIUDADANIA",
+            detalles_campos=detalles,
+        )
+        self.assertFalse(valido)
+        self.assertTrue(any("menor de edad" in m.lower() and "cédula" in m.lower() for m in motivos))
+        self.assertIn("discrepancia_documento_edad", detalles)
+        self.assertEqual(detalles["discrepancia_documento_edad"]["tipo"], "MENOR_CON_CC")
+
 
 if __name__ == "__main__":
     unittest.main()

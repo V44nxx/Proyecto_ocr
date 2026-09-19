@@ -19,8 +19,31 @@ JUNK_WORDS = {
     "CFDULA", "CELDULA", "CIUDADAMA", "CIUDADANLA", "CIUDADANA", "CIUDADANÌA",
     "IDENTIF", "IDENTIFICACI", "IDENTIFICACIONPERSONAL", "REPUBLICADECOLOMBIA",
     "MOUSEES", "FMRMA", "FIRMAS", "FIRMADO", "ANDAQUIES", "CAQUETA",
-    "FECHAYLUGARDEEXPEDICION", "LUGARDENACIMIENTG", "INDICEDERECHO", "REGISTRADGRNACIONAL"
+    "FECHAYLUGARDEEXPEDICION", "LUGARDENACIMIENTG", "INDICEDERECHO", "REGISTRADGRNACIONAL",
+    # Ruidos de membretes institucionales, trámites y fotocopias
+    "FOTOCOPIA", "PROCESO", "INSCRIPCION", "INSCRIPCIÓN", "MATRICULA", "MATRÍCULA",
+    "EMPRENDEDORA", "EMPRENDEDOR", "EMPRENDIMIENTO", "OFICINA", "DEPARTAMENTAL",
+    "MUNICIPAL", "SECRETARIA", "SECRETARÍA", "ALCALDIA", "ALCALDÍA", "GOBERNACION", "GOBERNACIÓN",
+    "FACILITADO", "FACILITADA", "TECNOLOGICO", "TECNOLÓGICO", "ESTRATEGIA",
+    "CAMPESENA", "CAMPESINA", "CAMPESINO", "FULLPOPULAR", "POPULAR", "SENA",
+    "AMAZONIA", "AMAZONÍA", "CENTRO", "MUJER", "PROGRAMA", "TITULADA", "COMPLEMENTARIA",
+    "CURSO", "FORMACION", "FORMACIÓN", "CONVENIO", "ASOCIACION", "COOPERATIVA",
+    "LISTADO", "PARTICIPANTES", "APRENDICES", "APRENDIZ", "INSTRUCTOR", "INSTRUCTORA",
+    "FICHA", "FOLIO", "ANEXO", "COPIA", "AUTENTICADA", "NOTARIA"
 }
+
+PATRON_RUIDO_ADMINISTRATIVO = re.compile(
+    r"\b(FOTOCOPIA|PROCESO\s+DE\s+INSCRIPCI[OÓ]N|MATR[IÍ]CULA|EMPRENDEDOR[A]?|OFICINA\s+DEPARTAMENTAL|"
+    r"DEPARTAMENTAL\s+DE\s+LA\s+MUJER|CENTRO\s+TECNOL[OÓ]GICO|ESTRATEGIA\s+CAMPESINA|FULL\s*POPULAR|"
+    r"SENA\s+CAQUETA|DOCUMENTO\s+DE\s+IDENTIDAD\s+FACILITADO)\b",
+    re.IGNORECASE
+)
+
+def es_linea_ruido_administrativo(texto: str) -> bool:
+    """Detecta si una línea o texto corresponde a membretes de trámite, fotocopias o sellos."""
+    if not texto:
+        return False
+    return bool(PATRON_RUIDO_ADMINISTRATIVO.search(texto))
 
 ROMAN_NOISE = {
     "I", "II", "III", "IIII", "IIIII", "IIIIII", "IV", "V", "VI", "VII", 
@@ -228,9 +251,13 @@ def resolver_nombre_completo(nombres: str, apellidos: str = "", actual: str = No
 
     if actual and actual.strip() and actual != "POR REVISAR":
         act_limp = limpiar_tokens_ruido(actual)
-        # Si actual tiene más palabras válidas que lo combinado, preferir actual
-        if len(act_limp.split()) > len(res.split()) and len(act_limp.split()) >= 2:
-            res = act_limp
+        # Solo preferir actual si actual es legítimo (sin palabras de ruido administrativo)
+        # y no sobrescribir nombres y apellidos válidos ya resueltos
+        if not es_linea_ruido_administrativo(actual):
+            if (not res or res == "POR REVISAR") and len(act_limp.split()) >= 2:
+                res = act_limp
+            elif len(act_limp.split()) > len(res.split()) and len(act_limp.split()) >= 2 and (not a_limpio or not n_limpio):
+                res = act_limp
 
     res = deduplicar_ngrams(res)
     res = limpiar_tokens_ruido(res)

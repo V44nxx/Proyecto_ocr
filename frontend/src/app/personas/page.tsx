@@ -14,7 +14,7 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 const getTipoDocInfo = (tipo?: string | null) => {
@@ -59,6 +59,17 @@ const getTipoDocInfo = (tipo?: string | null) => {
   };
 };
 
+const esPersonaEnRevision = (p: Persona) => {
+  const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
+  const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
+  return Boolean(
+    p.requiere_revision || 
+    (p.estado_registro && p.estado_registro !== "VALID") || 
+    inc.esInvalido || 
+    (p.detalles_campos as any)?.discrepancia_documento_edad
+  );
+};
+
 function PersonasContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,7 +79,9 @@ function PersonasContent() {
 
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [totalPersonasGlobal, setTotalPersonasGlobal] = useState<number | null>(null);
   const [filtroDocumento, setFiltroDocumento] = useState<string>(docParam || "todos");
+  const [documentosCargados, setDocumentosCargados] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [exportando, setExportando] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -120,26 +133,89 @@ function PersonasContent() {
   }, [pathname]);
 
   useEffect(() => {
-    if (!auth.isAuthenticated()) return;
+    if (!auth.isAuthenticated() || !documentosCargados) return;
     cargarPersonas(true);
     const interval = setInterval(() => cargarPersonas(false), 4000);
     return () => clearInterval(interval);
-  }, [pathname, filtroDocumento]);
+  }, [pathname, filtroDocumento, documentosCargados]);
 
   useEffect(() => {
     const docQuery = searchParams.get("documento_id");
     if (docQuery && docQuery !== filtroDocumento) {
       setFiltroDocumento(docQuery);
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("ver_todos_los_archivos");
+        localStorage.setItem("ultimo_documento_id", docQuery);
+      }
     }
   }, [searchParams]);
 
   const cargarDocumentos = async () => {
     try {
-      const res = await apiDocumentos.listar({ limit: 100 });
-      const docs = Array.isArray(res.data) ? res.data : [];
+      const [resDocs, resStatsGlobal] = await Promise.all([
+        apiDocumentos.listar({ limit: 100 }),
+        apiDocumentos.estadisticas().catch(() => null),
+      ]);
+      const docs: Documento[] = Array.isArray(resDocs.data) ? resDocs.data : [];
       setDocumentos(docs);
+
+      if (resStatsGlobal?.data?.total_personas != null) {
+        setTotalPersonasGlobal(resStatsGlobal.data.total_personas);
+      }
+
+      // Prioridad 1: si hay ?documento_id=... en la URL
+      const docQuery = searchParams.get("documento_id");
+      if (docQuery && docs.some((d) => d.id === docQuery)) {
+        setFiltroDocumento(docQuery);
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("ver_todos_los_archivos");
+          localStorage.setItem("ultimo_documento_id", docQuery);
+        }
+        setDocumentosCargados(true);
+        return;
+      }
+
+      // Prioridad 2: si se acaba de enviar/subir un archivo nuevo
+      const nuevoEnviado = typeof window !== "undefined" && localStorage.getItem("nuevo_archivo_enviado") === "true";
+      if (nuevoEnviado) {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("nuevo_archivo_enviado");
+          sessionStorage.removeItem("ver_todos_los_archivos");
+        }
+        const ultimoId = typeof window !== "undefined" ? localStorage.getItem("ultimo_documento_id") : null;
+        const targetDoc = (ultimoId && docs.find((d) => d.id === ultimoId)) || docs[0];
+        if (targetDoc) {
+          setFiltroDocumento(targetDoc.id);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("ultimo_documento_id", targetDoc.id);
+          }
+          setDocumentosCargados(true);
+          return;
+        }
+      }
+
+      // Prioridad 3: si el usuario eligió explícitamente "ver todos los archivos"
+      const verTodosManual = typeof window !== "undefined" && sessionStorage.getItem("ver_todos_los_archivos") === "true";
+      if (verTodosManual) {
+        setFiltroDocumento("todos");
+        setDocumentosCargados(true);
+        return;
+      }
+
+      // Por defecto: mostrar SOLO el último archivo enviado (el más reciente en el sistema)
+      const ultimoId = typeof window !== "undefined" ? localStorage.getItem("ultimo_documento_id") : null;
+      const targetDoc = (ultimoId && docs.find((d) => d.id === ultimoId)) || docs[0];
+      if (targetDoc) {
+        setFiltroDocumento(targetDoc.id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("ultimo_documento_id", targetDoc.id);
+        }
+      } else {
+        setFiltroDocumento("todos");
+      }
+      setDocumentosCargados(true);
     } catch {
-      // Ignorar
+      setDocumentosCargados(true);
     }
   };
 
@@ -165,11 +241,11 @@ function PersonasContent() {
       setPersonas(items);
 
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
-      const revCount = items.filter((p: Persona) => p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")).length;
+      const revCount = items.filter(esPersonaEnRevision).length;
       const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
       const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
       const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
-      const valCount = items.filter((p: Persona) => !p.requiere_revision && (!p.estado_registro || p.estado_registro === "VALID") && p.documento_id && p.en_excel !== false).length;
+      const valCount = items.filter((p: Persona) => !esPersonaEnRevision(p) && p.documento_id && p.en_excel !== false).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -184,6 +260,10 @@ function PersonasContent() {
         faltaExcel: faltaExcelCount,
         menores: menoresCount,
       });
+
+      if (!docIdFiltro && tot > 0) {
+        setTotalPersonasGlobal(tot);
+      }
 
       // Solo mostrar notificación si el usuario ejecutó la recarga manualmente
       if (esManual) {
@@ -366,11 +446,10 @@ function PersonasContent() {
   // Filtrado local por estado y cédula / nombre
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
+    const esRev = esPersonaEnRevision(p);
     if (filtroEstado === "revision") {
-      const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
       if (!esRev) return false;
     } else if (filtroEstado === "validas") {
-      const esRev = Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID"));
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
       if (esRev || faltaPdf || faltaExcel) return false;
@@ -655,15 +734,20 @@ function PersonasContent() {
                 )}
                 <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">{p.motor_ocr || "google_document_ai"}</span></span>
                 <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-700 dark:text-slate-400 font-medium">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
-                {edadCalculada !== null && (
-                  <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-bold shrink-0 border shadow-sm ${
-                    esMenor14Detalle
-                      ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
-                      : "bg-amber-100 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300"
-                  }`} title={`Edad: ${edadCalculada} años cumplidos`}>
-                    <span>{esMenor14Detalle ? `⚠️ MENOR: ${edadCalculada} años` : `${edadCalculada} años`}</span>
-                  </span>
-                )}
+                {edadCalculada !== null && (() => {
+                  const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadCalculada);
+                  return (
+                    <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-bold shrink-0 border shadow-sm ${
+                      inc.esInvalido
+                        ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
+                        : esMenor14Detalle
+                          ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
+                          : "bg-amber-100 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300"
+                    }`} title={inc.esInvalido ? inc.motivo : `Edad: ${edadCalculada} años cumplidos`}>
+                      <span>{inc.esInvalido ? `⚠️ ${edadCalculada} años (${inc.tipo === "MAYOR_CON_TI" ? "Mayor con TI" : "Menor con CC"})` : esMenor14Detalle ? `⚠️ MENOR: ${edadCalculada} años` : `${edadCalculada} años`}</span>
+                    </span>
+                  );
+                })()}
               </div>
               {estaEditando ? (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0">
@@ -688,6 +772,61 @@ function PersonasContent() {
                 </p>
               </div>
             )}
+
+            {/* Alerta Destacada: Archivo No Válido por Inconsistencia Documento vs Mayoría/Minoría de Edad */}
+            {(() => {
+              const edadVal = p.edad ?? calcularEdad(p.fecha_nacimiento);
+              const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
+              const inconsistencia = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadVal);
+
+              if (!discDocEdad && !inconsistencia.esInvalido) return null;
+
+              const esMayor = discDocEdad?.tipo === "MAYOR_CON_TI" || inconsistencia.tipo === "MAYOR_CON_TI" || (edadVal !== null && edadVal >= 18);
+              const edadMostrar = discDocEdad?.edad ?? inconsistencia.edad ?? edadVal;
+              const docInfo = getTipoDocInfo(p.tipo_documento);
+
+              return (
+                <div className="m-2.5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 dark:border-rose-500/70 text-rose-950 dark:text-rose-100 shadow-md min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-900 dark:text-rose-200">
+                      {esMayor
+                        ? "Archivo No Válido: Persona Mayor de Edad con Tarjeta de Identidad"
+                        : "Archivo No Válido: Persona Menor de Edad con Cédula de Ciudadanía"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-2.5 font-medium leading-relaxed">
+                    {esMayor
+                      ? `El archivo presentado no es válido ya que la persona es mayor de edad (${edadMostrar !== null ? `${edadMostrar} años` : "18+ años"}) y presenta un archivo de Tarjeta de Identidad que solo corresponde a menores de edad. Cuando la persona cumple 18 años debe presentar Cédula de Ciudadanía o Contraseña vigente.`
+                      : `El archivo presentado no es válido ya que la persona es menor de edad (${edadMostrar !== null ? `${edadMostrar} años` : "< 18 años"}) y presenta Cédula de Ciudadanía, documento exclusivo de personas mayores de edad. Debe presentar Tarjeta de Identidad.`}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 ml-7 text-xs">
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-blue-400 dark:border-blue-600/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-blue-800 dark:text-blue-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Condición Legal y Edad Calculada
+                      </div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">
+                        {edadMostrar !== null ? `${edadMostrar} años cumplidos` : "Edad no determinada"} — {esMayor ? "Mayor de Edad (≥ 18 años)" : "Menor de Edad (< 18 años)"}
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
+                        {esMayor ? "Documento legal requerido: Cédula de Ciudadanía (CC) o Contraseña" : "Documento legal requerido: Tarjeta de Identidad (TI)"}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-rose-400 dark:border-rose-600/50 shadow-sm">
+                      <div className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400 flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Documento Presentado en PDF
+                      </div>
+                      <div className="font-extrabold text-rose-950 dark:text-rose-200 text-sm mt-0.5">
+                        {docInfo.label} ({docInfo.codigo}) — No Admisible
+                      </div>
+                      <div className="text-[11px] text-rose-800 dark:text-rose-300 mt-1 font-semibold">
+                        {esMayor ? "Incompatible: Tarjeta de Identidad solo es válida hasta los 17 años" : "Incompatible: Cédula de Ciudadanía reservada para mayores de edad"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Alerta Destacada: Discrepancia Crítica de Nombre entre Cédula Física y Planilla Excel */}
             {Boolean((p.detalles_campos as any)?.discrepancia_excel) && (() => {
@@ -754,20 +893,22 @@ function PersonasContent() {
             )}
 
             {/* Motivos de Revisión / Alerta para Asistente */}
-            {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (() => {
+            {Boolean(esPersonaEnRevision(p)) && (() => {
               const rawMotivos: string[] = Array.isArray((p.detalles_campos as any)?.motivos_revision)
                 ? (p.detalles_campos as any).motivos_revision
                 : [];
               const tieneDiscrepanciaSuperior = Boolean((p.detalles_campos as any)?.discrepancia_excel);
+              const tieneDiscrepanciaDocEdad = Boolean((p.detalles_campos as any)?.discrepancia_documento_edad) || verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadCalculada).esInvalido;
               const motivosFiltrados = rawMotivos.filter((m: string) => {
                 const ml = m.toLowerCase();
                 if (ml.includes("expedici") || ml.includes("sexo") || ml.includes("lugar") || ml.includes("genero")) return false;
                 if (ml.includes("campo 'nombres'") || ml.includes("campo 'apellidos'")) return false;
                 // Si la tarjeta destacada de discrepancia ya se muestra arriba, no duplicar en las viñetas inferiores
                 if (tieneDiscrepanciaSuperior && (ml.includes("discrepancia") || ml.includes("campo 'nombre_completo'"))) return false;
+                if (tieneDiscrepanciaDocEdad && (ml.includes("mayor de edad") || ml.includes("menor de edad") || ml.includes("tarjeta de identidad"))) return false;
                 return true;
               });
-              if (motivosFiltrados.length === 0 && (!p.requiere_revision || tieneDiscrepanciaSuperior)) return null;
+              if (motivosFiltrados.length === 0 && (!p.requiere_revision || tieneDiscrepanciaSuperior || tieneDiscrepanciaDocEdad)) return null;
               return (
                 <div className="m-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -1184,14 +1325,60 @@ function PersonasContent() {
                 <Users className="w-4 h-4" />
               </span>
               <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Base de Datos OCR</span>
-              {filtroDocumento !== "todos" && (
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-300 font-medium flex items-center gap-1.5 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-                  <span className="font-bold text-slate-900 dark:text-white truncate max-w-[240px]">
-                    {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
+              {filtroDocumento !== "todos" ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-primary-50 dark:bg-primary-500/10 border border-primary-200 dark:border-primary-500/30 text-primary-900 dark:text-primary-300 font-medium flex items-center gap-1.5 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                    <span className="text-slate-600 dark:text-slate-400">Archivo:</span>
+                    <span className="font-bold text-slate-900 dark:text-white truncate max-w-[220px]" title={documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Archivo"}>
+                      {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} {stats.total === 1 ? "persona" : "personas"})</span>
                   </span>
-                  <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} {stats.total === 1 ? "persona" : "personas"})</span>
-                </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiltroDocumento("todos");
+                      setSeleccionados(new Set());
+                      if (typeof window !== "undefined") {
+                        sessionStorage.setItem("ver_todos_los_archivos", "true");
+                      }
+                    }}
+                    className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition-colors cursor-pointer border border-slate-300 dark:border-slate-700 shadow-sm flex items-center gap-1"
+                    title="Ver todas las personas de todos los archivos"
+                  >
+                    <span>🌐 Ver todos los archivos</span>
+                    {totalPersonasGlobal ? <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">({totalPersonasGlobal})</span> : null}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-300 font-medium flex items-center gap-1.5 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                    <span className="font-bold text-slate-900 dark:text-white">Mostrando todos los archivos</span>
+                    <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} personas en total)</span>
+                  </span>
+                  {documentos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const primerDoc = documentos[0];
+                        if (primerDoc) {
+                          setFiltroDocumento(primerDoc.id);
+                          setSeleccionados(new Set());
+                          if (typeof window !== "undefined") {
+                            sessionStorage.removeItem("ver_todos_los_archivos");
+                            localStorage.setItem("ultimo_documento_id", primerDoc.id);
+                          }
+                        }
+                      }}
+                      className="text-[11px] px-2.5 py-0.5 rounded-full bg-primary-50 hover:bg-primary-100 dark:bg-primary-500/10 dark:hover:bg-primary-500/20 text-primary-700 dark:text-primary-300 font-semibold transition-colors cursor-pointer border border-primary-200 dark:border-primary-500/30 shadow-sm flex items-center gap-1"
+                      title="Ver solo el último archivo enviado"
+                    >
+                      <span>★ Ver último archivo enviado</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Personas Registradas</h1>
@@ -1400,16 +1587,27 @@ function PersonasContent() {
             <select
               value={filtroDocumento}
               onChange={(e) => {
-                setFiltroDocumento(e.target.value);
+                const val = e.target.value;
+                setFiltroDocumento(val);
                 setSeleccionados(new Set());
+                if (typeof window !== "undefined") {
+                  if (val === "todos") {
+                    sessionStorage.setItem("ver_todos_los_archivos", "true");
+                  } else {
+                    sessionStorage.removeItem("ver_todos_los_archivos");
+                    localStorage.setItem("ultimo_documento_id", val);
+                  }
+                }
               }}
               className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-primary-500 font-semibold truncate cursor-pointer shadow-sm"
               title="Filtrar por archivo PDF de origen"
             >
-              <option value="todos">📄 Todos los PDFs ({documentos.length})</option>
-              {documentos.map((d) => (
+              <option value="todos">
+                🌐 Ver todos los archivos ({documentos.length} PDFs{totalPersonasGlobal ? ` - Total: ${totalPersonasGlobal} personas` : ""})
+              </option>
+              {documentos.map((d, index) => (
                 <option key={d.id} value={d.id}>
-                  📄 {d.nombre_original}
+                  📄 {d.nombre_original} {index === 0 ? "★ (Último archivo enviado)" : ""}
                 </option>
               ))}
             </select>
@@ -1512,8 +1710,34 @@ function PersonasContent() {
 
         {/* Barra de estado de la tabla */}
         <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2 text-xs">
-          <div className="text-slate-600 dark:text-slate-400 font-medium">
-            Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{stats.total}</strong> personas
+          <div className="flex items-center gap-2 flex-wrap text-slate-600 dark:text-slate-400 font-medium">
+            <span>
+              Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{stats.total}</strong> personas
+            </span>
+            {filtroDocumento !== "todos" ? (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary-500/10 text-primary-700 dark:text-primary-300 border border-primary-500/20 font-semibold">
+                <FileText className="w-3 h-3 text-primary-500" />
+                Archivo: {documentos.find(d => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiltroDocumento("todos");
+                    setSeleccionados(new Set());
+                    if (typeof window !== "undefined") {
+                      sessionStorage.setItem("ver_todos_los_archivos", "true");
+                    }
+                  }}
+                  className="ml-1 underline hover:text-primary-900 dark:hover:text-primary-200 cursor-pointer font-bold"
+                  title="Ver todas las personas registradas en todos los archivos"
+                >
+                  (Ver todos los archivos{totalPersonasGlobal ? `: ${totalPersonasGlobal} personas` : ""})
+                </button>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-semibold">
+                🌐 Todos los archivos activos ({documentos.length} PDFs)
+              </span>
+            )}
           </div>
         </div>
 
@@ -1634,8 +1858,16 @@ function PersonasContent() {
 
                           {/* Edad */}
                           <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
-                            {edadRow !== null ? (
-                              esMenor14 ? (
+                            {edadRow !== null ? (() => {
+                              const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
+                              if (inc.esInvalido) {
+                                return (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm animate-pulse" title={inc.motivo}>
+                                    ⚠️ {edadRow} años
+                                  </span>
+                                );
+                              }
+                              return esMenor14 ? (
                                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm" title={`Persona menor de 14 años (${edadRow} años)`}>
                                   {edadRow} años
                                 </span>
@@ -1643,8 +1875,8 @@ function PersonasContent() {
                                 <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/25 text-amber-800 dark:text-amber-300 font-medium whitespace-nowrap shadow-sm">
                                   {edadRow} años
                                 </span>
-                              )
-                            ) : (
+                              );
+                            })() : (
                               <span className="text-slate-400 text-xs">—</span>
                             )}
                           </td>
@@ -1725,25 +1957,33 @@ function PersonasContent() {
                               )}
 
                               {/* Estado de validación de datos: REVISAR o VÁLIDO */}
-                              {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
-                                  title={
-                                    (p.detalles_campos as any)?.discrepancia_excel?.motivo
-                                      ? (p.detalles_campos as any).discrepancia_excel.motivo
-                                      : "Requiere revisión manual de datos"
-                                  }
-                                >
-                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
-                                </span>
-                              ) : p.documento_id && p.en_excel !== false ? (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                  title="Registro completo y verificado"
-                                >
-                                  <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
-                                </span>
-                              ) : null}
+                              {(() => {
+                                const esRevRow = esPersonaEnRevision(p);
+                                const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
+                                const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
+                                const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || "Requiere revisión manual de datos";
+
+                                if (esRevRow) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
+                                      title={tooltipMotivo}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
+                                    </span>
+                                  );
+                                } else if (p.documento_id && p.en_excel !== false) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
+                                      title="Registro completo y verificado"
+                                    >
+                                      <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                           </td>
 

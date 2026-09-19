@@ -227,6 +227,10 @@ export default function DocumentosPage() {
     if (cuentaAtrasRedireccion <= 0) {
       const docCompletado = docsEnProceso.find((d) => d.estado === "completado") || docsEnProceso[0];
       if (docCompletado?.id) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("ultimo_documento_id", docCompletado.id);
+          localStorage.setItem("nuevo_archivo_enviado", "true");
+        }
         router.push(`/personas?documento_id=${docCompletado.id}`);
       } else {
         router.push("/personas");
@@ -349,6 +353,12 @@ export default function DocumentosPage() {
 
       setFaseActual("procesando");
       const docsResp = res.data?.documentos || [];
+
+      // Registrar el ID del nuevo archivo enviado para que la tabla de Personas lo muestre automáticamente
+      if (docsResp.length > 0 && typeof window !== "undefined") {
+        localStorage.setItem("ultimo_documento_id", docsResp[0].id);
+        localStorage.setItem("nuevo_archivo_enviado", "true");
+      }
 
       // Si se adjuntó Excel y el backend devolvió comparacion_id
       if (res.data?.comparacion_id) {
@@ -863,6 +873,10 @@ export default function DocumentosPage() {
                   <button
                     onClick={() => {
                       const docCompletado = docsEnProceso.find((d) => d.estado === "completado") || docsEnProceso[0];
+                      if (docCompletado?.id && typeof window !== "undefined") {
+                        localStorage.setItem("ultimo_documento_id", docCompletado.id);
+                        localStorage.setItem("nuevo_archivo_enviado", "true");
+                      }
                       router.push(docCompletado?.id ? `/personas?documento_id=${docCompletado.id}` : "/personas");
                     }}
                     className="btn-primary text-sm py-2.5 px-5 flex-1 md:flex-initial flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25 cursor-pointer"

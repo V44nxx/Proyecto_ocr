@@ -664,8 +664,8 @@ export default function DashboardPage() {
                                   {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "1")}
                                 </td>
                                 <td className="py-3 px-3 text-center whitespace-nowrap">
-                                  {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-medium shadow-sm">
+                                  {p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID") || Boolean((p.detalles_campos as any)?.discrepancia_documento_edad) ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-medium shadow-sm" title={(p.detalles_campos as any)?.discrepancia_documento_edad?.motivo || "Requiere verificación de datos OCR"}>
                                       <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
                                     </span>
                                   ) : (
@@ -727,10 +727,10 @@ export default function DashboardPage() {
                                         <span className="text-slate-500 text-[11px]">
                                           <strong className="text-slate-700 dark:text-slate-300">Nombres:</strong> {p.nombres || (p.detalles_campos as any)?.primer_nombre || "—"}
                                         </span>
-                                        {p.requiere_revision && (
+                                        {(p.requiere_revision || Boolean((p.detalles_campos as any)?.discrepancia_documento_edad)) && (
                                           <span className="text-amber-800 dark:text-amber-300 text-[11px] bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 font-medium inline-flex items-center gap-1.5">
                                             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                                            <span>Requiere verificación de datos OCR</span>
+                                            <span>{(p.detalles_campos as any)?.discrepancia_documento_edad?.motivo || "Requiere verificación de datos OCR"}</span>
                                           </span>
                                         )}
                                       </div>
@@ -748,7 +748,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-3">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-slate-600 dark:text-slate-400">
                 Mostrando <strong className="text-slate-900 dark:text-white">
                   {personasFicha.filter((p) => {
@@ -760,12 +760,29 @@ export default function DashboardPage() {
                   }).length}
                 </strong> de <strong className="text-slate-900 dark:text-white">{personasFicha.length}</strong> personas de esta ficha
               </div>
-              <button
-                onClick={() => setDocSeleccionadoModal(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-bold transition-all cursor-pointer shadow-sm"
-              >
-                Cerrar
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (docSeleccionadoModal?.id) {
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("ultimo_documento_id", docSeleccionadoModal.id);
+                        sessionStorage.removeItem("ver_todos_los_archivos");
+                      }
+                      router.push(`/personas?documento_id=${docSeleccionadoModal.id}`);
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Ver en Módulo Personas</span>
+                </button>
+                <button
+                  onClick={() => setDocSeleccionadoModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>

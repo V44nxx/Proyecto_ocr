@@ -32,6 +32,12 @@ NO_NOMBRE_HEADER = re.compile(
     r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
     r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
     r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
+    r"FOTOCOPIA|PROCESO|INSCRIPCION|INSCRIPCIÓN|MATRICULA|MATRÍCULA|EMPRENDEDORA|EMPRENDEDOR|EMPRENDIMIENTO|"
+    r"OFICINA|DEPARTAMENTAL|MUNICIPAL|SECRETARIA|SECRETARÍA|ALCALDIA|ALCALDÍA|GOBERNACION|GOBERNACIÓN|"
+    r"FACILITADO|FACILITADA|TECNOLOGICO|TECNOLÓGICO|ESTRATEGIA|CAMPESENA|CAMPESINA|CAMPESINO|FULLPOPULAR|POPULAR|"
+    r"SENA|AMAZONIA|AMAZONÍA|CENTRO|MUJER|PROGRAMA|TITULADA|COMPLEMENTARIA|CURSO|FORMACION|FORMACIÓN|"
+    r"CONVENIO|ASOCIACION|COOPERATIVA|LISTADO|PARTICIPANTES|APRENDICES|APRENDIZ|INSTRUCTOR|INSTRUCTORA|"
+    r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
     r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
     r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b|"
     r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b)",
@@ -959,24 +965,27 @@ class ExtractorService:
                     logger.debug(f"Cédula por código de barras reverso: {num_bar}")
                     return num_bar
 
-        # Estrategia 1: Por keyword
-        for keyword in self.KEYWORDS_IDENTIFICACION:
-            patron = re.compile(
-                keyword + r"[\s:]*([1-9][\d\s\.]{4,14}\d)",
-                re.IGNORECASE,
-            )
-            match = patron.search(texto)
-            if match:
-                numero = re.sub(r"[\s\.]", "", match.group(1))
-                valido, numero_limpio = validador.validar_cedula(numero)
-                if valido:
-                    logger.debug(f"Cédula por keyword: {numero_limpio}")
-                    return numero_limpio
+        # Estrategia 1: Por keyword (en misma línea o línea adyacente)
+        patron_num = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
+        for idx_l, l in enumerate(lineas):
+            for keyword in self.KEYWORDS_IDENTIFICACION:
+                if re.search(rf"\b{keyword}\b", l, re.IGNORECASE):
+                    # Revisar línea actual
+                    m = patron_num.search(l)
+                    # Si no hay dígitos en la línea del label, revisar línea siguiente
+                    if not m and idx_l + 1 < len(lineas):
+                        m = patron_num.search(lineas[idx_l + 1])
+                    if m:
+                        numero = re.sub(r"[\s\.,]", "", m.group(1))
+                        valido, numero_limpio = validador.validar_cedula(numero)
+                        if valido:
+                            logger.debug(f"Cédula por keyword: {numero_limpio}")
+                            return numero_limpio
 
-        # Estrategia 2: Número con puntos (formato colombiano: 1.117.811.948)
-        matches_puntos = self._patron_cedula_puntos.findall(texto)
+        # Estrategia 2: Número con puntos o comas (formato colombiano: 1.117.811.948 o 1. 125. 182. 543)
+        matches_puntos = patron_num.findall(texto)
         for mp in matches_puntos:
-            numero = mp.replace(".", "")
+            numero = re.sub(r"[\s\.,]", "", mp)
             valido, numero_limpio = validador.validar_cedula(numero)
             if valido:
                 logger.debug(f"Cédula con puntos: {numero_limpio}")
@@ -1086,6 +1095,9 @@ class ExtractorService:
     def _linea_valida_texto(self, linea: str) -> Optional[str]:
         if not linea:
             return None
+        from app.utils.name_cleaner import es_linea_ruido_administrativo
+        if es_linea_ruido_administrativo(linea):
+            return None
         txt = linea.strip()
         if re.search(r"\d", txt):
             return None
@@ -1110,9 +1122,10 @@ class ExtractorService:
         Devuelve la primera línea posterior a `desde` que parezca
         un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas).
         """
+        from app.utils.name_cleaner import es_linea_ruido_administrativo
         for linea in lineas[desde + 1 : desde + 5]:
             linea = linea.strip()
-            if not linea:
+            if not linea or es_linea_ruido_administrativo(linea):
                 continue
             # Ignorar si es solo dígitos o números
             if re.search(r"\d", linea):

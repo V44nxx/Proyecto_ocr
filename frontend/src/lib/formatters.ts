@@ -154,3 +154,53 @@ export function calcularEdad(fechaNacimiento: string | Date | null | undefined):
   return edad >= 0 && edad <= 125 ? edad : null;
 }
 
+export interface InconsistenciaDocumentoEdad {
+  esInvalido: boolean;
+  tipo?: "MAYOR_CON_TI" | "MENOR_CON_CC";
+  edad: number | null;
+  motivo?: string;
+}
+
+/**
+ * Valida la correspondencia legal entre la edad calculada y el tipo de documento presentado.
+ * En Colombia:
+ * - Menores de 18 años: Tarjeta de Identidad (TI)
+ * - Mayores de 18 años (>= 18 años): Cédula de Ciudadanía (CC) o Contraseña (CT)
+ * Si una persona mayor de 18 años presenta Tarjeta de Identidad, el archivo no es válido.
+ */
+export function verificarInconsistenciaDocumentoEdad(
+  tipoDocumento: string | null | undefined,
+  fechaNacimiento: string | Date | null | undefined,
+  edadPrecalculada?: number | null
+): InconsistenciaDocumentoEdad {
+  const edad = edadPrecalculada !== undefined && edadPrecalculada !== null
+    ? edadPrecalculada
+    : calcularEdad(fechaNacimiento);
+
+  if (edad === null) return { esInvalido: false, edad: null };
+
+  const tipo = (tipoDocumento || "").toUpperCase().trim();
+  const esTI = tipo === "TARJETA_IDENTIDAD" || tipo === "TI";
+  const esCC = tipo === "CEDULA_CIUDADANIA" || tipo === "CC";
+
+  if (edad >= 18 && esTI) {
+    return {
+      esInvalido: true,
+      tipo: "MAYOR_CON_TI",
+      edad,
+      motivo: `Archivo no válido ya que la persona es mayor de edad (${edad} años) y presenta archivo de Tarjeta de Identidad que solo corresponde a menores de edad.`
+    };
+  }
+
+  if (edad < 18 && esCC) {
+    return {
+      esInvalido: true,
+      tipo: "MENOR_CON_CC",
+      edad,
+      motivo: `Archivo no válido ya que la persona es menor de edad (${edad} años) y presenta archivo de Cédula de Ciudadanía que solo corresponde a mayores de 18 años.`
+    };
+  }
+
+  return { esInvalido: false, edad };
+}
+

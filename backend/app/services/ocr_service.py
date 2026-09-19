@@ -599,13 +599,19 @@ class OCRService:
             def _es_nombre_invalido(val: Optional[str]) -> bool:
                 if not val:
                     return True
+                from app.utils.name_cleaner import es_linea_ruido_administrativo, es_token_ruido
+                if es_linea_ruido_administrativo(str(val)):
+                    return True
                 v_up = str(val).strip().upper()
                 if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
                     return True
                 if any(hdr in v_up for hdr in [
                     "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI",
-                    "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER"
+                    "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER",
+                    "FOTOCOPIA", "PROCESO", "INSCRIPCION", "INSCRIPCIÓN", "MATRICULA", "MATRÍCULA", "EMPRENDEDORA", "EMPRENDEDOR", "SENA", "CAMPESINA", "FULLPOPULAR"
                 ]):
+                    return True
+                if all(es_token_ruido(tok) for tok in v_up.split()):
                     return True
                 if colombia_geo.es_geografico(v_up):
                     return True
@@ -923,9 +929,10 @@ class OCRService:
                 confianza=confianza,
                 detalles_campos=detalles_payload,
                 motor_ocr=ocr_engine,
+                tipo_documento=datos.get("tipo_documento", "CEDULA_CIUDADANIA"),
             )
 
-            requiere_revision = not tiene_datos_completos or bool(discrepancia_nombre_excel)
+            requiere_revision = not tiene_datos_completos or bool(discrepancia_nombre_excel) or bool(detalles_payload.get("discrepancia_documento_edad"))
             if ocr_engine == "tesseract_fallback":
                 estado_reg = "FALLBACK_TESSERACT"
             elif not requiere_revision:
@@ -1046,9 +1053,10 @@ class OCRService:
                     confianza=float(persona.confianza_extraccion or 0),
                     detalles_campos=detalles_existentes,
                     motor_ocr=persona.motor_ocr,
+                    tipo_documento=persona.tipo_documento,
                 )
 
-                if tiene_datos_completos and not discrepancia_nombre_excel and "discrepancia_excel" not in detalles_existentes:
+                if tiene_datos_completos and not discrepancia_nombre_excel and "discrepancia_excel" not in detalles_existentes and "discrepancia_documento_edad" not in detalles_existentes:
                     persona.requiere_revision = False
                     persona.estado_registro = "VALID"
                     detalles_existentes.pop("motivos_revision", None)

@@ -115,7 +115,9 @@ class DocumentSideClassifier:
             ))
         else:
             tiene_reverso_exclusivo = bool(re.search(
-                r"\b(REGISTRADOR\s*NACIONAL|REGISTRADURIA\s*NACIONAL|INDICE DERECHO|ÍNDICE DERECHO|HUELLA|ESTATURA|G\.S\.?\s*RH|ICCOL)\b|<{4,}|[A-Z0-9]+-[A-Z0-9]+-[MF]-[0-9]+",
+                r"\b(REGISTRADOR\s*NACIONAL|REGISTRADURIA\s*NACIONAL|REGISTRADOR|INDICE\s+DERECHO|ÍNDICE\s+DERECHO|HUELLA|ESTATURA|G\.?S\.?\s*RH|ICCOL|"
+                r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|LUGAR\s+DE\s+NACIMIENTO|FECHA\s+DE\s+VENCIMIENTO|FECHA\s+DE\s+NACIMIENTO|"
+                r"[0-9]\+?\s*RH|\bRH\s+[MF]\b)\b|<{4,}|[A-Z0-9]+-[A-Z0-9]+-[MF]-[0-9]+",
                 texto_up
             ))
 

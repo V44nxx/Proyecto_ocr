@@ -142,7 +142,7 @@ def create_tables():
                         p.nombre_completo = nom_limpio
                         modificados += 1
 
-                # Reevaluar con criterio estricto de completitud OCR
+                det_actual = dict(p.detalles_campos or {})
                 tiene_datos, motivos_rev = validador.evaluar_persona_completa(
                     numero_identificacion=p.numero_identificacion,
                     nombres=p.nombres,
@@ -153,13 +153,14 @@ def create_tables():
                     lugar_expedicion=p.lugar_expedicion,
                     sexo=p.sexo,
                     confianza=float(p.confianza_extraccion or 0),
-                    detalles_campos=p.detalles_campos,
+                    detalles_campos=det_actual,
                     motor_ocr=p.motor_ocr,
+                    tipo_documento=p.tipo_documento,
                 )
                 nuevo_req = not tiene_datos
                 nuevo_est = "VALID" if tiene_datos else ("FALLBACK_TESSERACT" if p.motor_ocr == "tesseract_fallback" else "REVIEW_REQUIRED")
                 
-                det = dict(p.detalles_campos or {})
+                det = det_actual
                 if motivos_rev:
                     det["motivos_revision"] = motivos_rev
                 else:

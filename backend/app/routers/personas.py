@@ -167,19 +167,66 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
 def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: bool) -> PersonaResponse:
     """
     Enriquece PersonaResponse con flags 100% precisos de presencia en PDF y en Excel,
-    y asegura que si hay discrepancia registrada con la planilla oficial de Excel,
-    se conserve y retorne prioritariamente el nombre oficial del Excel.
+    y asegura que si hay discrepancia registrada con la planilla oficial de Excel o
+    inconsistencia legal de documento vs edad, se refleje fielmente.
     """
+    from app.utils.validators import validador
+
     r = PersonaResponse.model_validate(p)
     r.en_pdf = p.documento_id is not None
 
-    detalles = p.detalles_campos or {}
-    if isinstance(detalles, dict):
-        disc_excel = detalles.get("discrepancia_excel")
-        if isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
-            nom_ex_ofic = disc_excel["nombre_excel"].strip()
-            if nom_ex_ofic:
-                r.nombre_completo = nom_ex_ofic
+    detalles = dict(p.detalles_campos or {})
+    disc_excel = detalles.get("discrepancia_excel")
+    if isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
+        nom_ex_ofic = disc_excel["nombre_excel"].strip()
+        if nom_ex_ofic:
+            r.nombre_completo = nom_ex_ofic
+
+    # Evaluación de mayoría de edad vs tipo de documento
+    edad_val = p.edad or validador.calcular_edad(p.fecha_nacimiento)
+    tipo_norm = str(p.tipo_documento or "").upper().strip()
+    es_ti = tipo_norm in ("TARJETA_IDENTIDAD", "TI")
+    es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC")
+
+    if edad_val is not None:
+        if edad_val >= 18 and es_ti:
+            disc_doc_edad = {
+                "tipo": "MAYOR_CON_TI",
+                "edad": edad_val,
+                "tipo_documento": p.tipo_documento or "TARJETA_IDENTIDAD",
+                "motivo": (
+                    f"Archivo no válido ya que la persona es mayor de edad ({edad_val} años) "
+                    f"y presenta archivo de Tarjeta de Identidad que solo corresponde a menores de edad."
+                )
+            }
+            detalles["discrepancia_documento_edad"] = disc_doc_edad
+            r.requiere_revision = True
+            if not r.estado_registro or r.estado_registro == "VALID":
+                r.estado_registro = "REVIEW_REQUIRED"
+            mots = list(detalles.get("motivos_revision") or [])
+            if disc_doc_edad["motivo"] not in mots:
+                mots.append(disc_doc_edad["motivo"])
+                detalles["motivos_revision"] = mots
+            r.detalles_campos = detalles
+        elif edad_val < 18 and es_cc:
+            disc_doc_edad = {
+                "tipo": "MENOR_CON_CC",
+                "edad": edad_val,
+                "tipo_documento": p.tipo_documento or "CEDULA_CIUDADANIA",
+                "motivo": (
+                    f"Archivo no válido ya que la persona es menor de edad ({edad_val} años) "
+                    f"y presenta archivo de Cédula de Ciudadanía que solo corresponde a mayores de 18 años."
+                )
+            }
+            detalles["discrepancia_documento_edad"] = disc_doc_edad
+            r.requiere_revision = True
+            if not r.estado_registro or r.estado_registro == "VALID":
+                r.estado_registro = "REVIEW_REQUIRED"
+            mots = list(detalles.get("motivos_revision") or [])
+            if disc_doc_edad["motivo"] not in mots:
+                mots.append(disc_doc_edad["motivo"])
+                detalles["motivos_revision"] = mots
+            r.detalles_campos = detalles
 
     if hay_excel:
         id_crudo = str(p.numero_identificacion or "").strip()
@@ -409,6 +456,7 @@ def actualizar_persona(
             confianza=float(persona.confianza_extraccion or 0),
             detalles_campos=persona.detalles_campos,
             motor_ocr=persona.motor_ocr,
+            tipo_documento=persona.tipo_documento,
         )
         det = dict(persona.detalles_campos or {})
         if tiene_datos:
@@ -634,6 +682,7 @@ async def subir_pdf_persona(
             confianza=float(persona.confianza_extraccion or 0),
             detalles_campos=det,
             motor_ocr=persona.motor_ocr,
+            tipo_documento=persona.tipo_documento,
         )
 
         if tiene_datos:

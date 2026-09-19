@@ -31,7 +31,7 @@ class ValidadorColombia:
         'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
     })
 
-    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
@@ -39,6 +39,12 @@ class ValidadorColombia:
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
         r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|DR|CDI|AAAS|AAS|"
+        r"FOTOCOPIA|PROCESO|INSCRIPCION|INSCRIPCIÓN|MATRICULA|MATRÍCULA|EMPRENDEDORA|EMPRENDEDOR|EMPRENDIMIENTO|"
+        r"OFICINA|DEPARTAMENTAL|MUNICIPAL|SECRETARIA|SECRETARÍA|ALCALDIA|ALCALDÍA|GOBERNACION|GOBERNACIÓN|"
+        r"FACILITADO|FACILITADA|TECNOLOGICO|TECNOLÓGICO|ESTRATEGIA|CAMPESENA|CAMPESINA|CAMPESINO|FULLPOPULAR|POPULAR|"
+        r"SENA|AMAZONIA|AMAZONÍA|CENTRO|MUJER|PROGRAMA|TITULADA|COMPLEMENTARIA|CURSO|FORMACION|FORMACIÓN|"
+        r"CONVENIO|ASOCIACION|COOPERATIVA|LISTADO|PARTICIPANTES|APRENDICES|APRENDIZ|INSTRUCTOR|INSTRUCTORA|"
+        r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
         r"I+|[I|l1!]{2,}|II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b",
         re.IGNORECASE,
     )
@@ -49,6 +55,7 @@ class ValidadorColombia:
         r"TARJETA|CEDULA|CÉDULA|NUIP|PERSONAL|NACIONAL|FECHA|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"LUGAR|Y|INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|FIRMA|FIRMAS|REGISTRADOR|REGISTRADORA|REGISTRADURIA|"
         r"PANENZ|BAILS|DANCING|DEPARTAMENTO|MUNICIPIO|OFICINA|PROVINCIA|ESTADO|ESTADOL|CIVIL|GIVIL|ALDEL|DIRECTOR|SECRETARIO|"
+        r"FOTOCOPIA|PROCESO|INSCRIPCION|INSCRIPCIÓN|MATRICULA|MATRÍCULA|EMPRENDEDORA|EMPRENDEDOR|SENA|CAMPESINA|FULLPOPULAR|"
         r"ALERGIF|ALMABEATRIZ|RENGIFO|BENGIFO|LOPET|LOPEZ|LÓPEZ|PENAGOS|GIRALDO|HERNAN|HERNÁN|CARLOS|ARIEL|"
         r"SANCHEZ|SÁNCHEZ|TORRES|GALINDO|VACHA|JUAN|ALEXANDER|VEGA|ROCHA|ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
         r"NACIMIENTO|NACIDO|MA|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC|ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b",
@@ -434,6 +441,41 @@ class ValidadorColombia:
     # EVALUACIÓN DE COMPLETITUD Y REVISIÓN
     # ──────────────────────────────────────────
     @classmethod
+    def calcular_edad(cls, fecha_nacimiento: Any) -> Optional[int]:
+        """Calcula la edad exacta en años cumplidos basado en la fecha de nacimiento."""
+        if not fecha_nacimiento:
+            return None
+        try:
+            from datetime import date, datetime
+            fn = None
+            if isinstance(fecha_nacimiento, datetime):
+                fn = fecha_nacimiento.date()
+            elif isinstance(fecha_nacimiento, date):
+                fn = fecha_nacimiento
+            elif isinstance(fecha_nacimiento, str):
+                s = fecha_nacimiento.strip()
+                if not s:
+                    return None
+                if "-" in s:
+                    parts = s.split("-")
+                    if len(parts) >= 3:
+                        fn = date(int(parts[0]), int(parts[1]), int(parts[2]))
+                elif "/" in s:
+                    parts = s.split("/")
+                    if len(parts) >= 3:
+                        if len(parts[0]) == 4:
+                            fn = date(int(parts[0]), int(parts[1]), int(parts[2]))
+                        else:
+                            fn = date(int(parts[2]), int(parts[1]), int(parts[0]))
+            if fn:
+                hoy = date.today()
+                return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        except Exception:
+            pass
+        return None
+
+    # ──────────────────────────────────────────
+    @classmethod
     def evaluar_persona_completa(
         cls,
         numero_identificacion: Optional[str] = None,
@@ -447,6 +489,7 @@ class ValidadorColombia:
         confianza: float = 100.0,
         detalles_campos: Optional[Dict[str, Any]] = None,
         motor_ocr: Optional[str] = None,
+        tipo_documento: Optional[str] = None,
     ) -> Tuple[bool, List[str]]:
         """
         Evalúa de forma estricta si una persona tiene todos sus datos reconocidos
@@ -482,9 +525,61 @@ class ValidadorColombia:
             if not valido_nom:
                 motivos.append(mot_nom)
 
-        # 3. Fecha de nacimiento (con la que se calcula la edad)
+        # 3. Fecha de nacimiento y correspondencia legal con el tipo de documento
         if not fecha_nacimiento:
             motivos.append("Fecha de nacimiento no reconocida por OCR")
+        else:
+            tipo_doc_eval = tipo_documento
+            if not tipo_doc_eval and detalles_campos and isinstance(detalles_campos, dict):
+                td = detalles_campos.get("tipo_documento")
+                if isinstance(td, dict):
+                    tipo_doc_eval = td.get("valor") or td.get("value")
+                elif isinstance(td, str):
+                    tipo_doc_eval = td
+
+            edad = cls.calcular_edad(fecha_nacimiento)
+            tipo_norm = str(tipo_doc_eval or "").upper().strip()
+            es_ti = tipo_norm in ("TARJETA_IDENTIDAD", "TI")
+            es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC")
+
+            if edad is not None:
+                if edad >= 18 and es_ti:
+                    mot_doc_edad = (
+                        f"Archivo no válido: La persona es mayor de edad ({edad} años) y presenta "
+                        f"Tarjeta de Identidad, la cual solo corresponde a menores de edad. "
+                        f"Debe presentar Cédula de Ciudadanía o Contraseña."
+                    )
+                    motivos.append(mot_doc_edad)
+                    if detalles_campos is not None and isinstance(detalles_campos, dict):
+                        detalles_campos["discrepancia_documento_edad"] = {
+                            "tipo": "MAYOR_CON_TI",
+                            "edad": edad,
+                            "tipo_documento": tipo_doc_eval or "TARJETA_IDENTIDAD",
+                            "motivo": (
+                                f"Archivo no válido ya que la persona es mayor de edad ({edad} años) "
+                                f"y presenta archivo de Tarjeta de Identidad que solo corresponde a menores de edad."
+                            )
+                        }
+                elif edad < 18 and es_cc:
+                    mot_doc_edad = (
+                        f"Archivo no válido: La persona es menor de edad ({edad} años) y presenta "
+                        f"Cédula de Ciudadanía, la cual solo corresponde a personas mayores de 18 años. "
+                        f"Debe presentar Tarjeta de Identidad."
+                    )
+                    motivos.append(mot_doc_edad)
+                    if detalles_campos is not None and isinstance(detalles_campos, dict):
+                        detalles_campos["discrepancia_documento_edad"] = {
+                            "tipo": "MENOR_CON_CC",
+                            "edad": edad,
+                            "tipo_documento": tipo_doc_eval or "CEDULA_CIUDADANIA",
+                            "motivo": (
+                                f"Archivo no válido ya que la persona es menor de edad ({edad} años) "
+                                f"y presenta archivo de Cédula de Ciudadanía que solo corresponde a mayores de 18 años."
+                            )
+                        }
+                else:
+                    if detalles_campos is not None and isinstance(detalles_campos, dict):
+                        detalles_campos.pop("discrepancia_documento_edad", None)
 
         # NOTA: Los campos secundarios (fecha_expedicion, lugar_expedicion, sexo)
         # ya no son requeridos ni obligatorios para marcar a una persona como válida.
@@ -501,7 +596,8 @@ class ValidadorColombia:
         # 5. Conflictos o estatus de campos primarios esenciales
         # El único campo relevante de identidad es nombre_completo; nombres y apellidos se ignoran para no fragmentar ni duplicar alertas
         CAMPOS_IGNORAR_REVISION = {
-            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo", "tipo_documento", "discrepancia_excel", "nombres", "apellidos"
+            "grouping", "motivos_revision", "fecha_expedicion", "lugar_expedicion", "sexo",
+            "tipo_documento", "discrepancia_excel", "discrepancia_documento_edad", "nombres", "apellidos"
         }
         if detalles_campos and isinstance(detalles_campos, dict):
             # Discrepancia crítica explícita entre Cédula física y Planilla Excel

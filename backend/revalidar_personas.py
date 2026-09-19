@@ -34,6 +34,7 @@ def revalidar_base_datos():
                 confianza=float(p.confianza_extraccion or 100),
                 detalles_campos=detalles,
                 motor_ocr=p.motor_ocr,
+                tipo_documento=p.tipo_documento,
             )
 
             cambio = False
@@ -59,10 +60,15 @@ def revalidar_base_datos():
                     p.detalles_campos = detalles
                     cambio = True
                     validados += 1
-                elif detalles.get("motivos_revision") != motivos_filtrados:
-                    detalles["motivos_revision"] = motivos_filtrados
-                    p.detalles_campos = detalles
-                    cambio = True
+                else:
+                    if not p.requiere_revision or p.estado_registro != "REVIEW_REQUIRED":
+                        p.requiere_revision = True
+                        p.estado_registro = "REVIEW_REQUIRED"
+                        cambio = True
+                    if detalles.get("motivos_revision") != motivos_filtrados:
+                        detalles["motivos_revision"] = motivos_filtrados
+                        p.detalles_campos = detalles
+                        cambio = True
 
             if cambio:
                 actualizados += 1

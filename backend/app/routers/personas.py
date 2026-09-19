@@ -124,10 +124,11 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
         ids_totales: Set[str] = set()
         hay_archivo = False
 
-        # 2. Extraer los IDs directamente de los archivos Excel físicos
+        # 2. Extraer los IDs directamente de los archivos Excel físicos o restaurados
         for comp in comparaciones:
-            if comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
-                ids_archivo = _extraer_ids_de_archivo_excel(comp.ruta_archivo)
+            ruta = comp.obtener_ruta_o_restaurar(db)
+            if ruta and ruta.exists():
+                ids_archivo = _extraer_ids_de_archivo_excel(str(ruta))
                 if ids_archivo:
                     ids_totales.update(ids_archivo)
                     hay_archivo = True
@@ -135,9 +136,8 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
         if hay_archivo:
             return ids_totales, True
 
-        # 3. Fallback solo si el archivo físico en disco no existiera:
-        # En la tabla Diferencia, los registros en Excel son 'faltante_bd' y 'diferente'.
-        # NOTA: 'nuevo_bd' son personas que están en BD pero NO en Excel, JAMÁS incluirlas.
+        # 3. Fallback si el archivo físico y el binario no existieran (ej. subidas históricas previas a persistencia):
+        # A. En la tabla Diferencia, los registros en Excel son 'faltante_bd' y 'diferente'.
         comp_ids = [c.id for c in comparaciones]
         rows = (
             db.query(Diferencia.numero_identificacion)
@@ -156,6 +156,52 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
                 if limpio:
                     fallback_ids.add(limpio)
                 fallback_ids.add(s)
+
+        # B. Identificar quiénes NO estaban en Excel según la comparación (tipo_diferencia = 'nuevo_bd')
+        rows_sobrantes = (
+            db.query(Diferencia.numero_identificacion)
+            .filter(
+                Diferencia.comparacion_id.in_(comp_ids),
+                Diferencia.tipo_diferencia == "nuevo_bd"
+            )
+            .distinct()
+            .all()
+        )
+        ids_sobrantes = set()
+        for r in rows_sobrantes:
+            if r[0]:
+                s = str(r[0]).strip()
+                ids_sobrantes.add(s)
+                limp = re.sub(r"[^\d]", "", s)
+                if limp:
+                    ids_sobrantes.add(limp)
+
+        # C. Reconstruir a partir de personas del usuario: los que NO están en ids_sobrantes (estaban en Excel coincidentes)
+        # o que tienen evidencia directa de Excel
+        from app.models.persona import Persona
+        p_query = db.query(Persona)
+        if usuario_id:
+            from sqlalchemy import or_
+            p_query = p_query.filter(or_(Persona.usuario_id == usuario_id, Persona.usuario_id.is_(None)))
+        personas_bd = p_query.all()
+
+        for p in personas_bd:
+            num = str(p.numero_identificacion or "").strip()
+            num_limp = re.sub(r"[^\d]", "", num)
+            det = p.detalles_campos or {}
+            es_excel = (
+                p.motor_ocr == "excel"
+                or bool(det.get("discrepancia_excel"))
+                or det.get("origen") == "excel_no_encontrado_en_pdf"
+                or (isinstance(det.get("nombre_completo"), dict) and det["nombre_completo"].get("source") == "excel_oficial")
+                or (isinstance(det.get("numero_identificacion"), dict) and det["numero_identificacion"].get("source") == "excel_oficial")
+                or (num and num not in ids_sobrantes and num_limp not in ids_sobrantes)
+            )
+            if es_excel:
+                if num:
+                    fallback_ids.add(num)
+                if num_limp:
+                    fallback_ids.add(num_limp)
 
         return fallback_ids, bool(comparaciones)
 
@@ -261,7 +307,19 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
                 detalles["motivos_revision"] = mots
             r.detalles_campos = detalles
 
-    if hay_excel:
+    # Comprobar si la persona tiene evidencia inequívoca de pertenecer a la planilla oficial de Excel
+    evidencia_excel = (
+        p.motor_ocr == "excel"
+        or bool(disc_excel)
+        or detalles.get("origen") == "excel_no_encontrado_en_pdf"
+        or (isinstance(detalles.get("nombre_completo"), dict) and detalles["nombre_completo"].get("source") == "excel_oficial")
+        or (isinstance(detalles.get("numero_identificacion"), dict) and detalles["numero_identificacion"].get("source") == "excel_oficial")
+        or (isinstance(detalles.get("nombres"), dict) and detalles["nombres"].get("source") == "excel_oficial")
+    )
+
+    if evidencia_excel:
+        r.en_excel = True
+    elif hay_excel:
         id_crudo = str(p.numero_identificacion or "").strip()
         id_limpio = re.sub(r"[^\d]", "", id_crudo)
 
@@ -326,16 +384,16 @@ def listar_personas(
             from app.services.excel_lookup_service import excel_lookup_service
             comp_obj = db.query(Comparacion).filter(
                 Comparacion.usuario_id == usuario.id,
-                Comparacion.ruta_archivo.isnot(None)
             ).order_by(Comparacion.fecha_carga.desc()).first()
             if not comp_obj:
                 comp_obj = db.query(Comparacion).filter(
                     Comparacion.usuario_id.is_(None),
-                    Comparacion.ruta_archivo.isnot(None)
                 ).order_by(Comparacion.fecha_carga.desc()).first()
 
-            if comp_obj and comp_obj.ruta_archivo and os.path.exists(comp_obj.ruta_archivo):
-                lookup_excel = excel_lookup_service.cargar_lookup(comp_obj.ruta_archivo)
+            if comp_obj:
+                ruta_comp_obj = comp_obj.obtener_ruta_o_restaurar(db)
+                if ruta_comp_obj and ruta_comp_obj.exists():
+                    lookup_excel = excel_lookup_service.cargar_lookup(str(ruta_comp_obj))
                 if lookup_excel:
                     hubo_cambios = False
                     for p in personas:
@@ -637,6 +695,7 @@ async def subir_pdf_persona(
         nombre_archivo=nombre_guardado,
         nombre_original=file.filename,
         ruta_archivo=str(ruta_guardada),
+        archivo_binario=content,
         estado="procesando",
         tamano_bytes=len(content),
     )

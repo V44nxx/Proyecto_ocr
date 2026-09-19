@@ -29,6 +29,11 @@ def _ejecutar_comparacion_background(comparacion_id: str, excel_path: str):
     from app.database import SessionLocal
     db = SessionLocal()
     try:
+        comp = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
+        if comp:
+            ruta_act = comp.obtener_ruta_o_restaurar(db)
+            if ruta_act:
+                excel_path = str(ruta_act)
         comparacion_service.ejecutar_comparacion(comparacion_id, excel_path, db)
     except Exception as e:
         logger.error(f"Error en comparación background: {e}")
@@ -67,6 +72,7 @@ async def upload_excel_comparacion(
         nombre_archivo=nombre_unico,
         nombre_original=file.filename,
         ruta_archivo=str(ruta_archivo),
+        archivo_binario=content,
         estado="pendiente" if not ejecutar else "procesando",
     )
     db.add(comparacion)
@@ -105,9 +111,12 @@ def ejecutar_comparacion(
     comparacion.estado = "procesando"
     db.commit()
 
+    ruta_excel_ejec = comparacion.obtener_ruta_o_restaurar(db)
+    path_str = str(ruta_excel_ejec) if ruta_excel_ejec else comparacion.ruta_archivo
+
     hilo = threading.Thread(
         target=_ejecutar_comparacion_background,
-        args=(str(comparacion.id), comparacion.ruta_archivo),
+        args=(str(comparacion.id), path_str),
         daemon=True
     )
     hilo.start()
@@ -351,9 +360,10 @@ def agregar_persona_bd_desde_comparacion(
     nombres = None
     apellidos = None
 
-    if comparacion.ruta_archivo and os.path.exists(comparacion.ruta_archivo):
+    ruta_comp_act = comparacion.obtener_ruta_o_restaurar(db)
+    if ruta_comp_act and ruta_comp_act.exists():
         try:
-            lookup = excel_lookup_service.cargar_lookup(comparacion.ruta_archivo)
+            lookup = excel_lookup_service.cargar_lookup(str(ruta_comp_act))
             reg = excel_lookup_service.buscar(num_id, lookup)
             if reg:
                 if not nom_completo:

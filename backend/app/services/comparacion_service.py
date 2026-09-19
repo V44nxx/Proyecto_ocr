@@ -868,8 +868,17 @@ class ComparacionService:
         df_excel = pd.DataFrame()
         excel_map: Dict[str, Dict[str, Any]] = {}
 
+        archivo_excel_encontrado: Optional[Path] = None
+        if hasattr(comparacion, "obtener_ruta_o_restaurar") and callable(comparacion.obtener_ruta_o_restaurar):
+            try:
+                ruta_res = comparacion.obtener_ruta_o_restaurar(db)
+                if isinstance(ruta_res, (str, Path)) and Path(ruta_res).exists() and Path(ruta_res).is_file():
+                    archivo_excel_encontrado = Path(ruta_res)
+            except Exception:
+                pass
+
         rutas_a_probar = []
-        if comparacion.ruta_archivo:
+        if not archivo_excel_encontrado and comparacion.ruta_archivo:
             r_norm = str(comparacion.ruta_archivo).replace("\\", "/")
             nom_base = Path(r_norm).name
             rutas_a_probar.extend([

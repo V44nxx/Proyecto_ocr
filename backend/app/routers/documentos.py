@@ -421,6 +421,7 @@ async def upload_pdf(
             nombre_archivo=nombre_excel,
             nombre_original=excel.filename,
             ruta_archivo=str(ruta_excel),
+            archivo_binario=excel_content,
             estado="pendiente",
         )
         db.add(comparacion)
@@ -451,6 +452,7 @@ async def upload_pdf(
             nombre_archivo=nombre_unico,
             nombre_original=pdf_file.filename,
             ruta_archivo=str(ruta_archivo),
+            archivo_binario=content,
             tamano_bytes=len(content),
             estado="procesando",
         )
@@ -832,18 +834,26 @@ def preview_pagina_pdf(
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
 
-    # 2. Verificar que el archivo existe
-    ruta = Path(documento.ruta_archivo) if documento.ruta_archivo else None
-    if not ruta or not ruta.exists():
+    # 2. Verificar que el archivo existe en disco o auto-restaurarlo desde PostgreSQL
+    ruta = documento.obtener_ruta_o_restaurar(db)
+    if (not ruta or not ruta.exists()) and not documento.archivo_binario:
         raise HTTPException(
             status_code=404,
             detail=f"Archivo PDF no disponible en el servidor: {documento.nombre_original}"
         )
 
-    # 3. Renderizar con PyMuPDF
+    # 3. Renderizar con PyMuPDF (abriendo desde archivo o directamente desde stream binario)
     try:
         import fitz  # PyMuPDF
-        pdf_doc = fitz.open(str(ruta))
+        if ruta and ruta.exists():
+            pdf_doc = fitz.open(str(ruta))
+        elif documento.archivo_binario:
+            pdf_doc = fitz.open(stream=documento.archivo_binario, filetype="pdf")
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Archivo PDF no disponible en el servidor: {documento.nombre_original}"
+            )
         total_paginas = len(pdf_doc)
 
         # Convertir a 0-indexed y validar rango

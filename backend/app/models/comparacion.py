@@ -1,9 +1,9 @@
 """Modelo SQLAlchemy: Comparacion"""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred
 from app.database import Base
 
 
@@ -15,6 +15,8 @@ class Comparacion(Base):
     nombre_archivo = Column(String(500), nullable=False)
     nombre_original = Column(String(500), nullable=False)
     ruta_archivo = Column(String(1000), nullable=True)
+    # Respaldo persistente de la planilla Excel en BD para evitar pérdida de datos tras reinicio/commit
+    archivo_binario = deferred(Column(LargeBinary, nullable=True))
 
     # Estadísticas
     total_registros_bd = Column(Integer, default=0)
@@ -36,6 +38,41 @@ class Comparacion(Base):
     # Relaciones
     usuario = relationship("Usuario", back_populates="comparaciones")
     diferencias = relationship("Diferencia", back_populates="comparacion", cascade="all, delete-orphan")
+
+    def obtener_ruta_o_restaurar(self, db_session=None):
+        """
+        Retorna la ruta Path del archivo Excel en disco. Si no existe físicamente (ej. tras
+        reinicio o despliegue de contenedor en Dokploy), lo restaura automáticamente
+        desde archivo_binario almacenado en la base de datos PostgreSQL.
+        """
+        from pathlib import Path
+        from app.config import settings
+        import logging
+        _log = logging.getLogger(__name__)
+
+        ruta = Path(self.ruta_archivo) if self.ruta_archivo else None
+        if ruta and ruta.exists() and ruta.is_file():
+            return ruta
+
+        if self.archivo_binario:
+            try:
+                if not ruta:
+                    nombre = self.nombre_archivo or f"comp_{self.id}.xlsx"
+                    ruta = settings.upload_path / nombre
+                ruta.parent.mkdir(parents=True, exist_ok=True)
+                ruta.write_bytes(self.archivo_binario)
+                self.ruta_archivo = str(ruta)
+                if db_session:
+                    try:
+                        db_session.commit()
+                    except Exception:
+                        pass
+                _log.info(f"Excel auto-restaurado en disco desde PostgreSQL: {ruta}")
+                return ruta
+            except Exception as e:
+                _log.warning(f"No se pudo restaurar archivo binario de comparación {self.id}: {e}")
+                return None
+        return None
 
     def __repr__(self):
         return f"<Comparacion {self.nombre_original} [{self.estado}]>"

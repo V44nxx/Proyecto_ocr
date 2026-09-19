@@ -81,11 +81,13 @@ class OCRService:
                     .order_by(Comparacion.fecha_carga.desc())
                     .first()
                 )
-                if comp and comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
-                    excel_lookup = excel_lookup_service.cargar_lookup(comp.ruta_archivo)
-                    logger.info(
-                        f"[OCR] Lookup Excel cargado automáticamente desde Comparación '{comp.nombre_original}' ({len(excel_lookup)} personas)"
-                    )
+                if comp:
+                    ruta_comp = comp.obtener_ruta_o_restaurar(db)
+                    if ruta_comp and ruta_comp.exists():
+                        excel_lookup = excel_lookup_service.cargar_lookup(str(ruta_comp))
+                        logger.info(
+                            f"[OCR] Lookup Excel cargado automáticamente desde Comparación '{comp.nombre_original}' ({len(excel_lookup)} personas)"
+                        )
                 else:
                     archivos_excel = sorted(
                         [p for p in settings.upload_path.glob("*.xls*") if not p.name.startswith("reporte_")],
@@ -760,8 +762,10 @@ class OCRService:
                         comp = comp_user or comp_q.order_by(Comparacion.fecha_carga.desc()).first()
                     else:
                         comp = comp_q.order_by(Comparacion.fecha_carga.desc()).first()
-                    if comp and comp.ruta_archivo and os.path.exists(comp.ruta_archivo):
-                        excel_lookup = excel_lookup_service.cargar_lookup(comp.ruta_archivo)
+                    if comp:
+                        ruta_comp = comp.obtener_ruta_o_restaurar(db)
+                        if ruta_comp and ruta_comp.exists():
+                            excel_lookup = excel_lookup_service.cargar_lookup(str(ruta_comp))
                 except Exception as e_lk:
                     logger.warning(f"[ExcelLookup] No se pudo cargar planilla para OCR: {e_lk}")
 

@@ -98,7 +98,9 @@ def create_tables():
                 "ALTER TABLE personas DROP CONSTRAINT IF EXISTS personas_numero_identificacion_key;",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL;",
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS visible_en_subida BOOLEAN DEFAULT TRUE;",
-                "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;"
+                "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;",
+                "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
+                "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;"
             ]
             for q in queries:
                 try:

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db

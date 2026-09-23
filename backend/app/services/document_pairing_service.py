@@ -9,9 +9,11 @@ from app.utils.logger import app_logger as logger
 # Orden de prioridad para resolver conflictos entre las dos caras del documento.
 # Un tipo más específico (ej: TARJETA_IDENTIDAD) siempre gana frente a UNKNOWN.
 _PRIORIDAD_TIPO_DOC = {
-    "TARJETA_IDENTIDAD": 10,
-    "CEDULA_EXTRANJERIA": 8,
-    "PASAPORTE": 8,
+    "PPT": 12,
+    "CEDULA_EXTRANJERIA": 11,
+    "CONTRASEÑA": 10,
+    "PASAPORTE": 10,
+    "TARJETA_IDENTIDAD": 9,
     "CEDULA_DIGITAL": 6,
     "CEDULA_CIUDADANIA": 5,
     "UNKNOWN": 0,

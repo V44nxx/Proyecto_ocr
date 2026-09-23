@@ -239,8 +239,21 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     edad_val = p.edad or validador.calcular_edad(p.fecha_nacimiento)
     tipo_norm = str(p.tipo_documento or "").upper().strip()
 
-    # Si en el texto OCR crudo se evidencia que es Tarjeta de Identidad, rectificar la clasificación
     texto_ocr = str(p.texto_ocr_crudo or "").upper()
+
+    # Detección y rectificación de tipo de documento a partir de texto OCR o del registro
+    es_ppt_en_texto = bool(
+        re.search(r"\b(PERMISO\s+POR\s+PROTECCI[OÓ]N\s+TEMPORAL|PERMISO\s+DE\s+PROTECCI[OÓ]N|PROTECCI[OÓ]N\s+TEMPORAL|PPT\b|P\.P\.T\b|VISIBLES)\b", texto_ocr)
+    )
+    es_ce_en_texto = bool(
+        re.search(r"\b(C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|CEDULA\s+EXTRANJERIA|EXTRANJER[IÍ]A|C\.E\b|C\.E\.|RESIDENTE\s+N[O0]?\.?)\b", texto_ocr)
+    )
+    es_contrasena_en_texto = bool(
+        re.search(r"\b(COMPROBANTE\s+DE\s+DOCUMENTO|EN\s+TR[AÁ]MITE|CONTRASE[NÑ]A)\b", texto_ocr)
+    )
+    es_pasaporte_en_texto = bool(
+        re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_ocr)
+    )
     es_tarjeta_en_texto = bool(
         re.search(
             r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|"
@@ -254,14 +267,45 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
             and not re.search(r"I<COL|C<COL", texto_ocr)
         )
     )
-    if es_tarjeta_en_texto and not re.search(r"\bCEDULA\s+DE\s+CIUDADAN[IÍ]A\b", texto_ocr):
+
+    if es_ppt_en_texto or "PPT" in tipo_norm or "TEMPORAL" in tipo_norm:
+        tipo_norm = "PPT"
+        r.tipo_documento = "PPT"
+        if p.tipo_documento != "PPT":
+            p.tipo_documento = "PPT"
+    elif es_ce_en_texto or "EXTRANJERIA" in tipo_norm or tipo_norm in ("CE", "CEDULA_EXTRANJERIA"):
+        tipo_norm = "CEDULA_EXTRANJERIA"
+        r.tipo_documento = "CEDULA_EXTRANJERIA"
+        if p.tipo_documento != "CEDULA_EXTRANJERIA":
+            p.tipo_documento = "CEDULA_EXTRANJERIA"
+    elif es_contrasena_en_texto or "CONTRASEÑA" in tipo_norm or "TRAMITE" in tipo_norm or tipo_norm in ("CT", "CONTRASEÑA"):
+        tipo_norm = "CONTRASEÑA"
+        r.tipo_documento = "CONTRASEÑA"
+        if p.tipo_documento != "CONTRASEÑA":
+            p.tipo_documento = "CONTRASEÑA"
+    elif es_pasaporte_en_texto or "PASAPORTE" in tipo_norm or "PASSPORT" in tipo_norm or tipo_norm in ("PAS", "PASAPORTE"):
+        tipo_norm = "PASAPORTE"
+        r.tipo_documento = "PASAPORTE"
+        if p.tipo_documento != "PASAPORTE":
+            p.tipo_documento = "PASAPORTE"
+    elif es_tarjeta_en_texto and not re.search(r"\bCEDULA\s+DE\s+CIUDADAN[IÍ]A\b", texto_ocr):
         tipo_norm = "TARJETA_IDENTIDAD"
         r.tipo_documento = "TARJETA_IDENTIDAD"
         if p.tipo_documento != "TARJETA_IDENTIDAD":
             p.tipo_documento = "TARJETA_IDENTIDAD"
+    elif tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD"):
+        tipo_norm = "TARJETA_IDENTIDAD"
+        r.tipo_documento = "TARJETA_IDENTIDAD"
+    else:
+        # Por defecto si es cédula colombiana
+        r.tipo_documento = p.tipo_documento or "CEDULA_CIUDADANIA"
 
-    es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
-    es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti)
+    es_ce = tipo_norm == "CEDULA_EXTRANJERIA"
+    es_ppt = tipo_norm == "PPT"
+    es_ti = tipo_norm == "TARJETA_IDENTIDAD"
+    es_contrasena = tipo_norm == "CONTRASEÑA"
+    es_pasaporte = tipo_norm == "PASAPORTE"
+    es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA", "CEDULA") and not es_ti and not es_ce and not es_ppt
 
     if edad_val is not None:
         if edad_val >= 18 and es_ti:

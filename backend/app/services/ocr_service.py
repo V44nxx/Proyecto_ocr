@@ -235,7 +235,32 @@ class OCRService:
             personas_guardadas_map: Dict[str, Dict[str, Any]] = {}
 
             for grp in grupos:
-                datos_grupo = self.parser.extraer_grupo(grp, ocr_engine="google_document_ai")
+                # ── Resolver motor representativo real del grupo (Trazabilidad precisa) ──
+                motores_grp = set()
+                if grp.front_page and grp.front_page.get("motor"):
+                    motores_grp.add(grp.front_page["motor"])
+                if grp.back_page and grp.back_page.get("motor"):
+                    motores_grp.add(grp.back_page["motor"])
+                for op in getattr(grp, "other_pages", []):
+                    if op and op.get("motor"):
+                        motores_grp.add(op["motor"])
+
+                if "google_document_ai+rapid_ocr" in motores_grp:
+                    motor_real = "google_document_ai+rapid_ocr"
+                elif "rapid_ocr" in motores_grp and "google_document_ai" in motores_grp:
+                    motor_real = "google_document_ai+rapid_ocr"
+                elif "rapid_ocr" in motores_grp:
+                    motor_real = "rapid_ocr"
+                elif "google_document_ai" in motores_grp:
+                    motor_real = "google_document_ai"
+                elif "tesseract_fallback" in motores_grp:
+                    motor_real = "tesseract_fallback"
+                elif "texto_nativo_pdf" in motores_grp:
+                    motor_real = "texto_nativo_pdf"
+                else:
+                    motor_real = "google_document_ai"
+
+                datos_grupo = self.parser.extraer_grupo(grp, ocr_engine=motor_real)
                 confianza = datos_grupo.get("confianza_extraccion", 0.0)
                 confianzas.append(confianza)
 
@@ -244,7 +269,7 @@ class OCRService:
                     texto_ocr=f"Frente Pag {grp.pagina_frente} | Reverso Pag {grp.pagina_reverso}",
                     documento_id=documento_id,
                     db=db,
-                    ocr_engine="google_document_ai",
+                    ocr_engine=motor_real,
                     pagina_num=grp.pagina_frente or grp.pagina_reverso or 1,
                     excel_lookup=excel_lookup,
                 )
@@ -388,6 +413,60 @@ class OCRService:
 
         return False
 
+    def _es_extraccion_docai_completa(
+        self, texto_docai: str, res_docai: Any, pagina_num: int = 0
+    ) -> tuple[bool, str]:
+        """
+        Evalúa si la extracción de Google Document AI es estructuralmente completa y confiable.
+        Si es completa, el Fast-Path retorna de inmediato evitando el cómputo de RapidOCR en CPU.
+        Si es incompleta o dudosa, retorna False con la razón para activar el rescate de RapidOCR.
+        """
+        if not texto_docai or not res_docai:
+            return False, "Texto o resultado nulo"
+
+        texto_limpio = texto_docai.strip()
+        palabras = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{3,}", texto_limpio)
+
+        # 1. Volumen mínimo de texto
+        if len(texto_limpio) < 40 or len(palabras) < 5:
+            return False, f"Volumen insuficiente ({len(texto_limpio)} chars, {len(palabras)} palabras)"
+
+        # 2. Confianza media de líneas de layout si están disponibles
+        docai_lines = []
+        if getattr(res_docai, "pages", None) and len(res_docai.pages) > 0:
+            docai_lines = getattr(res_docai.pages[0], "lines", [])
+
+        if docai_lines:
+            confidencias = [float(getattr(l, "confidence", 1.0)) for l in docai_lines if hasattr(l, "confidence")]
+            if confidencias:
+                conf_prom = sum(confidencias) / len(confidencias)
+                if conf_prom < 0.75:
+                    return False, f"Confianza promedio de líneas baja ({conf_prom * 100:.1f}% < 75%)"
+
+        # 3. Detección de cara y marcadores estructurales
+        from app.services.document_side_classifier import document_side_classifier
+        clasif = document_side_classifier.clasificar_cara(
+            texto_limpio,
+            lines=docai_lines
+        )
+        cara = clasif.get("cara", "UNKNOWN")
+        conf_cara = clasif.get("confianza", 0.0)
+
+        # 4. Verificación de número de identificación
+        lineas_docai = [l.strip() for l in texto_limpio.split("\n") if l.strip()]
+        id_encontrado = self.parser._extraer_identificacion(texto_limpio, lineas_docai)
+
+        if id_encontrado:
+            tiene_nombres = bool(re.search(r"\b(NOMBRES?|APELLIDOS?)\b", texto_limpio, re.I))
+            if tiene_nombres or conf_cara >= 0.65 or len(palabras) >= 8:
+                return True, f"Cédula {id_encontrado} detectada con estructura sólida"
+
+        # Si no tiene ID pero es un Reverso de Cédula o Tarjeta bien identificado
+        if cara in ("CEDULA_BACK", "TARJETA_IDENTIDAD_BACK") and conf_cara >= 0.70:
+            return True, f"Cara {cara} identificada con alta confianza ({conf_cara * 100:.1f}%)"
+
+        return False, "Sin número de identificación ni cara reconocible con alta confianza"
+
     # ──────────────────────────────────────────
     # OCR DE IMAGEN — MODO DUAL (DocAI + RapidOCR) + FALLBACK TESSERACT
     # ──────────────────────────────────────────
@@ -395,16 +474,18 @@ class OCRService:
         self, img_np, pagina_num: int = 0
     ) -> tuple:
         """
-        Motor OCR de imagen con modo DUAL activo (DocAI + RapidOCR en paralelo):
+        Motor OCR de imagen con modo DUAL activo (DocAI + RapidOCR):
 
-        Modo DUAL (cuando ambos disponibles):
+        Modo DUAL INTELIGENTE (Smart Dual OCR - Opción A):
           1. Google Document AI → texto principal + layout 2D estructurado
-          2. RapidOCR ONNX     → corre sobre la misma imagen
+          2. Evaluación de estructura y calidad (Smart Fast-Path):
+             - Si la cédula/reverso es completo y legible -> retorna inmediatamente sin tocar RapidOCR.
+             - Si faltan datos, cédula o la confianza es baja -> activa RapidOCR al rescate.
           3. Fusión de textos  → líneas de RapidOCR que DocAI no capturó se agregan
              al texto final, garantizando máxima cobertura de campos
-          Motor reportado: 'google_document_ai+rapid_ocr'
+          Motor reportado: 'google_document_ai+rapid_ocr' (si ambos fusionados)
 
-        Modo SOLO DocAI (si RapidOCR no disponible):
+        Modo SOLO DocAI (si Fast-Path completo o RapidOCR no disponible):
           Motor reportado: 'google_document_ai'
 
         Modo SOLO RapidOCR (si DocAI falla o no disponible):
@@ -422,7 +503,7 @@ class OCRService:
         texto_docai: str = ""
         res_docai = None
 
-        # ── Paso 1: Google Document AI (Fast-Path) ─────────────────────────
+        # ── Paso 1: Google Document AI (Smart Fast-Path) ───────────────────
         if google_document_ai_service.disponible:
             try:
                 # JPEG calidad 90: compresión ultrarrápida (~10ms vs 200ms PNG) y peso reducido 70%
@@ -442,9 +523,18 @@ class OCRService:
                         f"[DocAI] Página {pagina_num}: OK "
                         f"({len(texto_docai)} chars, {len(palabras)} palabras, {res_docai.tiempo_ms:.1f}ms)"
                     )
-                    # FAST-PATH: Si DocAI obtuvo texto suficiente, retornar inmediatamente sin ejecutar RapidOCR redundante
-                    if len(texto_docai) >= 25 and len(palabras) >= 3:
+                    # FAST-PATH INTELIGENTE (Opción A):
+                    # Solo retorna inmediatamente si la estructura y confianza son completas
+                    es_completo, motivo = self._es_extraccion_docai_completa(texto_docai, res_docai, pagina_num)
+                    if es_completo:
+                        logger.info(
+                            f"[SmartDualOCR] Página {pagina_num}: Fast-Path activo ({motivo}) -> Retorno directo DocAI"
+                        )
                         return texto_docai, "google_document_ai", res_docai
+                    else:
+                        logger.info(
+                            f"[SmartDualOCR] Página {pagina_num}: DocAI requiere rescate ({motivo}) -> Activando RapidOCR..."
+                        )
                 else:
                     logger.warning(f"[DocAI] Página {pagina_num}: texto vacío")
                     res_docai = None

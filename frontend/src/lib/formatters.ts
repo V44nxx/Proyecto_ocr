@@ -5,7 +5,10 @@ const JUNK_WORDS = new Set([
   "RETUBEICA", "REPÚBLICA", "NACIONAL", "REGISTRADURIA", "ESTADO", "NUMERO", 
   "FIRMA", "HUELLA", "INDICE", "DERECHO", "IZQUIERDO", "DOCUMENTO", "PERSONAL", 
   "REGISTRO", "CIVIL", "EXPEDICION", "LUGAR", "FECHA", "NACIMIENTO", "SEXO", 
-  "ESTATURA", "RH", "VIGENCIA", "POSTAL", "CUE", "III", "DR", "CDI", "AAAS"
+  "ESTATURA", "RH", "VIGENCIA", "POSTAL", "CUE", "III", "DR", "CDI", "AAAS",
+  "EXTRANJERIA", "EXTRANJERÍA", "RESIDENTE", "TEMPORAL", "PROTECCION", "PROTECCIÓN",
+  "PPT", "VISIBLES", "MIGRACION", "MIGRACIÓN", "PASAPORTE", "PASSPORT", "CONTRASEÑA",
+  "VEN", "ECU", "PER", "BOL", "CHL", "ARG", "BRA", "MEX", "USA", "ESP", "COL"
 ]);
 
 /**
@@ -180,8 +183,10 @@ export function verificarInconsistenciaDocumentoEdad(
   if (edad === null) return { esInvalido: false, edad: null };
 
   const tipo = (tipoDocumento || "").toUpperCase().trim();
-  const esTI = tipo.includes("TARJETA") || tipo === "TI";
-  const esCC = (tipo.includes("CEDULA") || tipo.includes("CÉDULA") || tipo === "CC") && !esTI;
+  const esCE = tipo.includes("EXTRANJER") || tipo === "CE";
+  const esPPT = tipo.includes("PPT") || tipo.includes("TEMPORAL");
+  const esTI = (tipo.includes("TARJETA") || tipo === "TI") && !esCE && !esPPT;
+  const esCC = (tipo.includes("CEDULA") || tipo.includes("CÉDULA") || tipo === "CC") && !esTI && !esCE && !esPPT;
 
   if (edad >= 18 && esTI) {
     return {

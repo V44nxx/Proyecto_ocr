@@ -89,8 +89,20 @@ class ExtractorService:
         r"IDENTIFICACI[OÓ]N",
         r"N[UÚ]MERO\s+C[EÉ]DULA",
         r"C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A",
+        r"C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A",
         r"C\.C\.",
         r"CC\.",
+        r"C\.E\.",
+        r"CE\.",
+        r"RESIDENTE\s+NO\.?",
+        r"RESIDENTE",
+        r"MIGRANTE",
+        r"MIGRACI[OÓ]N",
+        r"PPT\s+NO\.?",
+        r"PPT",
+        r"PASAPORTE\s+NO\.?",
+        r"PASAPORTE",
+        r"COMPROBANTE",
         r"N[UÚ]MERO",
         r"NO\.",
         r"NO\s+DE\s+CEDULA",
@@ -249,14 +261,39 @@ class ExtractorService:
     # MÉTODO PRINCIPAL DE EXTRACCIÓN
     # ──────────────────────────────────────────
     def detectar_tipo_documento(self, texto: str) -> str:
-        """Determina con alta precisión si el texto corresponde a Tarjeta de Identidad, Cédula de Ciudadanía, Cédula de Extranjería o Pasaporte."""
+        """Determina con alta precisión si el texto corresponde a PPT, Cédula de Extranjería, Contraseña, Pasaporte, Tarjeta de Identidad o Cédula de Ciudadanía."""
         if not texto:
             return "UNKNOWN"
         texto_up = texto.upper()
 
-        # 1. Tarjeta de Identidad (TI)
-        # Una Cédula de Ciudadanía NUNCA contiene 'TARJETA' o 'T.I.'.
-        # Soporta saltos de línea (\s+), OCR fusionado, typos y reverso característico de TI.
+        # 1. Permiso por Protección Temporal (PPT)
+        es_ppt = bool(
+            re.search(
+                r"\b(PERMISO\s+POR\s+PROTECCI[OÓ]N\s+TEMPORAL|PERMISO\s+DE\s+PROTECCI[OÓ]N\s+TEMPORAL|PROTECCI[OÓ]N\s+TEMPORAL|PPT\b|P\.P\.T\b|VISIBLES)\b",
+                texto_up
+            )
+        )
+
+        # 2. Cédula de Extranjería (CE)
+        es_extranjeria = bool(
+            re.search(
+                r"\b(C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|CEDULA\s+EXTRANJERIA|EXTRANJER[IÍ]A|C\.E\b|C\.E\.|RESIDENTE\s+N[O0]?\.?)\b",
+                texto_up
+            )
+        )
+
+        # 3. Contraseña (Comprobante de documento en trámite)
+        es_contrasena = bool(
+            re.search(
+                r"\b(COMPROBANTE\s+DE\s+DOCUMENTO|EN\s+TR[AÁ]MITE|CONTRASE[NÑ]A)\b",
+                texto_up
+            )
+        )
+
+        # 4. Pasaporte
+        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
+
+        # 5. Tarjeta de Identidad (TI)
         es_tarjeta = bool(
             re.search(
                 r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|"
@@ -272,12 +309,7 @@ class ExtractorService:
             )
         )
 
-        es_extranjeria = bool(re.search(r"\b(CEDULA\s+DE\s+EXTRANJERIA|CEDULA\s+EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
-        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
-
-        # 2. Cédula de Ciudadanía (CC)
-        # Requiere explícitamente palabras de CÉDULA o CIUDADANÍA (o formato MRZ I<COL / C<COL).
-        # NOTA: NO usar 'REPUBLICA DE COLOMBIA' o 'IDENTIFICACION PERSONAL' como prueba única de CC porque las TI también lo tienen.
+        # 6. Cédula de Ciudadanía (CC)
         es_cedula = bool(
             re.search(
                 r"\b(CEDULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
@@ -288,23 +320,26 @@ class ExtractorService:
             )
         )
 
-        if es_tarjeta and not es_cedula:
+        # Orden de resolución por especificidad
+        if es_ppt:
+            return "PPT"
+        elif es_extranjeria:
+            return "CEDULA_EXTRANJERIA"
+        elif es_contrasena:
+            return "CONTRASEÑA"
+        elif es_pasaporte:
+            return "PASAPORTE"
+        elif es_tarjeta and not es_cedula:
             return "TARJETA_IDENTIDAD"
         elif es_tarjeta and es_cedula:
-            # Si ambas aparecen (ej: fotocopia de trámite que menciona Cédula y Tarjeta)
             if re.search(r"\bTARJETA\s+(?:DE\s+)?IDENTIDAD\b", texto_up):
                 return "TARJETA_IDENTIDAD"
             elif re.search(r"\bC[EÉ]DULA\s+(?:DE\s+)?CIUDADAN[IÍ]A\b", texto_up):
                 return "CEDULA_CIUDADANIA"
             return "TARJETA_IDENTIDAD"
-        elif es_extranjeria:
-            return "CEDULA_EXTRANJERIA"
-        elif es_pasaporte:
-            return "PASAPORTE"
         elif es_cedula:
             return "CEDULA_CIUDADANIA"
         elif re.search(r"\b(REPUBLICA\s+DE\s+COLOMBIA|REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|NUIP)\b", texto_up):
-            # Formato de documento de identidad oficial colombiano sin etiqueta explícita: si tiene indicios de TI, priorizar TI
             if es_tarjeta:
                 return "TARJETA_IDENTIDAD"
             return "CEDULA_CIUDADANIA"
@@ -703,12 +738,16 @@ class ExtractorService:
 
         tipo_f = front_data.get("tipo_documento")
         tipo_b = back_data.get("tipo_documento")
-        if tipo_f == "TARJETA_IDENTIDAD" or tipo_b == "TARJETA_IDENTIDAD":
-            tipo_doc_grupo = "TARJETA_IDENTIDAD"
+        if tipo_f == "PPT" or tipo_b == "PPT":
+            tipo_doc_grupo = "PPT"
         elif tipo_f == "CEDULA_EXTRANJERIA" or tipo_b == "CEDULA_EXTRANJERIA":
             tipo_doc_grupo = "CEDULA_EXTRANJERIA"
+        elif tipo_f == "CONTRASEÑA" or tipo_b == "CONTRASEÑA":
+            tipo_doc_grupo = "CONTRASEÑA"
         elif tipo_f == "PASAPORTE" or tipo_b == "PASAPORTE":
             tipo_doc_grupo = "PASAPORTE"
+        elif tipo_f == "TARJETA_IDENTIDAD" or tipo_b == "TARJETA_IDENTIDAD":
+            tipo_doc_grupo = "TARJETA_IDENTIDAD"
         else:
             tipo_doc_grupo = _resolver_tipo_documento(tipo_f or "UNKNOWN", tipo_b or "UNKNOWN")
             if tipo_doc_grupo == "UNKNOWN":
@@ -802,7 +841,32 @@ class ExtractorService:
                 if "fecha" in campo:
                     d_f = validador.parsear_fecha(str(f_val))
                     d_b = validador.parsear_fecha(str(b_val))
-                    es_conflicto_real = bool(d_f and d_b and d_f != d_b)
+                    if d_f and d_b and d_f != d_b:
+                        if campo == "fecha_nacimiento":
+                            # Si una cara detectó la fecha de nacimiento y la otra la fecha de expedición
+                            # (ej: en PPT o Cédula, una fecha es 1991 y la otra 2023), asignar cronológicamente
+                            f_menor = min(d_f, d_b).isoformat()
+                            f_mayor = max(d_f, d_b).isoformat()
+                            f_val = f_menor
+                            b_val = f_menor
+                            res["fecha_nacimiento"] = f_menor
+                            if not res.get("fecha_expedicion") or res.get("fecha_expedicion") == f_menor:
+                                res["fecha_expedicion"] = f_mayor
+                            es_conflicto_real = False
+                        elif campo == "fecha_expedicion":
+                            f_mayor = max(d_f, d_b).isoformat()
+                            f_menor = min(d_f, d_b).isoformat()
+                            if res.get("fecha_nacimiento") == f_menor:
+                                f_val = f_mayor
+                                b_val = f_mayor
+                                res["fecha_expedicion"] = f_mayor
+                                es_conflicto_real = False
+                            else:
+                                es_conflicto_real = True
+                        else:
+                            es_conflicto_real = True
+                    else:
+                        es_conflicto_real = False
                 elif campo == "identificacion":
                     id_f = re.sub(r"\D", "", str(f_val))
                     id_b = re.sub(r"\D", "", str(b_val))
@@ -954,10 +1018,17 @@ class ExtractorService:
             if valido:
                 datos["identificacion"] = num
 
-        # ── Bloque MRZ nombres: apellidos<<nombres (TD1 de 3 líneas y TD2/TD3 de 2 líneas) ────
+        # ── Bloque MRZ nombres y TD1 ID: (TD1 de 3 líneas y TD2/TD3 de 2 líneas) ────
         for linea in lineas:
             linea_clean = linea.strip().replace(" ", "")
-            # Descartar línea 1 técnica de MRZ (ICC0L... o IDCOL...)
+            # Extraer ID de línea 1 técnica de MRZ (TD1 de Cédula de Extranjería / pasaporte)
+            m_td1_l1 = re.search(r"^I[<A-Z0-9]{1,4}COL([0-9]{6,10})<", linea_clean, re.I)
+            if m_td1_l1 and not datos.get("identificacion"):
+                valido, num = validador.validar_cedula(m_td1_l1.group(1))
+                if valido and not validador.es_secuencia_fecha(num):
+                    datos["identificacion"] = num
+
+            # Descartar línea 1 técnica de MRZ (ICC0L... o IDCOL...) para nombres
             if re.match(r"^I[A-Z0-9<]{0,4}C[0O]L", linea_clean):
                 continue
             # Normalizar separadores deteriorados por OCR (K< -> << y K inter-palabras -> <)
@@ -1013,7 +1084,7 @@ class ExtractorService:
             match_bar = re.search(pat_bar, texto)
             if match_bar:
                 valido, num_bar = validador.validar_cedula(match_bar.group(1))
-                if valido:
+                if valido and not validador.es_secuencia_fecha(num_bar):
                     logger.debug(f"Cédula por código de barras reverso: {num_bar}")
                     return num_bar
 
@@ -1034,6 +1105,8 @@ class ExtractorService:
                                     break
                     if m:
                         numero = re.sub(r"[\s\.,]", "", m.group(1))
+                        if validador.es_secuencia_fecha(numero):
+                            continue
                         valido, numero_limpio = validador.validar_cedula(numero)
                         if valido:
                             logger.debug(f"Cédula por keyword: {numero_limpio}")
@@ -1043,6 +1116,8 @@ class ExtractorService:
         matches_puntos = patron_num.findall(texto)
         for mp in matches_puntos:
             numero = re.sub(r"[\s\.,]", "", mp)
+            if validador.es_secuencia_fecha(numero):
+                continue
             valido, numero_limpio = validador.validar_cedula(numero)
             if valido:
                 logger.debug(f"Cédula con puntos: {numero_limpio}")
@@ -1051,18 +1126,25 @@ class ExtractorService:
         # Estrategia 3: Línea que sea solo números
         for linea in lineas:
             linea_limpia = linea.strip().replace(" ", "").replace(".", "")
-            if re.match(r"^[1-9]\d{6,9}$", linea_limpia):
+            if re.match(r"^[1-9]\d{5,9}$", linea_limpia):
+                if validador.es_secuencia_fecha(linea_limpia):
+                    continue
                 valido, numero = validador.validar_cedula(linea_limpia)
                 if valido:
                     logger.debug(f"Cédula por línea numérica: {numero}")
                     return numero
 
-        # Estrategia 4: Corrección OCR en candidatos largos (7-10 dígitos)
+        # Estrategia 4: Corrección OCR en candidatos largos (6-10 dígitos)
         candidatos = self._patron_cedula.findall(texto)
         for candidato in candidatos:
-            if len(candidato) >= 7:
+            if len(candidato) >= 6:
                 candidato_corregido = self._corregir_numero_ocr(candidato)
+                if validador.es_secuencia_fecha(candidato_corregido):
+                    continue
                 valido, numero = validador.validar_cedula(candidato_corregido)
+                if valido:
+                    logger.debug(f"Cédula con corrección OCR: {numero}")
+                    return numero
                 if valido:
                     logger.debug(f"Cédula con corrección OCR: {numero}")
                     return numero
@@ -1195,6 +1277,8 @@ class ExtractorService:
                     if norm_up in {"REPUBLICA DE COLOMBIA", "COLOMBIA", "DE COLOMBIA", "CEDULA DE CIUDADANIA", "TARJETA DE IDENTIDAD", "IDENTIFICACION PERSONAL"}:
                         continue
                     if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
+                        continue
+                    if NO_NOMBRE_HEADER.search(norm_up):
                         continue
                     if colombia_geo.es_geografico(nombre_norm):
                         continue

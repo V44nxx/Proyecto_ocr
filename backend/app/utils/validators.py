@@ -31,7 +31,7 @@ class ValidadorColombia:
         'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
     })
 
-    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes)
+    # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes, códigos de país)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
@@ -45,6 +45,9 @@ class ValidadorColombia:
         r"SENA|AMAZONIA|AMAZONÍA|CENTRO|MUJER|PROGRAMA|TITULADA|COMPLEMENTARIA|CURSO|FORMACION|FORMACIÓN|"
         r"CONVENIO|ASOCIACION|COOPERATIVA|LISTADO|PARTICIPANTES|APRENDICES|APRENDIZ|INSTRUCTOR|INSTRUCTORA|"
         r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
+        r"MIGRACION|MIGRACIÓN|VISIBLES|PROTECCION|PROTECCIÓN|TEMPORAL|RESIDENTE|MIGRANTE|VISITANTE|BENEFICIARIO|"
+        r"TRAMITE|TRÁMITE|COMPROBANTE|PASAPORTE|PASSPORT|VENCIMIENTO|"
+        r"VEN|ECU|PER|USA|COL|CHL|ARG|BRA|BOL|MEX|ESP|"
         r"I+|[I|l1!]{2,}|II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b",
         re.IGNORECASE,
     )
@@ -116,12 +119,37 @@ class ValidadorColombia:
             return False, "Comienza con cero"
 
         longitud = len(numero_limpio)
-        if longitud < 7:
-            return False, f"Muy corto ({longitud} dígitos) — ignora seriales sueltos de 6 dígitos"
+        if longitud < 6:
+            return False, f"Muy corto ({longitud} dígitos) — ignora seriales sueltos de menos de 6 dígitos"
         if longitud > 10:
             return False, f"Muy largo ({longitud} dígitos) — probable concatenación"
 
         return True, numero_limpio
+
+    @staticmethod
+    def es_secuencia_fecha(numero_str: str) -> bool:
+        """
+        Determina si una cadena numérica de 8 dígitos corresponde a una fecha (YYYYMMDD o DDMMYYYY).
+        Evita que fechas como 19850323 se extraigan accidentalmente como número de cédula.
+        """
+        if not numero_str or len(numero_str) != 8 or not numero_str.isdigit():
+            return False
+        
+        # Formato YYYYMMDD
+        año_1 = int(numero_str[:4])
+        mes_1 = int(numero_str[4:6])
+        dia_1 = int(numero_str[6:8])
+        if 1920 <= año_1 <= 2035 and 1 <= mes_1 <= 12 and 1 <= dia_1 <= 31:
+            return True
+
+        # Formato DDMMYYYY
+        dia_2 = int(numero_str[:2])
+        mes_2 = int(numero_str[2:4])
+        año_2 = int(numero_str[4:8])
+        if 1920 <= año_2 <= 2035 and 1 <= mes_2 <= 12 and 1 <= dia_2 <= 31:
+            return True
+
+        return False
 
     # ──────────────────────────────────────────
     # NOMBRES Y APELLIDOS
@@ -546,7 +574,11 @@ class ValidadorColombia:
             edad = cls.calcular_edad(fecha_nacimiento)
             tipo_norm = str(tipo_doc_eval or "").upper().strip()
             es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
-            es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti)
+            es_ce = "EXTRANJERIA" in tipo_norm or "EXTRANJERÍA" in tipo_norm or tipo_norm in ("CEDULA_EXTRANJERIA", "CE")
+            es_ppt = "PPT" in tipo_norm or "PROTECCION" in tipo_norm or "PROTECCIÓN" in tipo_norm
+            es_pas = "PASAPORTE" in tipo_norm or tipo_norm in ("PAS", "PASSPORT")
+            es_ct = "CONTRASE" in tipo_norm or "COMPROBANTE" in tipo_norm or tipo_norm in ("CT", "CONTRASENA")
+            es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti and not es_ce)
 
             if edad is not None:
                 if edad >= 18 and es_ti:

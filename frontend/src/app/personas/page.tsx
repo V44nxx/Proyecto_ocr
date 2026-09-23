@@ -28,6 +28,14 @@ const getTipoDocInfo = (tipo?: string | null) => {
       pill: "bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 font-semibold shadow-sm",
     };
   }
+  if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) {
+    return {
+      codigo: "PPT",
+      label: "Permiso Protección Temporal",
+      badge: "bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-300 dark:border-cyan-800/50 text-cyan-800 dark:text-cyan-300 font-bold shadow-sm",
+      pill: "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800/50 font-semibold shadow-sm",
+    };
+  }
   if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
     return {
       codigo: "CT",
@@ -44,7 +52,7 @@ const getTipoDocInfo = (tipo?: string | null) => {
       pill: "bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800/50 font-semibold shadow-sm",
     };
   }
-  if (t.includes("EXTRANJERIA") || t === "CE") {
+  if (t.includes("EXTRANJERIA") || t === "CE" || t.includes("RESIDENTE")) {
     return {
       codigo: "CE",
       label: "Cédula Extranjería",
@@ -52,7 +60,7 @@ const getTipoDocInfo = (tipo?: string | null) => {
       pill: "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/50 font-semibold shadow-sm",
     };
   }
-  if (t.includes("PASAPORTE") || t === "PAS") {
+  if (t.includes("PASAPORTE") || t === "PAS" || t.includes("PASSPORT")) {
     return {
       codigo: "PAS",
       label: "Pasaporte",
@@ -1003,7 +1011,8 @@ function PersonasContent() {
                       <option value="CEDULA_CIUDADANIA">Cédula de Ciudadanía (CC)</option>
                       <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad (TI)</option>
                       <option value="CEDULA_EXTRANJERIA">Cédula de Extranjería (CE)</option>
-                      <option value="CONTRASENA">Contraseña / Trámite (CT)</option>
+                      <option value="PPT">Permiso por Protección Temporal (PPT)</option>
+                      <option value="CONTRASEÑA">Contraseña / Trámite (CT)</option>
                       <option value="PASAPORTE">Pasaporte (PAS)</option>
                     </select>
                   </div>

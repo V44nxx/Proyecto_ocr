@@ -83,8 +83,19 @@ class DocumentSideClassifier:
                 and not re.search(r"I<COL|C<COL", texto_up)
             )
         )
-        es_extranjeria = bool(re.search(r"\b(CEDULA\s+DE\s+EXTRANJERIA|CEDULA\s+EXTRANJERIA|EXTRANJERIA|C\.E\b|C\.E\.)\b", texto_up))
-        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT)\b", texto_up))
+        es_ppt = bool(re.search(
+            r"\b(PERMISO\s+POR\s+PROTECCI[OÓ]N\s+TEMPORAL|PERMISO\s+PROTECCI[OÓ]N\s+TEMPORAL|ESTATUTO\s+TEMPORAL\s+DE\s+PROTECCI[OÓ]N|PPT\b|VISIBLES)\b",
+            texto_up
+        ))
+        es_contrasena = bool(re.search(
+            r"\b(COMPROBANTE\s+DE\s+DOCUMENTO\s+EN\s+TR[AÁ]MITE|DOCUMENTO\s+EN\s+TR[AÁ]MITE|CONTRASE[ÑN]A|PRE-EXPEDICI[OÓ]N)\b",
+            texto_up
+        ))
+        es_extranjeria = bool(re.search(
+            r"\b(C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|C[EÉ]DULA\s+EXTRANJER[IÍ]A|EXTRANJER[IÍ]A|C\.?E\.?\b|RESIDENTE\s+N[O0]|MIGRANTE\s+N[O0]|VISITANTE\s+N[O0])\b",
+            texto_up
+        ))
+        es_pasaporte = bool(re.search(r"\b(PASAPORTE|PASSPORT|REP[UÚ]BLICA\s+DE\s+COLOMBIA\s+PASAPORTE)\b", texto_up))
         es_cedula_digital = "NUIP" in texto_up and not es_tarjeta
 
         es_cedula = bool(
@@ -97,7 +108,15 @@ class DocumentSideClassifier:
             )
         )
 
-        if es_tarjeta and not es_cedula:
+        if es_ppt:
+            tipo_doc_base = "PPT"
+        elif es_extranjeria:
+            tipo_doc_base = "CEDULA_EXTRANJERIA"
+        elif es_contrasena:
+            tipo_doc_base = "CONTRASEÑA"
+        elif es_pasaporte:
+            tipo_doc_base = "PASAPORTE"
+        elif es_tarjeta and not es_cedula:
             tipo_doc_base = "TARJETA_IDENTIDAD"
         elif es_tarjeta and es_cedula:
             if re.search(r"\bTARJETA\s+(?:DE\s+)?IDENTIDAD\b", texto_up):
@@ -106,10 +125,6 @@ class DocumentSideClassifier:
                 tipo_doc_base = "CEDULA_CIUDADANIA"
             else:
                 tipo_doc_base = "TARJETA_IDENTIDAD"
-        elif es_extranjeria:
-            tipo_doc_base = "CEDULA_EXTRANJERIA"
-        elif es_pasaporte:
-            tipo_doc_base = "PASAPORTE"
         elif es_cedula:
             tipo_doc_base = "CEDULA_CIUDADANIA"
         else:

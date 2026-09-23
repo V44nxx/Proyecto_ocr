@@ -88,7 +88,10 @@ class SpatialFieldExtractor:
         "identificacion": [
             r"\bNUIP\b", r"\bNUMER[O0]?\b", r"\bNÚMER[O0]?\b",
             r"\bN[UÚ]MERO\s+DE\s+IDENTIFICACI[OÓ]N\b",
-            r"\bNO\.\s*\d", r"\bNO\.\b", r"\bC\.C\.?\b"
+            r"\bRESIDENTE\s+N[O0]?\.?\b", r"\bRESIDENTE\b",
+            r"\bMIGRANTE\s+N[O0]?\.?\b", r"\bMIGRACI[OÓ]N\b",
+            r"\bPPT\s+N[O0]?\.?\b", r"\bPASAPORTE\s+N[O0]?\.?\b",
+            r"\bNO\.\s*\d", r"\bNO\.\b", r"\bC\.C\.?\b", r"\bC\.E\.?\b"
         ],
         "apellidos": [
             r"AP[EÉI1]+L+[I10]*D[O0]?S?", r"PRIMER\s+APEL", r"SEGUNDO\s+APEL", r"SURNAMES?"
@@ -101,7 +104,7 @@ class SpatialFieldExtractor:
         ],
         "fecha_expedicion": [
             r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"FECHA\s+DE\s+EXPED[I1]C[I1][O0]?",
-            r"FECHA\s+EXPED[I1]C[I1][O0]?", r"EXPED[I1]C[I1][O0]?"
+            r"FECHA\s+EXPED[I1]C[I1][O0]?", r"EXPED[I1]C[I1][O0]?", r"FECHA\s+DE\s+EXPEDICION"
         ],
         "lugar_expedicion": [
             r"FECHA\s+Y\s+LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?", r"LUGAR\s+DE\s+EXPED[I1]C[I1][O0]?",
@@ -120,6 +123,7 @@ class SpatialFieldExtractor:
         r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|RETUBEICA|"
         r"COLOMB|COLOMS|COL\b|BIA\b|"
         r"CEDUL|CÉDUL|CEDUU|CEDUA|EDULA|CEDLA|CEDUIA|CFDULA|CELDULA|"
+        r"EXTRANJER|RESIDENTE|TEMPORAL|PROTECCION|PROTECCIÓN|MIGRACION|MIGRACIÓN|VISIBLES|PERMISO|PASAPORTE|PASSPORT|CONTRASEÑA|COMPROBANTE|TRAMITE|TRÁMITE|"
         r"CIUDAD|CIUDAN|GIUDAD|CIUDADAMA|CIUDADANLA|CIUDADANA|"
         r"IDENTIFIC|IDENTIF|NUMERO|NÚMERO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|NVYMERO|NVMERO|NOMORO|"
         r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|DIGITAL|"
@@ -134,6 +138,7 @@ class SpatialFieldExtractor:
         r"FICHA|FOLIO|ANEXO|COPIA|AUTENTICADA|NOTARIA|"
         r"BLICA|PUBLICA|PÚBLICA|APELLIDORAJONAL|MOUSEES|I?CC[0O]L|"
         r"\bICA\b|\bCADE\b|ICADE|\bCA\b|\bMEIA\b|\bDR\b|\bCDI\b|\bAAAS\b|\bAAS\b|"
+        r"\b(VEN|ECU|PER|BOL|CHL|ARG|BRA|MEX|USA|ESP)\b|"
         r"\bI+\b|\b[I|l1!]{2,}\b|\b(II|III|IIII|IIIII|IV|VI|VII|VIII|IX|XI|XII)\b|"
         # Ciudades/departamentos colombianos fusionados por OCR en membretes institucionales
         r"FLORENCIACAQUET|FLORENCIA[\-]CAQUET|ARMENIA[\-]?QUIND|NEIVA[\-]?HUILA|MOCOA[\-]?PUTUMAYO|"
@@ -231,22 +236,28 @@ class SpatialFieldExtractor:
         has_nombres = "nombres" in etiquetas
         has_apellidos = "apellidos" in etiquetas
 
-        # Determinar si el documento es Cédula Digital / Tarjeta Identidad (valores debajo)
+        # Determinar si el documento tiene valores debajo de los rótulos (PPT, CE, Pasaporte, Contraseña, Cédula Digital)
         # o Cédula Amarilla tradicional (valores encima de las etiquetas de guía).
-        es_cedula_digital = False
-        if any(et and "NUIP" in str(getattr(et, "text", "")).upper() for et in etiquetas.values()):
-            es_cedula_digital = True
-        elif layout_info and layout_info.get("has_nuip"):
-            es_cedula_digital = True
+        es_valores_debajo = False
+        if layout_info:
+            if layout_info.get("expected_direction") == "VALUE_BELOW_LABEL":
+                es_valores_debajo = True
+            elif layout_info.get("layout_type") in ["PPT", "CEDULA_EXTRANJERIA", "PASAPORTE", "CONTRASEÑA", "CEDULA_DIGITAL"]:
+                es_valores_debajo = True
+            elif layout_info.get("has_nuip"):
+                es_valores_debajo = True
+
+        if any(et and ("NUIP" in str(getattr(et, "text", "")).upper() or any(w in str(getattr(et, "text", "")).upper() for w in ["RESIDENTE", "PPT", "EXTRANJERIA", "PASAPORTE"])) for et in etiquetas.values()):
+            es_valores_debajo = True
 
         if has_nombres and has_apellidos:
-            if es_cedula_digital:
-                # Cédula Digital / Tarjeta Identidad: Valores por debajo de etiquetas
+            if es_valores_debajo:
+                # Valores por debajo de etiquetas (PPT, CE, Pasaporte, Cédula Digital)
                 if campo in ["nombres", "apellidos"]:
                     y_min = max(0.0, eb.y - 0.02)
                     y_max = eb.y + 0.18
                 else:
-                    y_min = eb.y
+                    y_min = max(0.0, eb.y - 0.02)
                     y_max = eb.y + 0.20
             else:
                 # Cédula Amarilla Tradicional: Valores impresos por encima de etiquetas
@@ -257,12 +268,16 @@ class SpatialFieldExtractor:
                     y_min = max(0.0, eb.y - 0.15)
                     y_max = eb.y + 0.20
         else:
-            if campo in ["apellidos", "nombres"]:
-                y_min = max(0.0, eb.y - 0.20)
+            if es_valores_debajo:
+                y_min = max(0.0, eb.y - 0.02)
                 y_max = eb.y + 0.20
             else:
-                y_min = max(0.0, eb.y - 0.15)
-                y_max = eb.y + 0.20
+                if campo in ["apellidos", "nombres"]:
+                    y_min = max(0.0, eb.y - 0.20)
+                    y_max = eb.y + 0.20
+                else:
+                    y_min = max(0.0, eb.y - 0.15)
+                    y_max = eb.y + 0.20
 
         return {
             "x_min": round(x_min, 4),
@@ -375,10 +390,18 @@ class SpatialFieldExtractor:
             "sexo": {"value": None, "confidence": 0.0, "status": "REVIEW_REQUIRED", "page": page_num, "source": "universal_parser"}
         }
 
-        # ── 1. MRZ (Zona Legible por Máquina - Cédula Digital / Pasaportes) ──
+        # ── 1. MRZ (Zona Legible por Máquina - Cédula Digital / Pasaportes / Cédula Extranjería) ──
         for l in lines:
             txt = getattr(l, "text", "").strip().replace(" ", "")
-            # Descartar línea 1 técnica de MRZ (ej: ICC0L... o IDCOL...)
+
+            # Extraer ID de línea 1 técnica de MRZ TD1 (ej: I<COL984581<<< o IDCOL...)
+            m_td1_l1 = re.search(r"I[<A-Z0-9]{1,4}COL([0-9]{6,10})<", txt, re.I)
+            if m_td1_l1 and not resultado_campos["identificacion"]["value"]:
+                valido, id_cand = validador.validar_cedula(m_td1_l1.group(1))
+                if valido and not validador.es_secuencia_fecha(id_cand):
+                    resultado_campos["identificacion"] = {"value": id_cand, "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de línea 1 de MRZ (TD1)"}
+
+            # Descartar línea 1 técnica de MRZ para no confundirla con nombres
             if re.match(r"^I[A-Z0-9<]{0,4}C[0O]L", txt, re.I):
                 continue
 
@@ -397,28 +420,39 @@ class SpatialFieldExtractor:
                         norm_nom = validador.normalizar_nombre(nom_raw)
                         if norm_nom and not self.NO_NOMBRE_HEADER.search(norm_nom):
                             resultado_campos["nombres"] = {"value": norm_nom, "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
+
+            # Formato estándar TD2/TD3: YYMMDD(nac) + chk + [MF] + YYMMDD(exp) + ID
             m_mrz2 = re.search(r"(\d{6})\d([MF])\d{7}[A-Z0-9]*?(\d{6,10})<\d", txt)
             if m_mrz2:
                 f_nac_raw, sex_raw, id_raw = m_mrz2.groups()
                 resultado_campos["sexo"] = {"value": sex_raw, "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
                 valido, id_limpio = validador.validar_cedula(id_raw)
-                if valido:
+                if valido and not validador.es_secuencia_fecha(id_limpio):
                     resultado_campos["identificacion"] = {"value": id_limpio, "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
                 dt = validador.parsear_fecha(f"19{f_nac_raw[:2]}-{f_nac_raw[2:4]}-{f_nac_raw[4:6]}" if int(f_nac_raw[:2]) > 30 else f"20{f_nac_raw[:2]}-{f_nac_raw[2:4]}-{f_nac_raw[4:6]}")
                 if dt:
                     resultado_campos["fecha_nacimiento"] = {"value": dt.isoformat(), "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
 
-        # ── 2. Identificación (NUIP / Cédula) ──
+            # Formato TD1 Línea 2 (Cédula de Extranjería reverso: ej 8503231F2907099ECU<<<<<<<<<<<0)
+            m_td1_l2 = re.search(r"^(\d{6})\d([MF])(\d{6})\d([A-Z]{3})", txt)
+            if m_td1_l2:
+                f_nac_raw, sex_raw, f_exp_raw, nat_raw = m_td1_l2.groups()
+                resultado_campos["sexo"] = {"value": sex_raw, "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ"}
+                dt_nac = validador.parsear_fecha(f"19{f_nac_raw[:2]}-{f_nac_raw[2:4]}-{f_nac_raw[4:6]}" if int(f_nac_raw[:2]) > 30 else f"20{f_nac_raw[:2]}-{f_nac_raw[2:4]}-{f_nac_raw[4:6]}")
+                if dt_nac and not resultado_campos["fecha_nacimiento"]["value"]:
+                    resultado_campos["fecha_nacimiento"] = {"value": dt_nac.isoformat(), "confidence": 0.98, "status": "VALID", "page": page_num, "source": "MRZ", "reason": "Extraído de MRZ (TD1)"}
+
+        # ── 2. Identificación (NUIP / Cédula / PPT / Extranjería 6-10 dígitos) ──
         # Busca en la página para cubrir cédulas estándar, rotadas, Tarjetas de Identidad y layouts variables
-        patron_num_general = re.compile(r"\b(\d{1,3}(?:\s*[\.,]\s*\d{3}){1,3}|\d{7,10})\b")
+        patron_num_general = re.compile(r"\b(\d{1,3}(?:\s*[\.,]\s*\d{3}){1,3}|\d{6,10})\b")
         if not resultado_campos["identificacion"]["value"]:
-            # Fase 2.1: Prioridad máxima a líneas con etiqueta explícita de número/NUIP/Cédula en el frente
+            # Fase 2.1: Prioridad máxima a líneas con etiqueta explícita de número/NUIP/Cédula/PPT en el frente
             for idx_l, l in enumerate(lines):
                 t = getattr(l, "text", "").upper().strip()
                 # Excluir líneas que son códigos de barras PDF417
                 if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t):
                     continue
-                if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|NO\.)\b", t):
+                if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|C\.E\.?|NO\.|RESIDENTE|MIGRANTE|PPT|PASAPORTE)\b", t):
                     matches = list(patron_num_general.finditer(t))
                     # Si la etiqueta NUMERO está sola en la línea, inspeccionar la línea inmediatamente siguiente
                     if not matches and idx_l + 1 < len(lines):
@@ -426,6 +460,8 @@ class SpatialFieldExtractor:
                         matches = list(patron_num_general.finditer(t_next))
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
+                        if validador.es_secuencia_fecha(raw_num):
+                            continue
                         valido, ced_ok = validador.validar_cedula(raw_num)
                         if valido:
                             resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de línea con etiqueta explícita de número"}
@@ -441,14 +477,17 @@ class SpatialFieldExtractor:
                     r"[A-Z0-9]+[MF]-0*([1-9][0-9]{5,9})-[0-9]+",
                     r"[0-9]{6,8}[MF][0-9]{7}C[0O]L0*([1-9][0-9]{5,9})",
                     r"COL0*([1-9][0-9]{5,9})[<0-9]",
-                    r"[A-Z]-[0-9]+-[0-9]+-[MF]-([0-9]{7,10})-[0-9]+",
+                    r"[A-Z]-[0-9]+-[0-9]+-[MF]-([0-9]{6,10})-[0-9]+",
                 ]
                 for l in lines:
                     txt_line = getattr(l, "text", "")
                     for pat in patrones_barcode:
                         m_bc = re.search(pat, txt_line)
                         if m_bc:
-                            valido, id_limpio = validador.validar_cedula(m_bc.group(1))
+                            raw_bc = m_bc.group(1)
+                            if validador.es_secuencia_fecha(raw_bc):
+                                continue
+                            valido, id_limpio = validador.validar_cedula(raw_bc)
                             if valido:
                                 resultado_campos["identificacion"] = {"value": id_limpio, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído de código de barras reverso"}
                                 break
@@ -469,6 +508,8 @@ class SpatialFieldExtractor:
                     matches = patron_num_general.finditer(t)
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
+                        if validador.es_secuencia_fecha(raw_num):
+                            continue
                         valido, ced_ok = validador.validar_cedula(raw_num)
                         if valido:
                             resultado_campos["identificacion"] = {"value": ced_ok, "confidence": doc_ai_confidence * 0.90, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por escaneo posicional de página"}
@@ -476,13 +517,16 @@ class SpatialFieldExtractor:
                     if resultado_campos["identificacion"]["value"]:
                         break
 
-        # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla y Digital) ──
+        # ── 3. Nombres y Apellidos (Layout Estructural Cédula Amarilla, Digital, PPT, Extranjería) ──
         # Ejecutar siempre para extraer o enriquecer nombres visuales frente a MRZ truncado
         if True:
-            # Determinar si es Cédula Digital o Tarjeta de Identidad
+            # Determinar si es documento con valores por debajo de los rótulos (Digital, TI, PPT, Extranjería, Pasaporte)
             es_digital_o_ti = any(
                 "NUIP" in getattr(l, "text", "").upper() or
-                any(w in getattr(l, "text", "").upper() for w in ["NACIONALIDAD", "DIGITAL", "CAN ", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD"])
+                any(w in getattr(l, "text", "").upper() for w in [
+                    "NACIONALIDAD", "DIGITAL", "CAN ", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD",
+                    "EXTRANJERIA", "EXTRANJERÍA", "RESIDENTE", "PPT", "VISIBLES", "PASAPORTE", "CONTRASEÑA"
+                ])
                 for l in lines
             )
 
@@ -494,11 +538,11 @@ class SpatialFieldExtractor:
                 re.I
             )
             FRENTE_KEYWORDS = re.compile(
-                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|NUMERO|N[UÚ]MERO|AP[EÉI1]+L+[I10]*D|N[O0]?M[BDRPE]*[EÉ]S?|MOUSEES)\b",
+                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|PERMISO\s+POR\s+PROTECCI[OÓ]N|NUMERO|N[UÚ]MERO|AP[EÉI1]+L+[I10]*D|N[O0]?M[BDRPE]*[EÉ]S?|MOUSEES)\b",
                 re.I
             )
             HEADER_FRENTE_KEYWORDS = re.compile(
-                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|TARJETA\s+DE\s+IDENTIDAD)\b",
+                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|TARJETA\s+DE\s+IDENTIDAD|PERMISO\s+POR\s+PROTECCI[OÓ]N|MIGRACI[OÓ]N\s+COLOMBIA)\b",
                 re.I
             )
 
@@ -562,7 +606,7 @@ class SpatialFieldExtractor:
 
             for idx, l in enumerate(lineas_frente):
                 t = getattr(l, "text", "").upper().strip()
-                if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO)\b", t) or re.search(r"\b\d{6,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
+                if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|RESIDENTE|PPT)\b", t) or re.search(r"\b\d{6,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
                     idx_num = idx
                 if re.search(r"\bAP[EÉI1]+L+[I10]*D", t) and idx_ape == -1:
                     idx_ape = idx
@@ -572,11 +616,14 @@ class SpatialFieldExtractor:
             if idx_ape != -1 and idx_nom != -1:
                 has_nuip = any(
                     "NUIP" in getattr(l, "text", "").upper() or
-                    any(w in getattr(l, "text", "").upper() for w in ["NACIONALIDAD", "DIGITAL", "CAN "])
+                    any(w in getattr(l, "text", "").upper() for w in [
+                        "NACIONALIDAD", "DIGITAL", "CAN ", "RESIDENTE", "EXTRANJERIA", "EXTRANJERÍA",
+                        "PPT", "VISIBLES", "PASAPORTE", "CONTRASEÑA"
+                    ])
                     for l in lineas_frente
                 )
                 if has_nuip:
-                    # Layout Cédula Digital / Tarjeta Identidad:
+                    # Layout Cédula Digital / Tarjeta Identidad / PPT / Cédula Extranjería:
                     # APELLIDOS_LABEL -> APELLIDOS_VAL -> NOMBRES_LABEL -> NOMBRES_VAL
                     # 1. Apellidos: después de APELLIDOS_LABEL y antes de NOMBRES_LABEL
                     inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
@@ -595,7 +642,7 @@ class SpatialFieldExtractor:
                                 toks_a = str(ape_prev).split()
                                 if len(toks_a) >= 2 and val_ape_vis.replace(" ", "").startswith(toks_a[0]):
                                     val_ape_vis = f"{toks_a[0]} {val_ape_vis.replace(' ', '')[len(toks_a[0]):]}"
-                            resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS (Digital)"}
+                            resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS (Digital/PPT/CE)"}
 
                     # 2. Nombres: después de NOMBRES_LABEL
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
@@ -605,7 +652,7 @@ class SpatialFieldExtractor:
                         cand_nom = []
                         for i in range(idx_nom + 1, min(len(lineas_frente), idx_nom + 4)):
                             t_i = getattr(lineas_frente[i], "text", "")
-                            if any(hdr in t_i.upper() for hdr in ["NACIONALIDAD", "ESTATURA", "SEXO", "FECHA", "LUGAR", "FIRMA"]):
+                            if any(hdr in t_i.upper() for hdr in ["NACIONALIDAD", "ESTATURA", "SEXO", "FECHA", "LUGAR", "FIRMA", "VISIBLES", "MIGRACION"]):
                                 break
                             limpio = self.limpiar_nombre(t_i)
                             if limpio:
@@ -617,7 +664,7 @@ class SpatialFieldExtractor:
                                 toks_m = str(nom_prev).split()
                                 if len(toks_m) >= 2 and val_vis.replace(" ", "").startswith(toks_m[0]):
                                     val_vis = f"{toks_m[0]} {val_vis.replace(' ', '')[len(toks_m[0]):]}"
-                            resultado_campos["nombres"] = {"value": val_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES (Digital)"}
+                            resultado_campos["nombres"] = {"value": val_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES (Digital/PPT/CE)"}
 
                 elif idx_ape < idx_nom:
                     # Layout Cédula Amarilla:

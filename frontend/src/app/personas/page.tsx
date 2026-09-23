@@ -340,14 +340,23 @@ function PersonasContent() {
     try {
       const payload: PersonaUpdate = {
         ...editForm,
+        numero_identificacion: editForm.numero_identificacion?.trim() || undefined,
+        nombre_completo: editForm.nombre_completo?.trim() || undefined,
+        nombres: editForm.nombres?.trim() || undefined,
+        apellidos: editForm.apellidos?.trim() || undefined,
+        fecha_nacimiento: editForm.fecha_nacimiento?.trim() || undefined,
+        fecha_expedicion: editForm.fecha_expedicion?.trim() || undefined,
+        lugar_expedicion: editForm.lugar_expedicion?.trim() || undefined,
+        sexo: editForm.sexo?.trim() || undefined,
         ...(forzarAprobado ? { requiere_revision: false } : {}),
       };
       await apiPersonas.actualizar(id, payload);
       toast.success(forzarAprobado ? "Datos guardados y persona validada" : "Datos actualizados correctamente", { id: "guardar-persona" });
       setEditando(null);
       cargarPersonas(true);
-    } catch {
-      toast.error("Error guardando cambios", { id: "guardar-persona" });
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error guardando cambios");
+      toast.error(msg, { id: "guardar-persona" });
     }
   };
 

@@ -93,6 +93,20 @@ class PersonaUpdate(BaseModel):
     sexo: Optional[str] = None
     requiere_revision: Optional[bool] = None
 
+    @field_validator("fecha_nacimiento", "fecha_expedicion", mode="before")
+    @classmethod
+    def sanitizar_fechas_update(cls, v):
+        if v is None or v == "" or (isinstance(v, str) and not v.strip()):
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            import re
+            m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$", v)
+            if m:
+                d, m_val, y = m.groups()
+                return f"{y}-{int(m_val):02d}-{int(d):02d}"
+        return v
+
     @field_validator("sexo")
     @classmethod
     def normalizar_sexo_update(cls, v):

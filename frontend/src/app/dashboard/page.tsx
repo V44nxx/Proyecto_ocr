@@ -13,52 +13,8 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { DashboardStats, Documento, Persona } from "@/types";
-
-const getTipoDocInfo = (tipo?: string | null) => {
-  const t = (tipo || "").toUpperCase().trim();
-  if (!t || t === "UNKNOWN") {
-    return {
-      codigo: "?",
-      label: "Por verificar",
-      badge: "bg-gray-100 dark:bg-gray-800/60 border-2 border-gray-400 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-black shadow-sm",
-    };
-  }
-  if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
-    return {
-      codigo: "CT",
-      label: "Contraseña",
-      badge: "bg-teal-100 dark:bg-teal-900/50 border-2 border-teal-600 dark:border-teal-400 text-teal-950 dark:text-teal-200 font-extrabold shadow-sm",
-    };
-  }
-  if (t.includes("TARJETA") || t === "TI") {
-    return {
-      codigo: "TI",
-      label: "Tarjeta de Identidad",
-      badge: "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-700 dark:border-purple-400 text-purple-950 dark:text-purple-100 font-black shadow-sm",
-    };
-  }
-  if (t.includes("EXTRANJERIA") || t === "CE") {
-    return {
-      codigo: "CE",
-      label: "Cédula Extranjería",
-      badge: "bg-amber-100 dark:bg-amber-900/50 border-2 border-amber-600 dark:border-amber-400 text-amber-950 dark:text-amber-200 font-black shadow-sm",
-    };
-  }
-  if (t.includes("PASAPORTE") || t === "PAS") {
-    return {
-      codigo: "PAS",
-      label: "Pasaporte",
-      badge: "bg-emerald-100 dark:bg-emerald-900/50 border-2 border-emerald-600 dark:border-emerald-400 text-emerald-950 dark:text-emerald-200 font-black shadow-sm",
-    };
-  }
-  return {
-    codigo: "CC",
-    label: "Cédula de Ciudadanía",
-    badge: "bg-blue-100 dark:bg-blue-900/60 border-2 border-blue-700 dark:border-blue-400 text-blue-950 dark:text-blue-100 font-black shadow-sm",
-  };
-};
 
 function StatCard({
   title,

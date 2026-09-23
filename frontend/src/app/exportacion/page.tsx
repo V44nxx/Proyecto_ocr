@@ -11,7 +11,7 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, Documento } from "@/types";
 
 const esPersonaEnRevision = (p: Persona) => {
@@ -445,7 +445,7 @@ export default function ExportacionPage() {
                             className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
                           />
                         </th>
-                        <th>Cédula</th>
+                        <th>Documento</th>
                         <th>Nombre Completo</th>
                         <th>F. Nacimiento</th>
                         <th>Edad</th>
@@ -458,6 +458,7 @@ export default function ExportacionPage() {
                         const isSelected = seleccionados.has(p.id);
                         const nomCompleto = formatNombreCompleto(p);
                         const esRev = esPersonaEnRevision(p);
+                        const docInfo = getTipoDocInfo(p.tipo_documento);
 
                         return (
                           <tr
@@ -477,8 +478,15 @@ export default function ExportacionPage() {
                                 className="rounded border-slate-700 bg-slate-800 text-primary-500 focus:ring-primary-500/40 cursor-pointer"
                               />
                             </td>
-                            <td className="font-mono text-primary-300 font-bold">
-                              {p.numero_identificacion}
+                            <td className="whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 flex-nowrap">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${docInfo.badge}`} title={docInfo.label}>
+                                  {docInfo.codigo}
+                                </span>
+                                <span className="font-mono text-primary-300 font-bold">
+                                  {p.numero_identificacion}
+                                </span>
+                              </div>
                             </td>
                             <td className="font-medium text-slate-200">
                               {nomCompleto || "—"}

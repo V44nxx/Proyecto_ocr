@@ -15,66 +15,8 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
-
-const getTipoDocInfo = (tipo?: string | null) => {
-  const t = (tipo || "").toUpperCase().trim();
-  if (!t || t === "UNKNOWN") {
-    return {
-      codigo: "?",
-      label: "Por verificar",
-      badge: "bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 font-bold shadow-sm",
-      pill: "bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 font-semibold shadow-sm",
-    };
-  }
-  if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) {
-    return {
-      codigo: "PPT",
-      label: "Permiso Protección Temporal",
-      badge: "bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-300 dark:border-cyan-800/50 text-cyan-800 dark:text-cyan-300 font-bold shadow-sm",
-      pill: "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800/50 font-semibold shadow-sm",
-    };
-  }
-  if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
-    return {
-      codigo: "CT",
-      label: "Contraseña",
-      badge: "bg-teal-50 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800/50 text-teal-800 dark:text-teal-300 font-bold shadow-sm",
-      pill: "bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800/50 font-semibold shadow-sm",
-    };
-  }
-  if (t.includes("TARJETA") || t === "TI") {
-    return {
-      codigo: "TI",
-      label: "Tarjeta de Identidad",
-      badge: "bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 font-bold shadow-sm",
-      pill: "bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800/50 font-semibold shadow-sm",
-    };
-  }
-  if (t.includes("EXTRANJERIA") || t === "CE" || t.includes("RESIDENTE")) {
-    return {
-      codigo: "CE",
-      label: "Cédula Extranjería",
-      badge: "bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 font-bold shadow-sm",
-      pill: "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/50 font-semibold shadow-sm",
-    };
-  }
-  if (t.includes("PASAPORTE") || t === "PAS" || t.includes("PASSPORT")) {
-    return {
-      codigo: "PAS",
-      label: "Pasaporte",
-      badge: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 font-bold shadow-sm",
-      pill: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/50 font-semibold shadow-sm",
-    };
-  }
-  return {
-    codigo: "CC",
-    label: "Cédula de Ciudadanía",
-    badge: "bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800/50 text-blue-800 dark:text-blue-300 font-bold shadow-sm",
-    pill: "bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800/50 font-semibold shadow-sm",
-  };
-};
 
 const esPersonaEnRevision = (p: Persona) => {
   const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);

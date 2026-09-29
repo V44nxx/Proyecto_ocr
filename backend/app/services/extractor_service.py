@@ -1090,10 +1090,14 @@ class ExtractorService:
         # Estrategia 1: Por keyword (en misma línea o líneas adyacentes)
         # Regex ampliado: captura formatos con espacios entre grupos: 1. 125. 182. 543
         patron_num = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
-        PALABRAS_RUIDO_ADMIN = ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]
+        PATRON_RUIDO_ADMIN = re.compile(
+            r"\b(?:FICHA|PROCESO|TEL|CEL|RADICAD\w*|FOLIO\w*|ACTA\w*|ANEXO\w*|CONTRATO\w*|"
+            r"RESOLUCION|PARTICIPANTE|DOCUMENTACION|LISTADO|FORMACION|INSTRUCTOR|"
+            r"WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ)\b",
+            re.I
+        )
         for idx_l, l in enumerate(lineas):
-            l_up = l.upper()
-            if any(rw in l_up for rw in PALABRAS_RUIDO_ADMIN):
+            if PATRON_RUIDO_ADMIN.search(l):
                 continue
             for keyword in self.KEYWORDS_IDENTIFICACION:
                 if re.search(rf"\b{keyword}\b", l, re.IGNORECASE):
@@ -1104,7 +1108,7 @@ class ExtractorService:
                         for offset in range(1, 4):
                             if idx_l + offset < len(lineas):
                                 l_cand = lineas[idx_l + offset]
-                                if any(rw in l_cand.upper() for rw in PALABRAS_RUIDO_ADMIN):
+                                if PATRON_RUIDO_ADMIN.search(l_cand):
                                     continue
                                 m = patron_num.search(l_cand)
                                 if m:
@@ -1129,8 +1133,10 @@ class ExtractorService:
                 logger.debug(f"Cédula con puntos: {numero_limpio}")
                 return numero_limpio
 
-        # Estrategia 3: Línea que sea solo números
+        # Estrategia 3: Línea que sea solo números (descartando teléfonos celulares y membretes)
         for linea in lineas:
+            if PATRON_RUIDO_ADMIN.search(linea):
+                continue
             linea_limpia = linea.strip().replace(" ", "").replace(".", "")
             if re.match(r"^[1-9]\d{5,9}$", linea_limpia):
                 if validador.es_secuencia_fecha(linea_limpia):
@@ -1619,7 +1625,7 @@ class ExtractorService:
                 keyword + r"[\s:\n]*"
                 r"(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4}"
                 r"|\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}"
-                r"|\d{1,2}[\s/\-\.][A-Za-z]{3,4}[\s/\-\.]\d{4}"
+                r"|\d{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+\d{2,4}"
                 r"|\d{1,2}\s+DE\s+\w+\s+DE\s+\d{4})",
                 re.IGNORECASE,
             )
@@ -1630,12 +1636,12 @@ class ExtractorService:
                 if fecha:
                     return fecha.isoformat()
 
-            # Búsqueda secundaria: si la fecha está en la línea siguiente a la palabra clave
+            # Búsqueda secundaria: si la fecha está en la línea siguiente o anterior a la palabra clave (ej. Cédula Amarilla)
             for idx, linea in enumerate(lineas):
                 if re.search(keyword, linea, re.IGNORECASE):
-                    subtexto = " ".join(lineas[idx: min(len(lineas), idx + 3)])
+                    subtexto = " ".join(lineas[max(0, idx - 3): min(len(lineas), idx + 3)])
                     m_fecha = re.search(
-                        r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.]\d{4})\b",
+                        r"\b(\d{1,2}[\s/\-\.]+(?:[A-Za-z0-9]{3,4}|\d{1,2})\.?[\s/\-\.]+\d{2,4})\b",
                         subtexto,
                     )
                     if m_fecha:

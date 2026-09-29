@@ -390,6 +390,51 @@ class SpatialFieldExtractor:
             "sexo": {"value": None, "confidence": 0.0, "status": "REVIEW_REQUIRED", "page": page_num, "source": "universal_parser"}
         }
 
+        # ── 0. Delimitación y Enfoque Exclusivo en la Cédula Física ─────────
+        # Identifica los anclajes estructurales oficiales del documento
+        HEADER_CARD_ANCHORS = re.compile(
+            r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
+            r"C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|TARJETA\s+DE\s+IDENTIDAD|PERMISO\s+POR\s+PROTECCI[OÓ]N|MIGRACI[OÓ]N\s+COLOMBIA|"
+            r"COMPROBANTE\s+DE\s+DOCUMENTO|PASAPORTE)\b",
+            re.I
+        )
+        from app.utils.name_cleaner import es_linea_ruido_administrativo
+
+        # Identificar la coordenada superior del documento físico
+        card_header_lines = [
+            l for l in lines
+            if HEADER_CARD_ANCHORS.search(getattr(l, "text", ""))
+            and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+            and not any(rw in getattr(l, "text", "").upper() for rw in [
+                "FOTOCOPIA", "OFICINA", "PROCESO", "MATRICULA", "MATRÍCULA", "INSCRIPCION", "INSCRIPCIÓN",
+                "CAMPESINA", "CAMPESENA", "FULLPOPULAR", "MUJER", "EMPRENDEDORA", "DEPARTAMENTAL", "APRENDIZ", "FICHA"
+            ])
+        ]
+
+        y_doc_top = min(getattr(l, "y", 0.0) for l in card_header_lines) if card_header_lines else None
+
+        def es_linea_externa_al_documento(line_obj) -> bool:
+            txt_l = getattr(line_obj, "text", "").upper().strip()
+            if not txt_l:
+                return True
+            # Línea ubicada físicamente por encima del encabezado de la cédula
+            if y_doc_top is not None and getattr(line_obj, "y", 0.0) < (y_doc_top - 0.015):
+                return True
+            # Líneas con ruido administrativo (fotocopia, sellos, matricula, ficha...)
+            if es_linea_ruido_administrativo(txt_l):
+                return True
+            # Teléfonos celulares o indicadores de contacto (con límites de palabra para no filtrar nombres como Aristel o Marcela)
+            if re.search(r"\b(?:TEL|CEL|WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ|FICHA|PROCESO)\b", txt_l):
+                return True
+            # Número celular colombiano de 10 dígitos aislado
+            num_clean = re.sub(r"[^\d]", "", txt_l)
+            if len(num_clean) == 10 and num_clean.startswith(("30", "31", "32", "33", "35", "37")):
+                return True
+            # Encabezado externo tipo 'CC. 30507543 NOMBRE' ubicado por encima del documento físico
+            if y_doc_top is not None and getattr(line_obj, "y", 0.0) < y_doc_top and re.search(r"\bCC[\.\s:]*\d+", txt_l):
+                return True
+            return False
+
         # ── 1. MRZ (Zona Legible por Máquina - Cédula Digital / Pasaportes / Cédula Extranjería) ──
         for l in lines:
             txt = getattr(l, "text", "").strip().replace(" ", "")
@@ -447,22 +492,20 @@ class SpatialFieldExtractor:
         patron_num_general = re.compile(r"\b(\d{1,3}(?:\s*[\.,]\s*\d{3}){1,3}|\d{6,10})\b")
         if not resultado_campos["identificacion"]["value"]:
             # Fase 2.1: Prioridad máxima a líneas con etiqueta explícita de número/NUIP/Cédula/PPT en el frente
-            from app.utils.name_cleaner import es_linea_ruido_administrativo
             for idx_l, l in enumerate(lines):
+                if es_linea_externa_al_documento(l):
+                    continue
                 t = getattr(l, "text", "").upper().strip()
                 # Excluir líneas que son códigos de barras PDF417 o encabezados/membretes institucionales
                 if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t):
-                    continue
-                if es_linea_ruido_administrativo(t):
-                    continue
-                if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]):
                     continue
                 if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|C\.E\.?|RESIDENTE|MIGRANTE|PPT|PASAPORTE|CEDULA|CÉDULA)\b", t):
                     matches = list(patron_num_general.finditer(t))
                     # Si la etiqueta NUMERO está sola en la línea, inspeccionar la línea inmediatamente siguiente
                     if not matches and idx_l + 1 < len(lines):
-                        t_next = getattr(lines[idx_l + 1], "text", "").upper().strip()
-                        if not es_linea_ruido_administrativo(t_next) and not any(rw in t_next for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE"]):
+                        l_next = lines[idx_l + 1]
+                        if not es_linea_externa_al_documento(l_next):
+                            t_next = getattr(l_next, "text", "").upper().strip()
                             matches = list(patron_num_general.finditer(t_next))
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
@@ -502,13 +545,10 @@ class SpatialFieldExtractor:
 
             # Fase 2.3: Búsqueda por escaneo posicional (descartando líneas de barcode, fechas y membretes administrativos)
             if not resultado_campos["identificacion"]["value"]:
-                from app.utils.name_cleaner import es_linea_ruido_administrativo
                 for l in lines:
+                    if es_linea_externa_al_documento(l):
+                        continue
                     t = getattr(l, "text", "").upper().strip()
-                    if es_linea_ruido_administrativo(t):
-                        continue
-                    if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]):
-                        continue
                     if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b\d{1,2}[\s/\-\.](?:[A-Z]{3}|\d{1,2})[\s/\-\.]\d{2,4}\b", t):
                         continue
                     matches = patron_num_general.finditer(t)
@@ -552,18 +592,12 @@ class SpatialFieldExtractor:
                 re.I
             )
 
-            from app.utils.name_cleaner import es_linea_ruido_administrativo
-
-            rev_lines = [l for l in lines if REVERSO_KEYWORDS.search(getattr(l, "text", ""))]
-            frt_lines = [l for l in lines if FRENTE_KEYWORDS.search(getattr(l, "text", ""))]
+            rev_lines = [l for l in lines if REVERSO_KEYWORDS.search(getattr(l, "text", "")) and not es_linea_externa_al_documento(l)]
+            frt_lines = [l for l in lines if FRENTE_KEYWORDS.search(getattr(l, "text", "")) and not es_linea_externa_al_documento(l)]
             frt_header_lines = [
                 l for l in lines 
                 if HEADER_FRENTE_KEYWORDS.search(getattr(l, "text", ""))
-                and not es_linea_ruido_administrativo(getattr(l, "text", ""))
-                and not any(rw in getattr(l, "text", "").upper() for rw in [
-                    "FOTOCOPIA", "OFICINA", "PROCESO", "MATRICULA", "MATRÍCULA", "INSCRIPCION", "INSCRIPCIÓN",
-                    "CAMPESINA", "CAMPESENA", "FULLPOPULAR", "MUJER", "EMPRENDEDORA", "DEPARTAMENTAL"
-                ])
+                and not es_linea_externa_al_documento(l)
             ]
 
             y_min_frente = 0.0
@@ -571,7 +605,7 @@ class SpatialFieldExtractor:
 
             if frt_header_lines:
                 # Recorte superior inteligente: omitir cualquier membrete o sello de fotocopia previo al recuadro del documento
-                y_min_frente = max(0.0, min(getattr(l, "y", 0.0) for l in frt_header_lines) - 0.03)
+                y_min_frente = max(0.0, min(getattr(l, "y", 0.0) for l in frt_header_lines) - 0.015)
 
             if rev_lines and frt_lines:
                 y_rev_avg = sum(getattr(l, "y", 0.0) for l in rev_lines) / len(rev_lines)
@@ -592,7 +626,7 @@ class SpatialFieldExtractor:
                 lineas_frente = [
                     l for l in lines 
                     if y_min_frente <= getattr(l, "y", 0.0) <= max(0.65, y_max_frente)
-                    and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+                    and not es_linea_externa_al_documento(l)
                 ]
             else:
                 lineas_frente = [
@@ -600,7 +634,7 @@ class SpatialFieldExtractor:
                     if y_min_frente <= getattr(l, "y", 0.0) <= y_max_frente 
                     and getattr(l, "x", 0.0) < 0.60
                     and not REVERSO_KEYWORDS.search(getattr(l, "text", ""))
-                    and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+                    and not es_linea_externa_al_documento(l)
                 ]
 
             # Ordenar por y para garantizar secuencia vertical correcta
@@ -794,17 +828,21 @@ class SpatialFieldExtractor:
                         if not resultado_campos["apellidos"]["value"]:
                             resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
 
-        # ── 4. Fechas (Estrategia Directa por Etiqueta + Universal Cronológica Invariante) ──
-        # 4.1 Búsqueda directa por etiquetas explícitas
-        patron_f_nac_lbl = re.compile(r"\bFECHA\s+DE\s+NACIMIENTO[\s:]*([0-9]{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.][0-9]{4})\b", re.I)
-        patron_f_exp_lbl = re.compile(r"\b(?:FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|FECHA\s+DE\s+EXPEDICI[OÓ]N)[\s:]*([0-9]{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.][0-9]{4})\b", re.I)
+        # ── 4. Fechas (Estrategia Directa por Etiqueta + Cédula Amarilla Reverso + Cronológica) ──
+        # 4.1.A Búsqueda directa por etiquetas explícitas
+        patron_f_nac_lbl = re.compile(r"\bFECHA\s+DE\s+NACIMIENTO[\s:]*([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", re.I)
+        patron_f_exp_lbl = re.compile(r"\b(?:FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|FECHA\s+DE\s+EXPEDICI[OÓ]N)[\s:]*([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", re.I)
 
         for idx_l, l in enumerate(lines):
+            if es_linea_externa_al_documento(l):
+                continue
             t_line = getattr(l, "text", "").strip()
             m_fn = patron_f_nac_lbl.search(t_line)
             if not m_fn and "FECHA DE NACIMIENTO" in t_line.upper() and idx_l + 1 < len(lines):
-                t_next = getattr(lines[idx_l + 1], "text", "").strip()
-                m_fn = re.search(r"\b([0-9]{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.][0-9]{4})\b", t_next)
+                l_next = lines[idx_l + 1]
+                if not es_linea_externa_al_documento(l_next):
+                    t_next = getattr(l_next, "text", "").strip()
+                    m_fn = re.search(r"\b([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", t_next)
             if m_fn and not resultado_campos["fecha_nacimiento"]["value"]:
                 dt_fn = validador.parsear_fecha(m_fn.group(1))
                 if dt_fn and 1930 <= dt_fn.year <= 2026:
@@ -819,8 +857,10 @@ class SpatialFieldExtractor:
 
             m_fe = patron_f_exp_lbl.search(t_line)
             if not m_fe and ("EXPEDICION" in t_line.upper() or "EXPEDICIÓN" in t_line.upper()) and idx_l + 1 < len(lines):
-                t_next = getattr(lines[idx_l + 1], "text", "").strip()
-                m_fe = re.search(r"\b([0-9]{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.][0-9]{4})\b", t_next)
+                l_next = lines[idx_l + 1]
+                if not es_linea_externa_al_documento(l_next):
+                    t_next = getattr(l_next, "text", "").strip()
+                    m_fe = re.search(r"\b([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", t_next)
             if m_fe and not resultado_campos["fecha_expedicion"]["value"]:
                 dt_fe = validador.parsear_fecha(m_fe.group(1))
                 if dt_fe and 1930 <= dt_fe.year <= 2026:
@@ -833,18 +873,72 @@ class SpatialFieldExtractor:
                         "reason": "Extraído directamente de etiqueta FECHA DE EXPEDICIÓN"
                     }
 
+        # 4.1.B Detección específica para Cédula Amarilla Holográfica (donde los rótulos están impresos DEBAJO de los valores)
+        for idx_l, l in enumerate(lines):
+            if es_linea_externa_al_documento(l):
+                continue
+            t_line = getattr(l, "text", "").upper().strip()
+
+            # Caso 1: Rótulo FECHA Y LUGAR DE EXPEDICION -> el valor está en la línea inmediatamente previa (idx_l - 1)
+            if re.search(r"\b(?:FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|FECHA\s+DE\s+EXPEDICI[OÓ]N|EXPEDICI[OÓ]N)\b", t_line) and not re.search(r"\bNACIMIENTO\b", t_line):
+                if not resultado_campos["fecha_expedicion"]["value"] and idx_l > 0:
+                    l_prev = lines[idx_l - 1]
+                    if not es_linea_externa_al_documento(l_prev):
+                        dt_fe = validador.parsear_fecha(getattr(l_prev, "text", ""))
+                        if not dt_fe:
+                            m_fe_prev = re.search(r"\b(\d{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+\d{2,4})\b", getattr(l_prev, "text", ""), re.I)
+                            if m_fe_prev:
+                                dt_fe = validador.parsear_fecha(m_fe_prev.group(1))
+                        if dt_fe and 1930 <= dt_fe.year <= 2026:
+                            resultado_campos["fecha_expedicion"] = {
+                                "value": dt_fe.isoformat(),
+                                "confidence": doc_ai_confidence,
+                                "status": "VALID",
+                                "page": page_num,
+                                "source": "universal_parser",
+                                "reason": "Extraído de línea encima de rótulo FECHA Y LUGAR DE EXPEDICION (Cédula Amarilla)"
+                            }
+
+            # Caso 2: Rótulo LUGAR DE NACIMIENTO -> en la Cédula Amarilla la fecha de nacimiento no tiene rótulo propio
+            # y se ubica 1, 2 o 3 líneas por encima de 'LUGAR DE NACIMIENTO'
+            if re.search(r"\bLUGAR\s+DE\s+NACIMIENTO\b", t_line):
+                if not resultado_campos["fecha_nacimiento"]["value"]:
+                    for offset in [1, 2, 3]:
+                        if idx_l - offset >= 0:
+                            l_p = lines[idx_l - offset]
+                            if es_linea_externa_al_documento(l_p):
+                                continue
+                            dt_fn = validador.parsear_fecha(getattr(l_p, "text", ""))
+                            if not dt_fn:
+                                m_fn_p = re.search(r"\b(\d{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+\d{2,4})\b", getattr(l_p, "text", ""), re.I)
+                                if m_fn_p:
+                                    dt_fn = validador.parsear_fecha(m_fn_p.group(1))
+                            if dt_fn and 1930 <= dt_fn.year <= 2026:
+                                resultado_campos["fecha_nacimiento"] = {
+                                    "value": dt_fn.isoformat(),
+                                    "confidence": doc_ai_confidence,
+                                    "status": "VALID",
+                                    "page": page_num,
+                                    "source": "universal_parser",
+                                    "reason": "Extraído de línea previa a rótulo LUGAR DE NACIMIENTO (Cédula Amarilla)"
+                                }
+                                break
+
         # 4.2 Escaneo cronológico complementario para fechas no resueltas
         fechas_doc = set()
         for l in lines:
+            if es_linea_externa_al_documento(l):
+                continue
             t = getattr(l, "text", "").strip()
-            if es_linea_ruido_administrativo(t):
+            # Excluir líneas de códigos de barras para no capturar fechas de emisión de duplicados
+            if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b[A-Z0-9]+-[MF]-\d+", t):
                 continue
             # Intentar parsear línea completa
             dt_full = validador.parsear_fecha(t)
             if dt_full and 1930 <= dt_full.year <= 2026:
                 fechas_doc.add(dt_full)
             else:
-                matches = re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\b", t)
+                matches = re.finditer(r"\b(\d{1,2}[\s/\-\.]+(?:[A-Za-z0-9]{3,4}|\d{1,2})\.?[\s/\-\.]+\d{2,4}|\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\b", t)
                 matched_valid = False
                 for m in matches:
                     dt_m = validador.parsear_fecha(m.group(1))
@@ -880,7 +974,7 @@ class SpatialFieldExtractor:
         f_exp_iso = resultado_campos["fecha_expedicion"]["value"]
         nombres_ctx = f"{resultado_campos['nombres']['value'] or ''} {resultado_campos['apellidos']['value'] or ''}"
         lugar_exp_res = colombia_geo.extraer_lugar_expedicion(
-            lineas=lines,
+            lineas=[l for l in lines if not es_linea_externa_al_documento(l)],
             fecha_expedicion_iso=f_exp_iso,
             nombres_excluir=nombres_ctx
         )
@@ -896,9 +990,9 @@ class SpatialFieldExtractor:
 
         # ── 6. Sexo ──
         for idx_l, l in enumerate(lines):
-            t = getattr(l, "text", "").upper().strip()
-            if es_linea_ruido_administrativo(t):
+            if es_linea_externa_al_documento(l):
                 continue
+            t = getattr(l, "text", "").upper().strip()
             y_pos = getattr(l, "y", 0.0)
             x_pos = getattr(l, "x", 0.0)
 

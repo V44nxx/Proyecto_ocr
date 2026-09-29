@@ -124,6 +124,11 @@ class ValidadorColombia:
         if longitud > 10:
             return False, f"Muy largo ({longitud} dígitos) — probable concatenación"
 
+        # Regla Colombia: En Colombia los números de 10 dígitos que inician con 3 (300, 310, 320, 350, etc.)
+        # corresponden a líneas telefónicas móviles (celulares), jamás a cédulas ni NUIP colombianas.
+        if longitud == 10 and numero_limpio.startswith(("30", "31", "32", "33", "35", "37")):
+            return False, f"Corresponde a número de teléfono celular colombiano (prefijo 3xx): {numero_limpio}"
+
         return True, numero_limpio
 
     @staticmethod
@@ -315,7 +320,7 @@ class ValidadorColombia:
             except ValueError:
                 pass
 
-        # ── Formato DD-MMM-YYYY (ej. 05-MAY-1987, 26-JUN-2007, 05/MAY/1987) ──
+        # ── Formato DD-MMM-YYYY (ej. 05-MAY-1987, 26-JUN-2007, 05/MAY/1987, 12-OCT.-1981) ──
         MESES = {
             "ENERO": 1, "FEBRERO": 2, "MARZO": 3, "ABRIL": 4,
             "MAYO": 5, "JUNIO": 6, "JULIO": 7, "AGOSTO": 8,
@@ -325,49 +330,66 @@ class ValidadorColombia:
             "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12,
             "JAN": 1, "APR": 4, "AUG": 8, "DEC": 12,
             # Variantes OCR frecuentes
+            "0CT": 10, "SET": 9, "AG0": 8, "D1C": 12, "N0V": 11,
+            "MARZ": 3, "FEBR": 2, "ABR1": 4, "3NE": 1,
             "ENER0": 1, "FEBRER0": 2, "MARZ0": 3, "ABR1L": 4,
             "AGOST0": 8, "SEPTIEMBRE": 9, "0CTUBRE": 10, "NOVIEMBRE": 11,
             "DICIEMBRE": 12,
         }
 
+        texto_u = texto.upper()
+        # Normalizar guiones/separadores espaciados (ej: '12 - OCT - 1981' -> '12-OCT-1981')
+        texto_u = re.sub(r"[\s\-]+[-/\.][\s\-]+", "-", texto_u)
+
         match_dmy_abrev = re.search(
-            r"\b(\d{1,2})[\s/\-\.]([A-Z]{3,4})[\s/\-\.](\d{4})\b",
-            texto.upper(),
+            r"\b(\d{1,2})[\s/\-\.]+([A-Z0-9]{3,4})\.?[\s/\-\.]+(\d{2,4})\b",
+            texto_u,
         )
         if match_dmy_abrev:
             dia_t, mes_t, anio_t = match_dmy_abrev.groups()
             mes_num = MESES.get(mes_t.upper())
             if mes_num:
+                anio = int(anio_t)
+                if len(anio_t) == 2:
+                    anio = 1900 + anio if anio > 30 else 2000 + anio
                 try:
-                    return date(int(anio_t), mes_num, int(dia_t))
+                    return date(anio, mes_num, int(dia_t))
                 except ValueError:
                     pass
 
-        # ── Formato DDMMMYYYY sin separador (ej. 22OCT2006) ─────────────────
+        # ── Formato DDMMMYYYY sin separador (ej. 22OCT2006, 120CT1981) ─────────────────
         match_unseparated = re.search(
-            r"\b(\d{1,2})([A-Z]{3,4})(\d{4})\b",
-            texto.upper(),
+            r"\b(\d{1,2})([A-Z0-9]{3,4})(\d{2,4})\b",
+            texto_u,
         )
         if match_unseparated:
             dia_t, mes_t, anio_t = match_unseparated.groups()
             mes_num = MESES.get(mes_t.upper())
             if mes_num:
+                anio = int(anio_t)
+                if len(anio_t) == 2:
+                    anio = 1900 + anio if anio > 30 else 2000 + anio
                 try:
-                    return date(int(anio_t), mes_num, int(dia_t))
+                    return date(anio, mes_num, int(dia_t))
                 except ValueError:
                     pass
 
         # ── Formato MMM DD YYYY (ej. NOV 07 1987, NOV-08-2005) ─────────────
         match_mdy_abrev = re.search(
-            r"\b([A-Z]{3,4})[\s/\-\.](\d{1,2})[\s/\-\.](\d{4})\b",
-            texto.upper(),
+            r"\b([A-Z0-9]{3,4})[\s/\-\.]+(\d{1,2})[\s/\-\.]+(\d{2,4})\b",
+            texto_u,
         )
         if match_mdy_abrev:
             mes_t, dia_t, anio_t = match_mdy_abrev.groups()
             mes_num = MESES.get(mes_t.upper())
             if mes_num:
+                anio = int(anio_t)
+                if len(anio_t) == 2:
+                    anio = 1900 + anio if anio > 30 else 2000 + anio
                 try:
-                    return date(int(anio_t), mes_num, int(dia_t))
+                    return date(anio, mes_num, int(dia_t))
+                except ValueError:
+                    pass
                 except ValueError:
                     pass
 

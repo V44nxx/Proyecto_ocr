@@ -223,7 +223,7 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
         r.en_pdf = True
     elif detalles.get("en_pdf") is False or p.motor_ocr == "excel":
         r.en_pdf = False
-        if p.requiere_revision is not False:
+        if p.requiere_revision is not False and p.estado_registro != "VALID" and not detalles.get("aprobado_manual"):
             r.requiere_revision = True
             if not r.estado_registro or r.estado_registro == "VALID":
                 r.estado_registro = "REVIEW_REQUIRED"
@@ -234,7 +234,7 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     if isinstance(disc_excel, dict):
         r.discrepancia_excel = disc_excel
         # Mantener la alerta y revisión activa solo si la persona no ha sido aprobada manualmente
-        if p.requiere_revision is not False and not disc_excel.get("aprobado_manual"):
+        if p.requiere_revision is not False and p.estado_registro != "VALID" and not disc_excel.get("aprobado_manual") and not detalles.get("aprobado_manual"):
             r.requiere_revision = True
             if not r.estado_registro or r.estado_registro == "VALID":
                 r.estado_registro = "REVIEW_REQUIRED"
@@ -312,6 +312,12 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     es_cc = tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA", "CEDULA") and not es_ti and not es_ce and not es_ppt
 
     if edad_val is not None:
+        es_aprobado_previo = bool(
+            p.requiere_revision is False
+            or p.estado_registro == "VALID"
+            or detalles.get("aprobado_manual")
+            or (isinstance(detalles.get("discrepancia_documento_edad"), dict) and detalles["discrepancia_documento_edad"].get("aprobado_manual"))
+        )
         if edad_val >= 18 and es_ti:
             disc_doc_edad = {
                 "tipo": "MAYOR_CON_TI",
@@ -320,10 +326,11 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
                 "motivo": (
                     f"Archivo no válido ya que la persona es mayor de edad ({edad_val} años) "
                     f"y presenta archivo de Tarjeta de Identidad que solo corresponde a menores de edad."
-                )
+                ),
+                "aprobado_manual": es_aprobado_previo,
             }
             detalles["discrepancia_documento_edad"] = disc_doc_edad
-            if p.requiere_revision is not False and not (isinstance(detalles.get("discrepancia_documento_edad"), dict) and detalles["discrepancia_documento_edad"].get("aprobado_manual")):
+            if not es_aprobado_previo and p.requiere_revision is not False:
                 r.requiere_revision = True
                 if not r.estado_registro or r.estado_registro == "VALID":
                     r.estado_registro = "REVIEW_REQUIRED"
@@ -340,10 +347,11 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
                 "motivo": (
                     f"Archivo no válido ya que la persona es menor de edad ({edad_val} años) "
                     f"y presenta archivo de Cédula de Ciudadanía que solo corresponde a mayores de 18 años."
-                )
+                ),
+                "aprobado_manual": es_aprobado_previo,
             }
             detalles["discrepancia_documento_edad"] = disc_doc_edad
-            if p.requiere_revision is not False and not (isinstance(detalles.get("discrepancia_documento_edad"), dict) and detalles["discrepancia_documento_edad"].get("aprobado_manual")):
+            if not es_aprobado_previo and p.requiere_revision is not False:
                 r.requiere_revision = True
                 if not r.estado_registro or r.estado_registro == "VALID":
                     r.estado_registro = "REVIEW_REQUIRED"
@@ -377,6 +385,13 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     else:
         # No se ha subido ninguna planilla Excel para contrastar
         r.en_excel = None
+
+    if p.requiere_revision is False or p.estado_registro == "VALID" or detalles.get("aprobado_manual") or detalles.get("validado_manual"):
+        r.requiere_revision = False
+        r.estado_registro = "VALID"
+        detalles_resp = dict(r.detalles_campos or {})
+        detalles_resp.pop("motivos_revision", None)
+        r.detalles_campos = detalles_resp
 
     return r
 
@@ -582,18 +597,37 @@ def actualizar_persona(
     from app.utils.validators import validador
     from datetime import datetime
 
+    if datos.estado_registro is not None:
+        persona.estado_registro = datos.estado_registro
+        campos_actualizados.append("estado_registro")
+
     if datos.requiere_revision is not None:
         persona.requiere_revision = datos.requiere_revision
         det = dict(persona.detalles_campos or {})
         if not datos.requiere_revision:
             persona.estado_registro = "VALID"
             det.pop("motivos_revision", None)
+            det["aprobado_manual"] = True
+            det["validado_manual"] = True
             if isinstance(det.get("discrepancia_excel"), dict):
                 det["discrepancia_excel"]["aprobado_manual"] = True
             if isinstance(det.get("discrepancia_documento_edad"), dict):
                 det["discrepancia_documento_edad"]["aprobado_manual"] = True
         else:
             persona.estado_registro = "REVIEW_REQUIRED"
+            det.pop("aprobado_manual", None)
+            det.pop("validado_manual", None)
+        persona.detalles_campos = det
+    elif datos.estado_registro == "VALID":
+        persona.requiere_revision = False
+        det = dict(persona.detalles_campos or {})
+        det.pop("motivos_revision", None)
+        det["aprobado_manual"] = True
+        det["validado_manual"] = True
+        if isinstance(det.get("discrepancia_excel"), dict):
+            det["discrepancia_excel"]["aprobado_manual"] = True
+        if isinstance(det.get("discrepancia_documento_edad"), dict):
+            det["discrepancia_documento_edad"]["aprobado_manual"] = True
         persona.detalles_campos = det
     else:
         # Reevaluar si con los datos guardados ya no requiere revisión

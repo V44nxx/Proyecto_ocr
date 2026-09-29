@@ -18,17 +18,34 @@ import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
-const esPersonaEnRevision = (p: Persona) => {
-  if (p.requiere_revision === false && (!p.estado_registro || p.estado_registro === "VALID")) {
+const esPersonaValidada = (p: Persona): boolean => {
+  if (!p) return false;
+  return Boolean(
+    p.requiere_revision === false ||
+    p.estado_registro === "VALID" ||
+    (p.detalles_campos as any)?.aprobado_manual === true ||
+    (p.detalles_campos as any)?.validado_manual === true
+  );
+};
+
+const esPersonaEnRevision = (p: Persona): boolean => {
+  if (!p) return false;
+  if (esPersonaValidada(p)) {
     return false;
   }
   const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
   const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
+  const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
+  const discDocEdadAprobada = discDocEdad && (discDocEdad.aprobado_manual || discDocEdad.ignorado);
+  const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+  const discExcelAprobada = discExcel && (discExcel.aprobado_manual || discExcel.ignorado);
+
   return Boolean(
     p.requiere_revision || 
     (p.estado_registro && p.estado_registro !== "VALID") || 
-    inc.esInvalido || 
-    (p.detalles_campos as any)?.discrepancia_documento_edad
+    (!discDocEdadAprobada && inc.esInvalido) || 
+    (!discDocEdadAprobada && discDocEdad) ||
+    (!discExcelAprobada && discExcel)
   );
 };
 
@@ -203,11 +220,18 @@ function PersonasContent() {
       setPersonas(items);
 
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
-      const revCount = items.filter(esPersonaEnRevision).length;
-      const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
-      const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
-      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false || Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel)).length;
-      const valCount = items.filter((p: Persona) => !esPersonaEnRevision(p) && p.documento_id && p.en_excel !== false && !Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel)).length;
+      const validasCount = items.filter(esPersonaValidada).length;
+      const revCount = items.filter((p: Persona) => !esPersonaValidada(p) && esPersonaEnRevision(p)).length;
+      const faltaPdfCount = items.filter((p: Persona) => !esPersonaValidada(p) && ((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false)).length;
+      const faltaExcelCount = items.filter((p: Persona) => !esPersonaValidada(p) && p.en_excel === false).length;
+      const discCount = items.filter((p: Persona) => {
+        if (esPersonaValidada(p)) return false;
+        const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
+        const faltaExcel = p.en_excel === false;
+        const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+        const tieneDiscrepanciaExcel = Boolean(discExcel && !discExcel.aprobado_manual);
+        return faltaPdf || faltaExcel || tieneDiscrepanciaExcel;
+      }).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -216,7 +240,7 @@ function PersonasContent() {
       setStats({
         total: tot,
         revision: revCount,
-        validas: valCount,
+        validas: validasCount,
         discrepancia: discCount,
         faltaPdf: faltaPdfCount,
         faltaExcel: faltaExcelCount,
@@ -351,7 +375,7 @@ function PersonasContent() {
         fecha_expedicion: editForm.fecha_expedicion?.trim() || undefined,
         lugar_expedicion: editForm.lugar_expedicion?.trim() || undefined,
         sexo: editForm.sexo?.trim() || undefined,
-        ...(forzarAprobado ? { requiere_revision: false } : {}),
+        ...(forzarAprobado ? { requiere_revision: false, estado_registro: "VALID" } : {}),
       };
       await apiPersonas.actualizar(id, payload);
       toast.success(forzarAprobado ? "Datos guardados y persona validada" : "Datos actualizados correctamente", { id: "guardar-persona" });
@@ -424,6 +448,8 @@ function PersonasContent() {
           if (item.id === id) {
             const det = { ...(item.detalles_campos as any || {}) };
             delete det.motivos_revision;
+            det.aprobado_manual = true;
+            det.validado_manual = true;
             if (det.discrepancia_excel) {
               det.discrepancia_excel = { ...det.discrepancia_excel, aprobado_manual: true };
             }
@@ -443,9 +469,9 @@ function PersonasContent() {
           return item;
         })
       );
-      await apiPersonas.actualizar(id, { requiere_revision: false });
+      await apiPersonas.actualizar(id, { requiere_revision: false, estado_registro: "VALID" });
       toast.success("Persona verificada y aprobada como válida", { id: `aprobar-${id}` });
-      cargarPersonas(true);
+      await cargarPersonas(false);
     } catch {
       toast.error("Error al aprobar persona", { id: `aprobar-${id}` });
     }
@@ -502,22 +528,26 @@ function PersonasContent() {
   // Filtrado local por estado y cédula / nombre
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
+    const estaVal = esPersonaValidada(p);
     const esRev = esPersonaEnRevision(p);
+
     if (filtroEstado === "revision") {
-      if (!esRev) return false;
+      if (estaVal || !esRev) return false;
     } else if (filtroEstado === "validas") {
-      const faltaPdf = !p.documento_id || p.en_pdf === false;
-      const faltaExcel = p.en_excel === false;
-      if (esRev || faltaPdf || faltaExcel) return false;
+      if (!estaVal) return false;
     } else if (filtroEstado === "discrepancia") {
-      const faltaPdf = !p.documento_id || p.en_pdf === false;
+      if (estaVal) return false;
+      const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      const tieneDiscrepanciaExcel = Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel);
+      const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+      const tieneDiscrepanciaExcel = Boolean(discExcel && !discExcel.aprobado_manual);
       if (!faltaPdf && !faltaExcel && !tieneDiscrepanciaExcel) return false;
     } else if (filtroEstado === "falta_pdf") {
-      const faltaPdf = !p.documento_id || p.en_pdf === false;
+      if (estaVal) return false;
+      const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
       if (!faltaPdf) return false;
     } else if (filtroEstado === "falta_excel") {
+      if (estaVal) return false;
       const faltaExcel = p.en_excel === false;
       if (!faltaExcel) return false;
     } else if (filtroEstado === "menores") {
@@ -620,7 +650,7 @@ function PersonasContent() {
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
     const esMenor14Detalle = edadCalculada !== null && edadCalculada < 14;
     const numIdVisible = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
-    const estaValidada = !esPersonaEnRevision(p) && (p.estado_registro === "VALID" || p.requiere_revision === false);
+    const estaValidada = esPersonaValidada(p);
 
     const campos = [
       { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
@@ -724,15 +754,17 @@ function PersonasContent() {
           <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-200/50 dark:bg-slate-950/50 min-h-[260px] max-h-[480px]">
             {!tienePdfValido ? (
               <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center px-4">
-                <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center border border-amber-500/30">
-                  <ImageOff className="w-6 h-6 text-amber-500" />
+                <div className={`w-12 h-12 rounded-full ${estaValidada ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-500" : "bg-amber-500/15 border-amber-500/30 text-amber-500"} flex items-center justify-center border`}>
+                  {estaValidada ? <CheckCircle className="w-6 h-6" /> : <ImageOff className="w-6 h-6" />}
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                    No se encontró en el PDF
+                    {estaValidada ? "Datos Validados Desde Planilla" : "No se encontró en el PDF"}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
-                    Esta persona figura en la planilla oficial de Excel pero no fue detectada en las páginas del PDF adjunto. Puede asociar o subir su cédula en PDF individualmente si la tiene disponible.
+                    {estaValidada
+                      ? "Esta persona fue verificada y aprobada con los datos de la planilla oficial. Si lo desea, puede asociar o subir su documento PDF de cédula en cualquier momento."
+                      : "Esta persona figura en la planilla oficial de Excel pero no fue detectada en las páginas del PDF adjunto. Puede asociar o subir su cédula en PDF individualmente si la tiene disponible."}
                   </p>
                 </div>
                 <button
@@ -1528,14 +1560,18 @@ function PersonasContent() {
                     )}
                     Subir PDF Cédula
                   </button>
-                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
+                  {!estaValidada ? (
                     <button
                       onClick={(e) => aprobarRevision(p.id, e)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0 cursor-pointer"
                       title="Aprobar datos y marcar como válido"
                     >
                       <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
                     </button>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" /> ✓ Registro Validado
+                    </span>
                   )}
                 </div>
                 <button
@@ -2173,7 +2209,7 @@ function PersonasContent() {
                           <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
                             {(() => {
                               const esRevRow = esPersonaEnRevision(p);
-                              const estaValidado = !esRevRow && (p.estado_registro === "VALID" || p.requiere_revision === false);
+                              const estaValidado = esPersonaValidada(p);
                               const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
                               const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
                               const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || (p.detalles_campos as any)?.motivo_no_en_pdf || (p.detalles_campos as any)?.motivos_revision?.[0] || "Requiere revisión manual de datos";

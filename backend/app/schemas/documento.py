@@ -92,6 +92,7 @@ class PersonaUpdate(BaseModel):
     lugar_expedicion: Optional[str] = None
     sexo: Optional[str] = None
     requiere_revision: Optional[bool] = None
+    estado_registro: Optional[str] = None
 
     @field_validator("fecha_nacimiento", "fecha_expedicion", mode="before")
     @classmethod

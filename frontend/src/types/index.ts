@@ -94,6 +94,7 @@ export interface PersonaUpdate {
   lugar_expedicion?: string;
   sexo?: string;
   requiere_revision?: boolean;
+  estado_registro?: string;
 }
 
 export interface Comparacion {

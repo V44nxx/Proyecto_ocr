@@ -55,11 +55,29 @@ PATRON_RUIDO_ADMINISTRATIVO = re.compile(
     re.IGNORECASE
 )
 
+# Patrón de membrete de ficha institucional escrito sobre la hoja, ENCIMA de la fotocopia de la cédula.
+# Ejemplo real: 'CC. 30507543 MARITZA GUTIERREZ MORENO' o 'CC 1006506310 LUCIA VARGAS'
+# Este texto NO proviene de la cédula física, sino del encabezado de la planilla institucional.
+PATRON_MEMBRETE_CC_EXTERNO = re.compile(
+    r"^\s*(?:CC|C\.C\.)[\.\s:]+\d{6,10}\s+[A-ZÁÉÍÓÚÜÑ]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ]{2,}){1,4}\s*$",
+    re.IGNORECASE
+)
+
 def es_linea_ruido_administrativo(texto: str) -> bool:
-    """Detecta si una línea o texto corresponde a membretes de trámite, fotocopias o sellos."""
+    """Detecta si una línea o texto corresponde a membretes de trámite, fotocopias o sellos.
+    
+    También cubre el patrón 'CC. 30507543 NOMBRE APELLIDO' que aparece como encabezado
+    de ficha institucional escrito SOBRE la fotocopia de la cédula (no proviene de la cédula).
+    """
     if not texto:
         return False
-    return bool(PATRON_RUIDO_ADMINISTRATIVO.search(texto))
+    if PATRON_RUIDO_ADMINISTRATIVO.search(texto):
+        return True
+    # Membrete de ficha: 'CC. NNNNNNNN NOMBRE APELLIDO APELLIDO'
+    if PATRON_MEMBRETE_CC_EXTERNO.match(texto.strip()):
+        return True
+    return False
+
 
 ROMAN_NOISE = {
     "I", "II", "III", "IIII", "IIIII", "IIIIII", "IV", "V", "VI", "VII", 

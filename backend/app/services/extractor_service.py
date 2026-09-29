@@ -1096,9 +1096,19 @@ class ExtractorService:
             r"WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ)\b",
             re.I
         )
+        # Patrón de membrete de ficha institucional: 'CC. NÚMERO NOMBRE APELLIDO'
+        # Este encabezado aparece SOBRE la fotocopia de la cédula, NO es un dato de la cédula.
+        PATRON_MEMBRETE_CC = re.compile(
+            r"^\s*(?:CC|C\.C\.)[\.\s:]+\d{6,10}\s+[A-ZÁÉÍÓÚÜÑ]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ]{2,}){1,4}\s*$",
+            re.IGNORECASE
+        )
         for idx_l, l in enumerate(lineas):
             if PATRON_RUIDO_ADMIN.search(l):
                 continue
+            # Descartar membrete de ficha 'CC. NUMERO NOMBRE APELLIDO'
+            if PATRON_MEMBRETE_CC.match(l.strip()):
+                continue
+
             for keyword in self.KEYWORDS_IDENTIFICACION:
                 if re.search(rf"\b{keyword}\b", l, re.IGNORECASE):
                     # Revisar línea actual

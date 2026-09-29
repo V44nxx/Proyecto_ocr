@@ -430,10 +430,19 @@ class SpatialFieldExtractor:
             num_clean = re.sub(r"[^\d]", "", txt_l)
             if len(num_clean) == 10 and num_clean.startswith(("30", "31", "32", "33", "35", "37")):
                 return True
-            # Encabezado externo tipo 'CC. 30507543 NOMBRE' ubicado por encima del documento físico
+            # Número de ficha institucional: 10 dígitos que empieza por 31 (ej: 3105701005)
+            # Son fichas SENA/institucionales, NO cédulas colombianas
+            if len(num_clean) == 10 and num_clean.startswith("31") and txt_l == num_clean:
+                return True
+            # Encabezado externo tipo 'CC. 30507543 NOMBRE APELLIDO' – SIEMPRE es membrete de planilla,
+            # nunca dato impreso en la cédula física (descartado independientemente de y_doc_top)
+            if re.search(r"^\s*(?:CC|C\.C\.)[\.\s:]+\d{6,10}\s+[A-ZÁÉÍÓÚÜÑ]{2,}", txt_l):
+                return True
+            # También si está por encima del documento y contiene el patrón CC NÚMERO
             if y_doc_top is not None and getattr(line_obj, "y", 0.0) < y_doc_top and re.search(r"\bCC[\.\s:]*\d+", txt_l):
                 return True
             return False
+
 
         # ── 1. MRZ (Zona Legible por Máquina - Cédula Digital / Pasaportes / Cédula Extranjería) ──
         for l in lines:

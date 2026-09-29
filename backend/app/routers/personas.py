@@ -223,9 +223,10 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
         r.en_pdf = True
     elif detalles.get("en_pdf") is False or p.motor_ocr == "excel":
         r.en_pdf = False
-        r.requiere_revision = True
-        if not r.estado_registro or r.estado_registro == "VALID":
-            r.estado_registro = "REVIEW_REQUIRED"
+        if p.requiere_revision is not False:
+            r.requiere_revision = True
+            if not r.estado_registro or r.estado_registro == "VALID":
+                r.estado_registro = "REVIEW_REQUIRED"
     else:
         r.en_pdf = p.documento_id is not None
 
@@ -322,14 +323,15 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
                 )
             }
             detalles["discrepancia_documento_edad"] = disc_doc_edad
-            r.requiere_revision = True
-            if not r.estado_registro or r.estado_registro == "VALID":
-                r.estado_registro = "REVIEW_REQUIRED"
-            mots = list(detalles.get("motivos_revision") or [])
-            if disc_doc_edad["motivo"] not in mots:
-                mots.append(disc_doc_edad["motivo"])
-                detalles["motivos_revision"] = mots
-            r.detalles_campos = detalles
+            if p.requiere_revision is not False and not (isinstance(detalles.get("discrepancia_documento_edad"), dict) and detalles["discrepancia_documento_edad"].get("aprobado_manual")):
+                r.requiere_revision = True
+                if not r.estado_registro or r.estado_registro == "VALID":
+                    r.estado_registro = "REVIEW_REQUIRED"
+                mots = list(detalles.get("motivos_revision") or [])
+                if disc_doc_edad["motivo"] not in mots:
+                    mots.append(disc_doc_edad["motivo"])
+                    detalles["motivos_revision"] = mots
+                r.detalles_campos = detalles
         elif edad_val < 18 and es_cc:
             disc_doc_edad = {
                 "tipo": "MENOR_CON_CC",
@@ -341,14 +343,15 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
                 )
             }
             detalles["discrepancia_documento_edad"] = disc_doc_edad
-            r.requiere_revision = True
-            if not r.estado_registro or r.estado_registro == "VALID":
-                r.estado_registro = "REVIEW_REQUIRED"
-            mots = list(detalles.get("motivos_revision") or [])
-            if disc_doc_edad["motivo"] not in mots:
-                mots.append(disc_doc_edad["motivo"])
-                detalles["motivos_revision"] = mots
-            r.detalles_campos = detalles
+            if p.requiere_revision is not False and not (isinstance(detalles.get("discrepancia_documento_edad"), dict) and detalles["discrepancia_documento_edad"].get("aprobado_manual")):
+                r.requiere_revision = True
+                if not r.estado_registro or r.estado_registro == "VALID":
+                    r.estado_registro = "REVIEW_REQUIRED"
+                mots = list(detalles.get("motivos_revision") or [])
+                if disc_doc_edad["motivo"] not in mots:
+                    mots.append(disc_doc_edad["motivo"])
+                    detalles["motivos_revision"] = mots
+                r.detalles_campos = detalles
 
     # Comprobar si la persona tiene evidencia inequívoca de pertenecer a la planilla oficial de Excel
     evidencia_excel = (
@@ -587,6 +590,8 @@ def actualizar_persona(
             det.pop("motivos_revision", None)
             if isinstance(det.get("discrepancia_excel"), dict):
                 det["discrepancia_excel"]["aprobado_manual"] = True
+            if isinstance(det.get("discrepancia_documento_edad"), dict):
+                det["discrepancia_documento_edad"]["aprobado_manual"] = True
         else:
             persona.estado_registro = "REVIEW_REQUIRED"
         persona.detalles_campos = det

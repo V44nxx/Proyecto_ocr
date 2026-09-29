@@ -19,6 +19,9 @@ import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEda
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 const esPersonaEnRevision = (p: Persona) => {
+  if (p.requiere_revision === false && (!p.estado_registro || p.estado_registro === "VALID")) {
+    return false;
+  }
   const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
   const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
   return Boolean(
@@ -415,8 +418,33 @@ function PersonasContent() {
   const aprobarRevision = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
+      // Feedback visual instantáneo: marcar como validado en el estado local de inmediato
+      setPersonas((prev) =>
+        prev.map((item) => {
+          if (item.id === id) {
+            const det = { ...(item.detalles_campos as any || {}) };
+            delete det.motivos_revision;
+            if (det.discrepancia_excel) {
+              det.discrepancia_excel = { ...det.discrepancia_excel, aprobado_manual: true };
+            }
+            if (det.discrepancia_documento_edad) {
+              det.discrepancia_documento_edad = { ...det.discrepancia_documento_edad, aprobado_manual: true };
+            }
+            return {
+              ...item,
+              requiere_revision: false,
+              estado_registro: "VALID",
+              detalles_campos: det,
+              discrepancia_excel: item.discrepancia_excel
+                ? { ...(item.discrepancia_excel as any), aprobado_manual: true }
+                : item.discrepancia_excel,
+            };
+          }
+          return item;
+        })
+      );
       await apiPersonas.actualizar(id, { requiere_revision: false });
-      toast.success("Persona aprobada como válida", { id: `aprobar-${id}` });
+      toast.success("Persona verificada y aprobada como válida", { id: `aprobar-${id}` });
       cargarPersonas(true);
     } catch {
       toast.error("Error al aprobar persona", { id: `aprobar-${id}` });
@@ -592,6 +620,7 @@ function PersonasContent() {
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
     const esMenor14Detalle = edadCalculada !== null && edadCalculada < 14;
     const numIdVisible = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
+    const estaValidada = !esPersonaEnRevision(p) && (p.estado_registro === "VALID" || p.requiere_revision === false);
 
     const campos = [
       { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
@@ -811,7 +840,7 @@ function PersonasContent() {
             </div>
 
             {/* Alerta Destacada en Rojo: Menor de 14 Años */}
-            {esMenor14Detalle && (
+            {esMenor14Detalle && !estaValidada && (
               <div className="m-2.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-500/15 border-2 border-rose-400 dark:border-rose-500/50 text-rose-950 dark:text-rose-200 shadow-md animate-pulse min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
@@ -827,6 +856,7 @@ function PersonasContent() {
 
             {/* Alerta Destacada: Archivo No Válido por Inconsistencia Documento vs Mayoría/Minoría de Edad */}
             {(() => {
+              if (estaValidada) return null;
               const edadVal = p.edad ?? calcularEdad(p.fecha_nacimiento);
               const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
               const inconsistencia = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadVal);
@@ -888,7 +918,7 @@ function PersonasContent() {
               const nombreExcelParaId = typeof disc === "object" ? (disc.nombre_excel_para_id || disc.nombre_excel) : "";
               const idExcelParaNombre = typeof disc === "object" ? (disc.id_excel_para_nombre || disc.id_excel_homonimo) : "";
               const motivo = typeof disc === "object" ? disc.motivo : "Discrepancia entre la cédula leída por OCR y la planilla oficial Excel.";
-              const estaAprobadoManual = Boolean(disc?.aprobado_manual || (!p.requiere_revision && p.estado_registro === "VALID"));
+              const estaAprobadoManual = Boolean(disc?.aprobado_manual || estaValidada);
 
               if (estaAprobadoManual) {
                 return (
@@ -1064,7 +1094,7 @@ function PersonasContent() {
             })()}
 
             {/* Alerta: Falta en Planilla Excel */}
-            {p.en_excel === false && (
+            {p.en_excel === false && !estaValidada && (
               <div className="m-2.5 p-3.5 rounded-xl bg-purple-100/90 dark:bg-purple-950/60 border-2 border-purple-600 dark:border-purple-500 text-purple-950 dark:text-purple-100 min-w-0 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <FileSpreadsheet className="w-4 h-4 text-purple-900 dark:text-purple-300 shrink-0" />
@@ -1089,7 +1119,7 @@ function PersonasContent() {
             )}
 
             {/* Alerta: Sin Documento PDF / No se encontró en el PDF */}
-            {(!tienePdfValido || p.en_pdf === false) && (
+            {(!tienePdfValido || p.en_pdf === false) && !estaValidada && (
               <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500/70 text-amber-950 dark:text-amber-100 min-w-0 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -2046,7 +2076,7 @@ function PersonasContent() {
                               <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
                                 {tipoInfo.codigo}
                               </span>
-                              <span className="font-mono text-blue-900 dark:text-primary-300 font-extrabold text-sm tracking-wide shrink-0">
+                              <span className="font-mono text-blue-900 dark:text-sky-300 font-extrabold text-sm tracking-wide shrink-0">
                                 {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
                                   p.numero_identificacion
                                 ) : (
@@ -2141,76 +2171,78 @@ function PersonasContent() {
 
                           {/* Estado: Alertas VÁLIDO, REVISAR, MENOR (< 14), NO EN PDF, NO EN EXCEL */}
                           <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
-                            <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
-                              {/* Alerta: Menor de 14 años */}
-                              {esMenor14 && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                  title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
-                                >
-                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
-                                </span>
-                              )}
+                            {(() => {
+                              const esRevRow = esPersonaEnRevision(p);
+                              const estaValidado = !esRevRow && (p.estado_registro === "VALID" || p.requiere_revision === false);
+                              const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
+                              const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
+                              const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || (p.detalles_campos as any)?.motivo_no_en_pdf || (p.detalles_campos as any)?.motivos_revision?.[0] || "Requiere revisión manual de datos";
 
-                              {/* Alerta: Falta en PDF */}
-                              {((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false) && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
-                                  title="No se encontró en el PDF (datos cargados desde la planilla Excel)"
-                                >
-                                  <FileText className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> NO EN PDF
-                                </span>
-                              )}
+                              if (estaValidado) {
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold whitespace-nowrap shadow-sm"
+                                    title="Registro completo y verificado"
+                                  >
+                                    <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
+                                  </span>
+                                );
+                              }
 
-                              {/* Alerta: Falta en Excel */}
-                              {p.en_excel === false && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                  title="No encontrado en la planilla Excel comparada"
-                                >
-                                  <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
-                                </span>
-                              )}
-
-                              {/* Alerta: Conflicto Cédula / Excel */}
-                              {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-700/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
-                                  title={((p.detalles_campos as any)?.discrepancia_excel?.motivo) || (p.discrepancia_excel as any)?.motivo || "Conflicto entre la cédula física del PDF y la planilla Excel"}
-                                >
-                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" /> CONFLICTO CÉDULA/EXCEL
-                                </span>
-                              )}
-
-                              {/* Estado de validación de datos: REVISAR o VÁLIDO */}
-                              {(() => {
-                                const esRevRow = esPersonaEnRevision(p);
-                                const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
-                                const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
-                                const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || (p.detalles_campos as any)?.motivo_no_en_pdf || (p.detalles_campos as any)?.motivos_revision?.[0] || "Requiere revisión manual de datos";
-
-                                if (esRevRow) {
-                                  return (
+                              return (
+                                <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
+                                  {/* Alerta: Menor de 14 años */}
+                                  {esMenor14 && (
                                     <span
-                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
-                                      title={tooltipMotivo}
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
+                                      title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
                                     >
-                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
+                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
                                     </span>
-                                  );
-                                } else if (p.documento_id && p.en_excel !== false) {
-                                  return (
+                                  )}
+
+                                  {/* Alerta: Falta en PDF */}
+                                  {((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false) && (
                                     <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                      title="Registro completo y verificado"
+                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
+                                      title="No se encontró en el PDF (datos cargados desde la planilla Excel)"
                                     >
-                                      <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
+                                      <FileText className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> NO EN PDF
                                     </span>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
+                                  )}
+
+                                  {/* Alerta: Falta en Excel */}
+                                  {p.en_excel === false && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
+                                      title="No encontrado en la planilla Excel comparada"
+                                    >
+                                      <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
+                                    </span>
+                                  )}
+
+                                  {/* Alerta: Conflicto Cédula / Excel */}
+                                  {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-700/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
+                                      title={((p.detalles_campos as any)?.discrepancia_excel?.motivo) || (p.discrepancia_excel as any)?.motivo || "Conflicto entre la cédula física del PDF y la planilla Excel"}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" /> CONFLICTO CÉDULA/EXCEL
+                                    </span>
+                                  )}
+
+                                  {/* Botón interactivo de validación: REVISAR */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => aprobarRevision(p.id, e)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors cursor-pointer"
+                                    title={`Haga clic para validar este registro. Motivo: ${tooltipMotivo}`}
+                                  >
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </td>
 
                           {/* Acciones — solo eliminar */}

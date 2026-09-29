@@ -203,8 +203,8 @@ function PersonasContent() {
       const revCount = items.filter(esPersonaEnRevision).length;
       const faltaPdfCount = items.filter((p: Persona) => !p.documento_id || p.en_pdf === false).length;
       const faltaExcelCount = items.filter((p: Persona) => p.en_excel === false).length;
-      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false).length;
-      const valCount = items.filter((p: Persona) => !esPersonaEnRevision(p) && p.documento_id && p.en_excel !== false).length;
+      const discCount = items.filter((p: Persona) => (!p.documento_id || p.en_pdf === false) || p.en_excel === false || Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel)).length;
+      const valCount = items.filter((p: Persona) => !esPersonaEnRevision(p) && p.documento_id && p.en_excel !== false && !Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel)).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -436,7 +436,8 @@ function PersonasContent() {
     } else if (filtroEstado === "discrepancia") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       const faltaExcel = p.en_excel === false;
-      if (!faltaPdf && !faltaExcel) return false;
+      const tieneDiscrepanciaExcel = Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel);
+      if (!faltaPdf && !faltaExcel && !tieneDiscrepanciaExcel) return false;
     } else if (filtroEstado === "falta_pdf") {
       const faltaPdf = !p.documento_id || p.en_pdf === false;
       if (!faltaPdf) return false;
@@ -831,35 +832,73 @@ function PersonasContent() {
               );
             })()}
 
-            {/* Alerta Destacada: Discrepancia Crítica de Nombre entre Cédula Física y Planilla Excel */}
-            {Boolean((p.detalles_campos as any)?.discrepancia_excel) && (() => {
-              const disc = (p.detalles_campos as any).discrepancia_excel;
-              const nombreCedula = typeof disc === "object" ? disc.nombre_cedula : "";
-              const nombreExcel = typeof disc === "object" ? disc.nombre_excel : "";
+            {/* Alerta Destacada: Discrepancia Crítica Cédula Física vs Planilla Excel */}
+            {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (() => {
+              const disc = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+              const nombreCedula = typeof disc === "object" ? (disc.nombre_cedula || p.nombre_completo) : p.nombre_completo;
+              const idOcr = typeof disc === "object" ? (disc.id_ocr || p.numero_identificacion) : p.numero_identificacion;
+              const nombreExcelParaId = typeof disc === "object" ? (disc.nombre_excel_para_id || disc.nombre_excel) : "";
+              const idExcelParaNombre = typeof disc === "object" ? (disc.id_excel_para_nombre || disc.id_excel_homonimo) : "";
+              const motivo = typeof disc === "object" ? disc.motivo : "Discrepancia entre la cédula leída por OCR y la planilla oficial Excel.";
+
               return (
-                <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500 dark:border-amber-500/70 text-amber-950 dark:text-amber-100 shadow-md min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                      Discrepancia de Nombre: Cédula Física (PDF) vs Planilla Excel
+                <div className="m-2.5 p-4 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 dark:from-rose-950/40 dark:to-amber-950/30 border-2 border-rose-500 dark:border-rose-500/80 text-rose-950 dark:text-rose-100 shadow-lg min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-900 dark:text-rose-200">
+                      Discrepancia Crítica: Verificación Cédula Física (OCR) vs Planilla Oficial Excel
                     </span>
                   </div>
-                  <p className="text-xs text-amber-950 dark:text-amber-100 ml-7 mb-2.5 font-medium leading-relaxed">
-                    El nombre extraído de la cédula física del PDF difiere del registrado en la planilla oficial de Excel. Se ha conservado prioritariamente el nombre de la planilla oficial de Excel y se requiere revisión obligatoria para validar inconsistencias.
+                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-3 font-semibold leading-relaxed">
+                    {motivo}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 ml-7 text-xs">
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-blue-400 dark:border-blue-600/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-blue-800 dark:text-blue-400 flex items-center gap-1">
-                        <FileSpreadsheet className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Nombre Oficial en Planilla Excel (Conservado)
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-7 text-xs">
+                    <div className="p-3 rounded-lg bg-white/95 dark:bg-slate-900/90 border border-amber-300 dark:border-amber-600/50 shadow-sm">
+                      <div className="text-[11px] uppercase font-bold text-amber-900 dark:text-amber-400 flex items-center gap-1.5 mb-1">
+                        <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        <span>Documento Físico Escaneado (PDF)</span>
                       </div>
-                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">{nombreExcel || p.nombre_completo}</div>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-amber-400 dark:border-amber-600/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1">
-                        <FileText className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Nombre detectado en Cédula Física (PDF)
+                      <div className="mt-1 space-y-1">
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula Extraída:</span>{" "}
+                          <span className="font-extrabold text-slate-900 dark:text-white font-mono">{idOcr || p.numero_identificacion}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Titular en Documento:</span>{" "}
+                          <span className="font-extrabold text-amber-900 dark:text-amber-300">{nombreCedula || p.nombre_completo}</span>
+                        </div>
                       </div>
-                      <div className="font-extrabold text-amber-950 dark:text-amber-200 text-sm mt-0.5">{nombreCedula || "Diferente en PDF"}</div>
                     </div>
+
+                    <div className="p-3 rounded-lg bg-white/95 dark:bg-slate-900/90 border border-blue-300 dark:border-blue-600/50 shadow-sm">
+                      <div className="text-[11px] uppercase font-bold text-blue-900 dark:text-blue-400 flex items-center gap-1.5 mb-1">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Registro en Planilla Excel</span>
+                      </div>
+                      <div className="mt-1 space-y-1">
+                        {nombreExcelParaId ? (
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Persona registrada con esa Cédula:</span>{" "}
+                            <span className="font-extrabold text-blue-950 dark:text-blue-200">{nombreExcelParaId}</span>
+                          </div>
+                        ) : null}
+                        {idExcelParaNombre ? (
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula oficial del titular en Excel:</span>{" "}
+                            <span className="font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">{idExcelParaNombre}</span>
+                          </div>
+                        ) : null}
+                        {!nombreExcelParaId && !idExcelParaNombre ? (
+                          <div className="text-slate-600 dark:text-slate-400 italic text-[11px]">
+                            La cédula leída no se encuentra asignada al titular en la planilla.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 ml-7 text-[11px] flex items-center gap-1.5 text-rose-800 dark:text-rose-300 font-medium bg-rose-100/60 dark:bg-rose-950/60 py-1.5 px-3 rounded-lg border border-rose-300/60 dark:border-rose-800/60">
+                    <span>🛡️</span>
+                    <span>El sistema preservó el nombre del documento físico escaneado para evitar asociar a otra persona indebidamente. Corrija manualmente si se trató de un error de lectura de cédula.</span>
                   </div>
                 </div>
               );
@@ -1971,6 +2010,16 @@ function PersonasContent() {
                                   title="No encontrado en la planilla Excel comparada"
                                 >
                                   <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
+                                </span>
+                              )}
+
+                              {/* Alerta: Conflicto Cédula / Excel */}
+                              {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-700/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
+                                  title={((p.detalles_campos as any)?.discrepancia_excel?.motivo) || (p.discrepancia_excel as any)?.motivo || "Conflicto entre la cédula física del PDF y la planilla Excel"}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" /> CONFLICTO CÉDULA/EXCEL
                                 </span>
                               )}
 

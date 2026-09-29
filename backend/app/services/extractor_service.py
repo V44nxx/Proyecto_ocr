@@ -104,7 +104,6 @@ class ExtractorService:
         r"PASAPORTE",
         r"COMPROBANTE",
         r"N[UÚ]MERO",
-        r"NO\.",
         r"NO\s+DE\s+CEDULA",
         r"NUIP",
     ]
@@ -1091,7 +1090,11 @@ class ExtractorService:
         # Estrategia 1: Por keyword (en misma línea o líneas adyacentes)
         # Regex ampliado: captura formatos con espacios entre grupos: 1. 125. 182. 543
         patron_num = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
+        PALABRAS_RUIDO_ADMIN = ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]
         for idx_l, l in enumerate(lineas):
+            l_up = l.upper()
+            if any(rw in l_up for rw in PALABRAS_RUIDO_ADMIN):
+                continue
             for keyword in self.KEYWORDS_IDENTIFICACION:
                 if re.search(rf"\b{keyword}\b", l, re.IGNORECASE):
                     # Revisar línea actual
@@ -1100,7 +1103,10 @@ class ExtractorService:
                     if not m:
                         for offset in range(1, 4):
                             if idx_l + offset < len(lineas):
-                                m = patron_num.search(lineas[idx_l + offset])
+                                l_cand = lineas[idx_l + offset]
+                                if any(rw in l_cand.upper() for rw in PALABRAS_RUIDO_ADMIN):
+                                    continue
+                                m = patron_num.search(l_cand)
                                 if m:
                                     break
                     if m:

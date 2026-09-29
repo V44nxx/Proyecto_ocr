@@ -91,7 +91,7 @@ class SpatialFieldExtractor:
             r"\bRESIDENTE\s+N[O0]?\.?\b", r"\bRESIDENTE\b",
             r"\bMIGRANTE\s+N[O0]?\.?\b", r"\bMIGRACI[OÓ]N\b",
             r"\bPPT\s+N[O0]?\.?\b", r"\bPASAPORTE\s+N[O0]?\.?\b",
-            r"\bNO\.\s*\d", r"\bNO\.\b", r"\bC\.C\.?\b", r"\bC\.E\.?\b"
+            r"\bC\.C\.?\b", r"\bC\.E\.?\b", r"\bCEDULA\b", r"\bCÉDULA\b"
         ],
         "apellidos": [
             r"AP[EÉI1]+L+[I10]*D[O0]?S?", r"PRIMER\s+APEL", r"SEGUNDO\s+APEL", r"SURNAMES?"
@@ -447,17 +447,23 @@ class SpatialFieldExtractor:
         patron_num_general = re.compile(r"\b(\d{1,3}(?:\s*[\.,]\s*\d{3}){1,3}|\d{6,10})\b")
         if not resultado_campos["identificacion"]["value"]:
             # Fase 2.1: Prioridad máxima a líneas con etiqueta explícita de número/NUIP/Cédula/PPT en el frente
+            from app.utils.name_cleaner import es_linea_ruido_administrativo
             for idx_l, l in enumerate(lines):
                 t = getattr(l, "text", "").upper().strip()
-                # Excluir líneas que son códigos de barras PDF417
+                # Excluir líneas que son códigos de barras PDF417 o encabezados/membretes institucionales
                 if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t):
                     continue
-                if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|C\.E\.?|NO\.|RESIDENTE|MIGRANTE|PPT|PASAPORTE)\b", t):
+                if es_linea_ruido_administrativo(t):
+                    continue
+                if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]):
+                    continue
+                if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|C\.C\.?|C\.E\.?|RESIDENTE|MIGRANTE|PPT|PASAPORTE|CEDULA|CÉDULA)\b", t):
                     matches = list(patron_num_general.finditer(t))
                     # Si la etiqueta NUMERO está sola en la línea, inspeccionar la línea inmediatamente siguiente
                     if not matches and idx_l + 1 < len(lines):
                         t_next = getattr(lines[idx_l + 1], "text", "").upper().strip()
-                        matches = list(patron_num_general.finditer(t_next))
+                        if not es_linea_ruido_administrativo(t_next) and not any(rw in t_next for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE"]):
+                            matches = list(patron_num_general.finditer(t_next))
                     for m in matches:
                         raw_num = re.sub(r"[^\d]", "", m.group(1))
                         if validador.es_secuencia_fecha(raw_num):
@@ -501,7 +507,7 @@ class SpatialFieldExtractor:
                     t = getattr(l, "text", "").upper().strip()
                     if es_linea_ruido_administrativo(t):
                         continue
-                    if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO"]):
+                    if any(rw in t for rw in ["FICHA", "PROCESO", "TEL", "CEL", "RADICAD", "FOLIO", "ACTA", "ANEXO", "CONTRATO", "RESOLUCION", "PARTICIPANTE", "DOCUMENTACION", "LISTADO", "FORMACION", "INSTRUCTOR"]):
                         continue
                     if re.search(r"^[AP]-[0-9]+-[0-9]+-[MF]-", t) or re.search(r"\b\d{1,2}[\s/\-\.](?:[A-Z]{3}|\d{1,2})[\s/\-\.]\d{2,4}\b", t):
                         continue

@@ -866,143 +866,76 @@ class OCRService:
                 except Exception as e_lk:
                     logger.warning(f"[ExcelLookup] No se pudo cargar planilla para OCR: {e_lk}")
 
-            if excel_lookup and id_limpio and not id_limpio.startswith("SIN_ID"):
-                from app.services.excel_lookup_service import excel_lookup_service
-                registro_excel = excel_lookup_service.buscar(id_limpio, excel_lookup)
-                if registro_excel:
-                    nom_comp_excel = registro_excel.get("nombre_completo", "").strip()
-                    nom_excel = registro_excel.get("nombres", "").strip()
-                    ape_excel = registro_excel.get("apellidos", "").strip()
-                    nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
-
-                    # Conservar el nombre que traiga el Excel; si el Excel no tiene nombre, sacarlo del PDF
-                    if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
-                        encontrado_en_excel = True
-                        fuente_nombre = "excel_oficial"
-                        nombre_completo_final = nombre_excel_candidato
-                        nombres_final = nom_excel or nombre_completo_final
-                        apellidos_final = ape_excel or ""
-
-                        tiene_nombre_cedula = bool(nom_ocr_cedula and len(nom_ocr_cedula) >= 3 and not _es_nombre_invalido(nom_ocr_cedula))
-                        if tiene_nombre_cedula:
-                            coinciden_nombres = comparacion_service._son_nombres_equivalentes(
-                                nombres_bd=nom_ocr_cedula,
-                                apellidos_bd="",
-                                nombres_excel=nombre_excel_candidato,
-                                apellidos_excel=""
-                            )
-                            if not coinciden_nombres:
-                                # DISCREPANCIA REAL PDF VS EXCEL:
-                                # Se conserva el nombre oficial del Excel pero se genera alerta obligatoria de REVISAR con el porqué
-                                mot_disc = (
-                                    f"Discrepancia en Nombre Completo: La Cédula física en PDF indica '{nom_ocr_cedula}' "
-                                    f"pero la Planilla Excel indica '{nombre_excel_candidato}'"
-                                )
-                                discrepancia_nombre_excel = {
-                                    "nombre_cedula": nom_ocr_cedula,
-                                    "nombre_excel": nombre_excel_candidato,
-                                    "motivo": mot_disc
-                                }
-                                logger.warning(
-                                    f"[ExcelLookup] ID {id_limpio}: Discrepancia PDF vs Excel detectada. "
-                                    f"PDF='{nom_ocr_cedula}' vs Excel='{nombre_excel_candidato}'. "
-                                    f"Se conserva nombre de Excel pero se marca para REVISIÓN con motivo detallado."
-                                )
-                            else:
-                                logger.info(
-                                    f"[ExcelLookup] ID {id_limpio}: nombre completo verificado con planilla oficial -> '{nombre_completo_final}'"
-                                )
-                    else:
-                        # Si el Excel no tiene nombre válido, sacarlo del PDF
-                        nombre_completo_final = nom_ocr_cedula or f"{nombres_final} {apellidos_final}".strip()
-                        fuente_nombre = "cedula_fisica"
-                        logger.info(
-                            f"[ExcelLookup] ID {id_limpio}: sin nombre válido en Excel. Tomando nombre del PDF -> '{nombre_completo_final}'"
-                        )
-                else:
-                    logger.info(
-                        f"[ExcelLookup] ID '{id_limpio}' no figura en la planilla oficial por ID exacto."
-                    )
-
-            # Fallback y auto-corrección de identificación por Nombre Completo si el ID tuvo un error de lectura/truncamiento de OCR
-            # Si el OCR ya obtuvo una cédula válida pero simplemente NO está en el Excel, se respeta la cédula del OCR ("sacar solo")
+            # ── Verificación exhaustiva bidireccional OCR vs Excel ──
+            from app.services.excel_lookup_service import excel_lookup_service
             id_original_ocr = str(num_doc) if num_doc else ""
-            if excel_lookup and not encontrado_en_excel and not discrepancia_nombre_excel:
-                from app.services.excel_lookup_service import excel_lookup_service
-                from app.services.comparacion_service import comparacion_service
-                nom_buscar = f"{nombres_final or ''} {apellidos_final or ''}".strip()
-                if nom_buscar and "POR REVISAR" not in nom_buscar:
-                    match_nombre = excel_lookup_service.buscar_por_nombre(nom_buscar, excel_lookup, id_ocr_candidato=id_limpio)
-                    if match_nombre:
-                        id_ofic, reg_ofic = match_nombre
-                        # Solo auto-corregir si no teníamos identificación, o si la distancia Levenshtein es <= 2 (error leve de lectura)
-                        es_ced_valida_ocr = bool(id_limpio and validador.validar_cedula(id_limpio)[0])
-                        dist_id = comparacion_service._distancia_levenshtein(str(id_ofic), str(id_limpio or "")) if id_limpio else 99
-                        debe_corregir = (not es_ced_valida_ocr) or (dist_id <= 2)
 
-                        if debe_corregir:
-                            logger.info(
-                                f"[ExcelLookup] Auto-corrigiendo identificación por coincidencia de nombre '{nom_buscar}': "
-                                f"OCR leyó '{id_limpio or id_original_ocr}' -> Corregido a '{id_ofic}' desde planilla oficial Excel"
-                            )
-                            id_anterior = id_limpio or id_original_ocr
-                            id_limpio = id_ofic
-                            num_doc = id_ofic
-                            datos["identificacion"] = id_ofic
-                            encontrado_en_excel = True
-                            fuente_nombre = "excel_oficial"
+            verif = excel_lookup_service.verificar_exhaustiva_ocr_excel(
+                id_ocr=num_doc,
+                nombre_ocr=nom_ocr_cedula,
+                nombres_ocr=nombres_final if nombres_final != "POR REVISAR" else "",
+                apellidos_ocr=apellidos_final if apellidos_final != "POR REVISAR" else "",
+                lookup=excel_lookup,
+                texto_ocr=texto_ocr
+            )
 
-                        nom_comp_excel = reg_ofic.get("nombre_completo", "").strip()
-                        nom_excel = reg_ofic.get("nombres", "").strip()
-                        ape_excel = reg_ofic.get("apellidos", "").strip()
-                        nombre_excel_candidato = nom_comp_excel or f"{nom_excel} {ape_excel}".strip()
-                        if nombre_excel_candidato and len(nombre_excel_candidato) >= 3 and not _es_nombre_invalido(nombre_excel_candidato):
-                            nombre_completo_final = nombre_excel_candidato
-                            nombres_final = nom_excel or nombre_completo_final
-                            apellidos_final = ape_excel or ""
+            encontrado_en_excel = verif["encontrado_en_excel"]
+            fuente_nombre = verif["fuente_nombre"]
+            nombre_completo_final = verif["nombre_final"]
+            nombres_final = verif["nombres_final"]
+            apellidos_final = verif["apellidos_final"]
+            discrepancia_nombre_excel = verif["discrepancia_excel"]
+            id_corregido = verif["id_final"]
+            if verif.get("id_original_ocr"):
+                id_original_ocr = verif["id_original_ocr"]
 
-                        # Si la persona ya había sido consultada en BD con el ID erróneo anterior:
-                        query_existente = db.query(Persona).filter(Persona.numero_identificacion == id_ofic)
-                        if doc_usuario_id:
-                            query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
-                        persona_oficial = query_existente.first()
-
-                        if persona:
-                            if persona_oficial and persona_oficial.id != persona.id:
-                                logger.info(f"[ExcelLookup] Fusionando registro erróneo '{id_anterior}' con registro existente '{id_ofic}'")
-                                db.delete(persona)
-                                persona = persona_oficial
-                            else:
-                                persona.numero_identificacion = id_ofic
-                        elif persona_oficial:
-                            persona = persona_oficial
-
-            from app.services.spatial_field_extractor import spatial_field_extractor
-
-            if fuente_nombre == "excel_oficial" and nombre_excel_candidato:
-                nombre_completo_final = nombre_excel_candidato
-            else:
-                from app.services.spatial_field_extractor import spatial_field_extractor
-
-                # Limpiar ruidos residuales al final o inicio del nombre (ej: "RODRIGUEZ COLOMS" -> "RODRIGUEZ", "ICA DE ANTONIO JAVIER" -> "ANTONIO JAVIER")
-                if nombres_final and nombres_final != "POR REVISAR":
-                    toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                    while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
-                        toks.pop(0)
-                    nombres_final = " ".join(toks).strip() or "POR REVISAR"
-                if apellidos_final and apellidos_final != "POR REVISAR":
-                    toks = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                    while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
-                        toks.pop(0)
-                    apellidos_final = " ".join(toks).strip() or "POR REVISAR"
-
-                from app.utils.name_cleaner import resolver_nombre_completo
-
-                nombre_completo_final = resolver_nombre_completo(
-                    nombres=nombres_final if nombres_final != "POR REVISAR" else "",
-                    apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
-                    actual=nombre_completo_final
+            # Si hubo auto-corrección de identificación justificada y verificada
+            if id_corregido and str(id_corregido) != str(num_doc) and verif["fuente_identificacion"] == "corregido_desde_excel":
+                logger.info(
+                    f"[ExcelLookup] Auto-corrigiendo identificación por validación exhaustiva: "
+                    f"OCR='{num_doc}' -> Corregido a '{id_corregido}' desde planilla oficial Excel"
                 )
+                id_anterior = num_doc
+                num_doc = id_corregido
+                id_limpio = id_corregido
+                datos["identificacion"] = id_corregido
+
+                query_existente = db.query(Persona).filter(Persona.numero_identificacion == id_corregido)
+                if doc_usuario_id:
+                    query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
+                persona_oficial = query_existente.first()
+
+                if persona:
+                    if persona_oficial and persona_oficial.id != persona.id:
+                        logger.info(f"[ExcelLookup] Fusionando registro erróneo '{id_anterior}' con registro existente '{id_corregido}'")
+                        db.delete(persona)
+                        persona = persona_oficial
+                    else:
+                        persona.numero_identificacion = id_corregido
+                elif persona_oficial:
+                    persona = persona_oficial
+
+            # Limpieza complementaria si el nombre proviene del documento físico
+            if fuente_nombre == "cedula_fisica" and nombres_final and nombres_final != "POR REVISAR":
+                from app.services.spatial_field_extractor import spatial_field_extractor
+                toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                    toks.pop(0)
+                nombres_final = " ".join(toks).strip() or "POR REVISAR"
+
+                if apellidos_final and apellidos_final != "POR REVISAR":
+                    toks_a = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                    while toks_a and toks_a[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks_a) > 1:
+                        toks_a.pop(0)
+                    apellidos_final = " ".join(toks_a).strip() or "POR REVISAR"
+
+                if not nombre_completo_final or nombre_completo_final == "POR REVISAR":
+                    from app.utils.name_cleaner import resolver_nombre_completo
+                    nombre_completo_final = resolver_nombre_completo(
+                        nombres=nombres_final if nombres_final != "POR REVISAR" else "",
+                        apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
+                        actual=nom_ocr_cedula
+                    )
 
             # ── Evaluación definitiva de completitud y validez ──
             detalles_payload = dict(datos.get("detalles_campos") or {})
@@ -1086,7 +1019,9 @@ class OCRService:
                 estado_reg = "REVIEW_REQUIRED"
 
             if motivos_rev:
-                detalles_payload["motivos_revision"] = motivos_rev
+                detalles_payload["motivos_revision"] = list(motivos_rev)
+                if discrepancia_nombre_excel and discrepancia_nombre_excel.get("motivo") not in detalles_payload["motivos_revision"]:
+                    detalles_payload["motivos_revision"].insert(0, discrepancia_nombre_excel["motivo"])
             elif discrepancia_nombre_excel:
                 detalles_payload["motivos_revision"] = [discrepancia_nombre_excel["motivo"]]
 

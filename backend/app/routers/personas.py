@@ -230,10 +230,11 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
         r.en_pdf = p.documento_id is not None
 
     disc_excel = detalles.get("discrepancia_excel")
-    if isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
-        nom_ex_ofic = disc_excel["nombre_excel"].strip()
-        if nom_ex_ofic:
-            r.nombre_completo = nom_ex_ofic
+    if isinstance(disc_excel, dict):
+        r.discrepancia_excel = disc_excel
+        r.requiere_revision = True
+        if not r.estado_registro or r.estado_registro == "VALID":
+            r.estado_registro = "REVIEW_REQUIRED"
 
     # Evaluación de mayoría de edad vs tipo de documento
     edad_val = p.edad or validador.calcular_edad(p.fecha_nacimiento)
@@ -446,35 +447,44 @@ def listar_personas(
                         if (id_limp not in ids_en_excel) and (id_crudo not in ids_en_excel) and p.documento_id:
                             nom_p = str(p.nombre_completo or f"{p.nombres or ''} {p.apellidos or ''}").strip()
                             if nom_p and "POR REVISAR" not in nom_p:
-                                match = excel_lookup_service.buscar_por_nombre(nom_p, lookup_excel, id_ocr_candidato=id_limp)
-                                if match:
-                                    id_ofic, reg_ofic = match
-                                    from app.services.comparacion_service import comparacion_service
-                                    from app.utils.validators import validador
-                                    es_ced_valida_ocr = bool(id_limp and validador.validar_cedula(id_limp)[0])
-                                    dist_id = comparacion_service._distancia_levenshtein(str(id_ofic), str(id_limp or "")) if id_limp else 99
-                                    debe_corregir = (not es_ced_valida_ocr) or (dist_id <= 2)
-
-                                    if debe_corregir:
-                                        logger.info(f"[Personas] Auto-corrigiendo en BD por coincidencia de nombre '{nom_p}': '{p.numero_identificacion}' -> '{id_ofic}'")
-                                        detalles = dict(p.detalles_campos or {})
-                                        detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
-                                        detalles["origen_identificacion"] = "corregido_desde_excel"
-                                        detalles["numero_identificacion"] = {
-                                            "valor": id_ofic,
-                                            "value": id_ofic,
-                                            "confidence": 1.0,
-                                            "status": "VALID",
-                                            "source": "excel_oficial",
-                                            "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {p.numero_identificacion})"
-                                        }
-                                        nom_ex_ofic = reg_ofic.get("nombre_completo") or f"{reg_ofic.get('nombres', '')} {reg_ofic.get('apellidos', '')}".strip()
-                                        if nom_ex_ofic:
-                                            p.nombre_completo = nom_ex_ofic
-                                        p.numero_identificacion = id_ofic
+                                verif = excel_lookup_service.verificar_exhaustiva_ocr_excel(
+                                    id_ocr=p.numero_identificacion,
+                                    nombre_ocr=p.nombre_completo,
+                                    nombres_ocr=p.nombres,
+                                    apellidos_ocr=p.apellidos,
+                                    lookup=lookup_excel,
+                                    texto_ocr=p.texto_ocr_crudo
+                                )
+                                # Solo corregir si la verificación exhaustiva confirma con certeza la auto-corrección
+                                if verif["id_final"] and str(verif["id_final"]) != str(p.numero_identificacion) and verif["fuente_identificacion"] == "corregido_desde_excel":
+                                    id_ofic = verif["id_final"]
+                                    logger.info(f"[Personas] Auto-corrigiendo en BD por verificación exhaustiva: '{p.numero_identificacion}' -> '{id_ofic}'")
+                                    detalles = dict(p.detalles_campos or {})
+                                    detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
+                                    detalles["origen_identificacion"] = "corregido_desde_excel"
+                                    detalles["numero_identificacion"] = {
+                                        "valor": id_ofic,
+                                        "value": id_ofic,
+                                        "confidence": 1.0,
+                                        "status": "VALID",
+                                        "source": "excel_oficial",
+                                        "reason": f"Cédula corregida automáticamente desde la planilla oficial Excel (OCR leyó: {p.numero_identificacion})"
+                                    }
+                                    if verif.get("nombre_final") and verif["fuente_nombre"] == "excel_oficial":
+                                        p.nombre_completo = verif["nombre_final"]
+                                    p.numero_identificacion = id_ofic
+                                    p.detalles_campos = detalles
+                                    p.fecha_actualizacion = datetime.utcnow()
+                                    ids_en_excel.add(id_ofic)
+                                    hubo_cambios = True
+                                elif verif.get("discrepancia_excel"):
+                                    # Registrar discrepancia si se descubrió un conflicto real
+                                    detalles = dict(p.detalles_campos or {})
+                                    if not detalles.get("discrepancia_excel"):
+                                        detalles["discrepancia_excel"] = verif["discrepancia_excel"]
                                         p.detalles_campos = detalles
-                                        p.fecha_actualizacion = datetime.utcnow()
-                                        ids_en_excel.add(id_ofic)
+                                        p.requiere_revision = True
+                                        p.estado_registro = "REVIEW_REQUIRED"
                                         hubo_cambios = True
 
                     if hubo_cambios:

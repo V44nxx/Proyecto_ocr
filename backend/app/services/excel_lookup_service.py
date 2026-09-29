@@ -293,5 +293,270 @@ class ExcelLookupService:
 
         return candidatos[0]
 
+    def verificar_exhaustiva_ocr_excel(
+        self,
+        id_ocr: Optional[str],
+        nombre_ocr: Optional[str],
+        nombres_ocr: Optional[str] = None,
+        apellidos_ocr: Optional[str] = None,
+        lookup: Optional[Dict[str, Dict[str, str]]] = None,
+        texto_ocr: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Verificación exhaustiva bidireccional entre la información extraída por OCR
+        del documento físico y la planilla oficial de Excel.
+
+        Reglas estrictas de validación:
+        1. Valida si la cédula extraída por OCR está en Excel.
+        2. Si la cédula está en Excel, valida si el nombre del documento físico coincide
+           con el nombre registrado en Excel para esa cédula (en ambos lados).
+        3. Si la cédula pertenece a OTRA persona en Excel, NUNCA sobreescribe el nombre
+           del documento con el de Excel. Busca si el titular real existe en Excel con otro ID.
+           Si se confirma por texto del documento o distancia <= 2, auto-corrige el ID al oficial.
+           Si no, genera una alerta crítica de discrepancia y marca para revisión.
+        4. Si la cédula no está en Excel pero el nombre sí, solo auto-corrige la cédula si
+           la distancia es leve (<= 2) o la cédula de Excel figura en el texto del documento.
+           Si es un homónimo con cédula completamente diferente, conserva la cédula física del OCR.
+        """
+        from app.utils.validators import validador
+        from app.services.comparacion_service import comparacion_service
+        from app.utils.name_cleaner import resolver_nombre_completo
+
+        id_limpio = _limpiar_id(id_ocr) if id_ocr else ""
+        tiene_id_ocr = bool(id_limpio and not id_limpio.startswith("SIN_ID") and len(id_limpio) >= 5)
+
+        nom_crudo = resolver_nombre_completo(
+            nombres=nombres_ocr or "",
+            apellidos=apellidos_ocr or "",
+            actual=nombre_ocr or ""
+        ).strip()
+        nom_doc = _limpiar_texto(nom_crudo)
+
+        def _es_invalido(val: str) -> bool:
+            if not val or len(val) < 3 or val == "POR REVISAR":
+                return True
+            from app.services.spatial_field_extractor import spatial_field_extractor
+            from app.services.colombia_geo_service import colombia_geo
+            if colombia_geo.es_geografico(val):
+                return True
+            palabras = val.split()
+            if len(palabras) < 2 and len(val) < 6:
+                return True
+            return False
+
+        tiene_nom_doc = not _es_invalido(nom_doc)
+
+        # Si no hay lookup cargado, respetar fielmente los datos del documento OCR
+        if not lookup:
+            return {
+                "id_final": id_limpio if tiene_id_ocr else "",
+                "nombre_final": nom_doc if tiene_nom_doc else (nombre_ocr or "POR REVISAR"),
+                "nombres_final": nombres_ocr or (nom_doc if tiene_nom_doc else "POR REVISAR"),
+                "apellidos_final": apellidos_ocr or "",
+                "id_original_ocr": None,
+                "encontrado_en_excel": False,
+                "fuente_identificacion": "ocr_directo",
+                "fuente_nombre": "cedula_fisica",
+                "estado_registro": "VALID" if (tiene_id_ocr and tiene_nom_doc) else "REVIEW_REQUIRED",
+                "requiere_revision": not (tiene_id_ocr and tiene_nom_doc),
+                "discrepancia_excel": None,
+                "motivo": "Documento procesado por OCR (sin planilla Excel para cotejar)."
+            }
+
+        # ── CASO A: El número extraído por OCR figura en Excel ──
+        reg_id_excel = lookup.get(id_limpio) if tiene_id_ocr else None
+        if reg_id_excel:
+            nom_excel_para_id = reg_id_excel.get("nombre_completo", "").strip()
+
+            if tiene_nom_doc:
+                coinciden = comparacion_service._son_nombres_equivalentes(
+                    nombres_bd=nom_doc,
+                    apellidos_bd="",
+                    nombres_excel=nom_excel_para_id,
+                    apellidos_excel=""
+                )
+                if coinciden:
+                    # ── A.1: CORRESPONDENCIA TOTAL (Cédula y Nombre verificados en ambos lados) ──
+                    return {
+                        "id_final": id_limpio,
+                        "nombre_final": nom_excel_para_id or nom_doc,
+                        "nombres_final": reg_id_excel.get("nombres") or nom_excel_para_id,
+                        "apellidos_final": reg_id_excel.get("apellidos") or "",
+                        "id_original_ocr": None,
+                        "encontrado_en_excel": True,
+                        "fuente_identificacion": "ocr_verificado_excel",
+                        "fuente_nombre": "excel_oficial",
+                        "estado_registro": "VALID",
+                        "requiere_revision": False,
+                        "discrepancia_excel": None,
+                        "motivo": f"Verificación exhaustiva exitosa: Cédula {id_limpio} y Nombre corresponden en ambos lados."
+                    }
+                else:
+                    # ── A.2: DISCREPANCIA CRÍTICA: La cédula pertenece a otra persona en Excel ──
+                    # NUNCA sobreescribir el nombre del titular con el de la cédula equivocada
+                    match_nom = self.buscar_por_nombre(nom_doc, lookup, id_ocr_candidato=id_limpio)
+                    if match_nom:
+                        id_excel_titular, reg_nom = match_nom
+                        dist_id = comparacion_service._distancia_levenshtein(str(id_excel_titular), str(id_limpio))
+                        id_en_texto = bool(texto_ocr and str(id_excel_titular) in re.sub(r"[^\d]", "", texto_ocr))
+
+                        if dist_id <= 2 or id_en_texto:
+                            # Se detectó que el número OCR tenía un error menor de lectura, pero el titular es real
+                            return {
+                                "id_final": id_excel_titular,
+                                "nombre_final": reg_nom.get("nombre_completo") or nom_doc,
+                                "nombres_final": reg_nom.get("nombres") or "",
+                                "apellidos_final": reg_nom.get("apellidos") or "",
+                                "id_original_ocr": id_limpio,
+                                "encontrado_en_excel": True,
+                                "fuente_identificacion": "corregido_desde_excel",
+                                "fuente_nombre": "excel_oficial",
+                                "estado_registro": "VALID",
+                                "requiere_revision": False,
+                                "discrepancia_excel": None,
+                                "motivo": f"Cédula auto-corregida: OCR leyó '{id_limpio}' (asociada en Excel a '{nom_excel_para_id}'), pero el documento pertenece a '{nom_doc}' cuya cédula oficial es {id_excel_titular} confirmada en el documento."
+                            }
+                        else:
+                            mot_disc = (
+                                f"Discrepancia crítica: La cédula '{id_limpio}' leída por OCR pertenece a '{nom_excel_para_id}' en Excel, "
+                                f"pero el documento físico indica '{nom_doc}' (quien figura en Excel con cédula {id_excel_titular}). "
+                                f"Se conserva el nombre físico del documento."
+                            )
+                            return {
+                                "id_final": id_limpio,
+                                "nombre_final": nom_doc,
+                                "nombres_final": nombres_ocr or nom_doc,
+                                "apellidos_final": apellidos_ocr or "",
+                                "id_original_ocr": None,
+                                "encontrado_en_excel": False,
+                                "fuente_identificacion": "ocr_con_discrepancia",
+                                "fuente_nombre": "cedula_fisica",
+                                "estado_registro": "REVIEW_REQUIRED",
+                                "requiere_revision": True,
+                                "discrepancia_excel": {
+                                    "tipo": "conflicto_id_vs_nombre",
+                                    "id_ocr": id_limpio,
+                                    "nombre_cedula": nom_doc,
+                                    "nombre_excel_para_id": nom_excel_para_id,
+                                    "id_excel_para_nombre": id_excel_titular,
+                                    "motivo": mot_disc
+                                },
+                                "motivo": mot_disc
+                            }
+                    else:
+                        mot_disc = (
+                            f"Inconsistencia de titular: La cédula extraída ({id_limpio}) pertenece en la planilla oficial a "
+                            f"'{nom_excel_para_id}', pero el documento escaneado pertenece a '{nom_doc}'. "
+                            f"Se conserva el nombre físico del documento para evitar datos erróneos."
+                        )
+                        return {
+                            "id_final": id_limpio,
+                            "nombre_final": nom_doc,
+                            "nombres_final": nombres_ocr or nom_doc,
+                            "apellidos_final": apellidos_ocr or "",
+                            "id_original_ocr": None,
+                            "encontrado_en_excel": False,
+                            "fuente_identificacion": "ocr_con_discrepancia",
+                            "fuente_nombre": "cedula_fisica",
+                            "estado_registro": "REVIEW_REQUIRED",
+                            "requiere_revision": True,
+                            "discrepancia_excel": {
+                                "tipo": "id_pertenece_a_otro",
+                                "id_ocr": id_limpio,
+                                "nombre_cedula": nom_doc,
+                                "nombre_excel_para_id": nom_excel_para_id,
+                                "motivo": mot_disc
+                            },
+                            "motivo": mot_disc
+                        }
+            else:
+                # OCR no pudo leer el nombre pero la cédula sí existe en Excel
+                return {
+                    "id_final": id_limpio,
+                    "nombre_final": nom_excel_para_id,
+                    "nombres_final": reg_id_excel.get("nombres") or nom_excel_para_id,
+                    "apellidos_final": reg_id_excel.get("apellidos") or "",
+                    "id_original_ocr": None,
+                    "encontrado_en_excel": True,
+                    "fuente_identificacion": "ocr_verificado_excel",
+                    "fuente_nombre": "excel_oficial",
+                    "estado_registro": "VALID",
+                    "requiere_revision": False,
+                    "discrepancia_excel": None,
+                    "motivo": f"Cédula {id_limpio} verificada en Excel. Nombre oficial asignado desde la planilla."
+                }
+
+        # ── CASO B: La cédula extraída por OCR NO figura directamente en Excel ──
+        if tiene_nom_doc:
+            match_nom = self.buscar_por_nombre(nom_doc, lookup, id_ocr_candidato=id_limpio)
+            if match_nom:
+                id_excel_titular, reg_nom = match_nom
+                nom_excel = reg_nom.get("nombre_completo", "")
+
+                dist_id = comparacion_service._distancia_levenshtein(str(id_excel_titular), str(id_limpio)) if tiene_id_ocr else 99
+                id_en_texto = bool(texto_ocr and str(id_excel_titular) in re.sub(r"[^\d]", "", texto_ocr))
+                es_ced_valida_ocr = bool(tiene_id_ocr and validador.validar_cedula(id_limpio)[0])
+
+                # Auto-corrección estricta: solo si hay evidencia física de que la cédula de Excel corresponde a esta persona
+                debe_corregir = (dist_id <= 2) or id_en_texto or (not es_ced_valida_ocr and (dist_id <= 4 or id_en_texto or not tiene_id_ocr))
+
+                if debe_corregir:
+                    return {
+                        "id_final": id_excel_titular,
+                        "nombre_final": nom_excel or nom_doc,
+                        "nombres_final": reg_nom.get("nombres") or nom_excel,
+                        "apellidos_final": reg_nom.get("apellidos") or "",
+                        "id_original_ocr": id_limpio if tiene_id_ocr else None,
+                        "encontrado_en_excel": True,
+                        "fuente_identificacion": "corregido_desde_excel",
+                        "fuente_nombre": "excel_oficial",
+                        "estado_registro": "VALID",
+                        "requiere_revision": False,
+                        "discrepancia_excel": None,
+                        "motivo": f"Cédula oficial {id_excel_titular} verificada y asignada desde Excel por coincidencia de nombre '{nom_doc}'."
+                    }
+                else:
+                    mot_disc = (
+                        f"Posible homónimo o cédula diferente: El nombre coincide con '{nom_excel}' en Excel (Cédula: {id_excel_titular}), "
+                        f"pero el documento físico presenta la cédula '{id_limpio}'. No se sobrescribió para evitar un error de asignación."
+                    )
+                    return {
+                        "id_final": id_limpio,
+                        "nombre_final": nom_doc,
+                        "nombres_final": nombres_ocr or nom_doc,
+                        "apellidos_final": apellidos_ocr or "",
+                        "id_original_ocr": None,
+                        "encontrado_en_excel": False,
+                        "fuente_identificacion": "ocr_directo",
+                        "fuente_nombre": "cedula_fisica",
+                        "estado_registro": "REVIEW_REQUIRED",
+                        "requiere_revision": True,
+                        "discrepancia_excel": {
+                            "tipo": "nombre_en_excel_pero_id_diferente",
+                            "id_ocr": id_limpio,
+                            "nombre_cedula": nom_doc,
+                            "id_excel_homonimo": id_excel_titular,
+                            "nombre_excel": nom_excel,
+                            "motivo": mot_disc
+                        },
+                        "motivo": mot_disc
+                    }
+
+        # ── CASO C: Ni la cédula ni el nombre figuran en Excel ──
+        return {
+            "id_final": id_limpio if tiene_id_ocr else "",
+            "nombre_final": nom_doc if tiene_nom_doc else (nombre_ocr or "POR REVISAR"),
+            "nombres_final": nombres_ocr or (nom_doc if tiene_nom_doc else "POR REVISAR"),
+            "apellidos_final": apellidos_ocr or "",
+            "id_original_ocr": None,
+            "encontrado_en_excel": False,
+            "fuente_identificacion": "ocr_directo",
+            "fuente_nombre": "cedula_fisica",
+            "estado_registro": "VALID" if (tiene_id_ocr and tiene_nom_doc) else "REVIEW_REQUIRED",
+            "requiere_revision": not (tiene_id_ocr and tiene_nom_doc),
+            "discrepancia_excel": None,
+            "motivo": "Documento procesado por OCR (no figura en la planilla oficial de Excel)."
+        }
+
 
 excel_lookup_service = ExcelLookupService()

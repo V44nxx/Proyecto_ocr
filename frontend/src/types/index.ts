@@ -79,6 +79,8 @@ export interface Persona {
   en_excel?: boolean | null;
   /** True si la persona tiene documento PDF asociado */
   en_pdf?: boolean | null;
+  /** Objeto de discrepancia estructurada si hay conflicto entre el documento físico y Excel */
+  discrepancia_excel?: Record<string, any> | null;
 }
 
 export interface PersonaUpdate {

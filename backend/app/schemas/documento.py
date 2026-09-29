@@ -139,6 +139,8 @@ class PersonaResponse(PersonaBase):
     en_excel: Optional[bool] = None
     # Origen de datos: True si la persona tiene documento PDF asociado
     en_pdf: Optional[bool] = None
+    # Alerta estructurada si hay discrepancia entre la cédula física y la planilla Excel
+    discrepancia_excel: Optional[dict] = None
 
     class Config:
         from_attributes = True

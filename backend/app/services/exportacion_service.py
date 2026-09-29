@@ -23,12 +23,14 @@ class ExportacionService:
 
     COLUMNAS = {
         "numero_identificacion": "Número Identificación",
+        "tipo_documento": "Tipo de Documento",
         "nombre_completo": "Nombre Completo",
         "fecha_nacimiento": "Fecha Nacimiento",
         "edad": "Edad",
         "documento_origen": "Documento PDF Origen",
         "requiere_revision": "Requiere Revisión",
         "fecha_registro": "Fecha Registro",
+        "estado_hallazgo": "Estado / Hallazgo",
     }
 
     # Colores corporativos
@@ -37,6 +39,25 @@ class ExportacionService:
     COLOR_ALTROW = "EBF4FA"      # Azul muy claro
     COLOR_REVISION = "FFF3CD"    # Amarillo suave
     COLOR_OK = "D4EDDA"          # Verde suave
+
+    @staticmethod
+    def _resolver_tipo_documento(tipo_doc: Optional[str], texto_ocr: Optional[str] = None) -> str:
+        """Retorna el nombre formal y legible del tipo de documento"""
+        texto = (texto_ocr or "").upper()
+        tipo = str(tipo_doc or "").upper().strip()
+
+        if re.search(r"\b(PERMISO\s+POR\s+PROTECCI[OÓ]N\s+TEMPORAL|PERMISO\s+DE\s+PROTECCI[OÓ]N|PROTECCI[OÓ]N\s+TEMPORAL|PPT\b|P\.P\.T\b|VISIBLES)\b", texto) or "PPT" in tipo or "TEMPORAL" in tipo:
+            return "Permiso por Protección Temporal (PPT)"
+        if re.search(r"\b(C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|CEDULA\s+EXTRANJERIA|EXTRANJER[IÍ]A|C\.E\b|C\.E\.|RESIDENTE\s+N[O0]?\.?)\b", texto) or "EXTRANJERIA" in tipo or tipo in ("CE", "CEDULA_EXTRANJERIA"):
+            return "Cédula de Extranjería (CE)"
+        if re.search(r"\b(COMPROBANTE\s+DE\s+DOCUMENTO|EN\s+TR[AÁ]MITE|CONTRASE[NÑ]A)\b", texto) or "CONTRASEÑA" in tipo or "TRAMITE" in tipo:
+            return "Contraseña"
+        if re.search(r"\b(PASAPORTE|PASSPORT)\b", texto) or "PASAPORTE" in tipo or "PASSPORT" in tipo:
+            return "Pasaporte"
+        if re.search(r"\bTARJETA\s+(?:DE\s+)?(?:IDENTIDAD|IDENTIF[A-Z]*|IDENTID[A-Z0-9]*|DENTIDAD)\b|\bTARJETADEIDENTIDAD\b|\bT\.?\s*I\.?\b", texto) or tipo in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD"):
+            return "Tarjeta de Identidad (TI)"
+
+        return "Cédula de Ciudadanía (CC)"
 
     def exportar_personas(self, db: Session, filtros: Optional[dict] = None) -> str:
         """
@@ -106,6 +127,10 @@ class ExportacionService:
         # Convertir a DataFrame
         datos = []
         from app.utils.name_cleaner import resolver_nombre_completo
+        from app.routers.personas import _obtener_ids_en_excel
+
+        usuario_id = filtros.get("usuario_id") if filtros else None
+        ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario_id)
 
         # Si se filtró por documento_id y la tabla activa no tiene personas (ej. vaciada),
         # recurrir al snapshot guardado en los metadatos del documento
@@ -133,27 +158,107 @@ class ExportacionService:
                             continue
 
                     nom_comp = resolver_nombre_completo(p_snap.get("nombres"), p_snap.get("apellidos"), p_snap.get("nombre_completo"))
+                    tipo_doc_fmt = self._resolver_tipo_documento(p_snap.get("tipo_documento"))
+
+                    en_pdf = p_snap.get("en_pdf", True)
+                    en_excel = p_snap.get("en_excel")
+                    if en_excel is None and hay_excel:
+                        num_crudo = str(p_snap.get("numero_identificacion") or "").strip()
+                        num_limpio = re.sub(r"[^\d]", "", num_crudo)
+                        en_excel = bool((num_limpio and num_limpio in ids_en_excel) or (num_crudo and num_crudo in ids_en_excel))
+
+                    es_aprobado = bool(p_snap.get("aprobado_manual") or not p_snap.get("requiere_revision"))
+
+                    if es_aprobado:
+                        estado_hallazgo = "Válido"
+                    elif not en_pdf and (en_excel is False):
+                        estado_hallazgo = "No está en el PDF ni en el Excel"
+                    elif not en_pdf:
+                        estado_hallazgo = "No está en el PDF"
+                    elif en_excel is False:
+                        estado_hallazgo = "No está en el Excel"
+                    else:
+                        estado_hallazgo = "Válido"
+
                     datos.append({
                         "numero_identificacion": p_snap.get("numero_identificacion") or "",
+                        "tipo_documento": tipo_doc_fmt,
                         "nombre_completo": nom_comp,
                         "fecha_nacimiento": p_snap.get("fecha_nacimiento") or "",
                         "edad": p_snap.get("edad") if p_snap.get("edad") is not None else "",
                         "documento_origen": doc.nombre_original,
                         "requiere_revision": "SÍ" if p_snap.get("requiere_revision") else "NO",
                         "fecha_registro": doc.fecha_carga.strftime("%d/%m/%Y %H:%M") if doc.fecha_carga else "",
+                        "estado_hallazgo": estado_hallazgo,
                     })
 
         for p in personas:
             nom_comp = resolver_nombre_completo(p.nombres, p.apellidos, p.nombre_completo)
             doc_nombre = p.documento.nombre_original if p.documento else "Sin documento"
+            tipo_doc_fmt = self._resolver_tipo_documento(p.tipo_documento, p.texto_ocr_crudo)
+
+            detalles = dict(p.detalles_campos or {})
+
+            # 1. Presencia en PDF
+            if detalles.get("en_pdf") is True or getattr(p, "documento_pdf_id", None) is not None:
+                en_pdf = True
+            elif detalles.get("en_pdf") is False or p.motor_ocr == "excel":
+                en_pdf = False
+            else:
+                en_pdf = p.documento_id is not None
+
+            # 2. Presencia en Excel
+            disc_excel = detalles.get("discrepancia_excel")
+            evidencia_excel = (
+                p.motor_ocr == "excel"
+                or bool(disc_excel)
+                or detalles.get("origen") == "excel_no_encontrado_en_pdf"
+                or (isinstance(detalles.get("nombre_completo"), dict) and detalles["nombre_completo"].get("source") == "excel_oficial")
+                or (isinstance(detalles.get("numero_identificacion"), dict) and detalles["numero_identificacion"].get("source") == "excel_oficial")
+                or (isinstance(detalles.get("nombres"), dict) and detalles["nombres"].get("source") == "excel_oficial")
+            )
+
+            if evidencia_excel:
+                en_excel = True
+            elif hay_excel:
+                id_crudo = str(p.numero_identificacion or "").strip()
+                id_limpio = re.sub(r"[^\d]", "", id_crudo)
+                en_excel = bool(
+                    (id_limpio and id_limpio in ids_en_excel) or
+                    (id_crudo and id_crudo in ids_en_excel)
+                )
+            else:
+                en_excel = None
+
+            # 3. Estado / Hallazgo
+            es_aprobado = bool(
+                p.requiere_revision is False
+                or p.estado_registro == "VALID"
+                or detalles.get("aprobado_manual")
+                or detalles.get("validado_manual")
+            )
+
+            if es_aprobado:
+                estado_hallazgo = "Válido"
+            elif not en_pdf and (en_excel is False):
+                estado_hallazgo = "No está en el PDF ni en el Excel"
+            elif not en_pdf:
+                estado_hallazgo = "No está en el PDF"
+            elif en_excel is False:
+                estado_hallazgo = "No está en el Excel"
+            else:
+                estado_hallazgo = "Válido"
+
             datos.append({
                 "numero_identificacion": p.numero_identificacion,
+                "tipo_documento": tipo_doc_fmt,
                 "nombre_completo": nom_comp,
                 "fecha_nacimiento": p.fecha_nacimiento.isoformat() if p.fecha_nacimiento else "",
                 "edad": p.edad if p.edad is not None else "",
                 "documento_origen": doc_nombre,
                 "requiere_revision": "SÍ" if p.requiere_revision else "NO",
                 "fecha_registro": p.fecha_registro.strftime("%d/%m/%Y %H:%M") if p.fecha_registro else "",
+                "estado_hallazgo": estado_hallazgo,
             })
 
         df = pd.DataFrame(datos, columns=list(self.COLUMNAS.keys()))
@@ -252,14 +357,16 @@ class ExportacionService:
             cell.border = borde
         ws.row_dimensions[3].height = 30
 
-        # Ajustar ancho de columnas y formatear datos
-        anchos = [22, 34, 18, 12, 32, 18, 20]
+        # Ajustar ancho de columnas y formatear datos (9 columnas profesionales)
+        anchos = [22, 26, 34, 18, 10, 32, 18, 20, 26]
         for i, ancho in enumerate(anchos, start=1):
             if i <= len(self.COLUMNAS):
                 ws.column_dimensions[get_column_letter(i)].width = ancho
 
         col_edad_idx = list(self.COLUMNAS.keys()).index("edad") + 1
+        col_tipo_doc_idx = list(self.COLUMNAS.keys()).index("tipo_documento") + 1
         col_revision_idx = list(self.COLUMNAS.keys()).index("requiere_revision") + 1
+        col_hallazgo_idx = list(self.COLUMNAS.keys()).index("estado_hallazgo") + 1
 
         # Estilos especiales para menores de edad
         relleno_menor_fila = PatternFill(
@@ -274,6 +381,12 @@ class ExportacionService:
         )
         fuente_menor_edad = Font(name="Calibri", size=11, bold=True, color="9C0006")
         fuente_menor_fila = Font(name="Calibri", size=10, color="500000")
+
+        # Estilos para estado / hallazgo
+        relleno_valido = PatternFill(start_color="D4EDDA", end_color="D4EDDA", fill_type="solid")
+        fuente_valido = Font(name="Calibri", size=10, bold=True, color="155724")
+        relleno_hallazgo_alerta = PatternFill(start_color="F8D7DA", end_color="F8D7DA", fill_type="solid")
+        fuente_hallazgo_alerta = Font(name="Calibri", size=10, bold=True, color="721C24")
 
         # Formatear filas de datos
         for row_num in range(4, total_filas + 4):
@@ -309,12 +422,27 @@ class ExportacionService:
                     cell.fill = relleno_ok
                     cell.font = fuente_datos
 
+            # Formato específico para celda Tipo de Documento
+            cell_tipo = ws.cell(row=row_num, column=col_tipo_doc_idx)
+            cell_tipo.alignment = Alignment(horizontal="center", vertical="center")
+
             # Destacar celda de EDAD en ROJO ALERTA si es menor de edad
             if es_menor:
                 cell_edad = ws.cell(row=row_num, column=col_edad_idx)
                 cell_edad.fill = relleno_menor_edad
                 cell_edad.font = fuente_menor_edad
                 cell_edad.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Formato y destaque visual para columna Estado / Hallazgo
+            cell_hallazgo = ws.cell(row=row_num, column=col_hallazgo_idx)
+            cell_hallazgo.alignment = Alignment(horizontal="center", vertical="center")
+            val_h = str(cell_hallazgo.value or "").strip()
+            if val_h == "Válido":
+                cell_hallazgo.fill = relleno_valido
+                cell_hallazgo.font = fuente_valido
+            elif "No está en" in val_h:
+                cell_hallazgo.fill = relleno_hallazgo_alerta
+                cell_hallazgo.font = fuente_hallazgo_alerta
 
             ws.row_dimensions[row_num].height = 20
 

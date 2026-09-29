@@ -100,12 +100,10 @@ def _obtener_ids_en_excel(db: Session, usuario_id) -> tuple[Set[str], bool]:
         from app.models.diferencia import Diferencia
 
         # 1. Buscar comparaciones del usuario
-        comp_query = (
-            db.query(Comparacion)
-            .filter(Comparacion.usuario_id == usuario_id)
-            .order_by(Comparacion.fecha_carga.desc())
-        )
-        comparaciones = comp_query.all()
+        comp_query = db.query(Comparacion)
+        if usuario_id:
+            comp_query = comp_query.filter(Comparacion.usuario_id == usuario_id)
+        comparaciones = comp_query.order_by(Comparacion.fecha_carga.desc()).all()
         if not comparaciones:
             return set(), False
 

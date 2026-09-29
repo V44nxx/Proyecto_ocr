@@ -232,9 +232,11 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
     disc_excel = detalles.get("discrepancia_excel")
     if isinstance(disc_excel, dict):
         r.discrepancia_excel = disc_excel
-        r.requiere_revision = True
-        if not r.estado_registro or r.estado_registro == "VALID":
-            r.estado_registro = "REVIEW_REQUIRED"
+        # Mantener la alerta y revisión activa solo si la persona no ha sido aprobada manualmente
+        if p.requiere_revision is not False and not disc_excel.get("aprobado_manual"):
+            r.requiere_revision = True
+            if not r.estado_registro or r.estado_registro == "VALID":
+                r.estado_registro = "REVIEW_REQUIRED"
 
     # Evaluación de mayoría de edad vs tipo de documento
     edad_val = p.edad or validador.calcular_edad(p.fecha_nacimiento)
@@ -583,6 +585,8 @@ def actualizar_persona(
         if not datos.requiere_revision:
             persona.estado_registro = "VALID"
             det.pop("motivos_revision", None)
+            if isinstance(det.get("discrepancia_excel"), dict):
+                det["discrepancia_excel"]["aprobado_manual"] = True
         else:
             persona.estado_registro = "REVIEW_REQUIRED"
         persona.detalles_campos = det

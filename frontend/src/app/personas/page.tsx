@@ -423,6 +423,54 @@ function PersonasContent() {
     }
   };
 
+  const aplicarNombreConflicto = async (p: Persona, nuevoNombre: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!nuevoNombre || !nuevoNombre.trim()) return;
+    const nombreLimpio = nuevoNombre.trim().toUpperCase();
+
+    // 1. Si está en modo edición, sincronizar el formulario
+    if (editando === p.id) {
+      setEditForm(prev => ({
+        ...prev,
+        nombre_completo: nombreLimpio,
+        nombres: nombreLimpio,
+        apellidos: ""
+      }));
+    }
+
+    // 2. Actualizar inmediatamente en el estado de la tabla (UI feedback instantáneo)
+    setPersonas(prev => prev.map(item => {
+      if (item.id === p.id) {
+        return {
+          ...item,
+          nombre_completo: nombreLimpio,
+          nombres: nombreLimpio,
+          apellidos: "",
+          // La alerta se mantiene activa como solicitó el usuario
+          requiere_revision: true,
+        };
+      }
+      return item;
+    }));
+
+    try {
+      // 3. Persistir en base de datos conservando la revisión requerida activa
+      await apiPersonas.actualizar(p.id, {
+        nombre_completo: nombreLimpio,
+        nombres: nombreLimpio,
+        apellidos: "",
+        requiere_revision: true,
+      });
+      toast.success(
+        `Nombre sobreescrito a "${nombreLimpio}". La alerta continuará activa hasta que haga clic en "Aprobar y Validar".`,
+        { id: `conflicto-nombre-${p.id}`, duration: 5500 }
+      );
+    } catch (err) {
+      console.error("Error al actualizar nombre desde conflicto:", err);
+      toast.error("Error al actualizar el nombre en el servidor", { id: `conflicto-nombre-err-${p.id}` });
+    }
+  };
+
   // Filtrado local por estado y cédula / nombre
   const personasFiltradas = (personas || []).filter((p) => {
     if (!p) return false;
@@ -840,6 +888,26 @@ function PersonasContent() {
               const nombreExcelParaId = typeof disc === "object" ? (disc.nombre_excel_para_id || disc.nombre_excel) : "";
               const idExcelParaNombre = typeof disc === "object" ? (disc.id_excel_para_nombre || disc.id_excel_homonimo) : "";
               const motivo = typeof disc === "object" ? disc.motivo : "Discrepancia entre la cédula leída por OCR y la planilla oficial Excel.";
+              const estaAprobadoManual = Boolean(disc?.aprobado_manual || (!p.requiere_revision && p.estado_registro === "VALID"));
+
+              if (estaAprobadoManual) {
+                return (
+                  <div className="m-2.5 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/70 text-emerald-950 dark:text-emerald-100 shadow-sm min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                        Discrepancia Verificada y Aprobada
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-800 dark:text-emerald-200 ml-7 font-medium">
+                      El registro ha sido validado manualmente con el nombre: <strong className="font-extrabold text-emerald-950 dark:text-white font-mono">{p.nombre_completo}</strong>.
+                    </p>
+                  </div>
+                );
+              }
+
+              const esNombreCedulaActivo = p.nombre_completo === nombreCedula;
+              const esNombreExcelActivo = nombreExcelParaId && p.nombre_completo === nombreExcelParaId;
 
               return (
                 <div className="m-2.5 p-4 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 dark:from-rose-950/40 dark:to-amber-950/30 border-2 border-rose-500 dark:border-rose-500/80 text-rose-950 dark:text-rose-100 shadow-lg min-w-0">
@@ -849,45 +917,122 @@ function PersonasContent() {
                       Discrepancia Crítica: Verificación Cédula Física (OCR) vs Planilla Oficial Excel
                     </span>
                   </div>
-                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-3 font-semibold leading-relaxed">
+                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-2 font-semibold leading-relaxed">
                     {motivo}
                   </p>
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 ml-7 mb-3 font-medium bg-white/70 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                    💡 <strong>Instrucción rápida:</strong> Haga clic en el botón <strong>"Usar este nombre"</strong> de la opción correcta para sobreescribir el nombre completo sin tener que escribirlo todo a mano. La alerta continuará visible para su revisión hasta que haga clic en <strong>"Aprobar y Validar"</strong>.
+                  </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-7 text-xs">
-                    <div className="p-3 rounded-lg bg-white/95 dark:bg-slate-900/90 border border-amber-300 dark:border-amber-600/50 shadow-sm">
-                      <div className="text-[11px] uppercase font-bold text-amber-900 dark:text-amber-400 flex items-center gap-1.5 mb-1">
-                        <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                        <span>Documento Físico Escaneado (PDF)</span>
+                    {/* Caja 1: Documento Físico (PDF) */}
+                    <div className={`p-3 rounded-lg border transition-all ${
+                      esNombreCedulaActivo
+                        ? "bg-amber-100/90 dark:bg-amber-950/70 border-amber-500 shadow-md ring-2 ring-amber-400/50"
+                        : "bg-white/95 dark:bg-slate-900/90 border-amber-300 dark:border-amber-600/50 shadow-sm"
+                    }`}>
+                      <div className="text-[11px] uppercase font-bold text-amber-900 dark:text-amber-400 flex items-center justify-between gap-1.5 mb-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Documento Físico Escaneado (PDF)</span>
+                        </span>
+                        {esNombreCedulaActivo && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600 text-white font-extrabold flex items-center gap-0.5">
+                            <Check className="w-2.5 h-2.5" /> Nombre Actual
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1 space-y-1">
+                      <div className="space-y-2">
                         <div>
                           <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula Extraída:</span>{" "}
                           <span className="font-extrabold text-slate-900 dark:text-white font-mono">{idOcr || p.numero_identificacion}</span>
                         </div>
                         <div>
-                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Titular en Documento:</span>{" "}
-                          <span className="font-extrabold text-amber-900 dark:text-amber-300">{nombreCedula || p.nombre_completo}</span>
+                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium block">Titular en Documento:</span>
+                          <span className="font-extrabold text-amber-900 dark:text-amber-300 text-sm block mt-0.5 break-words">
+                            {nombreCedula || p.nombre_completo}
+                          </span>
                         </div>
+                        {nombreCedula && (
+                          <button
+                            type="button"
+                            onClick={(e) => aplicarNombreConflicto(p, nombreCedula, e)}
+                            className={`w-full mt-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                              esNombreCedulaActivo
+                                ? "bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-400 dark:border-amber-700"
+                                : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm hover:scale-[1.01]"
+                            }`}
+                          >
+                            {esNombreCedulaActivo ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Nombre actualmente en la tabla</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>👆 Usar nombre del Documento</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-white/95 dark:bg-slate-900/90 border border-blue-300 dark:border-blue-600/50 shadow-sm">
-                      <div className="text-[11px] uppercase font-bold text-blue-900 dark:text-blue-400 flex items-center gap-1.5 mb-1">
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Registro en Planilla Excel</span>
+                    {/* Caja 2: Registro en Planilla Excel */}
+                    <div className={`p-3 rounded-lg border transition-all ${
+                      esNombreExcelActivo
+                        ? "bg-blue-100/90 dark:bg-blue-950/70 border-blue-500 shadow-md ring-2 ring-blue-400/50"
+                        : "bg-white/95 dark:bg-slate-900/90 border-blue-300 dark:border-blue-600/50 shadow-sm"
+                    }`}>
+                      <div className="text-[11px] uppercase font-bold text-blue-900 dark:text-blue-400 flex items-center justify-between gap-1.5 mb-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Registro en Planilla Excel</span>
+                        </span>
+                        {esNombreExcelActivo && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-extrabold flex items-center gap-0.5">
+                            <Check className="w-2.5 h-2.5" /> Nombre Actual
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1 space-y-1">
+                      <div className="space-y-2">
                         {nombreExcelParaId ? (
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Persona registrada con esa Cédula:</span>{" "}
-                            <span className="font-extrabold text-blue-950 dark:text-blue-200">{nombreExcelParaId}</span>
-                          </div>
+                          <>
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium block">Persona registrada con esa Cédula:</span>
+                              <span className="font-extrabold text-blue-950 dark:text-blue-200 text-sm block mt-0.5 break-words">
+                                {nombreExcelParaId}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => aplicarNombreConflicto(p, nombreExcelParaId, e)}
+                              className={`w-full mt-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                esNombreExcelActivo
+                                  ? "bg-blue-200 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 border border-blue-400 dark:border-blue-700"
+                                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:scale-[1.01]"
+                              }`}
+                            >
+                              {esNombreExcelActivo ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Nombre actualmente en la tabla</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>👆 Usar nombre oficial de Excel</span>
+                                </>
+                              )}
+                            </button>
+                          </>
                         ) : null}
+
                         {idExcelParaNombre ? (
-                          <div>
+                          <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
                             <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula oficial del titular en Excel:</span>{" "}
                             <span className="font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">{idExcelParaNombre}</span>
                           </div>
                         ) : null}
+
                         {!nombreExcelParaId && !idExcelParaNombre ? (
                           <div className="text-slate-600 dark:text-slate-400 italic text-[11px]">
                             La cédula leída no se encuentra asignada al titular en la planilla.
@@ -896,9 +1041,23 @@ function PersonasContent() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 ml-7 text-[11px] flex items-center gap-1.5 text-rose-800 dark:text-rose-300 font-medium bg-rose-100/60 dark:bg-rose-950/60 py-1.5 px-3 rounded-lg border border-rose-300/60 dark:border-rose-800/60">
-                    <span>🛡️</span>
-                    <span>El sistema preservó el nombre del documento físico escaneado para evitar asociar a otra persona indebidamente. Corrija manualmente si se trató de un error de lectura de cédula.</span>
+
+                  {/* Barra inferior de estado y aprobación directa */}
+                  <div className="mt-3 ml-7 p-2.5 rounded-lg bg-rose-100/70 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-slate-600 dark:text-slate-300 text-[11px] font-medium shrink-0">Nombre en la tabla:</span>
+                      <strong className="font-extrabold text-slate-900 dark:text-white truncate font-mono bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded border border-rose-300/50 dark:border-rose-700/50">
+                        {p.nombre_completo || "SIN NOMBRE"}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => aprobarRevision(p.id, e)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all shrink-0 cursor-pointer"
+                      title="Confirmar datos y marcar como válido"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
+                    </button>
                   </div>
                 </div>
               );

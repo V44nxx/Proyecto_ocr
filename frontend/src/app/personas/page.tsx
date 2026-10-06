@@ -1670,174 +1670,174 @@ function PersonasContent() {
             <button
               onClick={exportarVistaActual}
               disabled={exportando || personas.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950/30 border border-emerald-500/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+              className="btn-primary text-xs !py-2 !px-3.5 !rounded-xl !bg-[#34C759] hover:!bg-[#2fb350] shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
               title="Exportar registros mostrados a Excel (.xlsx)"
             >
-              <Download className="w-4 h-4 shrink-0 text-white" />
+              <Download className="w-3.5 h-3.5 shrink-0 text-white" />
               <span>Exportar a Excel</span>
             </button>
             <button
               onClick={() => setModalVaciarAbierto(true)}
               disabled={personas.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs font-bold transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+              className="btn-danger text-xs !py-2 !px-3.5 !rounded-xl shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap flex items-center gap-1.5"
               title={filtroDocumento !== "todos" ? "Vaciar personas de este archivo" : "Vaciar todas las personas de la tabla"}
             >
-              <Trash2 className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
               <span>Vaciar Tabla</span>
             </button>
           </div>
         </div>
 
         {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas (5 estados) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
           {/* Card 1: Total por Archivo o General */}
           <div
             onClick={() => setFiltroEstado("todos")}
-            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "todos"
-                ? "border-primary-500/60 ring-2 ring-primary-500/30 bg-primary-50/60 dark:bg-primary-500/10"
-                : "border-slate-200 dark:border-slate-800/80 hover:border-slate-400 dark:hover:border-slate-700"
+                ? "border-[#0071E3]/60 ring-1 ring-[#0071E3]/30 bg-[#0071E3]/[0.08]"
+                : "hover:border-slate-300 dark:hover:border-white/15"
             }`}
             title={filtroDocumento !== "todos" ? "Mostrar todas las personas de este archivo" : "Mostrar todas las personas registradas"}
           >
             <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {filtroDocumento !== "todos" ? "Total Archivo" : "Total Registradas"}
               </p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.total}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-feature-settings-tnum">{stats.total}</span>
+                <span className="text-[11px] text-slate-400">
                   {filtroDocumento !== "todos" ? "en archivo" : "en sistema"}
                 </span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-500/15 border border-primary-200 dark:border-primary-500/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
-              <Users className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#0071E3]/10 border border-[#0071E3]/20 flex items-center justify-center text-[#0071E3]">
+              <Users className="w-4 h-4" />
             </div>
           </div>
 
           {/* Card 2: Válidas */}
           <div
             onClick={() => setFiltroEstado("validas")}
-            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "validas"
-                ? "border-emerald-500/70 ring-2 ring-emerald-500/40 bg-emerald-50/60 dark:bg-emerald-500/10"
-                : "border-slate-200 dark:border-slate-800/80 hover:border-emerald-500/40"
+                ? "border-[#34C759]/60 ring-1 ring-[#34C759]/30 bg-[#34C759]/[0.08]"
+                : "hover:border-emerald-500/30"
             }`}
             title="Clic para ver solo personas con datos válidos y presentes"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400/90 uppercase tracking-wider">Válidos</p>
+                <p className="text-[11px] font-semibold text-[#34C759] uppercase tracking-wider">Válidos</p>
                 {filtroEstado === "validas" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
+                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#34C759]/20 text-[#34C759] border border-[#34C759]/30">
                     Activo
                   </span>
                 )}
               </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.validas}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">completos</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-bold text-[#34C759] tracking-tight font-feature-settings-tnum">{stats.validas}</span>
+                <span className="text-[11px] text-slate-400">completos</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <CheckCircle className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#34C759]/10 border border-[#34C759]/20 flex items-center justify-center text-[#34C759]">
+              <CheckCircle className="w-4 h-4" />
             </div>
           </div>
 
           {/* Card 3: Por Revisar */}
           <div
             onClick={() => setFiltroEstado("revision")}
-            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "revision"
-                ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-50/60 dark:bg-amber-500/10"
-                : "border-slate-200 dark:border-slate-800/80 hover:border-amber-500/40"
+                ? "border-[#FF9500]/60 ring-1 ring-[#FF9500]/30 bg-[#FF9500]/[0.08]"
+                : "hover:border-amber-500/30"
             }`}
             title="Clic para ver personas con datos incompletos pendientes de revisión"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400/90 uppercase tracking-wider">Por Revisar</p>
+                <p className="text-[11px] font-semibold text-[#FF9500] uppercase tracking-wider">Por Revisar</p>
                 {filtroEstado === "revision" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 animate-pulse">
+                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30">
                     Activo
                   </span>
                 )}
               </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{stats.revision}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">incompletos</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-bold text-[#FF9500] tracking-tight font-feature-settings-tnum">{stats.revision}</span>
+                <span className="text-[11px] text-slate-400">pendientes</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#FF9500]/10 border border-[#FF9500]/20 flex items-center justify-center text-[#FF9500]">
+              <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
 
           {/* Card 4: Menores de 14 Años */}
           <div
             onClick={() => setFiltroEstado("menores")}
-            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "menores"
-                ? "border-rose-500/70 ring-2 ring-rose-500/40 bg-rose-50/60 dark:bg-rose-500/10"
-                : "border-slate-200 dark:border-slate-800/80 hover:border-rose-500/40"
+                ? "border-[#FF3B30]/60 ring-1 ring-[#FF3B30]/30 bg-[#FF3B30]/[0.08]"
+                : "hover:border-rose-500/30"
             }`}
             title="Clic para ver personas menores de 14 años detectadas"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-rose-700 dark:text-rose-400/90 uppercase tracking-wider">Menores (&lt; 14)</p>
+                <p className="text-[11px] font-semibold text-[#FF3B30] uppercase tracking-wider">Menores (&lt; 14)</p>
                 {filtroEstado === "menores" && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 animate-pulse">
+                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#FF3B30]/20 text-[#FF3B30] border border-[#FF3B30]/30">
                     Activo
                   </span>
                 )}
               </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{stats.menores}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">detectados</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-bold text-[#FF3B30] tracking-tight font-feature-settings-tnum">{stats.menores}</span>
+                <span className="text-[11px] text-slate-400">detectados</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30]">
+              <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
 
           {/* Card 5: Falta en PDF o Excel */}
           <div
             onClick={() => setFiltroEstado("discrepancia")}
-            className={`cursor-pointer bg-white dark:bg-slate-900/80 border rounded-2xl p-4 flex items-center justify-between backdrop-blur-md shadow-sm dark:shadow-lg transition-all ${
+            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
-                ? "border-purple-500/70 ring-2 ring-purple-500/40 bg-purple-50/60 dark:bg-purple-500/10"
-                : "border-slate-200 dark:border-slate-800/80 hover:border-purple-500/40"
+                ? "border-purple-500/60 ring-1 ring-purple-500/30 bg-purple-500/[0.08]"
+                : "hover:border-purple-500/30"
             }`}
             title="Clic para ver personas que faltan en PDF o en la planilla Excel"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400/90 uppercase tracking-wider">Falta PDF / Excel</p>
+                <p className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Falta PDF / Excel</p>
                 {(filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel") && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 animate-pulse">
+                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30">
                     Activo
                   </span>
                 )}
               </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-purple-600 dark:text-purple-400">{stats.discrepancia}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">faltantes</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 tracking-tight font-feature-settings-tnum">{stats.discrepancia}</span>
+                <span className="text-[11px] text-slate-400">faltantes</span>
               </div>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-500/15 border border-purple-200 dark:border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-              <AlertCircle className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500">
+              <AlertCircle className="w-4 h-4" />
             </div>
           </div>
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 mb-5">
           {/* Búsqueda unificada por cédula, nombres o apellidos */}
           <div className="md:col-span-5 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               id="buscar-persona"
               type="text"
@@ -1845,23 +1845,23 @@ function PersonasContent() {
               value={buscar}
               onChange={(e) => setBuscar(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
-              placeholder="Buscar por número de cédula o nombre y apellidos..."
-              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all shadow-sm font-mono sm:font-sans"
+              placeholder="Buscar por cédula o nombre y apellidos..."
+              className="w-full pl-9 pr-9 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/40 transition-all shadow-sm h-10"
             />
             {buscar && (
               <button
                 onClick={() => { setBuscar(""); cargarPersonas(true); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
                 title="Limpiar búsqueda"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
           {/* Selector de Documento PDF */}
           <div className="md:col-span-3 relative">
-            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-600 dark:text-primary-400 pointer-events-none" />
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0071E3] pointer-events-none" />
             <select
               value={filtroDocumento}
               onChange={(e) => {
@@ -1877,15 +1877,15 @@ function PersonasContent() {
                   }
                 }
               }}
-              className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-primary-500 font-semibold truncate cursor-pointer shadow-sm"
+              className="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] font-medium truncate cursor-pointer shadow-sm h-10"
               title="Filtrar por archivo PDF de origen"
             >
               <option value="todos">
-                🌐 Ver todos los archivos ({documentos.length} PDFs{totalPersonasGlobal ? ` - Total: ${totalPersonasGlobal} personas` : ""})
+                🌐 Ver todos los archivos ({documentos.length} PDFs{totalPersonasGlobal ? ` - ${totalPersonasGlobal} personas` : ""})
               </option>
               {documentos.map((d, index) => (
                 <option key={d.id} value={d.id}>
-                  📄 {d.nombre_original} {index === 0 ? "★ (Último archivo enviado)" : ""}
+                  📄 {d.nombre_original} {index === 0 ? "★ (Último)" : ""}
                 </option>
               ))}
             </select>
@@ -1896,17 +1896,7 @@ function PersonasContent() {
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
-              className={`w-full py-2.5 px-3 border rounded-xl text-xs font-semibold cursor-pointer shadow-sm transition-all ${
-                filtroEstado === "revision"
-                  ? "border-amber-500 text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10"
-                  : filtroEstado === "validas"
-                  ? "border-emerald-500 text-emerald-900 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10"
-                  : filtroEstado === "menores"
-                  ? "border-rose-500 text-rose-900 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10"
-                  : filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
-                  ? "border-purple-500 text-purple-900 dark:text-purple-300 bg-purple-50 dark:bg-purple-500/10"
-                  : "bg-white dark:bg-slate-900/90 border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-200"
-              }`}
+              className="w-full px-3 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] cursor-pointer shadow-sm h-10 transition-all"
               title="Filtrar por estado del registro"
             >
               <option value="todos">📋 Todos los estados ({stats.total})</option>
@@ -1923,26 +1913,26 @@ function PersonasContent() {
           <div className="md:col-span-1 flex justify-end">
             <button
               onClick={recargarManual}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700/60 rounded-xl text-xs font-semibold transition-all shadow-sm cursor-pointer"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 btn-secondary !h-10 !rounded-xl !p-0 shadow-sm cursor-pointer"
               title="Recargar datos manualmente"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-primary-600 dark:text-primary-400 ${cargando ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-[#0071E3] ${cargando ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
 
         {/* Barra Flotante de Selección y Exportación Múltiple */}
         {seleccionados.size > 0 && (
-          <div className="mb-4 p-3.5 bg-gradient-to-r from-primary-950/90 via-slate-900 to-primary-950/90 border border-primary-500/40 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="mb-4 p-3 bg-slate-900/90 dark:bg-[#121620]/90 backdrop-blur-xl border border-white/[0.12] rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
             <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-primary-500/20 text-primary-300">
+              <span className="p-1.5 rounded-lg bg-[#0071E3]/20 text-[#0071E3]">
                 <CheckSquare className="w-4 h-4" />
               </span>
-              <span className="text-sm font-bold text-white">
+              <span className="text-xs font-semibold text-white">
                 {seleccionados.size} {seleccionados.size === 1 ? "persona seleccionada" : "personas seleccionadas"}
               </span>
               {filtroDocumento !== "todos" && (
-                <span className="text-xs text-primary-300/80 bg-primary-500/10 px-2 py-0.5 rounded border border-primary-500/20 font-medium">
+                <span className="text-[11px] text-slate-300 bg-white/[0.08] px-2 py-0.5 rounded border border-white/[0.08] font-medium">
                   Filtro PDF activo
                 </span>
               )}
@@ -1952,21 +1942,21 @@ function PersonasContent() {
               <button
                 onClick={() => setModalEliminarSeleccionadosAbierto(true)}
                 disabled={eliminandoEnLote}
-                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="btn-danger text-xs !py-1.5 !px-3 !rounded-xl font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Eliminar seleccionados ({seleccionados.size})</span>
+                <span>Eliminar ({seleccionados.size})</span>
               </button>
 
               <button
                 onClick={exportarSeleccion}
                 disabled={exportando}
-                className="btn-primary text-xs py-2 px-4 flex items-center gap-2 shadow-lg shadow-primary-500/20 font-bold"
+                className="btn-primary text-xs !py-1.5 !px-3 !rounded-xl font-semibold"
               >
                 {exportando ? (
                   <>
                     <div className="spinner w-3.5 h-3.5" />
-                    <span>Generando Excel...</span>
+                    <span>Generando...</span>
                   </>
                 ) : (
                   <>
@@ -1978,7 +1968,7 @@ function PersonasContent() {
 
               <button
                 onClick={() => setSeleccionados(new Set())}
-                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700/60 transition-colors cursor-pointer"
+                className="btn-secondary text-xs !py-1.5 !px-3 !rounded-xl"
               >
                 Limpiar selección
               </button>
@@ -2020,50 +2010,51 @@ function PersonasContent() {
         </div>
 
         {/* Tabla */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-md dark:shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="card-glass border border-slate-200/80 dark:border-white/[0.08] rounded-2xl shadow-sm overflow-hidden w-full min-w-0">
           {cargando ? (
             <div className="p-8 space-y-3">
               {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800/40 animate-pulse rounded-xl" />
+                <div key={i} className="h-12 bg-slate-100 dark:bg-white/[0.03] animate-pulse rounded-xl" />
               ))}
             </div>
           ) : personasFiltradas.length === 0 ? (
             <div className="text-center py-20 px-4">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex items-center justify-center text-slate-500">
-                <Users className="w-7 h-7" />
+              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] flex items-center justify-center text-slate-400">
+                <Users className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-300">No se encontraron registros</h3>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No se encontraron registros</h3>
               <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto">
                 {buscar ? `Sin resultados para "${buscar}"` : "No hay personas registradas."}
               </p>
               {buscar && (
-                <button onClick={() => setBuscar("")} className="mt-3 text-xs text-primary-600 dark:text-primary-400 hover:underline">
+                <button onClick={() => setBuscar("")} className="mt-3 text-xs text-[#0071E3] hover:underline cursor-pointer">
                   Limpiar búsqueda
                 </button>
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto w-full">
-              <table className="w-full text-left border-collapse">
+            <>
+              <div className="w-full overflow-x-auto">
+              <table className="table-fixed w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-100 dark:bg-slate-950/50 text-[11px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">
-                    <th className="py-3 px-2 w-8 text-center">
+                  <tr className="border-b border-slate-200/80 dark:border-white/[0.06] bg-slate-100/70 dark:bg-white/[0.03] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                    <th className="py-3 px-2 w-10 text-center">
                       <input
                         type="checkbox"
                         checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
                         onChange={toggleSeleccionarTodasVisibles}
-                        className="rounded border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-primary-600 focus:ring-primary-500/40 cursor-pointer"
+                        className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
                         title="Seleccionar / Deseleccionar todas las personas mostradas"
                       />
                     </th>
-                    <th className="py-3 px-1 w-7 text-center"></th>
-                    <th className="py-3 px-2 w-32 whitespace-nowrap">Documento / ID</th>
-                    <th className="py-3 px-2 whitespace-nowrap">Nombre Completo</th>
-                    <th className="py-3 px-1 w-16 text-center whitespace-nowrap">Edad</th>
-                    <th className="py-3 px-1 w-12 text-center whitespace-nowrap">Pág.</th>
-                    <th className="py-3 px-2 w-28 text-center whitespace-nowrap">Fuente</th>
-                    <th className="py-3 px-2 w-28 text-center whitespace-nowrap">Estado</th>
-                    <th className="py-3 px-2 w-10 text-center whitespace-nowrap">Acciones</th>
+                    <th className="py-3 px-1 w-9 text-center"></th>
+                    <th className="py-3 px-2 w-36 lg:w-40">Documento / ID</th>
+                    <th className="py-3 px-3">Nombre Completo</th>
+                    <th className="py-3 px-1 w-16 lg:w-20 text-center">Edad</th>
+                    <th className="py-3 px-1 w-12 lg:w-14 text-center">Pág.</th>
+                    <th className="py-3 px-2 w-24 lg:w-28 text-center">Fuente</th>
+                    <th className="py-3 px-2 w-32 lg:w-36 text-center">Estado</th>
+                    <th className="py-3 px-2 w-10 text-center"></th>
                   </tr>
                 </thead>
 
@@ -2081,80 +2072,82 @@ function PersonasContent() {
                       <Fragment key={p.id}>
                         {/* ── Fila principal ── */}
                         <tr
-                          className={`border-b border-slate-200 dark:border-slate-800/30 transition-colors cursor-pointer ${isExpandida
-                              ? "bg-blue-50/70 dark:bg-slate-800/40 border-primary-500/30"
+                          className={`transition-colors cursor-pointer ${isExpandida
+                              ? "bg-[#0071E3]/[0.06] dark:bg-[#0071E3]/10"
                               : isSeleccionada
-                                ? "bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/15"
-                                : "hover:bg-slate-50 dark:hover:bg-slate-800/20"
+                                ? "bg-[#0071E3]/[0.08] dark:bg-[#0071E3]/15"
+                                : "hover:bg-slate-500/[0.04] active:bg-slate-500/[0.07]"
                             }`}
                           onClick={() => toggleExpandir(p)}
                         >
                           {/* Checkbox de selección */}
-                          <td className="py-3 px-2 w-8 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2.5 px-2 w-10 text-center" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSeleccionada}
                               onChange={() => toggleSeleccionPersona(p.id)}
-                              className="rounded border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-primary-600 focus:ring-primary-500/40 cursor-pointer"
+                              className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
                             />
                           </td>
 
                           {/* Toggle expandir */}
-                          <td className="py-3 px-1 w-7 text-center">
-                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-primary-100 dark:bg-primary-500/20 border border-primary-400 dark:border-primary-500/40 text-primary-700 dark:text-primary-300" : "bg-slate-100 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/50 text-slate-600 dark:text-slate-400"}`}>
+                          <td className="py-2.5 px-1 w-9 text-center">
+                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-[#0071E3]/15 text-[#0071E3] border border-[#0071E3]/30" : "bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400"}`}>
                               {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </div>
                           </td>
 
-                          {/* Documento e ID con Badge - Compacto y pegado al nombre */}
-                          <td className="py-3 px-2 w-32 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 flex-nowrap">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
+                          {/* Documento e ID con Badge compacto */}
+                          <td className="py-2.5 px-2 w-36 lg:w-40 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono font-bold tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
                                 {tipoInfo.codigo}
                               </span>
-                              <span className="font-mono text-blue-900 dark:text-sky-300 font-extrabold text-sm tracking-wide shrink-0">
+                              <span className="font-mono text-slate-900 dark:text-sky-300 font-bold text-xs sm:text-sm tracking-wide truncate">
                                 {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
                                   p.numero_identificacion
                                 ) : (
-                                  <span className="italic text-rose-500 dark:text-rose-400 font-medium text-xs">Sin documento</span>
+                                  <span className="italic text-rose-500 dark:text-rose-400 font-medium text-xs">Sin doc.</span>
                                 )}
                               </span>
                               {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                <span className="text-[9px] bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-400 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
-                                  <CheckCircle className="w-2.5 h-2.5" /> Auto-corregido
+                                <span className="text-emerald-500 shrink-0 cursor-help" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
+                                  <CheckCircle className="w-3.5 h-3.5" />
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          {/* Nombre completo */}
-                          <td className="py-3 px-2 whitespace-nowrap">
-                            {nombreCompleto ? (
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap" title={nombreCompleto}>
-                                {nombreCompleto}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 italic text-xs whitespace-nowrap">Sin nombre</span>
-                            )}
+                          {/* Nombre completo — Celda fluida con truncamiento inteligente para evitar scroll horizontal */}
+                          <td className="py-2.5 px-3 min-w-0">
+                            <div className="truncate" title={nombreCompleto || "Sin nombre"}>
+                              {nombreCompleto ? (
+                                <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block tracking-tight">
+                                  {nombreCompleto}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-xs block">Sin nombre</span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Edad */}
-                          <td className="py-3 px-1 w-16 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-1 w-16 lg:w-20 text-center">
                             {edadRow !== null ? (() => {
                               const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
                               if (inc.esInvalido) {
                                 return (
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm animate-pulse" title={inc.motivo}>
-                                    ⚠️ {edadRow} años
+                                  <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 font-bold shadow-sm" title={inc.motivo}>
+                                    ⚠️ {edadRow}
                                   </span>
                                 );
                               }
                               return esMenor14 ? (
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 font-bold whitespace-nowrap shadow-sm" title={`Persona menor de 14 años (${edadRow} años)`}>
-                                  {edadRow} años
+                                <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 font-bold shadow-sm" title={`Persona menor de 14 años (${edadRow} años)`}>
+                                  {edadRow} a
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/25 text-amber-800 dark:text-amber-300 font-medium whitespace-nowrap shadow-sm">
+                                <span className="inline-block text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 font-medium shadow-sm">
                                   {edadRow} años
                                 </span>
                               );
@@ -2164,49 +2157,47 @@ function PersonasContent() {
                           </td>
 
                           {/* Página */}
-                          <td className="py-3 px-1 w-12 text-center whitespace-nowrap">
-                            <span className="text-[11px] font-mono text-slate-700 dark:text-slate-400 font-semibold whitespace-nowrap">
+                          <td className="py-2.5 px-1 w-12 lg:w-14 text-center">
+                            <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-semibold truncate block">
                               {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
                             </span>
                           </td>
 
                           {/* Fuente: PDF y/o Excel */}
-                          <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
-                            <div className="inline-flex items-center justify-center gap-1 whitespace-nowrap">
-                              {/* PDF badge */}
+                          <td className="py-2.5 px-2 w-24 lg:w-28 text-center">
+                            <div className="inline-flex items-center justify-center gap-1">
                               {(p.documento_id || p.documento_pdf_id) && p.en_pdf !== false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/25 dark:border-rose-400/25 text-rose-700 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 shrink-0 shadow-sm"
                                   title={p.nombre_documento_pdf ? `Cédula PDF individual: ${p.nombre_documento_pdf}` : "Extraído de documento PDF por OCR"}
                                 >
-                                  <FileText className="w-2.5 h-2.5 shrink-0 text-rose-600 dark:text-rose-400" /> PDF
+                                  <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-400 whitespace-nowrap shrink-0" title="Sin documento PDF asociado">
-                                  <FileText className="w-2.5 h-2.5 shrink-0" /> Sin PDF
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-slate-400 shrink-0" title="Sin documento PDF asociado">
+                                  <FileText className="w-2.5 h-2.5 shrink-0" /> —
                                 </span>
                               )}
-                              {/* Excel badge */}
                               {p.en_excel === true ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 dark:border-emerald-400/25 text-emerald-700 dark:text-emerald-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 shrink-0 shadow-sm"
                                   title="Encontrado en planilla Excel comparada"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
                                 </span>
                               ) : p.en_excel === false ? (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 dark:bg-rose-500/15 border border-rose-500/25 dark:border-rose-400/25 text-rose-700 dark:text-rose-300 whitespace-nowrap shrink-0 shadow-sm"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 shrink-0 shadow-sm"
                                   title="No encontrado en ninguna planilla Excel"
                                 >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0 text-rose-600 dark:text-rose-400" /> No Excel
+                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Ex.
                                 </span>
                               ) : null}
                             </div>
                           </td>
 
-                          {/* Estado: Alertas VÁLIDO, REVISAR, MENOR (< 14), NO EN PDF, NO EN EXCEL */}
-                          <td className="py-3 px-2 w-28 text-center whitespace-nowrap">
+                          {/* Estado: Pills sobrias y organizadas */}
+                          <td className="py-2.5 px-2 w-32 lg:w-36 text-center">
                             {(() => {
                               const esRevRow = esPersonaEnRevision(p);
                               const estaValidado = esPersonaValidada(p);
@@ -2260,10 +2251,10 @@ function PersonasContent() {
                                   {/* Alerta: Conflicto Cédula / Excel */}
                                   {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (
                                     <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-400 dark:border-rose-700/60 text-rose-800 dark:text-rose-300 text-[10px] font-bold whitespace-nowrap shadow-sm animate-pulse"
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-[9.5px] font-bold shadow-sm"
                                       title={((p.detalles_campos as any)?.discrepancia_excel?.motivo) || (p.discrepancia_excel as any)?.motivo || "Conflicto entre la cédula física del PDF y la planilla Excel"}
                                     >
-                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400" /> CONFLICTO CÉDULA/EXCEL
+                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-500" /> Conflicto Excel
                                     </span>
                                   )}
 
@@ -2271,19 +2262,19 @@ function PersonasContent() {
                                   <button
                                     type="button"
                                     onClick={(e) => aprobarRevision(p.id, e)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors cursor-pointer"
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-[9.5px] font-semibold shadow-sm transition-colors cursor-pointer active:scale-[0.98]"
                                     title={`Haga clic para validar este registro. Motivo: ${tooltipMotivo}`}
                                   >
-                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> REVISAR
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-500" /> REVISAR
                                   </button>
                                 </div>
                               );
                             })()}
                           </td>
 
-                          {/* Acciones — solo eliminar */}
-                          <td className="py-3 px-2 w-10 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors">
+                          {/* Acciones */}
+                          <td className="py-2.5 px-2 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar registro" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors active:scale-[0.95]">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </td>
@@ -2304,43 +2295,44 @@ function PersonasContent() {
                   })}
                 </tbody>
               </table>
+            </div>
 
-              {/* Pie de Tabla con Conteo Detallado */}
-              <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 bg-slate-950/70 border-t border-slate-800/80 text-xs text-slate-400 gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 rounded bg-primary-500/10 text-primary-400">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <span>
-                    Total en la tabla: <strong className="text-white font-bold text-sm">{personasFiltradas.length}</strong> {personasFiltradas.length === 1 ? "persona" : "personas"}
-                    {buscar && (
-                      <span className="text-slate-500 ml-1">
-                        (filtradas de un total de <strong className="text-slate-300 font-semibold">{personas.length}</strong>)
-                      </span>
-                    )}
-                  </span>
+            {/* Pie de Tabla con Conteo Detallado (fuera del scroll para no desbordar) */}
+            <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-3.5 bg-slate-50/80 dark:bg-white/[0.02] border-t border-slate-200/70 dark:border-white/[0.06] text-xs text-slate-500 dark:text-slate-400 gap-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-lg bg-[#0071E3]/10 text-[#0071E3]">
+                  <Users className="w-4 h-4" />
                 </div>
-                <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <strong className="text-slate-300 font-semibold">{stats.validas}</strong> Válidas
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                    <strong className="text-slate-300 font-semibold">{stats.revision}</strong> Por revisar
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                    <strong className="text-rose-300 font-semibold">{stats.menores}</strong> Menores (&lt; 14)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-purple-400" />
-                    <strong className="text-slate-300 font-semibold">{stats.discrepancia}</strong> Falta PDF/Excel
-                  </span>
-                </div>
+                <span>
+                  Total en la tabla: <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> {personasFiltradas.length === 1 ? "persona" : "personas"}
+                  {buscar && (
+                    <span className="text-slate-400 ml-1">
+                      (de un total de <strong className="text-slate-600 dark:text-slate-300 font-semibold">{personas.length}</strong>)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#34C759]" />
+                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.validas}</strong> Válidas
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF9500]" />
+                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.revision}</strong> Por revisar
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF3B30]" />
+                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.menores}</strong> Menores (&lt; 14)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.discrepancia}</strong> Falta PDF/Excel
+                </span>
               </div>
             </div>
-          )}
+          </>
+        )}
         </div>
 
         {/* Modal Confirmar Vaciar Tabla */}

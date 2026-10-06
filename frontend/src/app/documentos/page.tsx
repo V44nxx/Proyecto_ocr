@@ -667,33 +667,29 @@ export default function DocumentosPage() {
           <div
             ref={panelProgresoRef}
             id="panel-progreso-ocr"
-            className="mb-8 p-6 sm:p-7 rounded-2xl bg-dark-900/95 border border-primary-500/30 shadow-2xl shadow-primary-950/40 relative overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300 scroll-mt-6"
+            className="mb-8 p-6 sm:p-7 rounded-2xl bg-white/70 dark:bg-[#121620]/60 border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] relative overflow-hidden backdrop-blur-xl animate-in fade-in duration-300 scroll-mt-6"
           >
-            {/* Resplandor ambiental de fondo */}
-            <div className="absolute -right-20 -top-20 w-72 h-72 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
             {/* Cabecera del Progreso */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/[0.08] relative z-10">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/[0.06] relative z-10">
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                   procesoFinalizado
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                    : faseActual === "subiendo"
-                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30 animate-pulse"
-                    : "bg-primary-500/20 text-primary-400 border border-primary-500/30 animate-pulse"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : "bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08]"
                 }`}>
                   {procesoFinalizado ? (
-                    <CheckCircle2 className="w-6 h-6" />
+                    <CheckCircle2 className="w-5 h-5" />
                   ) : faseActual === "subiendo" ? (
-                    <ArrowUpCircle className="w-6 h-6 animate-bounce" />
+                    <ArrowUpCircle className="w-5 h-5 text-[#0071E3]" />
                   ) : (
-                    <Cpu className="w-6 h-6" />
+                    <Cpu className="w-5 h-5 text-[#0071E3]" />
                   )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">
                       {procesoFinalizado
                         ? `¡Extracción Completada en ${tiempoProcesamientoTexto}!`
                         : faseActual === "subiendo"
@@ -706,7 +702,7 @@ export default function DocumentosPage() {
                         : faseActual === "subiendo"
                         ? "badge-info"
                         : "badge-warning"
-                    } text-xs px-2.5 py-0.5 whitespace-nowrap shrink-0`}>
+                    } text-[10px] px-2.5 py-0.5 whitespace-nowrap shrink-0`}>
                       {procesoFinalizado
                         ? "Finalizado"
                         : faseActual === "subiendo"
@@ -714,7 +710,7 @@ export default function DocumentosPage() {
                         : "En progreso"}
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     {procesoFinalizado
                       ? `Se estructuraron ${totalPersonasDetectadas} personas y se guardaron en la base de datos.`
                       : faseActual === "subiendo"
@@ -1123,45 +1119,45 @@ export default function DocumentosPage() {
           </div>
 
           {/* ── PASO 1: PLANILLA EXCEL OFICIAL (OBLIGATORIO) ────────────────── */}
-          <div className={`mb-6 p-4 rounded-xl border-2 transition-all ${
+          <div className={`mb-6 p-4 rounded-2xl border transition-all ${
             excelSeleccionado
-              ? "border-emerald-600/70 dark:border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/[0.06]"
-              : "border-dashed border-amber-600/50 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/[0.04]"
+              ? "border-emerald-500/30 bg-emerald-500/[0.04]"
+              : "border-dashed border-amber-500/30 bg-amber-500/[0.03]"
           }`}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-600 dark:bg-amber-500 text-white dark:text-dark-950">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-900">
                 1
               </div>
-              <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Planilla Excel Oficial</h3>
-              <span className="text-[10px] font-extrabold text-amber-950 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/20 border border-amber-400 dark:border-amber-500/40 px-2 py-0.5 rounded-full">OBLIGATORIO</span>
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Planilla Excel Oficial</h3>
+              <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.2 rounded-full uppercase tracking-wider">Obligatorio</span>
             </div>
-            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium mb-3 ml-8">
-              Los nombres y apellidos de las personas se extraerán de esta planilla usando el número de cédula/TI como referencia.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 ml-7">
+              Los nombres oficiales se extraerán cotejando el documento de identidad contra este archivo.
             </p>
 
             {excelSeleccionado ? (
-              <div className="ml-8 flex items-center justify-between p-3.5 bg-emerald-100/90 dark:bg-emerald-500/15 border-2 border-emerald-500/50 dark:border-emerald-500/30 rounded-xl shadow-sm">
+              <div className="ml-7 flex items-center justify-between p-3 bg-white dark:bg-white/[0.04] border border-emerald-500/30 rounded-xl shadow-sm">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-200/80 dark:bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
-                    <FileSpreadsheet className="w-5 h-5 text-emerald-800 dark:text-emerald-300" />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-sm font-bold text-slate-900 dark:text-emerald-200 truncate block tracking-tight">{excelSeleccionado.name}</span>
-                    <span className="text-xs text-emerald-900 dark:text-slate-400 font-mono font-semibold">{formatSize(excelSeleccionado.size)} · Planilla oficial lista ✓</span>
+                    <span className="text-xs font-semibold text-slate-900 dark:text-white truncate block">{excelSeleccionado.name}</span>
+                    <span className="text-[11px] text-slate-400 font-mono">{formatSize(excelSeleccionado.size)} · Planilla cargada</span>
                   </div>
                 </div>
                 <button
                   onClick={() => setExcelSeleccionado(null)}
                   disabled={subiendo}
-                  className="text-slate-700 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-emerald-200/60 dark:hover:bg-dark-700 flex-shrink-0 cursor-pointer"
+                  className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-500/10 flex-shrink-0 cursor-pointer active:scale-[0.95]"
                   title="Cambiar Excel"
                 >
-                  <X className="w-4 h-4 text-slate-700 dark:text-slate-400" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <label className="ml-8 flex items-center gap-3 p-3.5 bg-dark-800/60 border border-dashed border-amber-500/30 rounded-xl cursor-pointer hover:border-amber-500/60 hover:bg-dark-800 transition-all group">
+              <label className="ml-7 flex items-center gap-3 p-3 bg-white dark:bg-white/[0.02] border border-dashed border-slate-300 dark:border-white/[0.12] rounded-xl cursor-pointer hover:border-[#0071E3] hover:bg-slate-50/80 dark:hover:bg-white/[0.04] transition-all group">
                 <input
                   type="file"
                   accept=".xlsx,.xls"
@@ -1176,17 +1172,17 @@ export default function DocumentosPage() {
                       return;
                     }
                     setExcelSeleccionado(f);
-                    toast.success(`✅ Planilla oficial cargada: ${f.name}`);
+                    toast.success(`Planilla oficial cargada: ${f.name}`);
                   }}
                 />
-                <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
-                  <PlusCircle className="w-5 h-5 text-amber-400" />
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                  <PlusCircle className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-amber-950 dark:text-amber-300 group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-[#0071E3] transition-colors">
                     Haz clic para seleccionar la planilla Excel
                   </p>
-                  <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">.xlsx · .xls · Requerido para extracción correcta de nombres</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">.xlsx · .xls · Necesario para verificación de nombres</p>
                 </div>
               </label>
             )}
@@ -1194,11 +1190,11 @@ export default function DocumentosPage() {
 
           {/* ── PASO 2: PDF(s) ───────────────────────────────────────── */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary-600 dark:bg-primary-500 text-white dark:text-dark-950">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-900">
               2
             </div>
-            <Upload className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Documentos PDF (Cédulas)</h3>
+            <Upload className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Documentos PDF (Cédulas)</h3>
           </div>
 
           <div
@@ -1206,15 +1202,15 @@ export default function DocumentosPage() {
             className={`dropzone ${isDragActive ? "active" : ""}`}
           >
             <input {...getInputProps()} />
-            <div className="w-16 h-16 rounded-2xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center transition-transform group-hover:scale-105">
-              <Upload className="w-8 h-8 text-primary-400" />
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.08] flex items-center justify-center transition-transform group-hover:scale-105">
+              <Upload className="w-6 h-6 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-white font-semibold text-base">
-                {isDragActive ? "Suelta los archivos aquí" : "Arrastra PDFs o haz clic para seleccionar"}
+              <p className="text-slate-900 dark:text-white font-semibold text-sm">
+                {isDragActive ? "Suelta los archivos aquí" : "Arrastra PDFs o haz clic para explorar"}
               </p>
-              <p className="text-slate-500 text-sm mt-1">
-                PDF · Hasta 50MB por archivo · Soporta documentos de múltiples páginas y frentes/reversos
+              <p className="text-slate-400 text-xs mt-1">
+                PDF · Hasta 50MB por archivo · Frentes y reversos
               </p>
             </div>
           </div>

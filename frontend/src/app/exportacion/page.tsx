@@ -208,14 +208,15 @@ export default function ExportacionPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 page-enter">
           {[
-            { label: "Total Personas", value: stats.total, color: "text-blue-400", border: "border-blue-500/20" },
-            { label: "Validadas OK", value: stats.ok, color: "text-emerald-400", border: "border-emerald-500/20" },
-            { label: "En Revisión", value: stats.revision, color: "text-amber-400", border: "border-amber-500/20" },
-            { label: "Fichas Completas", value: stats.completas, color: "text-purple-400", border: "border-purple-500/20" },
+            { label: "Total Personas", value: stats.total, color: "text-slate-900 dark:text-white" },
+            { label: "Validadas OK", value: stats.ok, color: "text-emerald-600 dark:text-emerald-400" },
+            { label: "En Revisión", value: stats.revision, color: "text-amber-600 dark:text-amber-400" },
+            { label: "Fichas Completas", value: stats.completas, color: "text-slate-900 dark:text-slate-200" },
           ].map((s) => (
-            <div key={s.label} className={`card text-center bg-slate-900/80 border ${s.border} backdrop-blur-md`}>
-              <p className={`text-3xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-slate-400 text-xs mt-1 font-medium">{s.label}</p>
+            <div key={s.label} className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 text-center overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+              <p className={`text-2xl font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
@@ -224,43 +225,44 @@ export default function ExportacionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 page-enter">
           {/* Columna Izquierda: Configuración de Exportación */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="card bg-slate-900/80 border border-slate-800/80 backdrop-blur-md">
-              <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+            <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-5 flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
                 Configurar Exportación
               </h2>
 
               {/* Selector de Documento PDF */}
               <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-primary-400" />
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
                   Documento PDF de Origen
                 </label>
                 <div className="relative">
                   <select
                     value={documentoSeleccionado}
                     onChange={(e) => setDocumentoSeleccionado(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-primary-500/70 transition-colors shadow-inner font-medium"
+                    className="w-full bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium"
                   >
                     <option value="todos">
-                      📄 Todos los documentos PDF ({personas.length} personas)
+                      Todos los documentos PDF ({personas.length} personas)
                     </option>
                     {documentos.map((doc) => {
                       const count = personasPorDoc[doc.id] || 0;
                       return (
                         <option key={doc.id} value={doc.id}>
-                          📄 {doc.nombre_original} ({count} personas)
+                          {doc.nombre_original} ({count} personas)
                         </option>
                       );
                     })}
                   </select>
                 </div>
                 {documentoSeleccionado !== "todos" && docActual && (
-                  <div className="mt-2.5 p-2.5 rounded-xl bg-primary-500/10 border border-primary-500/20 text-xs text-primary-300 flex items-center justify-between">
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.06] text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
                     <span className="truncate max-w-[240px] font-mono text-[11px]">
                       {docActual.nombre_original}
                     </span>
-                    <span className="font-bold text-primary-200">
+                    <span className="font-semibold text-slate-900 dark:text-white">
                       {personasPorDoc[docActual.id] || 0} personas
                     </span>
                   </div>
@@ -269,8 +271,8 @@ export default function ExportacionPage() {
 
               {/* Filtro por Estado de Revisión */}
               <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-slate-400" />
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
                   Filtrar por Estado
                 </label>
                 <div className="space-y-2">
@@ -278,25 +280,25 @@ export default function ExportacionPage() {
                     {
                       value: "todos",
                       label: "Todos los registros",
-                      icon: <Users className="w-4 h-4 text-blue-400" />,
+                      icon: <Users className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />,
                       count: personas.length,
                     },
                     {
                       value: "ok",
                       label: "Solo validados OK",
-                      icon: <CheckCircle className="w-4 h-4 text-emerald-400" />,
+                      icon: <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />,
                       count: stats.ok,
                     },
                     {
                       value: "revision",
                       label: "Solo en revisión",
-                      icon: <AlertTriangle className="w-4 h-4 text-amber-400" />,
+                      icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />,
                       count: stats.revision,
                     },
                     {
                       value: "menores",
                       label: "Solo menores de 14 años (< 14)",
-                      icon: <AlertTriangle className="w-4 h-4 text-rose-400" />,
+                      icon: <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />,
                       count: stats.menores,
                     },
                   ].map((opt) => (
@@ -304,8 +306,8 @@ export default function ExportacionPage() {
                       key={opt.value}
                       className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                         filtroRevision === opt.value
-                          ? "border-primary-500/60 bg-primary-500/10 ring-1 ring-primary-500/30"
-                          : "border-slate-800/80 hover:border-slate-700 bg-slate-950/60"
+                          ? "border-[#0071E3]/40 bg-[#0071E3]/[0.06]"
+                          : "border-slate-200/80 dark:border-white/[0.06] hover:bg-slate-100/60 dark:hover:bg-white/[0.03] bg-slate-50/50 dark:bg-white/[0.015]"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -315,22 +317,22 @@ export default function ExportacionPage() {
                           value={opt.value}
                           checked={filtroRevision === opt.value}
                           onChange={() => setFiltroRevision(opt.value as typeof filtroRevision)}
-                          className="accent-primary-500"
+                          className="accent-[#0071E3]"
                         />
                         {opt.icon}
-                        <span className="text-sm font-medium text-slate-200">{opt.label}</span>
+                        <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{opt.label}</span>
                       </div>
-                      <span className="badge badge-neutral text-xs font-mono">{opt.count}</span>
+                      <span className="badge badge-neutral text-[10px] font-mono">{opt.count}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
               {/* Resumen de Selección y Botón de Descarga */}
-              <div className="pt-4 border-t border-slate-800/80">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-3 font-medium">
+              <div className="pt-4 border-t border-slate-200/80 dark:border-white/[0.06]">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-3 font-medium">
                   <span>Personas seleccionadas:</span>
-                  <span className="text-white font-mono font-bold text-sm">
+                  <span className="text-slate-900 dark:text-white font-mono font-semibold text-xs">
                     {seleccionadosVisiblesCount} de {personasFiltradas.length}
                   </span>
                 </div>
@@ -338,34 +340,30 @@ export default function ExportacionPage() {
                 <button
                   onClick={exportarXlsx}
                   disabled={exportando || seleccionadosVisiblesCount === 0}
-                  className="btn-primary w-full py-3 flex items-center justify-center gap-2 text-sm font-bold shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {exportando ? (
                     <>
-                      <div className="spinner w-4 h-4" />
+                      <div className="spinner w-3.5 h-3.5" />
                       <span>Generando Excel...</span>
                     </>
                   ) : (
                     <>
-                      <Download className="w-4 h-4" />
-                      <span>
-                        {documentoSeleccionado !== "todos" && docActual
-                          ? `Descargar Excel (${seleccionadosVisiblesCount})`
-                          : `Descargar Excel (${seleccionadosVisiblesCount})`}
-                      </span>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Descargar Excel ({seleccionadosVisiblesCount})</span>
                     </>
                   )}
                 </button>
 
-                <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Alerta de menores (&lt; 14 años):</strong> Cualquier persona menor de 14 años será automáticamente resaltada con fila y celda de edad en <strong>ROJO</strong> en el archivo Excel descargado.
+                <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <span className="text-[11px]">
+                    <strong>Alerta de menores (&lt; 14 años):</strong> Cualquier persona menor de 14 años será automáticamente resaltada con fila y celda de edad en el reporte oficial descargado.
                   </span>
                 </div>
 
                 {personasFiltradas.length === 0 && (
-                  <p className="text-center text-slate-500 text-xs mt-3">
+                  <p className="text-center text-slate-400 text-xs mt-3">
                     No hay registros con los filtros seleccionados
                   </p>
                 )}
@@ -375,16 +373,17 @@ export default function ExportacionPage() {
 
           {/* Columna Derecha: Vista Previa y Selección Fina */}
           <div className="lg:col-span-7">
-            <div className="card bg-slate-900/80 border border-slate-800/80 backdrop-blur-md">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/80">
+            <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
                 <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <span>Vista Previa y Selección</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 font-mono">
                       {personasFiltradas.length}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Marca o desmarca personas específicas para personalizar tu exportación
                   </p>
                 </div>
@@ -402,7 +401,7 @@ export default function ExportacionPage() {
                       </>
                     ) : (
                       <>
-                        <CheckSquare className="w-3.5 h-3.5 text-primary-400" />
+                        <CheckSquare className="w-3.5 h-3.5 text-[#0071E3]" />
                         <span>Seleccionar todos</span>
                       </>
                     )}
@@ -421,21 +420,21 @@ export default function ExportacionPage() {
               {cargando ? (
                 <div className="space-y-2 py-4">
                   {Array(6).fill(0).map((_, i) => (
-                    <div key={i} className="skeleton h-11 rounded-xl bg-slate-800/40" />
+                    <div key={i} className="h-10 rounded-xl bg-slate-100 dark:bg-white/[0.03] animate-pulse" />
                   ))}
                 </div>
               ) : personasFiltradas.length === 0 ? (
                 <div className="text-center py-16 px-4">
-                  <Users className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-                  <p className="text-slate-400 text-sm font-semibold">No se encontraron personas</p>
-                  <p className="text-slate-600 text-xs mt-1">
+                  <Users className="w-10 h-10 mx-auto mb-2 text-slate-400" />
+                  <p className="text-slate-700 dark:text-slate-300 text-sm font-semibold">No se encontraron personas</p>
+                  <p className="text-slate-500 text-xs mt-1">
                     Cambia el documento o filtro de revisión seleccionado.
                   </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[520px] overflow-y-auto pr-1">
                   <table className="table-base text-xs w-full">
-                    <thead className="sticky top-0 bg-slate-950/90 backdrop-blur z-10">
+                    <thead className="sticky top-0 bg-white/95 dark:bg-[#121620]/95 backdrop-blur z-10">
                       <tr>
                         <th className="w-10 text-center py-2.5">
                           <input

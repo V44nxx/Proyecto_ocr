@@ -171,7 +171,7 @@ export default function DashboardPage() {
             <Activity className="w-5 h-5 text-primary-600 dark:text-primary-400" />
             <span className="text-primary-700 dark:text-primary-400 text-sm font-semibold">Panel de Control</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">KondID</h1>
           <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">
             Resumen en tiempo real del sistema OCR e historial interactivo de fichas procesadas
           </p>

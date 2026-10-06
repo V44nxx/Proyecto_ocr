@@ -106,7 +106,7 @@ export default function Sidebar() {
               </div>
               <div className="min-w-0">
                 <span className="text-sm font-bold text-slate-900 dark:text-white block truncate">
-                  Sistema OCR
+                  KondID
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                   Documentos CO
@@ -126,7 +126,7 @@ export default function Sidebar() {
           <div className="py-4 border-b border-slate-200 dark:border-white/[0.06] flex flex-col items-center gap-2">
             <div
               className="w-9 h-9 rounded-xl bg-primary-500/10 dark:bg-primary-600/20 border border-primary-500/30 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0"
-              title="Sistema OCR - Documentos CO"
+              title="KondID - Documentos CO"
               style={{ boxShadow: "0 0 15px rgba(59,130,246,0.2)" }}
             >
               <Cpu className="w-4 h-4" />

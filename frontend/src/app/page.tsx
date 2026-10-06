@@ -56,7 +56,7 @@ export default function LoginPage() {
                style={{ boxShadow: "0 0 30px rgba(59,130,246,0.3)" }}>
             <Cpu className="w-8 h-8 text-primary-400" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">Sistema OCR</h1>
+          <h1 className="text-3xl font-bold text-white mb-1">KondID</h1>
           <p className="text-slate-400 text-sm">
             Documentos de Identificación Colombianos
           </p>

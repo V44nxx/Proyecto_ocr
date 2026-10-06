@@ -6,10 +6,10 @@ import { SidebarProvider } from "@/context/SidebarContext";
 import BannerProcesoActivo from "@/components/ui/BannerProcesoActivo";
 
 export const metadata: Metadata = {
-  title: "Sistema OCR | Documentos Colombianos",
+  title: "KondID | Sistema OCR Documentos Colombianos",
   description:
     "Plataforma profesional de extracción automática de información desde documentos de identificación colombianos mediante OCR de alta precisión.",
-  keywords: "OCR, documentos, cédula, Colombia, extracción, PaddleOCR",
+  keywords: "KondID, OCR, documentos, cédula, Colombia, extracción, Document AI",
 };
 
 export default function RootLayout({

@@ -250,14 +250,15 @@ body {
                 var(--color-bg);
   }
 
-  /* ── Sidebar ── */
+  /* ── Sidebar (macOS style translucent material) ── */
   .sidebar {
     @apply fixed left-0 top-0 h-screen flex flex-col overflow-x-hidden;
     width: 16rem;
-    background: rgba(8, 14, 26, 0.95);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(18, 22, 32, 0.82);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     box-sizing: border-box;
   }
   .sidebar.collapsed {
@@ -268,21 +269,23 @@ body {
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
+    @apply flex items-center gap-3 px-3 py-2 rounded-xl
            text-slate-400 hover:text-white
-           transition-all duration-200 cursor-pointer text-sm font-medium w-full;
+           transition-all duration-150 cursor-pointer text-xs font-medium w-full
+           active:scale-[0.98];
     box-sizing: border-box;
   }
   .sidebar.collapsed .sidebar-item {
     @apply justify-center px-0;
   }
   .sidebar-item:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: rgba(255, 255, 255, 0.05);
   }
   .sidebar-item.active {
-    background: rgba(59, 130, 246, 0.15);
-    @apply text-primary-400;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(0, 113, 227, 0.12);
+    color: #409CFF;
+    border: 1px solid rgba(0, 113, 227, 0.22);
+    font-weight: 600;
   }
 
   /* ── Shimmer skeleton ── */
@@ -587,23 +590,23 @@ html.light [class*="from-cyan-600/20"] {
   border-color: #A5F3FC !important;
 }
 
-/* Sidebar in Light Mode */
+/* Sidebar in Light Mode (macOS Finder/Settings style) */
 html.light .sidebar {
-  background: rgba(255, 255, 255, 0.98) !important;
-  border-right: 1px solid #E2E8F0 !important;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.04) !important;
+  background: rgba(248, 250, 252, 0.85) !important;
+  border-right: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 1px 0 12px rgba(0, 0, 0, 0.02) !important;
 }
 html.light .sidebar-item {
   color: #475569 !important;
 }
 html.light .sidebar-item:hover {
-  background: rgba(37, 99, 235, 0.07) !important;
-  color: #1D4ED8 !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #0F172A !important;
 }
 html.light .sidebar-item.active {
-  background: rgba(37, 99, 235, 0.1) !important;
-  color: #2563EB !important;
-  border-color: rgba(37, 99, 235, 0.25) !important;
+  background: rgba(0, 113, 227, 0.08) !important;
+  color: #0071E3 !important;
+  border-color: rgba(0, 113, 227, 0.18) !important;
 }
 
 /* Scrollbar in Light Mode */

@@ -93,6 +93,31 @@ body {
 }
 
 /* ────────────────────────────────────────────
+   Select & Option Theme Styling (High Contrast)
+──────────────────────────────────────────── */
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: #121620 !important;
+  color: #f1f5f9 !important;
+}
+
+html.light select,
+body.light select,
+.light select {
+  color-scheme: light;
+}
+
+html.light select option,
+body.light select option,
+.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* ────────────────────────────────────────────
    Componentes reutilizables
 ──────────────────────────────────────────── */
 @layer components {

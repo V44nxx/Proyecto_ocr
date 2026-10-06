@@ -242,15 +242,15 @@ export default function ExportacionPage() {
                   <select
                     value={documentoSeleccionado}
                     onChange={(e) => setDocumentoSeleccionado(e.target.value)}
-                    className="w-full bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium"
+                    className="w-full bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                   >
-                    <option value="todos">
+                    <option value="todos" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
                       Todos los documentos PDF ({personas.length} personas)
                     </option>
                     {documentos.map((doc) => {
                       const count = personasPorDoc[doc.id] || 0;
                       return (
-                        <option key={doc.id} value={doc.id}>
+                        <option key={doc.id} value={doc.id} className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
                           {doc.nombre_original} ({count} personas)
                         </option>
                       );

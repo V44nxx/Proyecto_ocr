@@ -1877,14 +1877,14 @@ function PersonasContent() {
                   }
                 }
               }}
-              className="w-full pl-9 pr-3 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] font-medium truncate cursor-pointer shadow-sm h-10"
+              className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] font-medium truncate cursor-pointer shadow-sm h-10 [color-scheme:light] dark:[color-scheme:dark]"
               title="Filtrar por archivo PDF de origen"
             >
-              <option value="todos">
+              <option value="todos" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
                 🌐 Ver todos los archivos ({documentos.length} PDFs{totalPersonasGlobal ? ` - ${totalPersonasGlobal} personas` : ""})
               </option>
               {documentos.map((d, index) => (
-                <option key={d.id} value={d.id}>
+                <option key={d.id} value={d.id} className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
                   📄 {d.nombre_original} {index === 0 ? "★ (Último)" : ""}
                 </option>
               ))}
@@ -1896,16 +1896,16 @@ function PersonasContent() {
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
-              className="w-full px-3 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] cursor-pointer shadow-sm h-10 transition-all"
+              className="w-full px-3 py-2 bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] cursor-pointer shadow-sm h-10 transition-all [color-scheme:light] dark:[color-scheme:dark]"
               title="Filtrar por estado del registro"
             >
-              <option value="todos">📋 Todos los estados ({stats.total})</option>
-              <option value="validas">✅ Solo Válidos ({stats.validas})</option>
-              <option value="revision">⚠️ Por Revisar ({stats.revision})</option>
-              <option value="menores">🚨 Menores de 14 Años ({stats.menores})</option>
-              <option value="discrepancia">🟣 Falta PDF o Excel ({stats.discrepancia})</option>
-              <option value="falta_pdf">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
-              <option value="falta_excel">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
+              <option value="todos" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📋 Todos los estados ({stats.total})</option>
+              <option value="validas" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">✅ Solo Válidos ({stats.validas})</option>
+              <option value="revision" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">⚠️ Por Revisar ({stats.revision})</option>
+              <option value="menores" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🚨 Menores de 14 Años ({stats.menores})</option>
+              <option value="discrepancia" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🟣 Falta PDF o Excel ({stats.discrepancia})</option>
+              <option value="falta_pdf" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
+              <option value="falta_excel" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
             </select>
           </div>
 

@@ -18,13 +18,46 @@ import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
+const personaFaltaEnPdf = (p: Persona): boolean => {
+  if (!p) return false;
+  if (p.en_pdf === false) return true;
+  if (!p.documento_id && !p.documento_pdf_id) return true;
+  const det = p.detalles_campos as any;
+  if (det && det.en_pdf === false) return true;
+  if (det && det.origen === "excel_no_encontrado_en_pdf") return true;
+  return false;
+};
+
+const personaFaltaEnExcel = (p: Persona): boolean => {
+  if (!p) return false;
+  if (p.en_excel === false) return true;
+  const det = p.detalles_campos as any;
+  if (det && det.en_excel === false) return true;
+  return false;
+};
+
+const personaTieneDiscrepanciaFaltante = (p: Persona): boolean => {
+  if (!p) return false;
+  const faltaPdf = personaFaltaEnPdf(p);
+  const faltaExcel = personaFaltaEnExcel(p);
+  const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+  const tieneDiscExcel = Boolean(discExcel && !discExcel.aprobado_manual && !discExcel.ignorado);
+  return faltaPdf || faltaExcel || tieneDiscExcel;
+};
+
 const esPersonaValidada = (p: Persona): boolean => {
   if (!p) return false;
+  // Aprobación manual explícita
+  if ((p.detalles_campos as any)?.aprobado_manual === true || (p.detalles_campos as any)?.validado_manual === true) {
+    return true;
+  }
+  // Si falta en el PDF o en el Excel, NO se considera válidada automáticamente sin atención
+  if (personaFaltaEnPdf(p) || personaFaltaEnExcel(p)) {
+    return false;
+  }
   return Boolean(
     p.requiere_revision === false ||
-    p.estado_registro === "VALID" ||
-    (p.detalles_campos as any)?.aprobado_manual === true ||
-    (p.detalles_campos as any)?.validado_manual === true
+    p.estado_registro === "VALID"
   );
 };
 
@@ -32,6 +65,9 @@ const esPersonaEnRevision = (p: Persona): boolean => {
   if (!p) return false;
   if (esPersonaValidada(p)) {
     return false;
+  }
+  if (personaFaltaEnPdf(p) || personaFaltaEnExcel(p)) {
+    return true;
   }
   const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
   const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
@@ -222,16 +258,11 @@ function PersonasContent() {
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
       const validasCount = items.filter(esPersonaValidada).length;
       const revCount = items.filter((p: Persona) => !esPersonaValidada(p) && esPersonaEnRevision(p)).length;
-      const faltaPdfCount = items.filter((p: Persona) => !esPersonaValidada(p) && ((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false)).length;
-      const faltaExcelCount = items.filter((p: Persona) => !esPersonaValidada(p) && p.en_excel === false).length;
-      const discCount = items.filter((p: Persona) => {
-        if (esPersonaValidada(p)) return false;
-        const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
-        const faltaExcel = p.en_excel === false;
-        const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
-        const tieneDiscrepanciaExcel = Boolean(discExcel && !discExcel.aprobado_manual);
-        return faltaPdf || faltaExcel || tieneDiscrepanciaExcel;
-      }).length;
+
+      // Conteo DIRECTO Y COMPLETO: cuenta SIEMPRE todas las personas que faltan en PDF o en Excel
+      const faltaPdfCount = items.filter(personaFaltaEnPdf).length;
+      const faltaExcelCount = items.filter(personaFaltaEnExcel).length;
+      const discCount = items.filter(personaTieneDiscrepanciaFaltante).length;
       const menoresCount = items.filter((p: Persona) => {
         const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
         return ed !== null && ed < 14;
@@ -329,7 +360,8 @@ function PersonasContent() {
     } else {
       setExpandidoId(p.id);
       setEditando(null);
-      const paginaInicial = p.pagina_frente || p.pagina_numero || 1;
+      const pagsList = (p.detalles_campos as any)?.paginas;
+      const paginaInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
       setPaginaPrevia(paginaInicial);
       setImgCargando(true);
       setImgError(false);
@@ -341,7 +373,8 @@ function PersonasContent() {
     setEditando(p.id);
     if (expandidoId !== p.id) {
       setExpandidoId(p.id);
-      const paginaInicial = p.pagina_frente || p.pagina_numero || 1;
+      const pagsList = (p.detalles_campos as any)?.paginas;
+      const paginaInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
       setPaginaPrevia(paginaInicial);
       setImgCargando(true);
       setImgError(false);
@@ -536,20 +569,11 @@ function PersonasContent() {
     } else if (filtroEstado === "validas") {
       if (!estaVal) return false;
     } else if (filtroEstado === "discrepancia") {
-      if (estaVal) return false;
-      const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
-      const faltaExcel = p.en_excel === false;
-      const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
-      const tieneDiscrepanciaExcel = Boolean(discExcel && !discExcel.aprobado_manual);
-      if (!faltaPdf && !faltaExcel && !tieneDiscrepanciaExcel) return false;
+      if (!personaTieneDiscrepanciaFaltante(p)) return false;
     } else if (filtroEstado === "falta_pdf") {
-      if (estaVal) return false;
-      const faltaPdf = (!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false;
-      if (!faltaPdf) return false;
+      if (!personaFaltaEnPdf(p)) return false;
     } else if (filtroEstado === "falta_excel") {
-      if (estaVal) return false;
-      const faltaExcel = p.en_excel === false;
-      if (!faltaExcel) return false;
+      if (!personaFaltaEnExcel(p)) return false;
     } else if (filtroEstado === "menores") {
       const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
       if (ed === null || ed >= 14) return false;
@@ -643,16 +667,34 @@ function PersonasContent() {
     const docIdParaImagen = p.documento_pdf_id || (p.detalles_campos as any)?.documento_pdf_id || (p.en_pdf !== false ? p.documento_id : null);
     const tienePdfValido = !!docIdParaImagen && p.en_pdf !== false;
     const docId = p.documento_id ? String(p.documento_id) : null;
-    const tieneDosLados = !!(p.pagina_frente && p.pagina_reverso);
     const estaEditando = editando === p.id;
+
+    // Detección de Antecedentes y páginas múltiples
+    const tipoNormDoc = String(p.tipo_documento || (p.detalles_campos as any)?.tipo_documento?.valor || "").toUpperCase();
+    const esAntecedentesDoc = tipoNormDoc.includes("ANTECEDENTE");
+    const rawPaginas = (p.detalles_campos as any)?.paginas;
+    const paginasExtra: number[] = Array.isArray(rawPaginas)
+      ? rawPaginas.map((x: any) => Number(x)).filter((n: number) => !isNaN(n))
+      : [p.pagina_frente, p.pagina_reverso].filter((pg): pg is number => typeof pg === "number");
+    const listaPaginas = Array.from(new Set(paginasExtra.length > 0 ? paginasExtra : (p.pagina_frente ? [p.pagina_frente] : (p.pagina_numero ? [p.pagina_numero] : []))));
+    const tieneDosLados = !esAntecedentesDoc && !!(p.pagina_frente && p.pagina_reverso);
 
     const nomCompleto = formatNombreCompleto(p);
     const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
-    const esMenor14Detalle = edadCalculada !== null && edadCalculada < 14;
+    const esMenor14Detalle = !esAntecedentesDoc && edadCalculada !== null && edadCalculada < 14;
     const numIdVisible = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     const estaValidada = esPersonaValidada(p);
 
-    const campos = [
+    const campos = esAntecedentesDoc ? [
+      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
+      { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
+      {
+        key: "tipo_documento",
+        label: "Tipo de Certificado",
+        icono: <FileText className="w-3.5 h-3.5" />,
+        valor: "Certificado de Antecedentes (Procuraduría General / SIRI)"
+      },
+    ] : [
       { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
       { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
       {
@@ -670,7 +712,20 @@ function PersonasContent() {
       },
     ];
 
-    const camposSecundarios = [
+    const camposSecundarios = esAntecedentesDoc ? [
+      {
+        key: "certificado_numero",
+        label: "No. Certificado",
+        icono: <Hash className="w-3.5 h-3.5" />,
+        valor: (p.detalles_campos as any)?.certificado_numero ? `No. ${(p.detalles_campos as any).certificado_numero}` : null
+      },
+      {
+        key: "hojas_total",
+        label: "Páginas del Certificado",
+        icono: <FileText className="w-3.5 h-3.5" />,
+        valor: listaPaginas.length > 0 ? `${listaPaginas.length} hoja(s) (págs. ${listaPaginas.join(", ")})` : null
+      }
+    ] : [
       {
         key: "fecha_expedicion",
         label: "Fecha de Expedición",
@@ -710,7 +765,7 @@ function PersonasContent() {
         <div className="lg:w-[44%] w-full flex flex-col border-b lg:border-b-0 lg:border-r border-slate-300 dark:border-slate-800/50 min-h-[300px] min-w-0 overflow-hidden">
           {/* Toolbar PDF */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 dark:bg-slate-900/70 border-b border-slate-300 dark:border-slate-800/40 min-w-0 gap-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
               <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider shrink-0">Vista Documento</span>
               {p.nombre_documento_pdf ? (
@@ -722,7 +777,24 @@ function PersonasContent() {
                   {p.nombre_documento}
                 </span>
               ) : null}
-              {tieneDosLados && (
+              {esAntecedentesDoc && listaPaginas.length > 1 ? (
+                <div className="flex items-center gap-1 ml-1.5 shrink-0 flex-wrap">
+                  {listaPaginas.map((numPag, idx) => (
+                    <button
+                      key={numPag}
+                      onClick={() => { setPaginaPrevia(numPag); setImgCargando(true); setImgError(false); }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        paginaPrevia === numPag
+                          ? "bg-indigo-500/25 border border-indigo-500/40 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                          : "bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                      title={`Ver Hoja ${idx + 1} del certificado (Página ${numPag})`}
+                    >
+                      Hoja {idx + 1} (pág. {numPag})
+                    </button>
+                  ))}
+                </div>
+              ) : tieneDosLados ? (
                 <div className="flex items-center gap-1 ml-1.5 shrink-0">
                   <button
                     onClick={() => { setPaginaPrevia(p.pagina_frente!); setImgCargando(true); setImgError(false); }}
@@ -737,8 +809,7 @@ function PersonasContent() {
                     Reverso
                   </button>
                 </div>
-              )}
-              {!tieneDosLados && (
+              ) : (
                 <span className="text-[10px] text-slate-500 ml-1 shrink-0">pág. {paginaPrevia}</span>
               )}
             </div>
@@ -1225,6 +1296,7 @@ function PersonasContent() {
                       <option value="PPT">Permiso por Protección Temporal (PPT)</option>
                       <option value="CONTRASEÑA">Contraseña / Trámite (CT)</option>
                       <option value="PASAPORTE">Pasaporte (PAS)</option>
+                      <option value="CERTIFICADO_ANTECEDENTES">Certificado de Antecedentes (ANT)</option>
                     </select>
                   </div>
 
@@ -1809,13 +1881,20 @@ function PersonasContent() {
             className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
               filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
                 ? "border-purple-500/60 ring-1 ring-purple-500/30 bg-purple-500/[0.08]"
-                : "hover:border-purple-500/30"
+                : stats.discrepancia > 0
+                  ? "border-purple-500/50 bg-purple-500/[0.04] shadow-sm hover:border-purple-500/70"
+                  : "hover:border-purple-500/30"
             }`}
-            title="Clic para ver personas que faltan en PDF o en la planilla Excel"
+            title="Clic para ver todas las personas que faltan en PDF o en la planilla Excel"
           >
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <p className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Falta PDF / Excel</p>
+                {stats.discrepancia > 0 && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 animate-pulse">
+                    Error
+                  </span>
+                )}
                 {(filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel") && (
                   <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30">
                     Activo
@@ -1824,14 +1903,94 @@ function PersonasContent() {
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 tracking-tight font-feature-settings-tnum">{stats.discrepancia}</span>
-                <span className="text-[11px] text-slate-400">faltantes</span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {stats.faltaPdf > 0 || stats.faltaExcel > 0
+                    ? `(${stats.faltaPdf} en PDF · ${stats.faltaExcel} en Excel)`
+                    : "faltantes"}
+                </span>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500">
-              <AlertCircle className="w-4 h-4" />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stats.discrepancia > 0 ? "bg-purple-500/20 text-purple-600 border border-purple-500/40 shadow-sm" : "bg-purple-500/10 border border-purple-500/20 text-purple-500"}`}>
+              <AlertCircle className={`w-4 h-4 ${stats.discrepancia > 0 ? "animate-pulse" : ""}`} />
             </div>
           </div>
         </div>
+
+        {/* 🚨 Banner Prominente de Alerta Global: Personas Faltantes en PDF o Excel */}
+        {stats.discrepancia > 0 && (
+          <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-purple-500/15 via-rose-500/10 to-amber-500/10 border-2 border-purple-500/50 dark:border-purple-500/60 backdrop-blur-xl shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start md:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-600 dark:text-purple-300 shrink-0 shadow-sm">
+                <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2.5 py-0.5 rounded-lg border border-rose-300 dark:border-rose-700">
+                    Alerta de Personas Faltantes: {stats.discrepancia} en total
+                  </span>
+                  {stats.faltaPdf > 0 && (
+                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700">
+                      📄 {stats.faltaPdf} no {stats.faltaPdf === 1 ? "está" : "están"} en el PDF
+                    </span>
+                  )}
+                  {stats.faltaExcel > 0 && (
+                    <span className="text-xs font-bold text-purple-900 dark:text-purple-200 bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 rounded-lg border border-purple-300 dark:border-purple-700">
+                      📊 {stats.faltaExcel} no {stats.faltaExcel === 1 ? "está" : "están"} en el Excel
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 font-medium">
+                  Se detectaron discrepancias entre el archivo PDF y la planilla Excel. Haga clic en los botones para filtrar directamente y evitar buscarlas una por una:
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {stats.faltaPdf > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroEstado("falta_pdf")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                    filtroEstado === "falta_pdf"
+                      ? "bg-amber-600 text-white shadow-amber-600/30 ring-2 ring-amber-400"
+                      : "bg-white/90 dark:bg-slate-900/90 hover:bg-amber-600 hover:text-white text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60"
+                  }`}
+                  title="Filtrar personas que faltan en el documento PDF"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Ver faltantes en PDF ({stats.faltaPdf})</span>
+                </button>
+              )}
+              {stats.faltaExcel > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroEstado("falta_excel")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                    filtroEstado === "falta_excel"
+                      ? "bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400"
+                      : "bg-white/90 dark:bg-slate-900/90 hover:bg-purple-600 hover:text-white text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700/60"
+                  }`}
+                  title="Filtrar personas que faltan en la planilla Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Ver faltantes en Excel ({stats.faltaExcel})</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFiltroEstado("discrepancia")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  filtroEstado === "discrepancia"
+                    ? "bg-rose-600 text-white shadow-rose-600/30 ring-2 ring-rose-400"
+                    : "bg-rose-600 hover:bg-rose-700 text-white"
+                }`}
+                title="Ver todas las personas con inconsistencias de falta en PDF o Excel"
+              >
+                <span>Ver todas ({stats.discrepancia})</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Barra de Búsqueda y Filtros */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 mb-5">
@@ -1903,7 +2062,7 @@ function PersonasContent() {
               <option value="validas" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">✅ Solo Válidos ({stats.validas})</option>
               <option value="revision" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">⚠️ Por Revisar ({stats.revision})</option>
               <option value="menores" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🚨 Menores de 14 Años ({stats.menores})</option>
-              <option value="discrepancia" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🟣 Falta PDF o Excel ({stats.discrepancia})</option>
+              <option value="discrepancia" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🟣 Total Faltan en PDF o Excel ({stats.discrepancia})</option>
               <option value="falta_pdf" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
               <option value="falta_excel" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
             </select>
@@ -2158,8 +2317,18 @@ function PersonasContent() {
 
                           {/* Página */}
                           <td className="py-2.5 px-1 w-12 lg:w-14 text-center">
-                            <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-semibold truncate block">
-                              {p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—")}
+                            <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-semibold truncate block" title={
+                              Array.isArray((p.detalles_campos as any)?.paginas)
+                                ? `Páginas: ${(p.detalles_campos as any).paginas.join(", ")}`
+                                : undefined
+                            }>
+                              {(() => {
+                                const pags = (p.detalles_campos as any)?.paginas;
+                                if (Array.isArray(pags) && pags.length > 0) {
+                                  return pags.join(", ");
+                                }
+                                return p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—");
+                              })()}
                             </span>
                           </td>
 

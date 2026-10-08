@@ -190,12 +190,67 @@ class DocumentPairingService:
             grp.reasons = ["Documento de una sola página"]
             return [grp]
 
-        # ── Paso 1: Clasificar páginas en categorías de emparejamiento ──
+        # ── Paso 0: Agrupación Determinista de Certificados de Antecedentes ──
+        antecedentes_pages = [p for p in paginas if p.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES"]
+        paginas_estandar = [p for p in paginas if p.get("tipo_documento") != "CERTIFICADO_ANTECEDENTES"]
+
+        grupos_antecedentes: List[DocumentGroup] = []
+        if antecedentes_pages:
+            current_ant_grp = None
+            for p in antecedentes_pages:
+                p_num = p.get("pagina_numero", 1)
+                h_act = p.get("hoja_actual", 1)
+                h_tot = p.get("hoja_total", 1)
+                cert_no = p.get("certificado_numero")
+                tiene_titular = p.get("tiene_titular", False) or bool(p.get("numero_identificacion"))
+
+                # Inicia nuevo certificado si es hoja 1, tiene titular explícito, o difiere el número de certificado
+                es_inicio = (
+                    (h_act == 1)
+                    or tiene_titular
+                    or (current_ant_grp and cert_no and cert_no != getattr(current_ant_grp, "cert_no", None))
+                    or (current_ant_grp and getattr(current_ant_grp, "hojas_totales", 0) > 0 and len(current_ant_grp.pages) >= getattr(current_ant_grp, "hojas_totales", 0))
+                )
+
+                if es_inicio or current_ant_grp is None:
+                    if current_ant_grp:
+                        grupos_antecedentes.append(current_ant_grp)
+                    gid = f"ANT-{cert_no}" if cert_no else f"ANT-{p_num:03d}"
+                    current_ant_grp = DocumentGroup(gid)
+                    current_ant_grp.front_page = p
+                    current_ant_grp.tipo_documento = "CERTIFICADO_ANTECEDENTES"
+                    current_ant_grp.cert_no = cert_no
+                    current_ant_grp.hojas_totales = h_tot
+                    current_ant_grp.numero_identificacion = validador.limpiar_identificacion(p.get("numero_identificacion"))
+                    current_ant_grp.grouping_confidence = 0.98
+                    current_ant_grp.status = "VALID"
+                    current_ant_grp.reasons = [f"Certificado de Antecedentes No. {cert_no or ''} (Hoja {h_act} de {h_tot})"]
+                else:
+                    if current_ant_grp.back_page is None:
+                        current_ant_grp.back_page = p
+                    else:
+                        current_ant_grp.other_pages.append(p)
+                    current_ant_grp.reasons.append(f"Hoja anexa {h_act} de {h_tot} (página {p_num})")
+
+            if current_ant_grp:
+                grupos_antecedentes.append(current_ant_grp)
+
+        if not paginas_estandar:
+            # Si todas las páginas eran de antecedentes, renumerar y retornar directamente
+            for idx, g in enumerate(grupos_antecedentes):
+                g.group_id = f"DOC-{idx+1:03d}"
+            logger.info(
+                f"[DocumentPairingService] {total_pags} página(s) de Antecedentes -> "
+                f"{len(grupos_antecedentes)} certificado(s) único(s) sin duplicación."
+            )
+            return grupos_antecedentes
+
+        # ── Paso 1: Clasificar páginas estándar en categorías de emparejamiento ──
         standalone_pages = []
         front_candidates = []
         back_candidates = []
 
-        for p in paginas:
+        for p in paginas_estandar:
             cara = p.get("cara", "UNKNOWN")
             if cara == "CEDULA_AMBOS_LADOS":
                 standalone_pages.append(p)
@@ -357,7 +412,7 @@ class DocumentPairingService:
             else:
                 grupos_sin_id.append(g)
 
-        grupos_finales = list(grupos_unicos_map.values()) + grupos_sin_id
+        grupos_finales = list(grupos_unicos_map.values()) + grupos_sin_id + grupos_antecedentes
 
         # Reordenar por primera página física y renumerar IDs
         grupos_finales.sort(key=lambda g: g.pages[0] if g.pages else 999)

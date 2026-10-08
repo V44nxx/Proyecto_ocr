@@ -384,7 +384,27 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
         # No se ha subido ninguna planilla Excel para contrastar
         r.en_excel = None
 
-    if p.requiere_revision is False or p.estado_registro == "VALID" or detalles.get("aprobado_manual") or detalles.get("validado_manual"):
+    if r.en_excel is False and not detalles.get("aprobado_manual"):
+        r.requiere_revision = True
+        if not r.estado_registro or r.estado_registro == "VALID":
+            r.estado_registro = "REVIEW_REQUIRED"
+        if r.detalles_campos:
+            mots = list(r.detalles_campos.get("motivos_revision") or [])
+            mot_excel = "No figura en la planilla oficial de Excel cargada"
+            if mot_excel not in mots:
+                mots.append(mot_excel)
+            r.detalles_campos["motivos_revision"] = mots
+    elif r.en_pdf is False and not detalles.get("aprobado_manual"):
+        r.requiere_revision = True
+        if not r.estado_registro or r.estado_registro == "VALID":
+            r.estado_registro = "REVIEW_REQUIRED"
+        if r.detalles_campos:
+            mots = list(r.detalles_campos.get("motivos_revision") or [])
+            mot_pdf = "No figura en el documento PDF adjunto"
+            if mot_pdf not in mots:
+                mots.append(mot_pdf)
+            r.detalles_campos["motivos_revision"] = mots
+    elif p.requiere_revision is False or p.estado_registro == "VALID" or detalles.get("aprobado_manual") or detalles.get("validado_manual"):
         r.requiere_revision = False
         r.estado_registro = "VALID"
         detalles_resp = dict(r.detalles_campos or {})

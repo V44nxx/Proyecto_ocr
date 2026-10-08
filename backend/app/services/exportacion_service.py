@@ -46,6 +46,8 @@ class ExportacionService:
         texto = (texto_ocr or "").upper()
         tipo = str(tipo_doc or "").upper().strip()
 
+        if "ANTECEDENTE" in tipo or re.search(r"\b(CERTIFICADO\s+DE\s+ANTECEDENTES|CERTIFICADO\s+ORDINARIO|PROCURADUR[IÍ]A|SIRI)\b", texto):
+            return "Certificado de Antecedentes"
         if re.search(r"\b(PERMISO\s+POR\s+PROTECCI[OÓ]N\s+TEMPORAL|PERMISO\s+DE\s+PROTECCI[OÓ]N|PROTECCI[OÓ]N\s+TEMPORAL|PPT\b|P\.P\.T\b|VISIBLES)\b", texto) or "PPT" in tipo or "TEMPORAL" in tipo:
             return "Permiso por Protección Temporal (PPT)"
         if re.search(r"\b(C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|CEDULA\s+EXTRANJERIA|EXTRANJER[IÍ]A|C\.E\b|C\.E\.|RESIDENTE\s+N[O0]?\.?)\b", texto) or "EXTRANJERIA" in tipo or tipo in ("CE", "CEDULA_EXTRANJERIA"):

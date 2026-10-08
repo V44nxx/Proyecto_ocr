@@ -8,7 +8,8 @@ const JUNK_WORDS = new Set([
   "ESTATURA", "RH", "VIGENCIA", "POSTAL", "CUE", "III", "DR", "CDI", "AAAS",
   "EXTRANJERIA", "EXTRANJERÍA", "RESIDENTE", "TEMPORAL", "PROTECCION", "PROTECCIÓN",
   "PPT", "VISIBLES", "MIGRACION", "MIGRACIÓN", "PASAPORTE", "PASSPORT", "CONTRASEÑA",
-  "VEN", "ECU", "PER", "BOL", "CHL", "ARG", "BRA", "MEX", "USA", "ESP", "COL"
+  "ANTECEDENTES", "CERTIFICADO", "ORDINARIO", "ESPECIAL", "PROCURADURIA", "PROCURADURÍA", "SIRI",
+  "VEN", "ECU", "PER", "BOL", "CHL", "ARG", "BRA", "MEX", "ESP", "COL"
 ]);
 
 /**
@@ -228,6 +229,14 @@ export function getTipoDocInfo(tipo?: string | null): TipoDocInfo {
       label: "Por verificar",
       badge: "bg-gray-100 dark:bg-gray-800/80 border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold shadow-sm",
       pill: "bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-200 border border-gray-400 dark:border-gray-600 font-semibold shadow-sm",
+    };
+  }
+  if (t.includes("ANTECEDENTE") || t === "ANT" || t === "CERTIFICADO_ANTECEDENTES") {
+    return {
+      codigo: "ANT",
+      label: "Certificado de Antecedentes",
+      badge: "bg-indigo-100 dark:bg-indigo-950/70 border border-indigo-400 dark:border-indigo-500/60 text-indigo-900 dark:text-indigo-200 font-bold shadow-sm",
+      pill: "bg-indigo-100 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-200 border border-indigo-400 dark:border-indigo-500/60 font-semibold shadow-sm",
     };
   }
   if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) {

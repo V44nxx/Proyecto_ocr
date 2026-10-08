@@ -266,6 +266,17 @@ class ExtractorService:
             return "UNKNOWN"
         texto_up = texto.upper()
 
+        # 0. Certificado de Antecedentes (Procuraduría General / SIRI / Policía / Judiciales)
+        es_antecedentes = bool(
+            re.search(
+                r"\b(CERTIFICADO\s+DE\s+ANTECEDENTES|CERTIFICADO\s+ORDINARIO|CERTIFICADO\s+ESPECIAL|"
+                r"PROCURADUR[IÍ]A\s+GENERAL\s+DE\s+LA\s+NACI[OÓ]N|SIRI\b|"
+                r"ANTECEDENTES\s+DISCIPLINARIOS|ANTECEDENTES\s+PENALES|ANTECEDENTES\s+JUDICIALES|"
+                r"REGISTRO\s+DE\s+SANCIONES\s+E\s+INHABILIDADES)\b",
+                texto_up
+            )
+        )
+
         # 1. Permiso por Protección Temporal (PPT)
         es_ppt = bool(
             re.search(
@@ -321,7 +332,9 @@ class ExtractorService:
         )
 
         # Orden de resolución por especificidad
-        if es_ppt:
+        if es_antecedentes:
+            return "CERTIFICADO_ANTECEDENTES"
+        elif es_ppt:
             return "PPT"
         elif es_extranjeria:
             return "CEDULA_EXTRANJERIA"
@@ -399,6 +412,170 @@ class ExtractorService:
     # ──────────────────────────────────────────
     # MÉTODO PRINCIPAL DE EXTRACCIÓN
     # ──────────────────────────────────────────
+    def _extraer_antecedentes(
+        self,
+        texto: str,
+        lineas: List[str] = None,
+        pagina_num: int = 1,
+        ocr_engine: str = "google_document_ai"
+    ) -> Dict[str, Any]:
+        """
+        Extractor de alta fidelidad para Certificados de Antecedentes (Procuraduría General de la Nación / SIRI).
+        Extrae exclusivamente el Nombre Completo y Número de Identificación del titular certificado.
+        """
+        from app.utils.validators import validador
+        from app.utils.name_cleaner import limpiar_tokens_ruido
+
+        texto_limpio = texto or ""
+        lineas_arr = lineas or [l.strip() for l in texto_limpio.splitlines() if l.strip()]
+
+        # 1. Búsqueda del titular certificado mediante patrón oficial SIRI / Procuraduría:
+        # "el(la) señor(a) NOMBRE COMPLETO identificado(a) con Cédula de ciudadanía número 12345678:"
+        patron_titular = re.compile(
+            r"(?:el\(la\)\s*se[ñn]or\(a\)|el\s+se[ñn]or|la\s+se[ñn]ora|ciudadan[oa])\s+([A-ZÁÉÍÓÚÜÑ\s]{3,60}?)\s+identificado\(?a?\)?\s+(?:con\s+)?(?:C[eé]dula(?:\s+de\s+ciudadan[íi]a)?|Tarjeta(?:\s+de\s+identidad)?|documento|C\.?C\.?|N[Uu][Ii][Pp]|Pasaporte)?\s*(?:n[úu]mero|no\.?|#)?\s*([0-9\.\s]{5,15})",
+            re.I
+        )
+        m_titular = patron_titular.search(texto_limpio)
+        nombre_extraido = None
+        id_extraido = None
+
+        if m_titular:
+            nom_raw = m_titular.group(1).strip()
+            id_raw = re.sub(r"[^\d]", "", m_titular.group(2))
+            valido_id, id_limpio = validador.validar_cedula(id_raw)
+            id_extraido = id_limpio if valido_id else (id_raw if len(id_raw) >= 5 else None)
+
+            nom_limpio = validador.normalizar_nombre(limpiar_tokens_ruido(nom_raw))
+            if nom_limpio and len(nom_limpio.split()) >= 2:
+                nombre_extraido = nom_limpio
+        else:
+            for idx_l, l in enumerate(lineas_arr):
+                if re.search(r"el\(la\)\s*se[ñn]or\(a\)|ciudadan[oa]", l, re.I):
+                    linea_conjunta = " ".join(lineas_arr[idx_l:idx_l + 3])
+                    m_conj = patron_titular.search(linea_conjunta)
+                    if m_conj:
+                        id_raw = re.sub(r"[^\d]", "", m_conj.group(2))
+                        valido_id, id_limpio = validador.validar_cedula(id_raw)
+                        id_extraido = id_limpio if valido_id else id_raw
+                        nom_raw = m_conj.group(1).strip()
+                        nombre_extraido = validador.normalizar_nombre(limpiar_tokens_ruido(nom_raw))
+                        break
+
+        # Partición en nombres y apellidos
+        nombres = None
+        apellidos = None
+        if nombre_extraido:
+            toks = nombre_extraido.split()
+            if len(toks) == 4:
+                nombres = " ".join(toks[:2])
+                apellidos = " ".join(toks[2:])
+            elif len(toks) == 3:
+                nombres = toks[0]
+                apellidos = " ".join(toks[1:])
+            elif len(toks) == 2:
+                nombres = toks[0]
+                apellidos = toks[1]
+            else:
+                nombres = " ".join(toks[:2])
+                apellidos = " ".join(toks[2:])
+
+        # Metadatos del certificado
+        m_no = re.search(r"No\.?\s*(\d{6,15})", texto_limpio)
+        cert_no = m_no.group(1) if m_no else None
+        m_hoja = re.search(r"Hoja\s*(\d{1,2})\s*de\s*(\d{1,2})", texto_limpio, re.I)
+        h_act = int(m_hoja.group(1)) if m_hoja else 1
+        h_tot = int(m_hoja.group(2)) if m_hoja else 1
+
+        sanciones_estado = (
+            "NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES"
+            if "NO REGISTRA SANCIONES" in texto_limpio.upper()
+            else ("REGISTRA ANOTACIONES" if "REGISTRA LAS SIGUIENTES ANOTACIONES" in texto_limpio.upper() else "CERTIFICADO CONSULTADO")
+        )
+
+        detalles_campos = {
+            "certificado_numero": cert_no,
+            "hoja_actual": h_act,
+            "hoja_total": h_tot,
+            "paginas": [pagina_num],
+            "antecedentes_sanciones": sanciones_estado,
+            "tipo_documento": "CERTIFICADO_ANTECEDENTES"
+        }
+
+        conf_ident = 0.98 if id_extraido else 0.0
+        conf_nom = 0.98 if nombre_extraido else 0.0
+
+        if id_extraido:
+            detalles_campos["identificacion"] = {
+                "valor": id_extraido,
+                "value": id_extraido,
+                "confidence": conf_ident,
+                "status": "VALID",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Número de cédula extraído del certificado oficial de antecedentes"
+            }
+        else:
+            detalles_campos["identificacion"] = {
+                "valor": None,
+                "value": None,
+                "confidence": 0.0,
+                "status": "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Hoja de certificado sin titular (página anexa o firma)"
+            }
+
+        if nombre_extraido:
+            detalles_campos["nombre_completo"] = {
+                "valor": nombre_extraido,
+                "value": nombre_extraido,
+                "confidence": conf_nom,
+                "status": "VALID",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Nombre del titular extraído del certificado oficial de antecedentes"
+            }
+        else:
+            detalles_campos["nombre_completo"] = {
+                "valor": None,
+                "value": None,
+                "confidence": 0.0,
+                "status": "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Hoja de certificado sin titular (página anexa o firma)"
+            }
+
+        for c_no_aplica in ["fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"]:
+            detalles_campos[c_no_aplica] = {
+                "valor": None,
+                "value": None,
+                "confidence": 1.0,
+                "status": "NOT_APPLICABLE",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "No aplica para Certificado de Antecedentes"
+            }
+
+        es_valido = bool(id_extraido and nombre_extraido)
+        return {
+            "identificacion": id_extraido,
+            "nombre_completo": nombre_extraido,
+            "nombres": nombres,
+            "apellidos": apellidos,
+            "fecha_nacimiento": None,
+            "fecha_expedicion": None,
+            "lugar_expedicion": None,
+            "sexo": None,
+            "confianza_extraccion": 98.0 if es_valido else (75.0 if cert_no else 50.0),
+            "campos_encontrados": [k for k in ["identificacion", "nombre_completo", "nombres", "apellidos"] if locals().get(k)],
+            "tipo_documento": "CERTIFICADO_ANTECEDENTES",
+            "detalles_campos": detalles_campos,
+            "requiere_revision": not es_valido and h_act == 1,
+            "estado_registro": "VALID" if es_valido else "REVIEW_REQUIRED",
+            "errores": []
+        }
+
     def extraer(
         self,
         texto_ocr: str,
@@ -416,6 +593,8 @@ class ExtractorService:
         lineas = [l.strip() for l in texto.split("\n") if l.strip()]
 
         tipo_doc = self.detectar_tipo_documento(texto)
+        if tipo_doc == "CERTIFICADO_ANTECEDENTES":
+            return self._extraer_antecedentes(texto, lineas, pagina_num=pagina_num, ocr_engine=ocr_engine)
 
         resultado = {
             "identificacion": None,

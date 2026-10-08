@@ -590,25 +590,28 @@ class ValidadorColombia:
                 motivos.append(mot_nom)
 
         # 3. Fecha de nacimiento y correspondencia legal con el tipo de documento
-        if not fecha_nacimiento:
-            motivos.append("Fecha de nacimiento no reconocida por OCR")
-        else:
-            tipo_doc_eval = tipo_documento
-            if not tipo_doc_eval and detalles_campos and isinstance(detalles_campos, dict):
-                td = detalles_campos.get("tipo_documento")
-                if isinstance(td, dict):
-                    tipo_doc_eval = td.get("valor") or td.get("value")
-                elif isinstance(td, str):
-                    tipo_doc_eval = td
+        tipo_doc_eval = tipo_documento
+        if not tipo_doc_eval and detalles_campos and isinstance(detalles_campos, dict):
+            td = detalles_campos.get("tipo_documento")
+            if isinstance(td, dict):
+                tipo_doc_eval = td.get("valor") or td.get("value")
+            elif isinstance(td, str):
+                tipo_doc_eval = td
 
-            edad = cls.calcular_edad(fecha_nacimiento)
-            tipo_norm = str(tipo_doc_eval or "").upper().strip()
-            es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
-            es_ce = "EXTRANJERIA" in tipo_norm or "EXTRANJERÍA" in tipo_norm or tipo_norm in ("CEDULA_EXTRANJERIA", "CE")
-            es_ppt = "PPT" in tipo_norm or "PROTECCION" in tipo_norm or "PROTECCIÓN" in tipo_norm
-            es_pas = "PASAPORTE" in tipo_norm or tipo_norm in ("PAS", "PASSPORT")
-            es_ct = "CONTRASE" in tipo_norm or "COMPROBANTE" in tipo_norm or tipo_norm in ("CT", "CONTRASENA")
-            es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti and not es_ce)
+        tipo_norm = str(tipo_doc_eval or "").upper().strip()
+        es_antecedentes = "ANTECEDENTE" in tipo_norm
+
+        if not es_antecedentes:
+            edad = cls.calcular_edad(fecha_nacimiento) if fecha_nacimiento else None
+            if not fecha_nacimiento:
+                motivos.append("Fecha de nacimiento no reconocida por OCR")
+            else:
+                es_ti = "TARJETA" in tipo_norm or tipo_norm in ("TARJETA_IDENTIDAD", "TI", "TARJETA DE IDENTIDAD", "TARJETA IDENTIDAD")
+                es_ce = "EXTRANJERIA" in tipo_norm or "EXTRANJERÍA" in tipo_norm or tipo_norm in ("CEDULA_EXTRANJERIA", "CE")
+                es_ppt = "PPT" in tipo_norm or "PROTECCION" in tipo_norm or "PROTECCIÓN" in tipo_norm
+                es_pas = "PASAPORTE" in tipo_norm or tipo_norm in ("PAS", "PASSPORT")
+                es_ct = "CONTRASE" in tipo_norm or "COMPROBANTE" in tipo_norm or tipo_norm in ("CT", "CONTRASENA")
+                es_cc = (("CEDULA" in tipo_norm or "CÉDULA" in tipo_norm or tipo_norm in ("CEDULA_CIUDADANIA", "CC", "CEDULA DE CIUDADANIA")) and not es_ti and not es_ce)
 
             if edad is not None:
                 if edad >= 18 and es_ti:

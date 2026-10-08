@@ -244,3 +244,86 @@ def test_separar_nombres_pegados():
     assert separar_nombres_pegados("NOMBRESANGI") == "NOMBRES ANGI"
     assert separar_nombres_pegados("BotacheValero") == "Botache Valero"
 
+
+def test_header_rescue_gloria_botache_sin_etiquetas_visibles():
+    """
+    Caso Screenshot 1 (Pág. 10 - Cédula 1006484792):
+    Documento oscuro/fotocopia donde el OCR de la cédula no pudo extraer etiquetas APELLIDOS/NOMBRES,
+    pero la cabecera digital de la página contiene:
+      GLORIA AYDE BOTACHE DAZA
+      1006484792
+    El sistema debe rescatar el nombre completo y apellidos desde la cabecera,
+    evitando quedar en 'POR REVISAR' aun cuando no figure en el Excel.
+    """
+    from app.utils.name_cleaner import resolver_nombre_completo
+
+    lines = [
+        # Cabecera digital tipeada en la hoja escaneada
+        PseudoLine("GLORIA AYDE BOTACHE DAZA", y=0.07),
+        PseudoLine("1006484792", y=0.10),
+        # Frente de cédula física con baja visibilidad / sin etiquetas legibles
+        PseudoLine("REPUBLICA DE COLOMBIA", y=0.35),
+        PseudoLine("IDENTIFICACION PERSONAL", y=0.38),
+        PseudoLine("1.006.484.792", y=0.42),
+        # Texto borroso del frente sin rótulos APELLIDOS ni NOMBRES
+        # Reverso de cédula
+        PseudoLine("FECHA DE NACIMIENTO 03-MAY-2000", y=0.65, x=0.4),
+        PseudoLine("MILAN (CAQUETA)", y=0.68, x=0.4),
+        PseudoLine("1.52 O+ F", y=0.72, x=0.4),
+        PseudoLine("FECHA Y LUGAR DE EXPEDICION", y=0.78, x=0.4),
+    ]
+
+    res = spatial_field_extractor.extraer_cedula_universal(lines, page_num=10)
+
+    # Identificación extraída
+    assert res["identificacion"]["value"] == "1006484792"
+    assert res["identificacion"]["status"] == "VALID"
+
+    # Nombres y apellidos rescatados del encabezado digital
+    assert res["nombres"]["value"] == "GLORIA AYDE"
+    assert res["apellidos"]["value"] == "BOTACHE DAZA"
+    assert res["nombres"]["status"] == "VALID"
+    assert res["apellidos"]["status"] == "VALID"
+
+    nom_completo = resolver_nombre_completo(
+        nombres=res["nombres"]["value"],
+        apellidos=res["apellidos"]["value"]
+    )
+    assert nom_completo == "GLORIA AYDE BOTACHE DAZA"
+    assert nom_completo != "POR REVISAR"
+
+
+def test_deduplicacion_nombres_repetidos_ocr():
+    """
+    Caso Screenshot 2:
+    Evita que variaciones OCR o repeticiones de firmas se concatenen:
+    'ANGUIE CAROLINA BOTACHE' + 'ANGI CAROLINA' -> 'ANGUIE CAROLINA BOTACHE'
+    (sin repetir 'CAROLINA' ni concatenar 'ANGI CAROLINA').
+    """
+    from app.utils.name_cleaner import resolver_nombre_completo
+
+    # 1. Nombres contiene apellidos y apellidos repite nombres
+    res1 = resolver_nombre_completo("ANGUIE CAROLINA BOTACHE", "ANGI CAROLINA")
+    assert res1 == "ANGUIE CAROLINA BOTACHE"
+    assert res1.count("CAROLINA") == 1
+    assert "ANGI" not in res1.split() or "ANGUIE" not in res1.split()
+
+    # 2. Inverso
+    res2 = resolver_nombre_completo("ANGI CAROLINA", "ANGUIE CAROLINA BOTACHE")
+    assert res2 == "ANGUIE CAROLINA BOTACHE"
+
+    # 3. Registro corrupto previo en actual
+    res3 = resolver_nombre_completo("", "", actual="ANGUIE CAROLINA BOTACHE ANGI CAROLINA")
+    assert res3 == "ANGUIE CAROLINA BOTACHE"
+    assert res3.count("CAROLINA") == 1
+
+    # 4. Apellido repetido legítimo en Colombia (paterno y materno) se preserva
+    res4 = resolver_nombre_completo("JUAN CARLOS", "RODRIGUEZ RODRIGUEZ")
+    assert res4 == "JUAN CARLOS RODRIGUEZ RODRIGUEZ"
+
+    # 5. Apellido que se coló en nombres
+    res5 = resolver_nombre_completo("ANGI CAROLINA BOTACHE", "BOTACHE VALERO")
+    assert res5 == "ANGI CAROLINA BOTACHE VALERO"
+    assert res5.count("BOTACHE") == 1
+
+

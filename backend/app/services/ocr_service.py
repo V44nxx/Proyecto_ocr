@@ -1086,6 +1086,20 @@ class OCRService:
                     persona.apellidos = apellidos_final
                 elif (not persona.nombre_completo or persona.nombre_completo == "POR REVISAR") and nombre_completo_final != "POR REVISAR":
                     persona.nombre_completo = nombre_completo_final
+                    if nombres_final and nombres_final != "POR REVISAR":
+                        persona.nombres = nombres_final
+                    if apellidos_final and apellidos_final != "POR REVISAR":
+                        persona.apellidos = apellidos_final
+                elif nombre_completo_final and nombre_completo_final != "POR REVISAR":
+                    # Si el registro en BD contiene duplicaciones o si nombre_completo_final es una versión deduplicada y válida
+                    from app.utils.name_cleaner import deduplicar_tokens_nombre, deduplicar_ngrams
+                    nom_bd_dedup = deduplicar_tokens_nombre(deduplicar_ngrams(persona.nombre_completo or ""))
+                    if nom_bd_dedup != (persona.nombre_completo or "") or (persona.nombre_completo != nombre_completo_final and len(nombre_completo_final.split()) >= 2):
+                        persona.nombre_completo = nombre_completo_final
+                        if nombres_final and nombres_final != "POR REVISAR":
+                            persona.nombres = nombres_final
+                        if apellidos_final and apellidos_final != "POR REVISAR":
+                            persona.apellidos = apellidos_final
 
                 if _es_nombre_invalido(persona.nombres) and not _es_nombre_invalido(datos.get("nombres")):
                     persona.nombres = datos["nombres"]

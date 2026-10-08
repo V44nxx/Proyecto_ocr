@@ -340,27 +340,87 @@ def deduplicar_ngrams(texto: str) -> str:
     return " ".join(words)
 
 
+def distancia_levenshtein(s1: str, s2: str) -> int:
+    """Calcula la distancia de edición Levenshtein entre dos cadenas."""
+    if s1 == s2:
+        return 0
+    if len(s1) < len(s2):
+        return distancia_levenshtein(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1] * (len(s2) + 1)
+        for j, c2 in enumerate(s2):
+            curr[j + 1] = prev[j] if c1 == c2 else min(prev[j], prev[j + 1], curr[j]) + 1
+        prev = curr
+    return prev[len(s2)]
+
+
+def tokens_similares(t1: str, t2: str) -> bool:
+    """Determina si dos palabras o nombres son idénticos o variaciones tipográficas/OCR del mismo."""
+    t1 = t1.upper()
+    t2 = t2.upper()
+    if t1 == t2:
+        return True
+    if len(t1) < 3 or len(t2) < 3:
+        return False
+    d = distancia_levenshtein(t1, t2)
+    if d <= 1:
+        return True
+    if d <= 2 and len(t1) >= 4 and len(t2) >= 4 and t1[:3] == t2[:3]:
+        return True
+    return False
+
+
+def deduplicar_tokens_nombre(texto: str) -> str:
+    """
+    Elimina tokens duplicados a lo largo del nombre completo (exactos o con ligeras variaciones OCR),
+    preservando repeticiones legítimas consecutivas de apellidos paterno y materno
+    (ej: 'RODRIGUEZ RODRIGUEZ' o 'VILLA VILLA'), pero eliminando duplicados no consecutivos
+    (ej: 'ANGUIE CAROLINA BOTACHE ANGI CAROLINA' -> 'ANGUIE CAROLINA BOTACHE').
+    """
+    words = texto.split()
+    if not words:
+        return ""
+    resultado = []
+    for w in words:
+        w_up = w.upper()
+        # Si es idéntico al token inmediatamente anterior, permitir hasta 2 consecutivas
+        if resultado and resultado[-1].upper() == w_up:
+            consecutivos = 0
+            for r in reversed(resultado):
+                if r.upper() == w_up:
+                    consecutivos += 1
+                else:
+                    break
+            if consecutivos >= 2:
+                continue
+            resultado.append(w)
+            continue
+
+        # Si no es consecutivo, verificar si ya se vio un token idéntico o muy similar antes
+        ya_visto = False
+        for r in resultado:
+            if tokens_similares(r, w):
+                ya_visto = True
+                break
+        if not ya_visto:
+            resultado.append(w)
+
+    return " ".join(resultado)
+
+
 def resolver_nombre_completo(nombres: str, apellidos: str = "", actual: str = None) -> str:
     """
-    Unifica nombres y apellidos evitando duplicados accidentales (ej: nombres ya contiene apellidos)
-    y eliminando ruidos institucionales (IDENTIDAD, CUE, RETUBEICA, etc.).
+    Unifica nombres y apellidos evitando duplicados accidentales (ej: nombres ya contiene apellidos,
+    apellidos repite nombres, o variaciones OCR del mismo nombre) y eliminando ruidos institucionales.
     """
-    # Si ya viene un actual explícito y limpio, intentar deduplicarlo
-    if actual and actual.strip() and actual != "POR REVISAR":
-        act_limpio = limpiar_tokens_ruido(actual)
-        act_dedup = deduplicar_ngrams(act_limpio)
-        if len(act_dedup.split()) >= 2:
-            # Si actual tiene al menos 2 palabras y no es idéntico a una sola palabra repetida
-            pass
-
     n_limpio = limpiar_tokens_ruido(nombres or "")
     a_limpio = limpiar_tokens_ruido(apellidos or "")
 
-    n_norm = normalizar_str(n_limpio)
-    a_norm = normalizar_str(a_limpio)
-
-    toks_n = n_norm.split()
-    toks_a = a_norm.split()
+    toks_n = n_limpio.split()
+    toks_a = a_limpio.split()
 
     if not a_limpio and not n_limpio and actual and actual.strip() and actual != "POR REVISAR":
         res = limpiar_tokens_ruido(actual)
@@ -368,27 +428,54 @@ def resolver_nombre_completo(nombres: str, apellidos: str = "", actual: str = No
         res = n_limpio
     elif not n_limpio:
         res = a_limpio
-    elif n_norm.endswith(a_norm):
-        res = n_limpio
-    elif n_norm.replace(" ", "").endswith(a_norm.replace(" ", "")):
-        res = n_limpio
-    elif set(toks_a).issubset(set(toks_n)):
-        res = n_limpio
-    elif set(toks_n).issubset(set(toks_a)):
-        res = a_limpio
     else:
-        res = f"{n_limpio} {a_limpio}".strip()
+        # Verificar si toks_a es un subconjunto (exacto o fuzzy) de toks_n
+        a_en_n = [any(tokens_similares(t_a, t_n) for t_n in toks_n) for t_a in toks_a]
+        n_en_a = [any(tokens_similares(t_n, t_a) for t_a in toks_a) for t_n in toks_n]
+
+        if all(a_en_n):
+            # Todos los apellidos ya están presentes en nombres (ej: nombres="ANGUIE CAROLINA BOTACHE", apellidos="ANGI CAROLINA")
+            res = n_limpio
+        elif all(n_en_a):
+            # Todos los nombres ya están en apellidos
+            res = a_limpio
+        else:
+            # Filtrar de apellidos los tokens que ya están en nombres
+            toks_a_filtrados = []
+            for t_a in toks_a:
+                if any(tokens_similares(t_a, t_n) for t_n in toks_n):
+                    continue
+                toks_a_filtrados.append(t_a)
+
+            # Filtrar de nombres los tokens de apellidos que se colaron
+            toks_n_filtrados = []
+            for t_n in toks_n:
+                if any(tokens_similares(t_n, t_a) for t_a in toks_a_filtrados):
+                    continue
+                toks_n_filtrados.append(t_n)
+
+            str_n = " ".join(toks_n_filtrados)
+            str_a = " ".join(toks_a_filtrados)
+            if str_n and str_a:
+                res = f"{str_n} {str_a}".strip()
+            elif str_n:
+                res = str_n
+            elif str_a:
+                res = str_a
+            else:
+                res = n_limpio or a_limpio
 
     if actual and actual.strip() and actual != "POR REVISAR":
         act_limp = limpiar_tokens_ruido(actual)
         # Solo preferir actual si actual es legítimo (sin palabras de ruido administrativo)
-        # y no sobrescribir nombres y apellidos válidos ya resueltos
         if not es_linea_ruido_administrativo(actual):
-            if (not res or res == "POR REVISAR") and len(act_limp.split()) >= 2:
-                res = act_limp
-            elif len(act_limp.split()) > len(res.split()) and len(act_limp.split()) >= 2 and (not a_limpio or not n_limpio):
-                res = act_limp
+            act_dedup = deduplicar_tokens_nombre(deduplicar_ngrams(act_limp))
+            if (not res or res == "POR REVISAR") and len(act_dedup.split()) >= 2:
+                res = act_dedup
+            elif len(act_dedup.split()) > len(res.split()) and len(act_dedup.split()) >= 2 and (not a_limpio or not n_limpio):
+                res = act_dedup
 
     res = deduplicar_ngrams(res)
+    res = deduplicar_tokens_nombre(res)
     res = limpiar_tokens_ruido(res)
     return res.upper().strip() or "POR REVISAR"

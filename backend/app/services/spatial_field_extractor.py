@@ -796,6 +796,13 @@ class SpatialFieldExtractor:
                             y_limite_nom = getattr(lineas_frente[idx_nom], "y", 0.35)
                             if y_pos > y_limite_nom + 0.12:
                                 continue
+                        # Si no hay etiqueta NOMBRES pero sí número de cédula, limitar distancia al número
+                        # para no capturar la firma/rúbrica en el tercio inferior de la cédula
+                        elif not es_digital_o_ti and idx_num != -1 and idx_num < len(lineas_frente):
+                            y_num_line = getattr(lineas_frente[idx_num], "y", 0.0)
+                            if y_pos > y_num_line + 0.14:
+                                continue
+
                         limpio = self.limpiar_nombre(t_val)
                         if not limpio:
                             continue
@@ -819,8 +826,113 @@ class SpatialFieldExtractor:
                             resultado_campos["nombres"] = {"value": cands_limpios[1], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
                 elif len(cands_limpios) == 1:
                     if not colombia_geo.es_geografico(cands_limpios[0]):
-                        if not resultado_campos["apellidos"]["value"]:
-                            resultado_campos["apellidos"] = {"value": cands_limpios[0], "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        cand_unico = cands_limpios[0]
+                        from app.utils.name_cleaner import tokens_similares
+                        if not resultado_campos["apellidos"]["value"] and not resultado_campos["nombres"]["value"]:
+                            resultado_campos["apellidos"] = {"value": cand_unico, "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        elif not resultado_campos["apellidos"]["value"]:
+                            # Solo asignar a apellidos si no solapa sustancialmente con los nombres ya conocidos
+                            nom_exist = resultado_campos["nombres"]["value"] or ""
+                            palabras_cand = cand_unico.split()
+                            palabras_nom = nom_exist.split()
+                            coincidentes = [w_c for w_c in palabras_cand if any(tokens_similares(w_c, w_n) for w_n in palabras_nom)]
+                            no_coincidentes = [w_c for w_c in palabras_cand if not any(tokens_similares(w_c, w_n) for w_n in palabras_nom)]
+                            if no_coincidentes:
+                                resultado_campos["apellidos"] = {"value": " ".join(no_coincidentes), "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (apellidos)"}
+                        elif not resultado_campos["nombres"]["value"]:
+                            ape_exist = resultado_campos["apellidos"]["value"] or ""
+                            palabras_cand = cand_unico.split()
+                            palabras_ape = ape_exist.split()
+                            no_coincidentes = [w_c for w_c in palabras_cand if not any(tokens_similares(w_c, w_a) for w_a in palabras_ape)]
+                            if no_coincidentes:
+                                resultado_campos["nombres"] = {"value": " ".join(no_coincidentes), "confidence": doc_ai_confidence * 0.75, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído por secuencia posicional frontal (nombres)"}
+
+            # ── 3.1 Rescate por Encabezado Digital de Página (Header Rescue) ──
+            # Si el documento físico es una fotocopia oscura/degradada o no tiene etiquetas legibles,
+            # pero el postulante digitó su nombre en la cabecera de la página (ej: 'GLORIA AYDE BOTACHE DAZA' o 'ANGI CAROLINA BOTACHE VALERO')
+            if not resultado_campos["apellidos"]["value"] and not resultado_campos["nombres"]["value"]:
+                from app.utils.name_cleaner import tokens_similares
+                id_actual = resultado_campos["identificacion"]["value"] or ""
+
+                for idx_hl, hl in enumerate(lines):
+                    y_hl = getattr(hl, "y", 0.0)
+                    if y_doc_top is not None and y_hl >= (y_doc_top - 0.01):
+                        continue
+                    if y_hl > 0.40:
+                        continue
+
+                    t_hl = getattr(hl, "text", "").strip()
+                    if not t_hl or es_linea_ruido_administrativo(t_hl):
+                        continue
+                    # Descartar líneas con etiquetas del documento (NOMBRES, CEDULA, etc.)
+                    if re.search(r"\b(CEDULA|C[EÉ]DULA|NOMBRES|APELLIDOS|NUMERO|N[UÚ]MERO|NUIP|IDENTIFICACI[OÓ]N|TARJETA|REP[UÚ]BLICA|COLOMBIA)\b", t_hl, re.I):
+                        continue
+                    # Descartar correos, teléfonos o fechas
+                    if "@" in t_hl or re.search(r"\b3\d{9}\b", t_hl) or re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", t_hl):
+                        continue
+                    # Descartar números puros o membretes con CC
+                    if re.match(r"^\d+$", t_hl) or re.search(r"\b(?:CC|C\.C\.)[\.\s:]*\d+", t_hl, re.I):
+                        continue
+                    # Descartar encabezados institucionales
+                    if HEADER_CARD_ANCHORS.search(t_hl) or REVERSO_KEYWORDS.search(t_hl):
+                        continue
+
+                    limpio_h = self.limpiar_nombre(t_hl)
+                    if not limpio_h:
+                        continue
+
+                    words_h = limpio_h.split()
+                    if not (2 <= len(words_h) <= 5):
+                        continue
+                    if any(len(w) < 2 for w in words_h):
+                        continue
+                    if colombia_geo.es_geografico(limpio_h):
+                        continue
+
+                    # Verificar si una línea adyacente contiene el número de identificación
+                    tiene_id_cercano = False
+                    if id_actual:
+                        for offset in [-1, 1, 2]:
+                            idx_check = idx_hl + offset
+                            if 0 <= idx_check < len(lines):
+                                t_chk = re.sub(r"[^\d]", "", getattr(lines[idx_check], "text", ""))
+                                if t_chk == id_actual:
+                                    tiene_id_cercano = True
+                                    break
+
+                    if len(words_h) == 4:
+                        nom_h = " ".join(words_h[:2])
+                        ape_h = " ".join(words_h[2:])
+                    elif len(words_h) == 3:
+                        nom_h = words_h[0]
+                        ape_h = " ".join(words_h[1:])
+                    elif len(words_h) == 2:
+                        nom_h = words_h[0]
+                        ape_h = words_h[1]
+                    else:
+                        nom_h = " ".join(words_h[:2])
+                        ape_h = " ".join(words_h[2:])
+
+                    conf_rescue = 0.96 if tiene_id_cercano else 0.88
+                    if not resultado_campos["nombres"]["value"]:
+                        resultado_campos["nombres"] = {
+                            "value": nom_h,
+                            "confidence": conf_rescue,
+                            "status": "VALID",
+                            "page": page_num,
+                            "source": "header_rescue",
+                            "reason": f"Nombre rescatado de cabecera de página{' (confirmado con ID)' if tiene_id_cercano else ''}"
+                        }
+                    if not resultado_campos["apellidos"]["value"]:
+                        resultado_campos["apellidos"] = {
+                            "value": ape_h,
+                            "confidence": conf_rescue,
+                            "status": "VALID",
+                            "page": page_num,
+                            "source": "header_rescue",
+                            "reason": f"Apellidos rescatados de cabecera de página{' (confirmado con ID)' if tiene_id_cercano else ''}"
+                        }
+                    break
 
         # ── 4. Fechas (Estrategia Directa por Etiqueta + Cédula Amarilla Reverso + Cronológica) ──
         # 4.1.A Búsqueda directa por etiquetas explícitas

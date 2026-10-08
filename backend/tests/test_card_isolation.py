@@ -152,3 +152,95 @@ def test_fecha_nacimiento_variantes_ocr():
     res = spatial_field_extractor.extraer_cedula_universal(lines_variante, page_num=1)
     assert res["fecha_nacimiento"]["value"] == "1981-10-12"
     assert res["fecha_expedicion"]["value"] == "2000-03-30"
+
+
+def test_aislamiento_cedula_angi_botache():
+    """
+    Simula exactamente el documento del pantallazo del usuario (pág 5 ficha 3631718):
+    Parte superior (margen de hoja fotocopia):
+      - ANGI CAROLINA BOTACHE VALERO
+      - angiecarolina001@gmail.com
+      - 3102894860
+    Cédula Frente (físico):
+      - NUBLIC DE COLOMBIA (deformación OCR de REPUBLICA DE COLOMBIA)
+      - IDENTIFICACION PERSONAL
+      - NUMERO 1.117.547.992
+      - APELLIDOS
+      - BOTACHE VALERO
+      - NOMBRES
+      - ANGI CAROLINA
+      - CAPE (artefacto OCR de firma cursiva inferior)
+    Cédula Reverso (físico):
+      - FECHA DE NACIMIENTO 25-ABR-1997
+      - MILAN
+      - (CAQUETA)
+      - LUGAR DE NACIMIENTO
+      - 1.52 O+ F
+      - ESTATURA G.S. RH SEXO
+      - 01-DIC-2015 FLORENCIA
+      - FECHA Y LUGAR DE EXPEDICION
+      - Código de barras PDF417
+    """
+    from app.utils.name_cleaner import resolver_nombre_completo
+
+    lines = [
+        # Encabezado externo tipeado por la aprendiz en la hoja
+        PseudoLine("ANGI CAROLINA BOTACHE VALERO", y=0.08),
+        PseudoLine("angiecarolina001@gmail.com", y=0.11),
+        PseudoLine("3102894860", y=0.14),
+        # Frente de la cédula física
+        PseudoLine("NUBLIC DE COLOMBIA", y=0.30),
+        PseudoLine("IDENTIFICACION PERSONAL", y=0.33),
+        PseudoLine("NUMERO 1.117.547.992", y=0.36),
+        PseudoLine("APELLIDOS", y=0.39),
+        PseudoLine("BOTACHE VALERO", y=0.42),
+        PseudoLine("NOMBRES", y=0.45),
+        PseudoLine("ANGI CAROLINA", y=0.48),
+        PseudoLine("CAPE", y=0.52),  # Ruido de firma
+        # Reverso de la cédula física
+        PseudoLine("FECHA DE NACIMIENTO 25-ABR-1997", y=0.62, x=0.4),
+        PseudoLine("MILAN", y=0.65, x=0.4),
+        PseudoLine("(CAQUETA)", y=0.67, x=0.4),
+        PseudoLine("LUGAR DE NACIMIENTO", y=0.70, x=0.4),
+        PseudoLine("1.52 O+ F", y=0.73, x=0.4),
+        PseudoLine("ESTATURA G.S. RH SEXO", y=0.76, x=0.4),
+        PseudoLine("01-DIC-2015 FLORENCIA", y=0.79, x=0.4),
+        PseudoLine("FECHA Y LUGAR DE EXPEDICION", y=0.82, x=0.4),
+    ]
+
+    res = spatial_field_extractor.extraer_cedula_universal(lines, page_num=5)
+
+    # 1. Identificación debe ser el número real de cédula sin incluir celular
+    assert res["identificacion"]["value"] == "1117547992"
+    assert res["identificacion"]["status"] == "VALID"
+
+    # 2. Apellidos y Nombres exactos de la cédula física sin ruido NUBLIC ni CAPE
+    assert res["apellidos"]["value"] == "BOTACHE VALERO"
+    assert res["nombres"]["value"] == "ANGI CAROLINA"
+
+    # 3. Resolución de nombre completo sin ruido
+    nom_completo = resolver_nombre_completo(
+        nombres=res["nombres"]["value"],
+        apellidos=res["apellidos"]["value"]
+    )
+    assert nom_completo == "ANGI CAROLINA BOTACHE VALERO"
+    assert "NUBLIC" not in nom_completo
+    assert "CAPE" not in nom_completo
+
+    # 4. Fecha de nacimiento
+    assert res["fecha_nacimiento"]["value"] == "1997-04-25"
+    assert res["fecha_nacimiento"]["status"] == "VALID"
+
+
+def test_separar_nombres_pegados():
+    """Valida la separación de nombres o apellidos fusionados por el OCR."""
+    from app.utils.name_cleaner import separar_nombres_pegados
+
+    assert separar_nombres_pegados("BOTACHEVALERO") == "BOTACHE VALERO"
+    assert separar_nombres_pegados("ANGICAROLINA") == "ANGI CAROLINA"
+    assert separar_nombres_pegados("MURCIACORREDOR") == "MURCIA CORREDOR"
+    assert separar_nombres_pegados("SALASNARANJO") == "SALAS NARANJO"
+    assert separar_nombres_pegados("APELLIDOSBOTACHE") == "APELLIDOS BOTACHE"
+    assert separar_nombres_pegados("NOMBRESANGI") == "NOMBRES ANGI"
+    assert separar_nombres_pegados("BotacheValero") == "Botache Valero"
+

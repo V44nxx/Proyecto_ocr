@@ -34,6 +34,7 @@ class ValidadorColombia:
     # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes, códigos de país)
     _PALABRAS_NO_NOMBRE = re.compile(
         r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
+        r"NUBLIC|NUBLICA|RUBLIC|RUBLICA|UBLIC|UBLICA|REUBLICA|REPUBLIC|CAPE|CAFE|\bCP\b|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
@@ -190,6 +191,10 @@ class ValidadorColombia:
 
         # Corregir sustituciones OCR habituales (ej. SAB! -> SABI, homóglifos griegos)
         texto = cls.corregir_errores_ocr_nombre(texto)
+
+        # Desegmentar nombres o rótulos pegados sin espacios
+        from app.utils.name_cleaner import separar_nombres_pegados
+        texto = separar_nombres_pegados(texto)
 
         # Solo letras y espacios (incluyendo caracteres latinos)
         texto = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]", "", texto)
@@ -359,11 +364,14 @@ class ValidadorColombia:
 
         # ── Formato DDMMMYYYY sin separador (ej. 22OCT2006, 120CT1981) ─────────────────
         match_unseparated = re.search(
-            r"\b(\d{1,2})([A-Z0-9]{3,4})(\d{2,4})\b",
+            r"\b(\d{1,2})([A-Z]{3,4}|[A-Z0-9]{3})(\d{4})\b|\b(\d{1,2})([A-Z0-9]{3,4})(\d{2})\b",
             texto_u,
         )
         if match_unseparated:
-            dia_t, mes_t, anio_t = match_unseparated.groups()
+            if match_unseparated.group(1):
+                dia_t, mes_t, anio_t = match_unseparated.group(1), match_unseparated.group(2), match_unseparated.group(3)
+            else:
+                dia_t, mes_t, anio_t = match_unseparated.group(4), match_unseparated.group(5), match_unseparated.group(6)
             mes_num = MESES.get(mes_t.upper())
             if mes_num:
                 anio = int(anio_t)

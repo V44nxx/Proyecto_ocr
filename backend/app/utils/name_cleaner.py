@@ -21,6 +21,9 @@ JUNK_WORDS = {
     "IDENTIF", "IDENTIFICACI", "IDENTIFICACIONPERSONAL", "REPUBLICADECOLOMBIA",
     "MOUSEES", "FMRMA", "FIRMAS", "FIRMADO", "ANDAQUIES", "CAQUETA",
     "FECHAYLUGARDEEXPEDICION", "LUGARDENACIMIENTG", "INDICEDERECHO", "REGISTRADGRNACIONAL",
+    # Variantes OCR de REPUBLICA DE COLOMBIA y firmas espurias
+    "NUBLIC", "NUBLICA", "PUBLIC", "RUBLIC", "RUBLICA", "UBLIC", "UBLICA",
+    "REUBLICA", "REPUBLIC", "CAPE", "CAFE", "CP", "CADE", "CADES",
     # Ruidos de membretes institucionales, trámites y fotocopias
     "FOTOCOPIA", "PROCESO", "INSCRIPCION", "INSCRIPCIÓN", "MATRICULA", "MATRÍCULA",
     "EMPRENDEDORA", "EMPRENDEDOR", "EMPRENDIMIENTO", "OFICINA", "DEPARTAMENTAL",
@@ -38,6 +41,50 @@ JUNK_WORDS = {
     "FLORENCIACAQUETA", "FLORENCIACAQUETÁ",   # ciudad+dpto fusionados por OCR
     "MEDELLINANTIOQUÍA", "MEDELLÍNANTIOQUÍA", "BOGOTACUNDINAMARCA",
     "EMPRENDEDORA", "EMPRENDEDORAS",
+}
+
+# Diccionario canónico de nombres y apellidos comunes colombianos para desegmentación de tokens pegados
+NOMBRES_COLOMBIANOS_COMUNES = {
+    # Nombres masculinos
+    "JUAN", "CARLOS", "LUIS", "JOSE", "JORGE", "MIGUEL", "DAVID", "DANIEL", "ANDRES",
+    "ALEJANDRO", "CRISTIAN", "CHRISTIAN", "SEBASTIAN", "CAMILO", "FELIPE", "SANTIAGO",
+    "DIEGO", "JULIAN", "JULIO", "MARIO", "MARTIN", "PEDRO", "PABLO", "GABRIEL", "RICARDO",
+    "ROBERTO", "FERNANDO", "HECTOR", "OSCAR", "EDGAR", "CESAR", "JAIME", "ALEXANDER",
+    "JHON", "JHONATAN", "JHOAN", "EDILMER", "EMERSON", "LEONEL", "HOMERO", "HAROLD",
+    "HERNAN", "JAIRO", "JAVIER", "JESUS", "NELSON", "NESTOR", "RAFAEL", "RODRIGO",
+    "SERGIO", "VICTOR", "YESID", "FABIAN", "ALVARO", "GERMAN", "MAURICIO", "WILSON",
+    "GUSTAVO", "EDWIN", "FREDY", "FREDDY", "ALEXIS", "DUVAN", "BRAYAN", "KEVIN",
+    # Nombres femeninos
+    "MARIA", "ANA", "ANGI", "ANGIE", "CAROLINA", "PAOLA", "ANDREA", "DIANA", "LINA",
+    "LILIANA", "LUZ", "LUCIA", "LUISA", "GLORIA", "PATRICIA", "PAULA", "SANDRA", "SONIA",
+    "TATIANA", "VALENTINA", "VALERIA", "VANESSA", "VIVIANA", "YENNY", "YULIETH", "YURY",
+    "MARCELA", "MARGARITA", "MARITZA", "MAYRA", "MONICA", "NANCY", "NATALIA", "KATHERINE",
+    "LEIDY", "LEYDI", "YURANI", "BERCELIA", "DOLY", "ADRIANA", "CLAUDIA", "CONSTANZA",
+    "ESPERANZA", "BLANCA", "MARTHA", "LUDIVIA", "YULIANA", "DANIELA", "CAMILA", "ISABELLA",
+    "ISABEL", "SOFIA", "GABRIELA", "ALEJANDRA", "CATALINA", "EVELYN", "JESSICA", "DAYANA",
+    "STEFANY", "STEPHANIE", "ELIZABETH", "CARMEN", "ROCIO", "XIMENA", "JIMENA", "INGRID",
+    "AURA", "CECILIA", "CLEMENCIA", "NUBIA", "STELLA", "ESTELLA", "YOLANDA", "AMPARO",
+    # Apellidos comunes colombianos
+    "RODRIGUEZ", "GOMEZ", "GONZALEZ", "MARTINEZ", "GARCIA", "PEREZ", "LOPEZ", "HERNANDEZ",
+    "SANCHEZ", "RAMIREZ", "TORRES", "FLORES", "FLOREZ", "DIAZ", "VASQUEZ", "CASTRO",
+    "MORALES", "ORTIZ", "SILVA", "ROJAS", "GUTIERREZ", "JIMENEZ", "RUIZ", "ALVAREZ",
+    "ROMERO", "MORENO", "MENDOZA", "ALONSO", "CASTILLO", "MEDINA", "VARGAS", "GUZMAN",
+    "MUNOZ", "MUÑOZ", "ROCHA", "GUERRERO", "BENITEZ", "CORTES", "SOTO", "CARDONA",
+    "OSORIO", "RESTREPO", "JARAMILLO", "DUQUE", "QUINTERO", "LONDONO", "LONDOÑO",
+    "BEDOYA", "VILLA", "PECHENE", "CASTAÑO", "AGUDELO", "HENAO", "ZAPATA", "ZULUAGA",
+    "RIVERA", "CHAVEZ", "ACUNA", "ACUÑA", "CARRILLO", "BAUTISTA", "PARRA", "SUAREZ",
+    "OSPINA", "ESCOBAR", "MEJIA", "OCAMPO", "PINEDA", "TRUJILLO", "MONTOYA", "CEBALLOS",
+    "MARIN", "OCHOA", "VALENCIA", "SALAZAR", "TAPIAS", "CIFUENTES", "MONROY", "PATINO",
+    "PATIÑO", "CAMACHO", "BARON", "CACERES", "BARRERA", "BUSTOS", "CAMPO", "HURTADO",
+    "VELASQUEZ", "MONCADA", "ARBOLEDA", "POSADA", "HIGUITA", "RENDON", "CORREA",
+    "PALACIO", "RIOS", "VELEZ", "TABARES", "HERRERA", "BOTACHE", "VALERO", "MURCIA",
+    "CORREDOR", "SALAS", "NARANJO", "CALDERON", "AGUIRRE", "ARIAS", "CARDENAS",
+    "CABRERA", "CONTRERAS", "DELGADO", "DURAN", "ESPINOSA", "ESTRADA", "FRANCO",
+    "GALVIS", "GIRALDO", "HOYOS", "IBARRA", "LOAIZA", "LOZANO", "MERCADO", "MORA",
+    "NINO", "NIÑO", "ORDONEZ", "ORDOÑEZ", "OROZCO", "ORTEGA", "PADILLA", "PENA", "PEÑA",
+    "PINZON", "PINZÓN", "PUERTA", "RINCON", "RINCÓN", "RIVAS", "ROA", "ROLDAN",
+    "SALGADO", "SIERRA", "SOLER", "TRIANA", "URIBE", "VALLEJO", "VEGA", "VERA",
+    "VILLAMIZAR", "VILLEGAS", "YEPES", "ZAMBRANO"
 }
 
 PATRON_RUIDO_ADMINISTRATIVO = re.compile(
@@ -186,9 +233,58 @@ def es_token_ruido(t_raw: str) -> bool:
 SUFIJOS_FONDO_SEGURIDAD = ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM")
 
 
+def _descomponer_token_pegado(token: str) -> str:
+    """
+    Descompone un token si está formado por dos o más nombres/apellidos pegados
+    (ej: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'ANGICAROLINA' -> 'ANGI CAROLINA').
+    """
+    if not token or len(token) < 6:
+        return token
+    t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", normalizar_str(token))
+    if len(t_clean) < 6:
+        return token
+    # Si la palabra completa ya es un nombre legítimo conocido en el diccionario, no dividir
+    # (ej: VILLAMIZAR no se divide en VILLA + MIZAR)
+    if t_clean in NOMBRES_COLOMBIANOS_COMUNES and len(t_clean) <= 10:
+        return token
+
+    # Probar puntos de partición i entre 3 y len(t_clean)-2
+    for i in range(3, len(t_clean) - 2):
+        p1 = t_clean[:i]
+        p2 = t_clean[i:]
+        if p1 in NOMBRES_COLOMBIANOS_COMUNES and (p2 in NOMBRES_COLOMBIANOS_COMUNES or (len(p2) >= 6 and any(p2[:j] in NOMBRES_COLOMBIANOS_COMUNES and p2[j:] in NOMBRES_COLOMBIANOS_COMUNES for j in range(3, len(p2)-2)))):
+            p2_split = _descomponer_token_pegado(p2)
+            return f"{p1} {p2_split}"
+
+    return token
+
+
+def separar_nombres_pegados(texto: str) -> str:
+    """
+    Separa nombres y apellidos que fueron fusionados sin espacios por el OCR:
+    1. CamelCase / PascalCase: 'BotacheValero' -> 'Botache Valero'
+    2. Rótulos pegados al valor: 'APELLIDOSBOTACHE' -> 'APELLIDOS BOTACHE'
+    3. Nombres pegados en mayúsculas: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'ANGICAROLINA' -> 'ANGI CAROLINA'
+    """
+    if not texto:
+        return ""
+    # 1. Separar transiciones CamelCase (minúscula a mayúscula)
+    txt = re.sub(r"([a-záéíóúüñ])([A-ZÁÉÍÓÚÜÑ])", r"\1 \2", str(texto))
+    # 2. Separar rótulos de cédula pegados al inicio
+    txt = re.sub(r"\b(APELLIDOS?|NOMBRES?|CEDULA|NUMERO|CIUDADANIA)([A-ZÁÉÍÓÚÜÑ]{2,})\b", r"\1 \2", txt, flags=re.I)
+    # 3. Separar tokens individuales en mayúsculas
+    palabras = txt.split()
+    resultado = []
+    for p in palabras:
+        resultado.append(_descomponer_token_pegado(p))
+    return " ".join(resultado)
+
+
 def limpiar_tokens_ruido(texto: str) -> str:
     if not texto:
         return ""
+    # Desegmentar nombres o rótulos pegados sin espacios
+    texto = separar_nombres_pegados(str(texto))
     # Reemplazar símbolos, barras, números y caracteres no alfabéticos
     limpio_pre = re.sub(r"[|!/\\\[\]{}()<>=*#+~_^¿?¡,.;:\d]", " ", str(texto))
     toks = limpio_pre.split()

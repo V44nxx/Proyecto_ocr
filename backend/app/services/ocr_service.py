@@ -740,10 +740,15 @@ class OCRService:
                 if es_linea_ruido_administrativo(str(val)):
                     return True
                 v_up = str(val).strip().upper()
-                if v_up in {"POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA", "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA"}:
+                if v_up in {
+                    "POR REVISAR", "BLICA", "PUBLICA", "REPÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA",
+                    "PERSONAL", "CEDULA", "CIUDADANIA", "DOCUMENTO", "IDENTIFICACION", "TARJETA",
+                    "TARJETA DE IDENTIDAD", "CEDULA DE CIUDADANIA", "NUBLIC", "NUBLICA", "RUBLIC", "RUBLICA",
+                    "UBLIC", "UBLICA", "CAPE", "CAFE", "CP"
+                }:
                     return True
                 if any(hdr in v_up for hdr in [
-                    "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI",
+                    "CIUDAD", "CIUDADA", "CEDU", "COLOM", "REPUBLI", "REPÚBLI", "NUBLI", "RUBLI",
                     "REGISTRAD", "ESTADO CIVIL", "INDICE", "FIRMA", "PERSONAL", "IDENTIFIC", "CAMSCANNER",
                     "FOTOCOPIA", "PROCESO", "INSCRIPCION", "INSCRIPCIÓN", "MATRICULA", "MATRÍCULA", "EMPRENDEDORA", "EMPRENDEDOR", "SENA", "CAMPESINA", "FULLPOPULAR"
                 ]):

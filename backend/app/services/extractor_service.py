@@ -25,6 +25,7 @@ from app.services.colombia_geo_service import colombia_geo
 
 NO_NOMBRE_HEADER = re.compile(
     r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|"
+    r"NUBLI|NUBLIC|NUBLICA|RUBLI|RUBLIC|RUBLICA|UBLIC|UBLICA|CAPE|CAFE|\bCP\b|"
     r"COLOMB|COLOMS|COL\b|BIA\b|"
     r"CEDUL|CÉDUL|CEDUU|CEDUA|"
     r"CIUDAD|CIUDAN|GIUDAD|"

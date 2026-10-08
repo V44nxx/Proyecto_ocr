@@ -121,6 +121,7 @@ class SpatialFieldExtractor:
     # Se filtran solo si aparecen como única palabra en limpiar_nombre().
     NO_NOMBRE_HEADER = re.compile(
         r"(REPUBLI|REPÚBLI|REDUBLI|FEPUBLI|REPUTE|RETUBEICA|"
+        r"NUBLI|NUBLIC|NUBLICA|RUBLI|RUBLIC|RUBLICA|UBLIC|UBLICA|CAPE|CAFE|\bCP\b|"
         r"COLOMB|COLOMS|COL\b|BIA\b|"
         r"CEDUL|CÉDUL|CEDUU|CEDUA|EDULA|CEDLA|CEDUIA|CFDULA|CELDULA|"
         r"EXTRANJER|RESIDENTE|TEMPORAL|PROTECCION|PROTECCIÓN|MIGRACION|MIGRACIÓN|VISIBLES|PERMISO|PASAPORTE|PASSPORT|CONTRASEÑA|COMPROBANTE|TRAMITE|TRÁMITE|"
@@ -393,7 +394,8 @@ class SpatialFieldExtractor:
         # ── 0. Delimitación y Enfoque Exclusivo en la Cédula Física ─────────
         # Identifica los anclajes estructurales oficiales del documento
         HEADER_CARD_ANCHORS = re.compile(
-            r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
+            r"\b([RN]EP[UÚ]BLICA\s+DE\s+COLOMBIA|[RN]UBLIC[A]?\s+DE\s+COLOMBIA|PUBLIC[A]?\s+DE\s+COLOMBIA|"
+            r"IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|"
             r"C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|TARJETA\s+DE\s+IDENTIDAD|PERMISO\s+POR\s+PROTECCI[OÓ]N|MIGRACI[OÓ]N\s+COLOMBIA|"
             r"COMPROBANTE\s+DE\s+DOCUMENTO|PASAPORTE)\b",
             re.I
@@ -425,6 +427,9 @@ class SpatialFieldExtractor:
                 return True
             # Teléfonos celulares o indicadores de contacto (con límites de palabra para no filtrar nombres como Aristel o Marcela)
             if re.search(r"\b(?:TEL|CEL|WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ|FICHA|PROCESO)\b", txt_l):
+                return True
+            # Correos electrónicos externos
+            if "@" in txt_l or any(d in txt_l for d in ["@GMAIL", "@HOTMAIL", "@OUTLOOK", "@YAHOO", "@MISENA"]):
                 return True
             # Número celular colombiano de 10 dígitos aislado
             num_clean = re.sub(r"[^\d]", "", txt_l)
@@ -593,11 +598,13 @@ class SpatialFieldExtractor:
                 re.I
             )
             FRENTE_KEYWORDS = re.compile(
-                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|PERMISO\s+POR\s+PROTECCI[OÓ]N|NUMERO|N[UÚ]MERO|AP[EÉI1]+L+[I10]*D|N[O0]?M[BDRPE]*[EÉ]S?|MOUSEES)\b",
+                r"\b([RN]EP[UÚ]BLICA\s+DE\s+COLOMBIA|[RN]UBLIC[A]?\s+DE\s+COLOMBIA|PUBLIC[A]?\s+DE\s+COLOMBIA|"
+                r"IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|PERMISO\s+POR\s+PROTECCI[OÓ]N|NUMERO|N[UÚ]MERO|AP[EÉI1]+L+[I10]*D|N[O0]?M[BDRPE]*[EÉ]S?|MOUSEES)\b",
                 re.I
             )
             HEADER_FRENTE_KEYWORDS = re.compile(
-                r"\b(REP[UÚ]BLICA\s+DE\s+COLOMBIA|IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|TARJETA\s+DE\s+IDENTIDAD|PERMISO\s+POR\s+PROTECCI[OÓ]N|MIGRACI[OÓ]N\s+COLOMBIA)\b",
+                r"\b([RN]EP[UÚ]BLICA\s+DE\s+COLOMBIA|[RN]UBLIC[A]?\s+DE\s+COLOMBIA|PUBLIC[A]?\s+DE\s+COLOMBIA|"
+                r"IDENTIFICACI[OÓ]N\s+PERSONAL|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A|C[EÉ]DULA\s+DE\s+EXTRANJER[IÍ]A|TARJETA\s+DE\s+IDENTIDAD|PERMISO\s+POR\s+PROTECCI[OÓ]N|MIGRACI[OÓ]N\s+COLOMBIA)\b",
                 re.I
             )
 
@@ -663,99 +670,75 @@ class SpatialFieldExtractor:
                     idx_nom = idx
 
             if idx_ape != -1 and idx_nom != -1:
-                has_nuip = any(
-                    "NUIP" in getattr(l, "text", "").upper() or
-                    any(w in getattr(l, "text", "").upper() for w in [
-                        "NACIONALIDAD", "DIGITAL", "CAN ", "RESIDENTE", "EXTRANJERIA", "EXTRANJERÍA",
-                        "PPT", "VISIBLES", "PASAPORTE", "CONTRASEÑA"
-                    ])
-                    for l in lineas_frente
-                )
-                if has_nuip:
-                    # Layout Cédula Digital / Tarjeta Identidad / PPT / Cédula Extranjería:
-                    # APELLIDOS_LABEL -> APELLIDOS_VAL -> NOMBRES_LABEL -> NOMBRES_VAL
-                    # 1. Apellidos: después de APELLIDOS_LABEL y antes de NOMBRES_LABEL
+                if idx_ape < idx_nom:
+                    # Layout estándar (Cédula Amarilla, Digital, PPT, CE): APELLIDOS arriba de NOMBRES
+                    # 1. Verificar si hay valor inline con APELLIDOS
                     inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
-                    else:
-                        cand_ape = []
-                        for i in range(idx_ape + 1, idx_nom):
-                            limpio = self.limpiar_nombre(getattr(lineas_frente[i], "text", ""))
-                            if limpio:
-                                cand_ape.append(limpio)
-                        if cand_ape:
-                            val_ape_vis = " ".join(cand_ape)
-                            ape_prev = resultado_campos["apellidos"].get("value")
-                            if ape_prev and val_ape_vis.replace(" ", "").startswith(str(ape_prev).replace(" ", "")):
-                                toks_a = str(ape_prev).split()
-                                if len(toks_a) >= 2 and val_ape_vis.replace(" ", "").startswith(toks_a[0]):
-                                    val_ape_vis = f"{toks_a[0]} {val_ape_vis.replace(' ', '')[len(toks_a[0]):]}"
-                            resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS (Digital/PPT/CE)"}
 
-                    # 2. Nombres: después de NOMBRES_LABEL
-                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
-                    if inline_nom:
-                        resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
-                    else:
-                        cand_nom = []
-                        for i in range(idx_nom + 1, min(len(lineas_frente), idx_nom + 4)):
-                            t_i = getattr(lineas_frente[i], "text", "")
-                            if any(hdr in t_i.upper() for hdr in ["NACIONALIDAD", "ESTATURA", "SEXO", "FECHA", "LUGAR", "FIRMA", "VISIBLES", "MIGRACION"]):
-                                break
-                            limpio = self.limpiar_nombre(t_i)
-                            if limpio:
-                                cand_nom.append(limpio)
-                        if cand_nom:
-                            val_vis = " ".join(cand_nom)
-                            nom_prev = resultado_campos["nombres"].get("value")
-                            if nom_prev and val_vis.replace(" ", "").startswith(str(nom_prev).replace(" ", "")):
-                                toks_m = str(nom_prev).split()
-                                if len(toks_m) >= 2 and val_vis.replace(" ", "").startswith(toks_m[0]):
-                                    val_vis = f"{toks_m[0]} {val_vis.replace(' ', '')[len(toks_m[0]):]}"
-                            resultado_campos["nombres"] = {"value": val_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES (Digital/PPT/CE)"}
-
-                elif idx_ape < idx_nom:
-                    # Layout Cédula Amarilla:
-                    # NUMERO -> APELLIDOS_VAL -> APELLIDOS_LABEL -> NOMBRES_VAL -> NOMBRES_LABEL
-                    # 1. Verificar si hay valor inline en la misma línea de APELLIDOS
-                    inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
-                    if inline_ape:
-                        resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
-                    else:
-                        cand_ape = []
-                        y_ape = getattr(lineas_frente[idx_ape], "y", 0.0)
-                        for i in range(idx_ape - 1, -1, -1):
-                            l_i = lineas_frente[i]
-                            y_i = getattr(l_i, "y", 0.0)
-                            # Los apellidos están inmediatamente encima de APELLIDOS (máx 0.14 de distancia vertical)
-                            if y_ape - y_i > 0.14:
-                                break
-                            t_i = getattr(l_i, "text", "")
-                            if any(hdr in t_i.upper() for hdr in ["NUMERO", "NÚMERO", "CEDULA", "REPUBLICA", "IDENTIFICACION", "TARJETA"]):
-                                break
-                            limpio = self.limpiar_nombre(t_i)
-                            if limpio:
-                                cand_ape.insert(0, limpio)
-                        if cand_ape and not resultado_campos["apellidos"]["value"]:
-                            ape_val = " ".join(cand_ape[-2:])
-                            resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
-
-                    # 2. Verificar si hay valor inline en la misma línea de NOMBRES
+                    # 2. Verificar si hay valor inline con NOMBRES
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
                     if inline_nom:
                         resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
-                    else:
-                        cand_nom = []
-                        for i in range(idx_ape + 1, idx_nom):
-                            limpio = self.limpiar_nombre(getattr(lineas_frente[i], "text", ""))
-                            if limpio:
-                                cand_nom.append(limpio)
-                        if cand_nom and not resultado_campos["nombres"]["value"]:
-                            nom_val = " ".join(cand_nom[-2:])
+
+                    # Candidatos entre APELLIDOS y NOMBRES
+                    cand_between = []
+                    for i in range(idx_ape + 1, idx_nom):
+                        limpio = self.limpiar_nombre(getattr(lineas_frente[i], "text", ""))
+                        if limpio:
+                            cand_between.append(limpio)
+
+                    # Candidatos después de NOMBRES
+                    cand_after_nom = []
+                    for i in range(idx_nom + 1, min(len(lineas_frente), idx_nom + 4)):
+                        t_i = getattr(lineas_frente[i], "text", "")
+                        if any(hdr in t_i.upper() for hdr in [
+                            "NACIONALIDAD", "ESTATURA", "SEXO", "FECHA", "LUGAR", "FIRMA", "VISIBLES", "MIGRACION",
+                            "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE", "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO"
+                        ]) or re.search(r"\b\d{4}\b", t_i):
+                            break
+                        limpio = self.limpiar_nombre(t_i)
+                        if limpio:
+                            cand_after_nom.append(limpio)
+                            # Si ya obtuvimos un nombre compuesto completo (>= 2 palabras), detener
+                            # para evitar capturar firmas o artefactos inferiores
+                            if len(limpio.split()) >= 2:
+                                break
+
+                    # Candidatos inmediatamente antes de APELLIDOS (para layout invertido)
+                    cand_before_ape = []
+                    y_ape = getattr(lineas_frente[idx_ape], "y", 0.0)
+                    for i in range(idx_ape - 1, -1, -1):
+                        l_i = lineas_frente[i]
+                        y_i = getattr(l_i, "y", 0.0)
+                        if y_ape - y_i > 0.14:
+                            break
+                        t_i = getattr(l_i, "text", "")
+                        if any(hdr in t_i.upper() for hdr in ["NUMERO", "NÚMERO", "CEDULA", "REPUBLICA", "IDENTIFICACION", "TARJETA"]):
+                            break
+                        limpio = self.limpiar_nombre(t_i)
+                        if limpio:
+                            cand_before_ape.insert(0, limpio)
+
+                    if cand_before_ape and not cand_after_nom:
+                        # Layout invertido (valores antes de los rótulos: QUIÑONES GOMEZ / APELLIDOS / NADIA YULIETH / NOMBRES):
+                        if cand_before_ape and not resultado_campos["apellidos"]["value"]:
+                            ape_val = " ".join(cand_before_ape[-2:])
+                            resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
+                        if cand_between and not resultado_campos["nombres"]["value"]:
+                            nom_val = " ".join(cand_between[-2:])
                             resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
+                    else:
+                        # Layout estándar: APELLIDOS -> cand_between, NOMBRES -> cand_after_nom
+                        if cand_between and not resultado_campos["apellidos"]["value"]:
+                            val_ape_vis = " ".join(cand_between)
+                            resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
+                        if cand_after_nom and not resultado_campos["nombres"]["value"]:
+                            val_nom_vis = " ".join(cand_after_nom)
+                            resultado_campos["nombres"] = {"value": val_nom_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES"}
                 else:
-                    # Layout Inverso: NOMBRES_LABEL -> NOMBRES_VAL -> APELLIDOS_LABEL -> APELLIDOS_VAL
+                    # Layout Inverso de rótulos: NOMBRES_LABEL -> NOMBRES_VAL -> APELLIDOS_LABEL -> APELLIDOS_VAL
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
                     if inline_nom:
                         resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
@@ -779,6 +762,8 @@ class SpatialFieldExtractor:
                                 cand_ape.append(limpio)
                         if cand_ape and not resultado_campos["apellidos"]["value"]:
                             resultado_campos["apellidos"] = {"value": " ".join(cand_ape), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS"}
+
+            # Fallback por líneas consecutivas limpias del frente (mejorado: validación de ruido y geografía)ltado_campos["apellidos"] = {"value": " ".join(cand_ape), "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta APELLIDOS"}
 
             # Fallback por líneas consecutivas limpias del frente (mejorado: validación de ruido y geografía)
             RUIDO_NOMBRES = {
@@ -805,11 +790,11 @@ class SpatialFieldExtractor:
                             y_num_line = getattr(lineas_frente[idx_num], "y", 0.0)
                             if y_pos < y_num_line - 0.01:
                                 continue
-                        # En Cédula Amarilla, los nombres están estrictamente por encima de la etiqueta NOMBRES (y < y_nom).
-                        # Todo lo que esté por debajo de NOMBRES es el área de firma/rúbrica del ciudadano (ej: DR CDI).
+                        # En Cédula Amarilla, los nombres están inmediatamente bajo o sobre la etiqueta NOMBRES.
+                        # Todo lo que esté más de 0.12 por debajo de NOMBRES es el área de firma/rúbrica (ej: DR CDI).
                         if not es_digital_o_ti and idx_nom != -1:
                             y_limite_nom = getattr(lineas_frente[idx_nom], "y", 0.35)
-                            if y_pos >= y_limite_nom:
+                            if y_pos > y_limite_nom + 0.12:
                                 continue
                         limpio = self.limpiar_nombre(t_val)
                         if not limpio:

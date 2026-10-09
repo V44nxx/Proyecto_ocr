@@ -64,6 +64,8 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "ISABEL", "SOFIA", "GABRIELA", "ALEJANDRA", "CATALINA", "EVELYN", "JESSICA", "DAYANA",
     "STEFANY", "STEPHANIE", "ELIZABETH", "CARMEN", "ROCIO", "XIMENA", "JIMENA", "INGRID",
     "AURA", "CECILIA", "CLEMENCIA", "NUBIA", "STELLA", "ESTELLA", "YOLANDA", "AMPARO",
+    "AYDE", "AIDE", "HAYDEE", "NURY", "LUCY", "LUCENY", "RUBY", "DARY", "MIRYAM", "MIRIAM",
+    "ORNEIDA", "ELVA", "ROSA",
     # Apellidos comunes colombianos
     "RODRIGUEZ", "GOMEZ", "GONZALEZ", "MARTINEZ", "GARCIA", "PEREZ", "LOPEZ", "HERNANDEZ",
     "SANCHEZ", "RAMIREZ", "TORRES", "FLORES", "FLOREZ", "DIAZ", "VASQUEZ", "CASTRO",
@@ -84,7 +86,9 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "NINO", "NIÑO", "ORDONEZ", "ORDOÑEZ", "OROZCO", "ORTEGA", "PADILLA", "PENA", "PEÑA",
     "PINZON", "PINZÓN", "PUERTA", "RINCON", "RINCÓN", "RIVAS", "ROA", "ROLDAN",
     "SALGADO", "SIERRA", "SOLER", "TRIANA", "URIBE", "VALLEJO", "VEGA", "VERA",
-    "VILLAMIZAR", "VILLEGAS", "YEPES", "ZAMBRANO"
+    "VILLAMIZAR", "VILLEGAS", "YEPES", "ZAMBRANO", "DAZA", "IQUINAS", "NOSCUE",
+    "SAMBONY", "COLLAZOS", "TIRADO", "PERAFAN", "PALENCIA", "BOLANOS", "BOLAÑOS",
+    "CASTANEDA", "CASTAÑEDA", "VILLANUEVA"
 }
 
 PATRON_RUIDO_ADMINISTRATIVO = re.compile(
@@ -233,18 +237,41 @@ def es_token_ruido(t_raw: str) -> bool:
 SUFIJOS_FONDO_SEGURIDAD = ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM")
 
 
+def reparar_tokens_divididos(texto: str) -> str:
+    """Une tokens que el scanner separó indebidamente (ej: 'BO TACHE' -> 'BOTACHE')."""
+    if not texto:
+        return ""
+    words = texto.split()
+    if len(words) < 2:
+        return texto
+    i = 0
+    res = []
+    while i < len(words):
+        if i + 1 < len(words):
+            w1_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", normalizar_str(words[i]))
+            w2_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", normalizar_str(words[i+1]))
+            fusion = w1_clean + w2_clean
+            if fusion in NOMBRES_COLOMBIANOS_COMUNES:
+                res.append(fusion)
+                i += 2
+                continue
+        res.append(words[i])
+        i += 1
+    return " ".join(res)
+
+
 def _descomponer_token_pegado(token: str) -> str:
     """
     Descompone un token si está formado por dos o más nombres/apellidos pegados
-    (ej: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'ANGICAROLINA' -> 'ANGI CAROLINA').
+    (ej: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'BOTACHEDAZA' -> 'BOTACHE DAZA',
+    'GLORIAAAYDE' -> 'GLORIA AYDE').
     """
-    if not token or len(token) < 6:
+    if not token or len(token) < 5:
         return token
     t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", normalizar_str(token))
-    if len(t_clean) < 6:
+    if len(t_clean) < 5:
         return token
     # Si la palabra completa ya es un nombre legítimo conocido en el diccionario, no dividir
-    # (ej: VILLAMIZAR no se divide en VILLA + MIZAR)
     if t_clean in NOMBRES_COLOMBIANOS_COMUNES and len(t_clean) <= 10:
         return token
 
@@ -252,11 +279,53 @@ def _descomponer_token_pegado(token: str) -> str:
     for i in range(3, len(t_clean) - 2):
         p1 = t_clean[:i]
         p2 = t_clean[i:]
-        if p1 in NOMBRES_COLOMBIANOS_COMUNES and (p2 in NOMBRES_COLOMBIANOS_COMUNES or (len(p2) >= 6 and any(p2[:j] in NOMBRES_COLOMBIANOS_COMUNES and p2[j:] in NOMBRES_COLOMBIANOS_COMUNES for j in range(3, len(p2)-2)))):
+        if p1 in NOMBRES_COLOMBIANOS_COMUNES and (p2 in NOMBRES_COLOMBIANOS_COMUNES or (len(p2) >= 5 and any(p2[:j] in NOMBRES_COLOMBIANOS_COMUNES and p2[j:] in NOMBRES_COLOMBIANOS_COMUNES for j in range(3, len(p2)-2)))):
             p2_split = _descomponer_token_pegado(p2)
             return f"{p1} {p2_split}"
 
+    # Probar partición colapsando vocales repetidas en la frontera (ej: GLORIAAAYDE -> GLORIA + AYDE)
+    for i in range(3, len(t_clean) - 2):
+        p1 = t_clean[:i]
+        if p1 in NOMBRES_COLOMBIANOS_COMUNES:
+            resto = t_clean[i:]
+            char_fin = p1[-1]
+            resto_strip = resto.lstrip(char_fin)
+            if resto in NOMBRES_COLOMBIANOS_COMUNES:
+                return f"{p1} {resto}"
+            if resto_strip in NOMBRES_COLOMBIANOS_COMUNES:
+                return f"{p1} {resto_strip}"
+            if (char_fin + resto_strip) in NOMBRES_COLOMBIANOS_COMUNES:
+                return f"{p1} {char_fin + resto_strip}"
+
     return token
+
+
+def limpiar_alucinaciones_ocr_nombre(texto: str) -> str:
+    """
+    Elimina palabras o secuencias corruptas como 'ANGIUECUVOLINA' cuando en el mismo texto
+    ya figuran los nombres o apellidos reales legítimos (ej: 'ANGI CAROLINA' o 'BOTACHE').
+    """
+    if not texto:
+        return ""
+    words = texto.split()
+    if len(words) <= 2:
+        return texto
+    
+    legitimos = [w.upper() for w in words if normalizar_str(w) in NOMBRES_COLOMBIANOS_COMUNES]
+    if not legitimos:
+        return texto
+
+    res = []
+    for w in words:
+        w_norm = normalizar_str(w)
+        # Si es una palabra atípica muy larga (>= 11 letras) no presente en el diccionario
+        # que contiene triplete de vocales o solapa con los tokens legítimos
+        if len(w_norm) >= 11 and w_norm not in NOMBRES_COLOMBIANOS_COMUNES:
+            if re.search(r"[AEIOU]{3,}", w_norm):
+                if any(leg in w_norm for leg in legitimos if len(leg) >= 4):
+                    continue
+        res.append(w)
+    return " ".join(res)
 
 
 def separar_nombres_pegados(texto: str) -> str:
@@ -283,8 +352,12 @@ def separar_nombres_pegados(texto: str) -> str:
 def limpiar_tokens_ruido(texto: str) -> str:
     if not texto:
         return ""
+    # Reparar tokens divididos como 'BO TACHE' -> 'BOTACHE'
+    texto = reparar_tokens_divididos(str(texto))
     # Desegmentar nombres o rótulos pegados sin espacios
     texto = separar_nombres_pegados(str(texto))
+    # Limpiar tokens alucinados corruptos
+    texto = limpiar_alucinaciones_ocr_nombre(str(texto))
     # Reemplazar símbolos, barras, números y caracteres no alfabéticos
     limpio_pre = re.sub(r"[|!/\\\[\]{}()<>=*#+~_^¿?¡,.;:\d]", " ", str(texto))
     toks = limpio_pre.split()

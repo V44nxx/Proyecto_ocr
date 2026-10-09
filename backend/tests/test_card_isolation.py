@@ -327,3 +327,26 @@ def test_deduplicacion_nombres_repetidos_ocr():
     assert res5.count("BOTACHE") == 1
 
 
+def test_casos_reales_screenshot_desegmentacion_y_alucinacion():
+    """
+    Casos reales reportados por el usuario en la captura de pantalla:
+    1. 'GLORIAAAYDE BOTACHEDAZA' -> 'GLORIA AYDE BOTACHE DAZA'
+    2. 'ANGIUECUVOLINA BO TACHE ANGI CAROLINA' -> 'BOTACHE ANGI CAROLINA'
+    """
+    from app.utils.name_cleaner import resolver_nombre_completo, separar_nombres_pegados, limpiar_tokens_ruido
+
+    # Caso 1: Palabras pegadas con vocales de frontera y apellido DAZA
+    t1 = "GLORIAAAYDE BOTACHEDAZA"
+    assert separar_nombres_pegados(t1) == "GLORIA AYDE BOTACHE DAZA"
+    assert resolver_nombre_completo("", "", actual=t1) == "GLORIA AYDE BOTACHE DAZA"
+
+    # Caso 2: Alucinación OCR + token dividido 'BO TACHE'
+    t2 = "ANGIUECUVOLINA BO TACHE ANGI CAROLINA"
+    res2 = resolver_nombre_completo("", "", actual=t2)
+    assert "ANGIUECUVOLINA" not in res2
+    assert "BOTACHE" in res2
+    assert "ANGI" in res2
+    assert "CAROLINA" in res2
+    assert res2 == "BOTACHE ANGI CAROLINA"
+
+

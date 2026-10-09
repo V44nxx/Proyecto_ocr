@@ -429,19 +429,11 @@ class OCRService:
         if len(texto_limpio) < 40 or len(palabras) < 5:
             return False, f"Volumen insuficiente ({len(texto_limpio)} chars, {len(palabras)} palabras)"
 
-        # 2. Confianza media de líneas de layout si están disponibles
         docai_lines = []
         if getattr(res_docai, "pages", None) and len(res_docai.pages) > 0:
             docai_lines = getattr(res_docai.pages[0], "lines", [])
 
-        if docai_lines:
-            confidencias = [float(getattr(l, "confidence", 1.0)) for l in docai_lines if hasattr(l, "confidence")]
-            if confidencias:
-                conf_prom = sum(confidencias) / len(confidencias)
-                if conf_prom < 0.75:
-                    return False, f"Confianza promedio de líneas baja ({conf_prom * 100:.1f}% < 75%)"
-
-        # 3. Detección de cara y marcadores estructurales
+        # 2. Detección de cara y marcadores estructurales
         from app.services.document_side_classifier import document_side_classifier
         clasif = document_side_classifier.clasificar_cara(
             texto_limpio,
@@ -450,18 +442,29 @@ class OCRService:
         cara = clasif.get("cara", "UNKNOWN")
         conf_cara = clasif.get("confianza", 0.0)
 
-        # 4. Verificación de número de identificación
+        # 3. Verificación de número de identificación
         lineas_docai = [l.strip() for l in texto_limpio.split("\n") if l.strip()]
         id_encontrado = self.parser._extraer_identificacion(texto_limpio, lineas_docai)
 
         if id_encontrado:
             tiene_nombres = bool(re.search(r"\b(NOMBRES?|APELLIDOS?)\b", texto_limpio, re.I))
-            if tiene_nombres or conf_cara >= 0.65 or len(palabras) >= 8:
-                return True, f"Cédula {id_encontrado} detectada con estructura sólida"
+            if tiene_nombres or conf_cara >= 0.40 or len(palabras) >= 6:
+                return True, f"Cédula {id_encontrado} detectada con estructura sólida ({len(palabras)} palabras)"
 
         # Si no tiene ID pero es un Reverso de Cédula o Tarjeta bien identificado
-        if cara in ("CEDULA_BACK", "TARJETA_IDENTIDAD_BACK") and conf_cara >= 0.70:
+        if cara in ("CEDULA_BACK", "TARJETA_IDENTIDAD_BACK", "ANTECEDENTES_BACK") and conf_cara >= 0.50:
             return True, f"Cara {cara} identificada con alta confianza ({conf_cara * 100:.1f}%)"
+
+        if len(palabras) >= 12 and conf_cara >= 0.40:
+            return True, f"Documento estructurado reconocido ({len(palabras)} palabras)"
+
+        # 4. Solo si no se encontró ID ni cara estructurada, evaluar confianza general de líneas
+        if docai_lines:
+            confidencias = [float(getattr(l, "confidence", 1.0)) for l in docai_lines if hasattr(l, "confidence")]
+            if confidencias:
+                conf_prom = sum(confidencias) / len(confidencias)
+                if conf_prom < 0.60:
+                    return False, f"Confianza promedio de líneas baja ({conf_prom * 100:.1f}% < 60%)"
 
         return False, "Sin número de identificación ni cara reconocible con alta confianza"
 
@@ -583,8 +586,8 @@ class OCRService:
                 # Crear copia del resultado con texto enriquecido manteniendo las páginas/layout de DocAI
                 res_final = StructuredDocumentAIResult(
                     text=texto_fusionado,
-                    tiempo_ms=res_docai.tiempo_ms,
-                    pages=res_docai.pages,
+                    tiempo_ms=getattr(res_docai, "tiempo_ms", 0.0) if res_docai else 0.0,
+                    pages=getattr(res_docai, "pages", []) if res_docai else [],
                 )
             else:
                 logger.info(f"[DualOCR] Página {pagina_num}: Ambos motores coincidentes — sin líneas adicionales")
@@ -637,16 +640,24 @@ class OCRService:
             (texto_fusionado: str, cantidad_lineas_nuevas: int)
         """
         from rapidfuzz import fuzz
+        from app.utils.name_cleaner import es_token_ruido, es_linea_ruido_administrativo
 
         lineas_base = [l.strip() for l in texto_principal.split("\n") if l.strip()]
         lineas_secundarias = [l.strip() for l in texto_secundario.split("\n") if len(l.strip()) >= 3]
 
         lineas_nuevas: list[str] = []
         for linea in lineas_secundarias:
-            linea_up = linea.upper()
-            # Verificar si ya existe una línea similar en el texto base
+            linea_up = linea.upper().strip()
+            if not linea_up or len(linea_up) < 3:
+                continue
+            if es_linea_ruido_administrativo(linea):
+                continue
+            # Si la línea entera es una palabra de encabezado puro (ej: 'APELLIDOS', 'NOMBRES')
+            if linea_up in {"APELLIDOS", "NOMBRES", "CEDULA", "CIUDADANIA", "NUMERO", "FIRMA", "HUELLA"}:
+                continue
+            # Verificar si ya existe una línea similar en el texto base (umbral 80%)
             ya_existe = any(
-                fuzz.ratio(linea_up, lb.upper()) >= 82
+                fuzz.ratio(linea_up, lb.upper()) >= 80
                 for lb in lineas_base
                 if lb.strip()
             )
@@ -1089,15 +1100,20 @@ class OCRService:
                     if apellidos_final and apellidos_final != "POR REVISAR":
                         persona.apellidos = apellidos_final
                 elif nombre_completo_final and nombre_completo_final != "POR REVISAR":
-                    # Si el registro en BD contiene duplicaciones o si nombre_completo_final es una versión deduplicada y válida
-                    from app.utils.name_cleaner import deduplicar_tokens_nombre, deduplicar_ngrams
-                    nom_bd_dedup = deduplicar_tokens_nombre(deduplicar_ngrams(persona.nombre_completo or ""))
-                    if nom_bd_dedup != (persona.nombre_completo or "") or (persona.nombre_completo != nombre_completo_final and len(nombre_completo_final.split()) >= 2):
-                        persona.nombre_completo = nombre_completo_final
-                        if nombres_final and nombres_final != "POR REVISAR":
-                            persona.nombres = nombres_final
-                        if apellidos_final and apellidos_final != "POR REVISAR":
-                            persona.apellidos = apellidos_final
+                    # Si el registro en BD proviene de la planilla oficial Excel, no sobreescribirlo si el OCR leyó un nombre distinto
+                    es_fuente_excel = (
+                        isinstance(persona.detalles_campos, dict)
+                        and persona.detalles_campos.get("nombre_completo", {}).get("source") == "excel_oficial"
+                    )
+                    if not es_fuente_excel:
+                        from app.utils.name_cleaner import deduplicar_tokens_nombre, deduplicar_ngrams
+                        nom_bd_dedup = deduplicar_tokens_nombre(deduplicar_ngrams(persona.nombre_completo or ""))
+                        if nom_bd_dedup != (persona.nombre_completo or "") or (persona.nombre_completo != nombre_completo_final and len(nombre_completo_final.split()) >= 2):
+                            persona.nombre_completo = nombre_completo_final
+                            if nombres_final and nombres_final != "POR REVISAR":
+                                persona.nombres = nombres_final
+                            if apellidos_final and apellidos_final != "POR REVISAR":
+                                persona.apellidos = apellidos_final
 
                 if _es_nombre_invalido(persona.nombres) and not _es_nombre_invalido(datos.get("nombres")):
                     persona.nombres = datos["nombres"]

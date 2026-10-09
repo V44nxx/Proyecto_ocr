@@ -76,18 +76,6 @@ class RapidOCRService:
                 img_proc = img_np.copy()
                 eval_h, eval_w = height, width
 
-            # 2. Mejora de contraste adaptativo (CLAHE): resalta texto tenue y limpia tramas de hologramas
-            if len(img_proc.shape) == 3 and img_proc.shape[2] == 3:
-                try:
-                    lab = cv2.cvtColor(img_proc, cv2.COLOR_BGR2LAB)
-                    l, a, b = cv2.split(lab)
-                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                    l_clahe = clahe.apply(l)
-                    lab_clahe = cv2.merge((l_clahe, a, b))
-                    img_proc = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR)
-                except Exception as e_clahe:
-                    logger.debug(f"[RapidOCR] Error aplicando CLAHE: {e_clahe}")
-
             # RapidOCR procesa imágenes en formato BGR/RGB numpy array
             results, elapse_list = self._engine(img_proc)
             tiempo_ms = (time.time() - inicio) * 1000

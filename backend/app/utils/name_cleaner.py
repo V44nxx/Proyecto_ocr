@@ -13,7 +13,10 @@ JUNK_WORDS = {
     "LUGAR", "FECHA", "NACIMIENTO", "SEXO", "ESTATURA", "RH", "VIGENCIA", 
     "POSTAL", "CUE", "DR", "CDI", "AAAS", "AAS", "NOMBRES", "APELLIDOS", 
     "NOMBRE", "APELLIDO", "APILLIDOS", "APILLIDO", "APELIDOS", "APELIDO",
-    "NOMERES", "NOMERE", "NOMPRES", "NOMBPE", "NOMERO", "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
+    "APELLIXIS", "APELLIXOS", "APELLIOS", "APELLIGOS", "APELLIZOS", "APELLIDS", "APELLXIS", "APELLIS", "APELLXOS",
+    "NOMERES", "NOMERE", "NOMPRES", "NOMBPE", "NOMERO", "NONBRES", "MOMBRES", "NQMBRES",
+    "ROOETTNA", "AESEPHGLPUAO", "ROOETINA",
+    "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
     "PÚBLICA", "ICADE", "CADE", "MEIA", "DILOM", "COLOM", "COLOMS", "LICA",
     "ELICA", "DILOMBIA", "LOM", "REPUBLI", "NIMEPO", "EDULA", "NIMERO", "NUMEPO",
     "NÚMEPO", "NVYMERO", "NVMERO", "NRO", "CEDLA", "CEDUIA", "CEDUI",
@@ -185,11 +188,15 @@ def _distancia_levenshtein(s1: str, s2: str) -> int:
 
 
 def es_token_ruido_difuso(t_alpha: str) -> bool:
-    """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA)."""
+    """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA, APELLIXIS)."""
     if not t_alpha or len(t_alpha) < 3:
         return False
     if t_alpha in NOMBRES_LEGITIMOS_EXCEPCION:
         return False
+    if (t_alpha.startswith("APEL") or t_alpha.startswith("APIL")) and len(t_alpha) <= 12:
+        return True
+    if (t_alpha.startswith("NOMBR") or t_alpha.startswith("NOMER") or t_alpha.startswith("NOMPR")) and len(t_alpha) <= 12:
+        return True
     for can in PALABRAS_ENCABEZADO_CANONICAS:
         max_d = 1 if len(can) <= 5 else 2
         d = _distancia_levenshtein(t_alpha, can)

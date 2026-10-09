@@ -94,10 +94,13 @@ class SpatialFieldExtractor:
             r"\bC\.C\.?\b", r"\bC\.E\.?\b", r"\bCEDULA\b", r"\bCÉDULA\b"
         ],
         "apellidos": [
+            r"\bAP[EÉI1]+L+[I10A-Z]*(?:D|X|G|Z|S|OS|IS)[O0I1A-Z]*\b",
+            r"\bAP[EÉI1]+L+[A-Z]{2,6}\b",
             r"AP[EÉI1]+L+[I10]*D[O0]?S?", r"PRIMER\s+APEL", r"SEGUNDO\s+APEL", r"SURNAMES?"
         ],
         "nombres": [
-            r"\b(?:N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", r"PRIMER\s+N[O0]?MBRE", r"SEGUNDO\s+N[O0]?MBRE", r"GIVEN\s+NAMES?"
+            r"\b(?:N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|NOMERES?|NOMPRES?|NOMBPE|NONBRES?|MOMBRES?|NQMBRES?|MOUSEES)\b",
+            r"PRIMER\s+N[O0]?MBRE", r"SEGUNDO\s+N[O0]?MBRE", r"GIVEN\s+NAMES?"
         ],
         "fecha_nacimiento": [
             r"FECHA\s+DE\s+NAC[I1]M[I1]ENT[O0]?", r"NAC[I1]M[I1]ENT[O0]?", r"DATE\s+OF\s+B[I1]RTH"
@@ -127,7 +130,7 @@ class SpatialFieldExtractor:
         r"EXTRANJER|RESIDENTE|TEMPORAL|PROTECCION|PROTECCIÓN|MIGRACION|MIGRACIÓN|VISIBLES|PERMISO|PASAPORTE|PASSPORT|CONTRASEÑA|COMPROBANTE|TRAMITE|TRÁMITE|"
         r"CIUDAD|CIUDAN|GIUDAD|CIUDADAMA|CIUDADANLA|CIUDADANA|"
         r"IDENTIFIC|IDENTIF|NUMERO|NÚMERO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|NVYMERO|NVMERO|NOMORO|"
-        r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|DIGITAL|"
+        r"AP[EÉI1]+L+[I10A-Z]*(?:D|X|G|Z|S|OS|IS)[O0I1A-Z]*|AP[EÉI1]+L+[A-Z]{2,6}|APELLIXIS|APELLIXOS|APELLIOS|APELLIGOS|APELLIZOS|APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|NOMERES|NOMPRES|NOMBPE|NONBRES|MOMBRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|DIGITAL|"
         r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
@@ -217,6 +220,13 @@ class SpatialFieldExtractor:
                         if re.search(pat, txt) or re.search(pat, txt_norm):
                             etiquetas_encontradas[campo] = SpatialCandidate(txt, bbox, conf, idx)
                             break
+
+            if "apellidos" not in etiquetas_encontradas:
+                if txt.startswith("APEL") or txt.startswith("APIL") or "APELLI" in txt:
+                    etiquetas_encontradas["apellidos"] = SpatialCandidate(txt, bbox, conf, idx)
+            if "nombres" not in etiquetas_encontradas:
+                if txt.startswith("NOMBR") or txt.startswith("NOMER") or txt.startswith("NOMPR") or txt == "MOUSEES":
+                    etiquetas_encontradas["nombres"] = SpatialCandidate(txt, bbox, conf, idx)
 
         return etiquetas_encontradas
 
@@ -683,21 +693,21 @@ class SpatialFieldExtractor:
                 t = getattr(l, "text", "").upper().strip()
                 if (re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|RESIDENTE|PPT)\b", t) or re.search(r"\b\d{6,10}\b", re.sub(r"[^\d]", "", t))) and idx_num == -1:
                     idx_num = idx
-                if re.search(r"\bAP[EÉI1]+L+[I10]*D", t) and idx_ape == -1:
+                if (re.search(r"\bAP[EÉI1]+L+[I10A-Z]*(?:D|X|G|Z|S|OS|IS)[O0I1A-Z]*\b", t) or re.search(r"\bAP[EÉI1]+L+[A-Z]{2,6}\b", t) or t.startswith("APEL") or t.startswith("APIL")) and idx_ape == -1:
                     idx_ape = idx
-                if re.search(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", t) and idx_nom == -1:
+                if (re.search(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|NOMERES?|NOMPRES?|NOMBPE|NONBRES?|MOMBRES?|NQMBRES?|MOUSEES)\b", t) or t.startswith("NOMBR") or t.startswith("NOMER") or t.startswith("NOMPR")) and idx_nom == -1:
                     idx_nom = idx
 
             if idx_ape != -1 and idx_nom != -1:
                 if idx_ape < idx_nom:
                     # Layout estándar (Cédula Amarilla, Digital, PPT, CE): APELLIDOS arriba de NOMBRES
                     # 1. Verificar si hay valor inline con APELLIDOS
-                    inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10]*D[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
+                    inline_ape = self.limpiar_nombre(re.sub(r"\bAP[EÉI1]+L+[I10A-Z]*[A-Z]*\b", "", getattr(lineas_frente[idx_ape], "text", ""), flags=re.I))
                     if inline_ape:
                         resultado_campos["apellidos"] = {"value": inline_ape, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta APELLIDOS"}
 
                     # 2. Verificar si hay valor inline con NOMBRES
-                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
+                    inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|NOMERES?|NOMPRES?|NOMBPE|NONBRES?|MOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))
                     if inline_nom:
                         resultado_campos["nombres"] = {"value": inline_nom, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído inline con etiqueta NOMBRES"}
 
@@ -740,16 +750,16 @@ class SpatialFieldExtractor:
                         if limpio:
                             cand_before_ape.insert(0, limpio)
 
-                    if cand_before_ape and not cand_after_nom:
-                        # Layout invertido (valores antes de los rótulos: QUIÑONES GOMEZ / APELLIDOS / NADIA YULIETH / NOMBRES):
-                        if cand_before_ape and not resultado_campos["apellidos"]["value"]:
+                    if cand_before_ape and (cand_between or not cand_after_nom):
+                        # Layout Cédula Amarilla tradicional (valores antes de los rótulos: APELLIDOS arriba, NOMBRES abajo):
+                        if not resultado_campos["apellidos"]["value"]:
                             ape_val = " ".join(cand_before_ape[-2:])
                             resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
                         if cand_between and not resultado_campos["nombres"]["value"]:
                             nom_val = " ".join(cand_between[-2:])
                             resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                     else:
-                        # Layout estándar: APELLIDOS -> cand_between, NOMBRES -> cand_after_nom
+                        # Layout estándar (Cédula Digital / PPT / CE con rótulos arriba del valor):
                         if cand_between and not resultado_campos["apellidos"]["value"]:
                             val_ape_vis = " ".join(cand_between)
                             resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
@@ -889,8 +899,18 @@ class SpatialFieldExtractor:
                     # Descartar correos, teléfonos o fechas
                     if "@" in t_hl or re.search(r"\b3\d{9}\b", t_hl) or re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", t_hl):
                         continue
-                    # Descartar números puros o membretes con CC
-                    if re.match(r"^\d+$", t_hl) or re.search(r"\b(?:CC|C\.C\.)[\.\s:]*\d+", t_hl, re.I):
+                    # Si viene en formato 'CC. 30507543 MARITZA GUTIERREZ MORENO', extraer el nombre
+                    m_cc = re.search(r"\b(?:CC|C\.C\.)[\.\s:]*([0-9A-Za-z\.\,]{6,12})[\s\-,:]+(.+)", t_hl, re.I)
+                    if m_cc:
+                        t_hl = m_cc.group(2).strip()
+                        if not resultado_campos["identificacion"]["value"]:
+                            id_cand = validador.limpiar_numero_documento(m_cc.group(1))
+                            if id_cand and len(id_cand) >= 6:
+                                resultado_campos["identificacion"] = {
+                                    "value": id_cand, "confidence": 0.90, "status": "VALID",
+                                    "page": page_num, "source": "universal_parser", "reason": "Extraído de encabezado de página"
+                                }
+                    elif re.match(r"^\d+$", t_hl) or re.search(r"\b(?:CC|C\.C\.)[\.\s:]*\d+", t_hl, re.I):
                         continue
                     # Descartar encabezados institucionales
                     if HEADER_CARD_ANCHORS.search(t_hl) or REVERSO_KEYWORDS.search(t_hl):

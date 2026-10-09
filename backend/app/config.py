@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     GOOGLE_DOCUMENT_AI_LOCATION: str = "us"
     # ID del procesador — OBLIGATORIO, configurar en .env
     # Ejemplo: "abc123def456789a"
-    GOOGLE_DOCUMENT_AI_PROCESSOR_ID: str = ""
+    GOOGLE_DOCUMENT_AI_PROCESSOR_ID: str = "c0b0e9a8458af30c"
     # Ruta al JSON de credenciales (Service Account)
     # En Docker: /app/credentials/google-document-ai.json
     # En local:  ./credentials/google-document-ai.json

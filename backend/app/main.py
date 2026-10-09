@@ -150,12 +150,29 @@ def root():
 
 @app.get("/health", tags=["Sistema"])
 def health_check():
-    """Verificación de salud del sistema"""
+    """Verificación de salud del sistema y diagnóstico de motores OCR"""
     db_ok = check_db_connection()
+    from app.services.google_document_ai_service import google_document_ai_service
+    from app.services.rapid_ocr_service import rapid_ocr_service
+    import os
+
+    docai_info = {
+        "disponible": google_document_ai_service.disponible,
+        "processor_id_configurado": bool(settings.GOOGLE_DOCUMENT_AI_PROCESSOR_ID),
+        "creds_path_existe": bool(settings.GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS)),
+        "creds_env_configurado": bool(settings.GOOGLE_CREDENTIALS_JSON or settings.GOOGLE_CREDENTIALS_BASE64),
+    }
+
     return {
         "status": "ok" if db_ok else "degradado",
         "database": "conectada" if db_ok else "sin conexión",
         "version": settings.APP_VERSION,
+        "motores": {
+            "google_docai": docai_info,
+            "rapid_ocr": rapid_ocr_service.disponible,
+            "tesseract": True,
+        },
+        "cpu_count": os.cpu_count(),
     }
 
 

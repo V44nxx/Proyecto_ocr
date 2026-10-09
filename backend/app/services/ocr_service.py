@@ -178,10 +178,27 @@ class OCRService:
                     "numero_identificacion": id_pre
                 }
 
-            # Procesamiento concurrente de páginas (hasta 6 workers en paralelo)
-            max_workers = min(6, total_paginas) if total_paginas > 0 else 1
+            # Concurrencia adaptativa y óptima:
+            # - Si Google Document AI está activo (I/O cloud), usar hasta 6 workers.
+            # - Si se procesa en CPU local (RapidOCR/Tesseract), limitar a min(cpu_cores, 2)
+            #   para evitar contención de núcleos, thrashing y saturación de memoria en VPS.
+            if google_document_ai_service.disponible:
+                max_workers = min(6, total_paginas) if total_paginas > 0 else 1
+            else:
+                cpu_cores = os.cpu_count() or 1
+                max_workers = min(max(1, cpu_cores), 2) if total_paginas > 0 else 1
+
             resultados_desordenados = []
             paginas_procesadas = 0
+
+            self._actualizar_progreso(
+                documento_id=documento_id,
+                db=db,
+                progreso=8,
+                paso=f"Analizando {total_paginas} {'página' if total_paginas == 1 else 'páginas'}...",
+                pagina_actual=0,
+                total_paginas=total_paginas,
+            )
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futuros = {executor.submit(_procesar_una_pagina, p_num): p_num for p_num in range(1, total_paginas + 1)}
@@ -192,7 +209,7 @@ class OCRService:
                         documento_id=documento_id,
                         db=db,
                         progreso=progreso_pct,
-                        paso=f"Procesando páginas con OCR ({paginas_procesadas}/{total_paginas})...",
+                        paso=f"Procesando páginas ({paginas_procesadas}/{total_paginas})...",
                         pagina_actual=paginas_procesadas,
                         total_paginas=total_paginas,
                     )
@@ -341,21 +358,22 @@ class OCRService:
     # ──────────────────────────────────────────
     def _necesita_ocr_imagen(self, texto: str, pag=None) -> bool:
         """
-        Determina si una página necesita OCR de imagen.
+        Determina si una página necesita OCR de imagen o si su texto nativo es suficiente.
 
-        En fotocopias escaneadas o digitalizadas (Word/Canva/PDF editor):
-        - El encabezado o pie de página suele ser texto nativo (membretes de trámite, fotocopia, etc.).
-        - La cédula física en sí es una IMAGEN escaneada incrustada en la página.
-
-        Reglas estrictas:
-        1. Si la página contiene imágenes incrustadas (fotos de cédulas en fotocopias),
-           SE DEBE forzar OCR de imagen a menos que el texto nativo ya contenga una cédula completa
-           (número válido Y nombres de ciudadano que no sean solo membrete).
-        2. Si todo el texto nativo es membrete administrativo/trámite, forzar OCR.
-        3. Si el texto nativo no contiene un número de identificación válido (6-10 dígitos), forzar OCR.
-        4. Si no tiene etiquetas clave de cédula, forzar OCR.
+        Reglas:
+        1. Si no hay texto nativo o es menor a 20 caracteres -> Forzar OCR.
+        2. Si todo el texto es membrete/ruido administrativo -> Forzar OCR.
+        3. Certificados oficiales de Antecedentes (Procuraduría, SIRI, Policía, Judiciales, Inpec):
+           Si el texto nativo ya contiene la estructura del certificado con titular o cédula -> Fast-Path directo, OMITIR OCR.
+        4. Reversos de cédulas / documentos:
+           Si contiene campos de reverso (nacimiento, sangre, estatura, etc.) -> OMITIR OCR.
+        5. Cédulas y documentos de identidad:
+           Si contiene un número de cédula válido (6-10 dígitos) Y palabras de identificación
+           (NUIP, apellidos, nombres, cédula, tarjeta, titular, etc.) -> OMITIR OCR.
+        6. En fotocopias escaneadas donde la cédula es una imagen incrustada dentro de una hoja en blanco,
+           forzar OCR si no hay cédula válida o el texto nativo está incompleto.
         """
-        if not texto or not texto.strip():
+        if not texto or not texto.strip() or len(texto.strip()) < 20:
             return True
 
         from app.utils.name_cleaner import es_linea_ruido_administrativo
@@ -363,24 +381,36 @@ class OCRService:
 
         lineas_no_vacias = [l.strip() for l in texto.splitlines() if l.strip()]
 
-        # 1. Si todo el texto nativo corresponde a membretes administrativos o fotocopias
+        # 1. Si todo el texto nativo corresponde a membretes administrativos o marcas de fotocopiado
         if lineas_no_vacias and all(es_linea_ruido_administrativo(l) for l in lineas_no_vacias):
             logger.info("[OCR] Todo el texto nativo es membrete administrativo/fotocopia -> Forzando OCR de imagen")
             return True
 
-        # 2. Si hay imágenes incrustadas en la página (cédulas escaneadas en fotocopias)
-        if pag is not None:
-            try:
-                imgs = pag.get_images()
-                if imgs and len(imgs) > 0:
-                    # En fotocopias de cédula, la imagen contiene los datos del ciudadano
-                    if not re.search(r"\b(APELLIDOS?|NOMBRES?|NUIP)\b", texto, re.I):
-                        logger.info(f"[OCR] Página con {len(imgs)} imagen(es) incrustada(s) -> Forzando OCR de imagen")
-                        return True
-            except Exception:
-                pass
+        texto_limpio = re.sub(r"\s+", " ", texto.strip())
+        palabras_validas = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{3,}", texto_limpio)
 
-        # 3. Verificar si el texto nativo contiene un número de cédula válido (6 a 10 dígitos)
+        # 2. Certificados oficiales de Antecedentes (Procuraduría General de la Nación, SIRI, Policía, Inpec)
+        PATRON_ANTECEDENTES = re.compile(
+            r"\b(CERTIFICADO\s+DE\s+ANTECEDENTES|CERTIFICADO\s+ORDINARIO|CERTIFICADO\s+ESPECIAL|"
+            r"PROCURADUR[IÍ]A|SIRI|POLIC[IÍ]A\s+NACIONAL|ANTECEDENTES\s+JUDICIALES|"
+            r"ANTECEDENTES\s+DISCIPLINARIOS|REGISTRO\s+NACIONAL\s+DE\s+MEDIDAS\s+CORRECTIVAS)\b",
+            re.IGNORECASE
+        )
+        if PATRON_ANTECEDENTES.search(texto_limpio):
+            if len(palabras_validas) >= 8:
+                logger.info("[OCR] Certificado oficial de antecedentes con texto nativo digital -> Fast-Path sin OCR")
+                return False
+
+        # 3. Reversos de cédula / tarjetas de identidad
+        PATRON_REVERSO = re.compile(
+            r"\b(FECHA\s+DE\s+NACIMIENTO|LUGAR\s+DE\s+NACIMIENTO|GRUPO\s+SANGU[IÍ]NEO|ESTATURA|SEXO|RH|EXPEDICI[OÓ]N)\b",
+            re.IGNORECASE
+        )
+        if PATRON_REVERSO.search(texto_limpio) and len(palabras_validas) >= 5:
+            logger.info("[OCR] Reverso de documento con texto nativo suficiente -> Fast-Path sin OCR")
+            return False
+
+        # 4. Verificar si contiene un número de identificación válido (6 a 10 dígitos)
         patron_id = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")
         tiene_id_valido = False
         for m in patron_id.finditer(texto):
@@ -394,19 +424,30 @@ class OCRService:
             logger.info("[OCR] Texto nativo no contiene número de identificación válido -> Forzando OCR de imagen")
             return True
 
-        # 4. Longitud mínima y keywords
-        texto_limpio = re.sub(r"\s+", " ", texto.strip())
-        palabras_validas = re.findall(r"[A-Za-záéíóúüñÁÉÍÓÚÜÑ]{3,}", texto_limpio)
-        if len(palabras_validas) < 5 or len(texto_limpio) < 50:
-            return True
-
-        # 5. Keywords estructurales obligatorias de cédula
-        KEYWORDS_CEDULA = re.compile(
-            r"\b(NUIP|APELLIDOS?|NOMBRES?|CEDULA\s+DE\s+CIUDADAN|TARJETA\s+DE\s+IDENTIDAD)\b",
+        # 5. Keywords de documento de identidad (Cédula, Tarjeta, etc.)
+        PATRON_KEYWORDS_DOC = re.compile(
+            r"\b(NUIP|APELLIDOS?|NOMBRES?|C[EÉ]DULA(?:\s+DE\s+CIUDADAN[IÍ]A)?|TARJETA(?:\s+DE\s+IDENTIDAD)?|DOCUMENTO(?:\s+DE\s+IDENTIDAD)?|TITULAR|CIUDADAN[OÓA])\b",
             re.IGNORECASE
         )
-        if not KEYWORDS_CEDULA.search(texto_limpio):
-            logger.info("[OCR] Texto nativo sin keywords estructurales de cédula — forzando OCR de imagen")
+        tiene_keywords_doc = bool(PATRON_KEYWORDS_DOC.search(texto_limpio))
+
+        # 6. Si hay imágenes incrustadas en la página (fotocopias de cédula escaneadas)
+        if pag is not None:
+            try:
+                imgs = pag.get_images()
+                if imgs and len(imgs) > 0:
+                    # Si tiene imágenes incrustadas y el texto nativo no contiene keywords de cédula ni volumen suficiente
+                    if not tiene_keywords_doc or len(palabras_validas) < 6:
+                        logger.info(f"[OCR] Página con {len(imgs)} imagen(es) incrustada(s) y texto escaso -> Forzando OCR")
+                        return True
+            except Exception:
+                pass
+
+        if len(palabras_validas) < 5 or len(texto_limpio) < 30:
+            return True
+
+        if not tiene_keywords_doc:
+            logger.info("[OCR] Texto nativo sin keywords estructurales de documento -> Forzando OCR de imagen")
             return True
 
         return False

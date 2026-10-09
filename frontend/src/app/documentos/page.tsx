@@ -633,7 +633,7 @@ export default function DocumentosPage() {
 
       if (progresoGlobal > 0 && progresoGlobal < 100) {
         const progresoRestante = 100 - progresoGlobal;
-        const segundosPorPunto = Math.max(0.1, (tiempoTranscurrido + 1) / Math.max(progresoGlobal, 10));
+        const segundosPorPunto = Math.min(1.8, Math.max(0.1, (tiempoTranscurrido + 1) / Math.max(progresoGlobal, 10)));
         const estSegundos = Math.max(1, Math.round(progresoRestante * segundosPorPunto));
         return `~${estSegundos}s`;
       }

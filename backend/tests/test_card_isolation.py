@@ -350,3 +350,54 @@ def test_casos_reales_screenshot_desegmentacion_y_alucinacion():
     assert res2 == "BOTACHE ANGI CAROLINA"
 
 
+def test_necesita_ocr_imagen_antecedentes_fastpath():
+    """
+    Verifica que documentos digitales como Antecedentes (Procuraduría, SIRI, Policía)
+    usen Fast-Path sin forzar procesamiento OCR innecesario de imagen.
+    """
+    from app.services.ocr_service import ocr_service
+
+    texto_antecedentes = """
+    PROCURADURIA GENERAL DE LA NACION
+    SIRI - SISTEMA DE INFORMACION Y REGISTRO DE SANCIONES
+    CERTIFICADO DE ANTECEDENTES ORDINARIO No. 12948271
+    El suscrito Jefe de la División de Registro y Control de la Procuraduría General de la Nación,
+    CERTIFICA que una vez consultada la base de datos del SIRI, el(la) señor(a):
+    BOTACHE VALERO ANGI CAROLINA
+    identificado(a) con Cédula de ciudadanía número 1.117.547.992
+    NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES
+    """
+    assert ocr_service._necesita_ocr_imagen(texto_antecedentes, pag=None) is False
+
+
+def test_necesita_ocr_imagen_reverso_cedula_fastpath():
+    """
+    Verifica que reversos de documento con texto nativo suficiente no fuercen OCR.
+    """
+    from app.services.ocr_service import ocr_service
+
+    texto_reverso = """
+    FECHA DE NACIMIENTO 25-ABR-1997
+    LUGAR DE NACIMIENTO FLORENCIA CAQUETA
+    ESTATURA 1.52 G.S. RH O+ SEXO F
+    FECHA Y LUGAR DE EXPEDICION 01-DIC-2015 FLORENCIA
+    """
+    assert ocr_service._necesita_ocr_imagen(texto_reverso, pag=None) is False
+
+
+def test_necesita_ocr_imagen_fotocopia_o_vacio_fuerza_ocr():
+    """
+    Verifica que páginas escaneadas vacías o con mero membrete fuercen OCR de imagen.
+    """
+    from app.services.ocr_service import ocr_service
+
+    # Página vacía (escáner puro)
+    assert ocr_service._necesita_ocr_imagen("", pag=None) is True
+    assert ocr_service._necesita_ocr_imagen("   ", pag=None) is True
+
+    # Página solo con pie de página administrativo
+    texto_ruido = "FOTOCOPIA AMPLIADA AL 150%\nDOCUMENTO PRIVADO"
+    assert ocr_service._necesita_ocr_imagen(texto_ruido, pag=None) is True
+
+
+

@@ -50,7 +50,7 @@ services:
       # ─────────────────────────────────────────────
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-ocr-sena}
       GOOGLE_DOCUMENT_AI_LOCATION: ${GOOGLE_DOCUMENT_AI_LOCATION:-us}
-      GOOGLE_DOCUMENT_AI_PROCESSOR_ID: ${GOOGLE_DOCUMENT_AI_PROCESSOR_ID:-}
+      GOOGLE_DOCUMENT_AI_PROCESSOR_ID: ${GOOGLE_DOCUMENT_AI_PROCESSOR_ID:-c0b0e9a8458af30c}
       GOOGLE_DOCUMENT_AI_ENABLED: ${GOOGLE_DOCUMENT_AI_ENABLED:-true}
       # Ruta DENTRO del contenedor (el archivo se monta vía volumen)
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/google-document-ai.json

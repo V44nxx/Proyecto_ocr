@@ -458,13 +458,20 @@ def cancelar_subida_o_procesamiento(
         doc_nombre = doc.nombre_original
         ruta = doc.ruta_archivo
 
-        # 1. Marcar estado como cancelado inmediatamente para que cualquier hilo OCR en curso se detenga
-        doc.estado = "cancelado"
-        meta = dict(doc.metadatos or {})
-        meta["cancelado"] = True
-        meta["paso"] = "Cancelado por el usuario"
-        doc.metadatos = meta
-        db.flush()
+        # 1. Intentar marcar estado como cancelado de inmediato por si hilos OCR están verificando
+        try:
+            doc.estado = "cancelado"
+            meta = dict(doc.metadatos or {})
+            meta["cancelado"] = True
+            meta["paso"] = "Cancelado por el usuario"
+            doc.metadatos = meta
+            db.flush()
+        except Exception as e_flush:
+            db.rollback()
+            logger.warning(f"[Cancelar] Aviso al marcar cancelado ({e_flush}). Continuando con eliminación directa.")
+            doc = db.query(Documento).filter(Documento.id == doc_id).first()
+            if not doc:
+                continue
 
         # 2. Eliminar personas asociadas a este documento
         db.query(Persona).filter(

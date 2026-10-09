@@ -17,7 +17,7 @@ class Documento(Base):
     ruta_archivo = Column(String(1000), nullable=True)
     tamano_bytes = Column(BigInteger, nullable=True)
     total_paginas = Column(Integer, default=0)
-    estado = Column(String(50), default="pendiente")   # pendiente|procesando|completado|error|revision
+    estado = Column(String(50), default="pendiente")   # pendiente|procesando|completado|error|revision|cancelado
     confianza_ocr = Column(Numeric(5, 2), nullable=True)
     mensaje_error = Column(Text, nullable=True)
     tiempo_procesamiento_ms = Column(Integer, nullable=True)

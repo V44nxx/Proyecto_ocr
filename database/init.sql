@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS documentos (
     tamano_bytes BIGINT,
     total_paginas INTEGER DEFAULT 0,
     estado VARCHAR(50) DEFAULT 'pendiente' 
-        CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision')),
+        CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision', 'cancelado')),
     confianza_ocr DECIMAL(5,2),           -- Porcentaje promedio de confianza 0-100
     mensaje_error TEXT,
     tiempo_procesamiento_ms INTEGER,

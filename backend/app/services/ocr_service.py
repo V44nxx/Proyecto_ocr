@@ -139,29 +139,27 @@ class OCRService:
             # ── Paso 1: Preparar páginas y procesar en paralelo con ThreadPoolExecutor ──
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            tareas_paginas = []
-            for i in range(total_paginas):
-                p_num = i + 1
-                pag = doc[i]
-                txt_nat = pag.get_text("text")
-                nec_ocr = self._necesita_ocr_imagen(txt_nat, pag=pag)
-                img_arr = None
-                if nec_ocr:
-                    # 200 DPI: resolución óptima para OCR documental, 56% más ligero y 2.5x más rápido que 300 DPI
-                    pix = pag.get_pixmap(dpi=200)
-                    img_arr = self.image_processor._pixmap_to_numpy(pix)
-                tareas_paginas.append((p_num, txt_nat, nec_ocr, img_arr))
-
             doc.close()
 
-            def _procesar_una_pagina(item):
-                p_num, txt_nat, nec_ocr, img_arr = item
-                if nec_ocr and img_arr is not None:
-                    txt_pag, motor, layout = self._ocr_imagen(img_np=img_arr, pagina_num=p_num)
-                else:
-                    txt_pag = txt_nat
-                    motor = "texto_nativo_pdf"
-                    layout = None
+            def _procesar_una_pagina(p_num: int):
+                doc_local = fitz.open(ruta_pdf)
+                try:
+                    pag = doc_local[p_num - 1]
+                    txt_nat = pag.get_text("text")
+                    nec_ocr = self._necesita_ocr_imagen(txt_nat, pag=pag)
+                    if nec_ocr:
+                        # 200 DPI: resolución óptima para OCR documental, 56% más ligero y 2.5x más rápido que 300 DPI
+                        pix = pag.get_pixmap(dpi=200)
+                        img_arr = self.image_processor._pixmap_to_numpy(pix)
+                        del pix
+                        txt_pag, motor, layout = self._ocr_imagen(img_np=img_arr, pagina_num=p_num)
+                        del img_arr
+                    else:
+                        txt_pag = txt_nat
+                        motor = "texto_nativo_pdf"
+                        layout = None
+                finally:
+                    doc_local.close()
 
                 from app.services.document_side_classifier import document_side_classifier
                 clasif = document_side_classifier.clasificar_cara(
@@ -186,7 +184,7 @@ class OCRService:
             paginas_procesadas = 0
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futuros = {executor.submit(_procesar_una_pagina, t): t[0] for t in tareas_paginas}
+                futuros = {executor.submit(_procesar_una_pagina, p_num): p_num for p_num in range(1, total_paginas + 1)}
                 for futuro in as_completed(futuros):
                     paginas_procesadas += 1
                     progreso_pct = 10 + int((paginas_procesadas / max(total_paginas, 1)) * 60)

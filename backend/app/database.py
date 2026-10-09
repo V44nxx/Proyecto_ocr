@@ -103,8 +103,9 @@ def create_tables():
                 "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "UPDATE documentos SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
                 "UPDATE comparaciones SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
-                "UPDATE personas SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
-                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;"
+                "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;",
+                "ALTER TABLE documentos DROP CONSTRAINT IF EXISTS documentos_estado_check;",
+                "ALTER TABLE documentos ADD CONSTRAINT documentos_estado_check CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision', 'cancelado'));"
             ]
             for q in queries:
                 try:

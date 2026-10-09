@@ -516,14 +516,20 @@ def listar_personas(
                                     ids_en_excel.add(id_ofic)
                                     hubo_cambios = True
                                 elif verif.get("discrepancia_excel"):
-                                    # Registrar discrepancia si se descubrió un conflicto real
+                                    # Registrar discrepancia si se descubrió un conflicto real y priorizar nombre oficial de Excel
                                     detalles = dict(p.detalles_campos or {})
                                     if not detalles.get("discrepancia_excel"):
                                         detalles["discrepancia_excel"] = verif["discrepancia_excel"]
-                                        p.detalles_campos = detalles
-                                        p.requiere_revision = True
-                                        p.estado_registro = "REVIEW_REQUIRED"
-                                        hubo_cambios = True
+                                    if verif.get("nombre_final") and verif.get("fuente_nombre") == "excel_oficial" and p.nombre_completo != verif["nombre_final"]:
+                                        p.nombre_completo = verif["nombre_final"]
+                                        if verif.get("nombres_final"):
+                                            p.nombres = verif["nombres_final"]
+                                        if verif.get("apellidos_final"):
+                                            p.apellidos = verif["apellidos_final"]
+                                    p.detalles_campos = detalles
+                                    p.requiere_revision = True
+                                    p.estado_registro = "REVIEW_REQUIRED"
+                                    hubo_cambios = True
 
                     if hubo_cambios:
                         db.commit()

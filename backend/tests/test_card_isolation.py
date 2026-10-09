@@ -400,4 +400,84 @@ def test_necesita_ocr_imagen_fotocopia_o_vacio_fuerza_ocr():
     assert ocr_service._necesita_ocr_imagen(texto_ruido, pag=None) is True
 
 
+def test_aislamiento_cedula_con_contacto_externo_en_cabecera():
+    """
+    Caso de la Imagen 1:
+    En la parte superior de la hoja el postulante escribió su nombre, correo y teléfono:
+      ANGI CAROLINA BOTACHE VALERO
+      Angiecarolina001@gmail.com
+      3102494860
+    Luego abajo está la Cédula física con:
+      REPUBLICA DE COLOMBIA
+      1.117.547.992
+      APELLIDOS BOTACHE VALERO
+      NOMBRES ANGI CAROLINA
+
+    El extractor espacial debe ignorar el texto externo superior y extraer
+    limpiamente BOTACHE VALERO y ANGI CAROLINA de la cédula física.
+    """
+    lines = [
+        # Cabecera externa escrita en la hoja
+        PseudoLine("ANGI CAROLINA BOTACHE VALERO", y=0.15, x=0.25),
+        PseudoLine("Angiecarolina001@gmail.com", y=0.18, x=0.25),
+        PseudoLine("3102494860", y=0.21, x=0.25),
+
+        # Cédula física
+        PseudoLine("REPUBLICA DE COLOMBIA", y=0.35, x=0.30),
+        PseudoLine("IDENTIFICACION PERSONAL", y=0.38, x=0.30),
+        PseudoLine("NUMERO 1.117.547.992", y=0.43, x=0.30),
+        PseudoLine("APELLIDOS", y=0.47, x=0.20),
+        PseudoLine("BOTACHE VALERO", y=0.50, x=0.20),
+        PseudoLine("NOMBRES", y=0.54, x=0.20),
+        PseudoLine("ANGI CAROLINA", y=0.57, x=0.20),
+    ]
+
+    res = spatial_field_extractor.extraer_cedula_universal(lines, page_num=5)
+
+    assert res["identificacion"]["value"] == "1117547992"
+    assert res["apellidos"]["value"] == "BOTACHE VALERO"
+    assert res["nombres"]["value"] == "ANGI CAROLINA"
+    # Verificar que no hubo contaminación del correo (ej. ANGIUECUVOLINA)
+    assert "ANGIUECUVOLINA" not in (res["nombres"]["value"] or "")
+    assert "GMAIL" not in (res["nombres"]["value"] or "")
+
+
+def test_excel_lookup_prioridad_con_alerta_discrepancia():
+    """
+    Caso de la Imagen 2:
+    La cédula 40087584 leyó 'CONSULO RCMUN' por OCR borroso, pero en Excel está
+    'CONSUELO RAMON FIERRO'.
+    Se debe priorizar el nombre de Excel en la tabla ('CONSUELO RAMON FIERRO'),
+    pero conservando la alerta y estado REVIEW_REQUIRED con detalle de discrepancia.
+    """
+    from app.services.excel_lookup_service import excel_lookup_service
+
+    lookup = {
+        "40087584": {
+            "nombre_completo": "CONSUELO RAMON FIERRO",
+            "nombres": "CONSUELO",
+            "apellidos": "RAMON FIERRO"
+        }
+    }
+
+    res = excel_lookup_service.verificar_exhaustiva_ocr_excel(
+        id_ocr="40087584",
+        nombre_ocr="CONSULO RCMUN",
+        lookup=lookup
+    )
+
+    # Prioridad al nombre de Excel para la tabla
+    assert res["nombre_final"] == "CONSUELO RAMON FIERRO"
+    assert res["fuente_nombre"] == "excel_oficial"
+    assert res["encontrado_en_excel"] is True
+
+    # Pero conservando alerta para advertir si en Excel estuviera mal
+    assert res["requiere_revision"] is True
+    assert res["estado_registro"] == "REVIEW_REQUIRED"
+    assert res["discrepancia_excel"] is not None
+    assert res["discrepancia_excel"]["tipo"] in ["NOMBRE_DISCREPANTE", "id_pertenece_a_otro"]
+    assert "CONSUELO RAMON FIERRO" in res["discrepancia_excel"]["motivo"]
+
+
+
 

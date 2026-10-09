@@ -46,8 +46,9 @@ def test_verificacion_discrepancia_id_pertenece_a_otro():
         nombre_ocr="CARLOS ALBERTO GOMEZ",
         lookup=lookup
     )
-    # NUNCA debe cambiar el nombre a ANTONIO VALENCIA VILLEGAS
-    assert res["nombre_final"] == "CARLOS ALBERTO GOMEZ"
+    # Según requerimiento del usuario: se da prioridad al nombre del Excel en la tabla,
+    # pero manteniendo la alerta de discrepancia y estado REVIEW_REQUIRED para revisión
+    assert res["nombre_final"] == "ANTONIO VALENCIA VILLEGAS"
     assert res["id_final"] == "16221480"
     assert res["requiere_revision"] is True
     assert res["estado_registro"] == "REVIEW_REQUIRED"

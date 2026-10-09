@@ -413,7 +413,23 @@ class SpatialFieldExtractor:
             ])
         ]
 
-        y_doc_top = min(getattr(l, "y", 0.0) for l in card_header_lines) if card_header_lines else None
+        # Anclajes estructurales alternativos: rótulos de NUMERO, NUIP, Cédula o APELLIDOS en la cédula
+        card_alt_lines = [
+            l for l in lines
+            if re.search(r"\b(NUMERO|N[UÚ]MERO|NOMORO|NUIP|AP[EÉI1]+L+[I10]*D|C[EÉ]DULA\s+DE\s+CIUDADAN[IÍ]A)\b", getattr(l, "text", ""), re.I)
+            and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+            and not any(rw in getattr(l, "text", "").upper() for rw in [
+                "FOTOCOPIA", "MATRICULA", "INSCRIPCION", "APRENDIZ", "FICHA"
+            ])
+        ]
+
+        if card_header_lines:
+            y_doc_top = min(getattr(l, "y", 0.0) for l in card_header_lines)
+        elif card_alt_lines:
+            # En la cédula colombiana, la cabecera está máximo a 0.08 por encima de NUMERO o APELLIDOS
+            y_doc_top = max(0.0, min(getattr(l, "y", 0.0) for l in card_alt_lines) - 0.08)
+        else:
+            y_doc_top = None
 
         def es_linea_externa_al_documento(line_obj) -> bool:
             txt_l = getattr(line_obj, "text", "").upper().strip()
@@ -425,22 +441,23 @@ class SpatialFieldExtractor:
             # Líneas con ruido administrativo (fotocopia, sellos, matricula, ficha...)
             if es_linea_ruido_administrativo(txt_l):
                 return True
-            # Teléfonos celulares o indicadores de contacto (con límites de palabra para no filtrar nombres como Aristel o Marcela)
+            # Teléfonos celulares o indicadores de contacto
             if re.search(r"\b(?:TEL|CEL|WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ|FICHA|PROCESO)\b", txt_l):
                 return True
-            # Correos electrónicos externos
-            if "@" in txt_l or any(d in txt_l for d in ["@GMAIL", "@HOTMAIL", "@OUTLOOK", "@YAHOO", "@MISENA"]):
+            # Correos electrónicos externos o dominios de correo
+            if "@" in txt_l or any(d in txt_l for d in ["@GMAIL", "@HOTMAIL", "@OUTLOOK", "@YAHOO", "@MISENA", "GMAIL", "HOTMAIL", "OUTLOOK", "YAHOO", ".COM", ".CO"]):
+                return True
+            # Nombres de usuario de correo con números (ej: Angiecarolina001) - descartando fechas compactas (ej: 22OCT2006)
+            if not validador.parsear_fecha(txt_l) and re.search(r"^[A-Za-z]{4,}\d{2,}$", txt_l):
                 return True
             # Número celular colombiano de 10 dígitos aislado
             num_clean = re.sub(r"[^\d]", "", txt_l)
-            if len(num_clean) == 10 and num_clean.startswith(("30", "31", "32", "33", "35", "37")):
+            if len(num_clean) == 10 and num_clean.startswith(("30", "31", "32", "33", "35", "37")) and not validador.parsear_fecha(txt_l):
                 return True
             # Número de ficha institucional: 10 dígitos que empieza por 31 (ej: 3105701005)
-            # Son fichas SENA/institucionales, NO cédulas colombianas
             if len(num_clean) == 10 and num_clean.startswith("31") and txt_l == num_clean:
                 return True
-            # Encabezado externo tipo 'CC. 30507543 NOMBRE APELLIDO' – SIEMPRE es membrete de planilla,
-            # nunca dato impreso en la cédula física (descartado independientemente de y_doc_top)
+            # Encabezado externo tipo 'CC. 30507543 NOMBRE APELLIDO'
             if re.search(r"^\s*(?:CC|C\.C\.)[\.\s:]+\d{6,10}\s+[A-ZÁÉÍÓÚÜÑ]{2,}", txt_l):
                 return True
             # También si está por encima del documento y contiene el patrón CC NÚMERO
@@ -622,6 +639,8 @@ class SpatialFieldExtractor:
             if frt_header_lines:
                 # Recorte superior inteligente: omitir cualquier membrete o sello de fotocopia previo al recuadro del documento
                 y_min_frente = max(0.0, min(getattr(l, "y", 0.0) for l in frt_header_lines) - 0.015)
+            elif y_doc_top is not None:
+                y_min_frente = max(0.0, y_doc_top - 0.01)
 
             if rev_lines and frt_lines:
                 y_rev_avg = sum(getattr(l, "y", 0.0) for l in rev_lines) / len(rev_lines)
@@ -936,8 +955,8 @@ class SpatialFieldExtractor:
 
         # ── 4. Fechas (Estrategia Directa por Etiqueta + Cédula Amarilla Reverso + Cronológica) ──
         # 4.1.A Búsqueda directa por etiquetas explícitas
-        patron_f_nac_lbl = re.compile(r"\bFECHA\s+DE\s+NACIMIENTO[\s:]*([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", re.I)
-        patron_f_exp_lbl = re.compile(r"\b(?:FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|FECHA\s+DE\s+EXPEDICI[OÓ]N)[\s:]*([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", re.I)
+        patron_f_nac_lbl = re.compile(r"\bFECHA\s+DE\s+NACIMIENTO[\s:]*([0-9]{1,2}[\s/\-\.]*[A-Za-z0-9]{3,4}\.?[\s/\-\.]*[0-9]{2,4})\b", re.I)
+        patron_f_exp_lbl = re.compile(r"\b(?:FECHA\s+Y\s+LUGAR\s+DE\s+EXPEDICI[OÓ]N|FECHA\s+DE\s+EXPEDICI[OÓ]N)[\s:]*([0-9]{1,2}[\s/\-\.]*[A-Za-z0-9]{3,4}\.?[\s/\-\.]*[0-9]{2,4})\b", re.I)
 
         for idx_l, l in enumerate(lines):
             if es_linea_externa_al_documento(l):
@@ -948,7 +967,7 @@ class SpatialFieldExtractor:
                 l_next = lines[idx_l + 1]
                 if not es_linea_externa_al_documento(l_next):
                     t_next = getattr(l_next, "text", "").strip()
-                    m_fn = re.search(r"\b([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b", t_next)
+                    m_fn = re.search(r"\b([0-9]{1,2}[\s/\-\.]*[A-Za-z0-9]{3,4}\.?[\s/\-\.]*[0-9]{2,4})\b", t_next)
             if m_fn and not resultado_campos["fecha_nacimiento"]["value"]:
                 dt_fn = validador.parsear_fecha(m_fn.group(1))
                 if dt_fn and 1930 <= dt_fn.year <= 2026:

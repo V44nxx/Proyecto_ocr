@@ -304,13 +304,15 @@ def limpiar_alucinaciones_ocr_nombre(texto: str) -> str:
     """
     Elimina palabras o secuencias corruptas como 'ANGIUECUVOLINA' cuando en el mismo texto
     ya figuran los nombres o apellidos reales legítimos (ej: 'ANGI CAROLINA' o 'BOTACHE').
+    También elimina tokens que contengan dígitos o que sean combinaciones no reconocidas
+    que excedan 10 caracteres cuando existen nombres legítimos.
     """
     if not texto:
         return ""
     words = texto.split()
-    if len(words) <= 2:
+    if len(words) <= 1:
         return texto
-    
+
     legitimos = [w.upper() for w in words if normalizar_str(w) in NOMBRES_COLOMBIANOS_COMUNES]
     if not legitimos:
         return texto
@@ -318,12 +320,16 @@ def limpiar_alucinaciones_ocr_nombre(texto: str) -> str:
     res = []
     for w in words:
         w_norm = normalizar_str(w)
-        # Si es una palabra atípica muy larga (>= 11 letras) no presente en el diccionario
-        # que contiene triplete de vocales o solapa con los tokens legítimos
-        if len(w_norm) >= 11 and w_norm not in NOMBRES_COLOMBIANOS_COMUNES:
-            if re.search(r"[AEIOU]{3,}", w_norm):
-                if any(leg in w_norm for leg in legitimos if len(leg) >= 4):
-                    continue
+        # Si contiene dígitos (ej: Angiecarolina001) -> descartar de nombre de persona
+        if re.search(r"\d", w):
+            continue
+        # Si es una palabra corrupta larga no reconocida mientras ya hay nombres legítimos
+        if len(w_norm) >= 10 and w_norm not in NOMBRES_COLOMBIANOS_COMUNES:
+            # Si solapa con un nombre legítimo presente (ej: ANGIUECUVOLINA con ANGI)
+            if any(leg in w_norm for leg in legitimos if len(leg) >= 4):
+                continue
+            if re.search(r"[AEIOU]{3,}", w_norm) or any(seq in w_norm for seq in ["UECU", "UVOL", "VOLIN"]):
+                continue
         res.append(w)
     return " ".join(res)
 

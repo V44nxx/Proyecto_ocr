@@ -418,19 +418,19 @@ class ExcelLookupService:
                             }
                         else:
                             mot_disc = (
-                                f"Discrepancia crítica: La cédula '{id_limpio}' leída por OCR pertenece a '{nom_excel_para_id}' en Excel, "
-                                f"pero el documento físico indica '{nom_doc}' (quien figura en Excel con cédula {id_excel_titular}). "
-                                f"Se conserva el nombre físico del documento."
+                                f"Discrepancia detectada: La cédula '{id_limpio}' registrada en Excel corresponde a '{nom_excel_para_id}', "
+                                f"mientras que el documento físico fue leído por OCR como '{nom_doc}'. "
+                                f"Se da prioridad al nombre oficial de Excel ('{nom_excel_para_id}'), conservando la alerta para revisión."
                             )
                             return {
                                 "id_final": id_limpio,
-                                "nombre_final": nom_doc,
-                                "nombres_final": nombres_ocr or nom_doc,
-                                "apellidos_final": apellidos_ocr or "",
+                                "nombre_final": nom_excel_para_id or nom_doc,
+                                "nombres_final": reg_id_excel.get("nombres") or nom_excel_para_id,
+                                "apellidos_final": reg_id_excel.get("apellidos") or "",
                                 "id_original_ocr": None,
-                                "encontrado_en_excel": False,
-                                "fuente_identificacion": "ocr_con_discrepancia",
-                                "fuente_nombre": "cedula_fisica",
+                                "encontrado_en_excel": True,
+                                "fuente_identificacion": "ocr_verificado_excel",
+                                "fuente_nombre": "excel_oficial",
                                 "estado_registro": "REVIEW_REQUIRED",
                                 "requiere_revision": True,
                                 "discrepancia_excel": {
@@ -445,19 +445,19 @@ class ExcelLookupService:
                             }
                     else:
                         mot_disc = (
-                            f"Inconsistencia de titular: La cédula extraída ({id_limpio}) pertenece en la planilla oficial a "
-                            f"'{nom_excel_para_id}', pero el documento escaneado pertenece a '{nom_doc}'. "
-                            f"Se conserva el nombre físico del documento para evitar datos erróneos."
+                            f"Discrepancia detectada: La cédula '{id_limpio}' registrada en Excel corresponde a '{nom_excel_para_id}', "
+                            f"mientras que el documento físico fue leído por OCR como '{nom_doc}'. "
+                            f"Se da prioridad al nombre oficial de Excel ('{nom_excel_para_id}'), conservando la alerta para revisión."
                         )
                         return {
                             "id_final": id_limpio,
-                            "nombre_final": nom_doc,
-                            "nombres_final": nombres_ocr or nom_doc,
-                            "apellidos_final": apellidos_ocr or "",
+                            "nombre_final": nom_excel_para_id or nom_doc,
+                            "nombres_final": reg_id_excel.get("nombres") or nom_excel_para_id,
+                            "apellidos_final": reg_id_excel.get("apellidos") or "",
                             "id_original_ocr": None,
-                            "encontrado_en_excel": False,
-                            "fuente_identificacion": "ocr_con_discrepancia",
-                            "fuente_nombre": "cedula_fisica",
+                            "encontrado_en_excel": True,
+                            "fuente_identificacion": "ocr_verificado_excel",
+                            "fuente_nombre": "excel_oficial",
                             "estado_registro": "REVIEW_REQUIRED",
                             "requiere_revision": True,
                             "discrepancia_excel": {

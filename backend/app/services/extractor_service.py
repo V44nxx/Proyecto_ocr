@@ -1416,20 +1416,20 @@ class ExtractorService:
             linea_up = linea.upper().strip()
 
             if re.search(r"\b(APELLIDOS?|PRIMER\s+APELLIDO|SEGUNDO\s+APELLIDO|SURNAMES?)\b", linea_up):
-                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
                 cand_siguiente = self._siguiente_linea_valida(lineas, idx)
-                if cand_anterior and not apellidos:
-                    apellidos = cand_anterior
-                elif cand_siguiente and not apellidos:
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
+                if cand_siguiente and not apellidos:
                     apellidos = cand_siguiente
+                elif cand_anterior and not apellidos:
+                    apellidos = cand_anterior
 
             if re.search(r"\b(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE|GIVEN\s+NAMES?)\b", linea_up):
-                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
                 cand_siguiente = self._siguiente_linea_valida(lineas, idx)
-                if cand_anterior and cand_anterior != apellidos and not nombres:
-                    nombres = cand_anterior
-                elif cand_siguiente and cand_siguiente != apellidos and not nombres:
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
+                if cand_siguiente and cand_siguiente != apellidos and not nombres:
                     nombres = cand_siguiente
+                elif cand_anterior and cand_anterior != apellidos and not nombres:
+                    nombres = cand_anterior
 
         return nombres, apellidos
 

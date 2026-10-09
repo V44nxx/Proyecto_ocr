@@ -664,8 +664,10 @@ function PersonasContent() {
 
   // ─── Panel de detalle inline (acordeón) ───────────────────────────────────
   const renderPanelDetalle = (p: Persona) => {
-    const docIdParaImagen = p.documento_pdf_id || (p.detalles_campos as any)?.documento_pdf_id || (p.en_pdf !== false ? p.documento_id : null);
-    const tienePdfValido = !!docIdParaImagen && p.en_pdf !== false;
+    // Si la persona es de Excel o no tiene páginas físicas extraídas ni PDF individual, NO debe mostrar documento de otra persona
+    const esPersonaSinPdf = p.en_pdf === false || p.motor_ocr === "excel" || p.grupo_documento_id === "EXCEL-SIN-PDF" || (p.detalles_campos as any)?.en_pdf === false || (!p.pagina_frente && !p.pagina_numero && !p.documento_pdf_id);
+    const docIdParaImagen = !esPersonaSinPdf ? (p.documento_pdf_id || p.documento_id) : (p.documento_pdf_id || null);
+    const tienePdfValido = !esPersonaSinPdf && !!docIdParaImagen;
     const docId = p.documento_id ? String(p.documento_id) : null;
     const estaEditando = editando === p.id;
 

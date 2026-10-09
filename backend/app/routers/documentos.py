@@ -366,17 +366,9 @@ def _procesar_batch_ocr_y_comparacion(
                     logger.warning(f"[OCR Batch Background] Error limpiando comparacion pendiente: {e_c}")
             return
 
-        # ── Registrar personas en Excel que NO están en los PDFs del lote ──
-        if excel_path and items:
-            try:
-                logger.info(f"[OCR Batch Background] Verificando personas de Excel no encontradas en PDF...")
-                _registrar_personas_excel_faltantes(
-                    items=items,
-                    excel_path=excel_path,
-                    db=db,
-                )
-            except Exception as e_falt:
-                logger.error(f"[OCR Batch Background] Error registrando personas faltantes de Excel: {e_falt}")
+        # ── Personas de Excel no encontradas en PDF ──
+        # NOTA: No se inyectan como personas ficticias del PDF para evitar duplicados y asignación errónea de documentos.
+        # El módulo de Comparación (/comparacion) se encarga de listar y reportar quiénes faltaron en el PDF.
 
         # ── Ejecutar comparación automática si se adjuntó planilla Excel ─
         if comparacion_id and excel_path:

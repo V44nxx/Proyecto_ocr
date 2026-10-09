@@ -70,42 +70,10 @@ def test_evaluacion_docai_incompleta_solo_header():
     assert "Sin número de identificación" in motivo
 
 
-def test_ocr_imagen_rapid_primario_exitoso_evita_docai():
+def test_ocr_imagen_docai_primario_exitoso_evita_rapid():
     """
-    Verifica que si RapidOCR extrae texto satisfactorio (>= 20 caracteres),
-    retorna 'rapid_ocr' de inmediato y NO invoca Google Document AI ($0 costo, ejecución local ultrarrápida).
-    """
-    servicio = OCRService()
-    img_fake = np.ones((400, 600, 3), dtype=np.uint8) * 255
-
-    mock_rapid_res = StructuredDocumentAIResult(
-        text=TEXTO_RESCATADO_RAPID,
-        tiempo_ms=450.0,
-        pages=[OCRPageData(page_number=1, width=600, height=400, text=TEXTO_RESCATADO_RAPID, lines=[])]
-    )
-
-    with patch("app.services.ocr_service.google_document_ai_service") as mock_gdoc, \
-         patch("app.services.ocr_service.rapid_ocr_service") as mock_rapid:
-
-        mock_rapid.disponible = True
-        mock_rapid.procesar_imagen.return_value = (TEXTO_RESCATADO_RAPID, 95.0, mock_rapid_res)
-
-        mock_gdoc.disponible = True
-
-        texto_final, motor_final, struct_final = servicio._ocr_imagen(img_fake, pagina_num=1)
-
-        # RapidOCR se ejecuta como motor primario
-        mock_rapid.procesar_imagen.assert_called_once()
-        # Google Document AI NO debe ser invocado (ahorro de costo y tiempo)
-        mock_gdoc.procesar_documento_estructurado.assert_not_called()
-        assert motor_final == "rapid_ocr"
-        assert "1006501709" in texto_final
-
-
-def test_ocr_imagen_activa_fallback_docai_cuando_rapid_escaso():
-    """
-    Verifica que si RapidOCR devuelve texto escaso (< 20 caracteres) o falla,
-    se activa el fallback de contingencia a Google Document AI y retorna 'google_document_ai'.
+    Verifica que si Google Document AI está disponible y procesa exitosamente (>= 15 caracteres),
+    retorna 'google_document_ai' de inmediato y NO invoca el cómputo pesado de RapidOCR en CPU.
     """
     servicio = OCRService()
     img_fake = np.ones((400, 600, 3), dtype=np.uint8) * 255
@@ -124,21 +92,54 @@ def test_ocr_imagen_activa_fallback_docai_cuando_rapid_escaso():
          patch("app.services.ocr_service.rapid_ocr_service") as mock_rapid, \
          patch("cv2.imencode", return_value=(True, MagicMock(tobytes=lambda: b"fake_jpeg"))):
 
-        # RapidOCR devuelve texto insuficiente (< 20 chars)
-        mock_rapid.disponible = True
-        mock_rapid.procesar_imagen.return_value = ("HOLA", 50.0, None)
-
         mock_gdoc.disponible = True
         mock_gdoc.procesar_documento_estructurado.return_value = mock_docai_res
 
+        mock_rapid.disponible = True
+
         texto_final, motor_final, struct_final = servicio._ocr_imagen(img_fake, pagina_num=1)
 
-        # Rapid intentó procesar
-        mock_rapid.procesar_imagen.assert_called_once()
-        # Al ser insuficiente, DocAI fallback entra en acción
+        # Google Document AI se ejecuta como motor primario
         mock_gdoc.procesar_documento_estructurado.assert_called_once()
+        # RapidOCR NO debe ser invocado (ahorro de cómputo en CPU y máxima velocidad)
+        mock_rapid.procesar_imagen.assert_not_called()
         assert motor_final == "google_document_ai"
         assert "1.006.501.709" in texto_final
+
+
+def test_ocr_imagen_activa_fallback_rapid_cuando_docai_falla():
+    """
+    Verifica que si Google Document AI falla o está indisponible,
+    se activa el fallback automático a RapidOCR y retorna 'rapid_ocr'.
+    """
+    servicio = OCRService()
+    img_fake = np.ones((400, 600, 3), dtype=np.uint8) * 255
+
+    mock_rapid_res = StructuredDocumentAIResult(
+        text=TEXTO_RESCATADO_RAPID,
+        tiempo_ms=450.0,
+        pages=[OCRPageData(page_number=1, width=600, height=400, text=TEXTO_RESCATADO_RAPID, lines=[])]
+    )
+
+    with patch("app.services.ocr_service.google_document_ai_service") as mock_gdoc, \
+         patch("app.services.ocr_service.rapid_ocr_service") as mock_rapid, \
+         patch("cv2.imencode", return_value=(True, MagicMock(tobytes=lambda: b"fake_jpeg"))):
+
+        # Google Document AI falla (ej. error de cuota o red)
+        mock_gdoc.disponible = True
+        mock_gdoc.procesar_documento_estructurado.side_effect = RuntimeError("Quota exceeded / Network timeout")
+
+        mock_rapid.disponible = True
+        mock_rapid.procesar_imagen.return_value = (TEXTO_RESCATADO_RAPID, 95.0, mock_rapid_res)
+
+        texto_final, motor_final, struct_final = servicio._ocr_imagen(img_fake, pagina_num=1)
+
+        # DocAI intentó procesar
+        mock_gdoc.procesar_documento_estructurado.assert_called_once()
+        # Al fallar, RapidOCR fallback entra en acción
+        mock_rapid.procesar_imagen.assert_called_once()
+        assert motor_final == "rapid_ocr"
+        assert "1006501709" in texto_final
 
 
 def test_trazabilidad_motor_en_grupo_y_persona():

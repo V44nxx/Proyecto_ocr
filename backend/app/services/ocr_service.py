@@ -148,8 +148,8 @@ class OCRService:
                     txt_nat = pag.get_text("text")
                     nec_ocr = self._necesita_ocr_imagen(txt_nat, pag=pag)
                     if nec_ocr:
-                        # 150 DPI: resolución óptima para OCR neuronal en CPU, 45% más ligero y 2.2x más rápido que 200 DPI
-                        pix = pag.get_pixmap(dpi=150)
+                        # 200 DPI: resolución óptima para Google Document AI
+                        pix = pag.get_pixmap(dpi=200)
                         img_arr = self.image_processor._pixmap_to_numpy(pix)
                         del pix
                         txt_pag, motor, layout = self._ocr_imagen(img_np=img_arr, pagina_num=p_num)
@@ -178,9 +178,9 @@ class OCRService:
                     "numero_identificacion": id_pre
                 }
 
-            # Concurrencia adaptativa y óptima para procesamiento en CPU
+            # Concurrencia adaptativa para llamadas I/O a Google Document AI
             cpu_cores = os.cpu_count() or 1
-            max_workers = min(max(1, cpu_cores), 3) if total_paginas > 0 else 1
+            max_workers = min(max(2, cpu_cores), 4) if total_paginas > 0 else 1
 
             resultados_desordenados = []
             paginas_procesadas = 0
@@ -510,54 +510,28 @@ class OCRService:
         self, img_np, pagina_num: int = 0
     ) -> tuple:
         """
-        Motor OCR de imagen con RapidOCR como motor primario (Zero-cost, local en VPS)
-        y Google Document AI preservado como fallback de contingencia.
+        Motor OCR de imagen con Google Document AI como motor primario de alta velocidad
+        y precisión neuronal, con RapidOCR preservado como fallback automático ($0 costo)
+        y Tesseract como último recurso.
 
         Estrategia de ejecución:
-          1. RapidOCR (Local Neural ONNX + CLAHE + Auto-scale):
-             - Ejecución local ultrarrápida (~1.5s por página en CPU)
-             - Genera layout 2D de líneas y tokens para el Extractor Espacial Universal
-             - Si extrae texto con volumen suficiente -> Retorna inmediatamente sin tocar Google Cloud ($0 costo).
-          2. Google Document AI (Fallback de Respaldo):
-             - Se activa de forma segura si RapidOCR retorna vacío o si se fuerza por configuración.
+          1. Google Document AI (Motor Primario):
+             - Procesamiento neuronal en la nube (~1.5s por página)
+             - Genera layout 2D de alta precisión con líneas y tokens para el Extractor Espacial Universal.
+             - Si extrae texto con volumen suficiente -> Retorna inmediatamente.
+          2. RapidOCR (Fallback Local Automático):
+             - Se activa de forma segura si Document AI no está disponible o falla por cuota/red.
           3. Tesseract (Último recurso si ambos fallan).
         """
         import cv2
         from app.services.google_document_ai_service import StructuredDocumentAIResult
 
-        texto_rapid: str = ""
-        res_rapid = None
-
-        # ── Paso 1: RapidOCR como Motor Primario de Alto Rendimiento ($0 Costo) ──
-        forzar_docai_primero = getattr(settings, "FORCE_GOOGLE_DOCAI", False)
-
-        if rapid_ocr_service.disponible and not forzar_docai_primero:
-            try:
-                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(
-                    img_np, pagina_num=pagina_num
-                )
-                texto_rapid = texto_rapid or ""
-                # Si RapidOCR extrajo texto con contenido útil, retornar inmediatamente
-                if len(texto_rapid.strip()) >= 20:
-                    logger.info(
-                        f"[RapidOCR] Página {pagina_num}: Éxito motor local "
-                        f"({len(texto_rapid)} chars, confianza={conf_rapid:.1f}%) -> Retorno directo (Sin costo GCP)"
-                    )
-                    return texto_rapid, "rapid_ocr", res_rapid
-                else:
-                    logger.info(f"[RapidOCR] Página {pagina_num}: Texto escaso ({len(texto_rapid.strip())} chars), evaluando fallback DocAI...")
-            except Exception as e:
-                logger.error(f"[RapidOCR] Página {pagina_num}: Error ({type(e).__name__}: {e})")
-                texto_rapid = ""
-                res_rapid = None
-
-        # ── Paso 2: Google Document AI (Fallback Preservado de Contingencia) ──
         texto_docai: str = ""
         res_docai = None
 
+        # ── Paso 1: Google Document AI como Motor Primario de Alta Precisión y Velocidad ──
         if google_document_ai_service.disponible:
             try:
-                logger.info(f"[DocAI Fallback] Página {pagina_num}: Activando Google Document AI como respaldo de contingencia...")
                 success, img_encoded = cv2.imencode(".jpg", img_np, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                 if not success:
                     raise ValueError("No se pudo codificar la imagen a JPEG")
@@ -568,20 +542,44 @@ class OCRService:
                 )
                 texto_docai = res_docai.text or ""
 
-                if texto_docai.strip():
+                if len(texto_docai.strip()) >= 15:
                     palabras = re.findall(r"[A-Za-záéíóúñÁÉÍÓÚÑ]{3,}", texto_docai)
                     logger.info(
-                        f"[DocAI] Página {pagina_num}: OK "
+                        f"[DocAI] Página {pagina_num}: Éxito motor primario "
                         f"({len(texto_docai)} chars, {len(palabras)} palabras, {res_docai.tiempo_ms:.1f}ms)"
                     )
                     return texto_docai, "google_document_ai", res_docai
+                else:
+                    logger.info(f"[DocAI] Página {pagina_num}: Texto escaso ({len(texto_docai.strip())} chars), evaluando fallback RapidOCR...")
             except Exception as e:
-                logger.error(f"[DocAI Fallback] Página {pagina_num}: Error en Document AI ({type(e).__name__}: {e})")
+                logger.error(f"[DocAI] Página {pagina_num}: Error en Document AI ({type(e).__name__}: {e}), activando fallback...")
                 res_docai = None
 
-        # Si RapidOCR obtuvo algún texto parcial y DocAI no estuvo disponible:
-        if texto_rapid.strip():
-            return texto_rapid, "rapid_ocr", res_rapid
+        # ── Paso 2: RapidOCR (Fallback Local Automático y Seguro) ──
+        texto_rapid: str = ""
+        res_rapid = None
+
+        if rapid_ocr_service.disponible:
+            try:
+                logger.info(f"[RapidOCR Fallback] Página {pagina_num}: Activando RapidOCR como respaldo...")
+                texto_rapid, conf_rapid, res_rapid = rapid_ocr_service.procesar_imagen(
+                    img_np, pagina_num=pagina_num
+                )
+                texto_rapid = texto_rapid or ""
+                if len(texto_rapid.strip()) >= 15:
+                    logger.info(
+                        f"[RapidOCR] Página {pagina_num}: Éxito motor fallback "
+                        f"({len(texto_rapid)} chars, confianza={conf_rapid:.1f}%)"
+                    )
+                    return texto_rapid, "rapid_ocr", res_rapid
+            except Exception as e:
+                logger.error(f"[RapidOCR Fallback] Página {pagina_num}: Error en RapidOCR ({type(e).__name__}: {e})")
+                texto_rapid = ""
+                res_rapid = None
+
+        # Si DocAI obtuvo algún texto parcial y RapidOCR no mejoró:
+        if texto_docai.strip():
+            return texto_docai, "google_document_ai", res_docai
 
         # ── Paso 3: Tesseract (último fallback si ambos fallaron) ─────────
         logger.warning(f"[Tesseract] Página {pagina_num}: Todos los motores principales fallaron, usando Tesseract")

@@ -307,12 +307,16 @@ class ComparacionService:
         if diff_bd_words and diff_ex_words:
             return False
 
-        # Si uno es subconjunto limpio del otro (ej. se omitió el segundo nombre)
+        # Si uno es subconjunto limpio del otro (ej. se omitió el segundo nombre o segundo apellido)
         inter_count = sum(c_inter.values()) + len(matched_bd)
         total_words = max(len(w_bd), len(w_excel))
-        if (not diff_bd_words or not diff_ex_words) and inter_count >= 2:
-            ratio = inter_count / total_words
-            return ratio >= 0.70
+        if inter_count >= 2:
+            if not diff_bd_words:
+                # Cada palabra extraída del documento corresponde a la persona en Excel (cero contradicciones)
+                # Cubre casos como 'CONSUELO RAMON' vs 'CONSUELO RAMON FIERRO' (2/3 = 66.7%)
+                return (inter_count / total_words) >= 0.50
+            elif not diff_ex_words:
+                return (inter_count / total_words) >= 0.65
 
         return False
 

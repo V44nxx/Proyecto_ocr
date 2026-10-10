@@ -148,8 +148,8 @@ class OCRService:
                     txt_nat = pag.get_text("text")
                     nec_ocr = self._necesita_ocr_imagen(txt_nat, pag=pag)
                     if nec_ocr:
-                        # 200 DPI: resolución óptima para Google Document AI
-                        pix = pag.get_pixmap(dpi=200)
+                        # 300 DPI: resolución óptima recomendada para Google Document AI
+                        pix = pag.get_pixmap(dpi=300)
                         img_arr = self.image_processor._pixmap_to_numpy(pix)
                         del pix
                         txt_pag, motor, layout = self._ocr_imagen(img_np=img_arr, pagina_num=p_num)
@@ -532,7 +532,7 @@ class OCRService:
         # ── Paso 1: Google Document AI como Motor Primario de Alta Precisión y Velocidad ──
         if google_document_ai_service.disponible:
             try:
-                success, img_encoded = cv2.imencode(".jpg", img_np, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                success, img_encoded = cv2.imencode(".jpg", img_np, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
                 if not success:
                     raise ValueError("No se pudo codificar la imagen a JPEG")
                 img_bytes = img_encoded.tobytes()

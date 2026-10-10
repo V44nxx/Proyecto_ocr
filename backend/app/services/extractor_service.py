@@ -707,7 +707,10 @@ class ExtractorService:
 
         # ── Estrategia 2b: Cédula Amarilla (sin NUIP ni etiquetas de APELLIDOS/NOMBRES) ─────
         # Detectar ANTES del fallback posicional para que tenga prioridad
-        invalidos_nombre = {"POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA", "PERSONAL", "CEDULA", "CIUDADANIA"}
+        invalidos_nombre = {
+            "POR REVISAR", "BLICA", "PUBLICA", "PÚBLICA", "REPUBLICA", "COLOMBIA", "DE COLOMBIA",
+            "PERSONAL", "CEDULA", "CIUDADANIA", "NAL", "ONAL", "NACIONA", "NACIONAL", "IA"
+        }
         if self._es_cedula_amarilla(texto):
             nom_am, ape_am = self._extraer_cedula_amarilla(texto, lineas)
             if ape_am and (not resultado["apellidos"] or resultado["apellidos"] in invalidos_nombre):

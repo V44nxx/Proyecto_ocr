@@ -20,16 +20,8 @@ class ValidadorColombia:
     """Validadores específicos para documentos de identificación colombianos."""
 
     # Diccionario de homóglifos (caracteres griegos/cirílicos visualmente idénticos a letras latinas)
-    HOMOGLYPHS = str.maketrans({
-        # Letras griegas a latinas
-        'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I', 'Κ': 'K', 'Μ': 'M',
-        'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X',
-        'α': 'a', 'β': 'b', 'ε': 'e', 'ι': 'i', 'κ': 'k', 'ν': 'n', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'υ': 'y', 'χ': 'x',
-        # Letras cirílicas a latinas
-        'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P',
-        'С': 'C', 'Т': 'T', 'Х': 'X',
-        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x',
-    })
+    from app.services.google_document_ai_service import GoogleDocumentAIService
+    HOMOGLYPHS = GoogleDocumentAIService.HOMOGLYPH_MAP
 
     # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes, códigos de país)
     _PALABRAS_NO_NOMBRE = re.compile(
@@ -41,7 +33,7 @@ class ValidadorColombia:
         r"LUGAR|EXPEDICION|EXPEDICIÓN|EXPIRACION|EXPIRACIÓN|"
         r"NACIMIENTO|FECHA|SEXO|ESTATURA|NACIONALIDAD|REGISTRADOR|REGISTRADORA|REGISTRADURIA|REGISTRAD|GERENTE|MINISTERIO|"
         r"CAMSCANNER|POWERED|SCANNER|CS|PANENZ|BAILS|DANCING|ARCHIV|DOC|DOCUMENTO|REGISTRO|CIVIL|"
-        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|DR|CDI|AAAS|AAS|"
+        r"ALMABEATRIZ|SCANNED|WITH|PERSONAL|NACIONAL|NACIONA|NAL|ONAL|DR|CDI|AAAS|AAS|"
         r"FOTOCOPIA|PROCESO|INSCRIPCION|INSCRIPCIÓN|MATRICULA|MATRÍCULA|EMPRENDEDORA|EMPRENDEDOR|EMPRENDIMIENTO|"
         r"OFICINA|DEPARTAMENTAL|MUNICIPAL|SECRETARIA|SECRETARÍA|ALCALDIA|ALCALDÍA|GOBERNACION|GOBERNACIÓN|"
         r"FACILITADO|FACILITADA|TECNOLOGICO|TECNOLÓGICO|ESTRATEGIA|CAMPESENA|CAMPESINA|CAMPESINO|FULLPOPULAR|POPULAR|"

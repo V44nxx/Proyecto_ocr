@@ -254,6 +254,43 @@ class GoogleDocumentAIService:
         """Indica si el servicio está correctamente configurado y listo para usarse."""
         return self._disponible
 
+    # Tabla exhaustiva de homóglifos (griegos y cirílicos a latinos)
+    HOMOGLYPH_MAP = str.maketrans({
+        # Griegas mayúsculas
+        'Α': 'A', 'Β': 'B', 'Γ': 'G', 'Δ': 'D', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Θ': 'O',
+        'Ι': 'I', 'Κ': 'K', 'Λ': 'L', 'Μ': 'M', 'Ν': 'N', 'Ξ': 'X', 'Ο': 'O', 'Π': 'P',
+        'Ρ': 'P', 'Σ': 'S', 'Τ': 'T', 'Υ': 'Y', 'Φ': 'F', 'Χ': 'X', 'Ψ': 'Y', 'Ω': 'O',
+        # Griegas minúsculas
+        'α': 'a', 'β': 'b', 'γ': 'g', 'δ': 'd', 'ε': 'e', 'ζ': 'z', 'η': 'h', 'θ': 'o',
+        'ι': 'i', 'κ': 'k', 'λ': 'l', 'μ': 'm', 'ν': 'n', 'ξ': 'x', 'ο': 'o', 'π': 'p',
+        'ρ': 'p', 'σ': 's', 'ς': 's', 'τ': 't', 'υ': 'y', 'φ': 'f', 'χ': 'x', 'ψ': 'y', 'ω': 'o',
+        # Cirílicas mayúsculas
+        'А': 'A', 'Б': 'B', 'В': 'B', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'Z',
+        'З': 'Z', 'И': 'I', 'Й': 'I', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'H', 'О': 'O',
+        'П': 'P', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Ф': 'F', 'Х': 'X', 'Ц': 'C',
+        'Ч': 'C', 'Ш': 'S', 'Щ': 'S', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'U',
+        'Я': 'R', 'І': 'I', 'Ї': 'I', 'Ј': 'J',
+        # Cirílicas minúsculas
+        'а': 'a', 'б': 'b', 'в': 'b', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'z',
+        'з': 'z', 'и': 'i', 'й': 'i', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'h', 'о': 'o',
+        'п': 'p', 'р': 'p', 'с': 'c', 'т': 't', 'у': 'y', 'ф': 'f', 'х': 'x', 'ц': 'c',
+        'ч': 'c', 'ш': 's', 'щ': 's', 'ы': 'y', 'э': 'e', 'ю': 'u', 'я': 'r', 'і': 'i',
+    })
+
+    @classmethod
+    def normalizar_texto_docai(cls, texto: str) -> str:
+        """Normaliza homóglifos y sustituciones de OCR frecuentes en texto extraído."""
+        if not texto:
+            return ""
+        import re
+        # 1. Reemplazar homóglifos griegos/cirílicos por sus equivalentes latinos
+        res = texto.translate(cls.HOMOGLYPH_MAP)
+        # 2. Correcciones tipográficas frecuentes de OCR:
+        # SAB! -> SABI, PEREZ1 -> PEREZ / MART1NEZ -> MARTINEZ
+        res = re.sub(r"\b([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,})[!1|\]]", r"\1I", res)
+        res = re.sub(r"([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)[!|]([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)", r"\1I\2", res)
+        return res
+
     def _text_from_anchor(self, text_anchor, full_text: str) -> str:
         if not text_anchor or not text_anchor.text_segments:
             return ""
@@ -262,19 +299,33 @@ class GoogleDocumentAIService:
             start = int(segment.start_index) if segment.start_index else 0
             end = int(segment.end_index)
             parts.append(full_text[start:end])
-        return "".join(parts).strip()
+        raw_text = "".join(parts).strip()
+        return self.normalizar_texto_docai(raw_text)
 
-    def _poly_to_box(self, bounding_poly) -> Tuple[float, float, float, float]:
-        if not bounding_poly or not bounding_poly.normalized_vertices:
+    def _poly_to_box(self, bounding_poly, page_w: float = 1.0, page_h: float = 1.0) -> Tuple[float, float, float, float]:
+        if not bounding_poly:
             return 0.0, 0.0, 0.0, 0.0
-        vertices = bounding_poly.normalized_vertices
-        xs = [v.x for v in vertices if hasattr(v, "x")]
-        ys = [v.y for v in vertices if hasattr(v, "y")]
-        if not xs or not ys:
-            return 0.0, 0.0, 0.0, 0.0
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        return round(min_x, 4), round(min_y, 4), round(max_x - min_x, 4), round(max_y - min_y, 4)
+        # Vértices normalizados (0.0 a 1.0)
+        if hasattr(bounding_poly, "normalized_vertices") and bounding_poly.normalized_vertices:
+            vertices = bounding_poly.normalized_vertices
+            xs = [v.x for v in vertices if hasattr(v, "x")]
+            ys = [v.y for v in vertices if hasattr(v, "y")]
+            if not xs or not ys:
+                return 0.0, 0.0, 0.0, 0.0
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            return round(min_x, 4), round(min_y, 4), round(max_x - min_x, 4), round(max_y - min_y, 4)
+        # Vértices en píxeles (no normalizados)
+        elif hasattr(bounding_poly, "vertices") and bounding_poly.vertices:
+            vertices = bounding_poly.vertices
+            xs = [v.x / max(page_w, 1.0) for v in vertices if hasattr(v, "x")]
+            ys = [v.y / max(page_h, 1.0) for v in vertices if hasattr(v, "y")]
+            if not xs or not ys:
+                return 0.0, 0.0, 0.0, 0.0
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            return round(min_x, 4), round(min_y, 4), round(max_x - min_x, 4), round(max_y - min_y, 4)
+        return 0.0, 0.0, 0.0, 0.0
 
     def procesar_documento_estructurado(
         self,
@@ -305,7 +356,8 @@ class GoogleDocumentAIService:
 
         result = self._client.process_document(request=request)
         doc = result.document
-        full_text = doc.text if doc.text else ""
+        full_text_raw = doc.text if doc.text else ""
+        full_text = self.normalizar_texto_docai(full_text_raw)
 
         paginas_estructuradas: List[OCRPageData] = []
 
@@ -317,41 +369,37 @@ class GoogleDocumentAIService:
             lines_list: List[OCRLine] = []
             tokens_list: List[OCRToken] = []
 
-            # Parsear líneas
+            # Parsear tokens de la página
+            if hasattr(page, "tokens"):
+                for tok in page.tokens:
+                    t_txt = self._text_from_anchor(tok.layout.text_anchor, full_text_raw)
+                    if not t_txt:
+                        continue
+                    t_conf = float(tok.layout.confidence) if hasattr(tok.layout, "confidence") and tok.layout.confidence else 0.90
+                    tx, ty, tw, th = self._poly_to_box(tok.layout.bounding_poly, w, h)
+                    t_obj = OCRToken(text=t_txt, confidence=t_conf, page_number=num_pag, x=tx, y=ty, w=tw, h=th)
+                    tokens_list.append(t_obj)
+
+            # Parsear líneas y asociarles sus tokens correspondientes
             if hasattr(page, "lines"):
                 for line in page.lines:
-                    txt = self._text_from_anchor(line.layout.text_anchor, full_text)
+                    txt = self._text_from_anchor(line.layout.text_anchor, full_text_raw)
                     if not txt:
                         continue
                     conf = float(line.layout.confidence) if hasattr(line.layout, "confidence") and line.layout.confidence else 0.90
-                    bx, by, bw, bh = self._poly_to_box(line.layout.bounding_poly)
-                    line_tokens: List[OCRToken] = []
+                    bx, by, bw, bh = self._poly_to_box(line.layout.bounding_poly, w, h)
 
-                    # Parsear tokens dentro de la línea
-                    if hasattr(line, "tokens"):
-                        for tok in line.tokens:
-                            t_txt = self._text_from_anchor(tok.layout.text_anchor, full_text)
-                            t_conf = float(tok.layout.confidence) if hasattr(tok.layout, "confidence") and tok.layout.confidence else conf
-                            tx, ty, tw, th = self._poly_to_box(tok.layout.bounding_poly)
-                            t_obj = OCRToken(text=t_txt, confidence=t_conf, page_number=num_pag, x=tx, y=ty, w=tw, h=th)
-                            line_tokens.append(t_obj)
-                            tokens_list.append(t_obj)
+                    # Asociar tokens que caen espacialmente dentro de la caja de la línea
+                    line_tokens = [
+                        tok for tok in tokens_list
+                        if (bx - 0.01) <= (tok.x + tok.w / 2.0) <= (bx + bw + 0.01)
+                        and (by - 0.01) <= (tok.y + tok.h / 2.0) <= (by + bh + 0.01)
+                    ]
 
                     lines_list.append(OCRLine(
                         text=txt, confidence=conf, page_number=num_pag,
                         x=bx, y=by, w=bw, h=bh, tokens=line_tokens
                     ))
-
-            # Si la página no entregó líneas explícitas pero sí tokens
-            if not lines_list and hasattr(page, "tokens"):
-                for tok in page.tokens:
-                    t_txt = self._text_from_anchor(tok.layout.text_anchor, full_text)
-                    if not t_txt:
-                        continue
-                    t_conf = float(tok.layout.confidence) if hasattr(tok.layout, "confidence") and tok.layout.confidence else 0.90
-                    tx, ty, tw, th = self._poly_to_box(tok.layout.bounding_poly)
-                    t_obj = OCRToken(text=t_txt, confidence=t_conf, page_number=num_pag, x=tx, y=ty, w=tw, h=th)
-                    tokens_list.append(t_obj)
 
             paginas_estructuradas.append(OCRPageData(
                 page_number=num_pag, width=w, height=h, text=full_text,

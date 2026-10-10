@@ -44,6 +44,9 @@ JUNK_WORDS = {
     "FLORENCIACAQUETA", "FLORENCIACAQUETÁ",   # ciudad+dpto fusionados por OCR
     "MEDELLINANTIOQUÍA", "MEDELLÍNANTIOQUÍA", "BOGOTACUNDINAMARCA",
     "EMPRENDEDORA", "EMPRENDEDORAS",
+    # Sufijos y ruidos de guilloche/marcas de agua fusionados con APELLIDOS
+    "NAL", "ONAL", "NACIONA", "NACION", "NACIONAL",
+    "GISTRADKIRIA", "GISTRAD", "ISTRAD", "REGISTRAD", "COLOSARIA", "COLESARIA",
 }
 
 # Diccionario canónico de nombres y apellidos comunes colombianos para desegmentación de tokens pegados
@@ -57,6 +60,7 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "HERNAN", "JAIRO", "JAVIER", "JESUS", "NELSON", "NESTOR", "RAFAEL", "RODRIGO",
     "SERGIO", "VICTOR", "YESID", "FABIAN", "ALVARO", "GERMAN", "MAURICIO", "WILSON",
     "GUSTAVO", "EDWIN", "FREDY", "FREDDY", "ALEXIS", "DUVAN", "BRAYAN", "KEVIN",
+    "RAMON", "RAMÓN", "CONSUELO",
     # Nombres femeninos
     "MARIA", "ANA", "ANGI", "ANGIE", "CAROLINA", "PAOLA", "ANDREA", "DIANA", "LINA",
     "LILIANA", "LUZ", "LUCIA", "LUISA", "GLORIA", "PATRICIA", "PAULA", "SANDRA", "SONIA",
@@ -91,7 +95,7 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "SALGADO", "SIERRA", "SOLER", "TRIANA", "URIBE", "VALLEJO", "VEGA", "VERA",
     "VILLAMIZAR", "VILLEGAS", "YEPES", "ZAMBRANO", "DAZA", "IQUINAS", "NOSCUE",
     "SAMBONY", "COLLAZOS", "TIRADO", "PERAFAN", "PALENCIA", "BOLANOS", "BOLAÑOS",
-    "CASTANEDA", "CASTAÑEDA", "VILLANUEVA"
+    "CASTANEDA", "CASTAÑEDA", "VILLANUEVA", "FIERRO", "SABI", "SABÍ"
 }
 
 PATRON_RUIDO_ADMINISTRATIVO = re.compile(
@@ -365,6 +369,12 @@ def separar_nombres_pegados(texto: str) -> str:
 def limpiar_tokens_ruido(texto: str) -> str:
     if not texto:
         return ""
+    # Traducir homóglifos griegos/cirílicos generados por motores OCR
+    from app.services.google_document_ai_service import GoogleDocumentAIService
+    texto = str(texto).translate(GoogleDocumentAIService.HOMOGLYPH_MAP)
+    # Corregir errores tipográficos de OCR antes de limpiar símbolos (ej: SAB! -> SABI, D!AZ -> DIAZ)
+    texto = re.sub(r"\b([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,})[!1|\]]", r"\1I", texto)
+    texto = re.sub(r"([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)[!|]([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)", r"\1I\2", texto)
     # Reparar tokens divididos como 'BO TACHE' -> 'BOTACHE'
     texto = reparar_tokens_divididos(str(texto))
     # Desegmentar nombres o rótulos pegados sin espacios

@@ -47,6 +47,10 @@ JUNK_WORDS = {
     # Sufijos y ruidos de guilloche/marcas de agua fusionados con APELLIDOS
     "NAL", "ONAL", "NACIONA", "NACION", "NACIONAL",
     "GISTRADKIRIA", "GISTRAD", "ISTRAD", "REGISTRAD", "COLOSARIA", "COLESARIA",
+    # Fragmentos de marcas de agua y hologramas pegados a etiquetas
+    "BIA", "MBIA", "ER", "EN", "IA", "POMAHEB", "THOUSEES", "HOUSEES", "RAJONAL", "APELLIDORAJONAL",
+    # Ruidos de firmas manuscritas y registradores
+    "ALERGIF", "BEREN", "AMEL", "SANZ", "PRIST", "NUC", "ARLO", "SF",
 }
 
 # Diccionario canónico de nombres y apellidos comunes colombianos para desegmentación de tokens pegados
@@ -245,7 +249,7 @@ def es_token_ruido(t_raw: str) -> bool:
     return False
 
 
-SUFIJOS_FONDO_SEGURIDAD = ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM")
+SUFIJOS_FONDO_SEGURIDAD = ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM", "BIA", "MBIA", "RAJONAL")
 
 
 def reparar_tokens_divididos(texto: str) -> str:

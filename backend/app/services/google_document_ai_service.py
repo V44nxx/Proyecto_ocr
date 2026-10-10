@@ -289,6 +289,8 @@ class GoogleDocumentAIService:
         # SAB! -> SABI, PEREZ1 -> PEREZ / MART1NEZ -> MARTINEZ
         res = re.sub(r"\b([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,})[!1|\]]", r"\1I", res)
         res = re.sub(r"([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)[!|]([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)", r"\1I\2", res)
+        # 3. Remover dígitos arábigo-índicos (\u0660-\u0669 y \u06f0-\u06f9) producidos por guilloches
+        res = re.sub(r"[\u0660-\u0669\u06f0-\u06f9]+", "", res)
         return res
 
     def _text_from_anchor(self, text_anchor, full_text: str) -> str:

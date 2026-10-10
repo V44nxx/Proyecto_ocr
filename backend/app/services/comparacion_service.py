@@ -194,7 +194,9 @@ class ComparacionService:
             "CEDULA", "CIUDADANIA", "TARJETA", "IDENTIDAD", "PERSONAL", "NACIONAL",
             "REGISTRADURIA", "ESTADO", "CIVIL", "NUMERO", "NO", "DOC", "DOCUMENTO",
             "POR", "REVISAR", "CAMSCANNER", "FIRMA", "INDICE", "TITULAR", "DILOM",
-            "COLOM", "COLOMS", "LICA", "BLICA", "ELICA", "DILOMBIA", "LOM"
+            "COLOM", "COLOMS", "LICA", "BLICA", "ELICA", "DILOMBIA", "LOM",
+            "BIA", "MBIA", "ER", "EN", "IA", "COLESARIA", "COLOSARIA", "GISTRADKIRIA",
+            "RAJONAL", "MOUSEES", "THOUSEES", "POMAHEB", "ALERGIF", "BEREN", "AMEL", "SANZ"
         }
 
         nom_total_bd = f"{norm_nb} {norm_ab}".strip()
@@ -207,7 +209,7 @@ class ComparacionService:
         w_bd = []
         for w in raw_w_bd:
             w_limpio = w
-            for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM"):
+            for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM", "BIA", "MBIA"):
                 if w_limpio.endswith(suf) and len(w_limpio) - len(suf) >= 4:
                     w_limpio = w_limpio[:-len(suf)]
                     break
@@ -311,12 +313,12 @@ class ComparacionService:
         inter_count = sum(c_inter.values()) + len(matched_bd)
         total_words = max(len(w_bd), len(w_excel))
         if inter_count >= 2:
-            if not diff_bd_words:
-                # Cada palabra extraída del documento corresponde a la persona en Excel (cero contradicciones)
-                # Cubre casos como 'CONSUELO RAMON' vs 'CONSUELO RAMON FIERRO' (2/3 = 66.7%)
-                return (inter_count / total_words) >= 0.50
-            elif not diff_ex_words:
-                return (inter_count / total_words) >= 0.65
+            if not diff_bd_words or not diff_ex_words:
+                # Cero contradicciones: todos los nombres de un lado están confirmados en el otro.
+                # Permite que la planilla Excel use nombres resumidos (ej: 'DIEGO PARRA')
+                # mientras el documento físico contiene los 4 nombres ('DIEGO ARMANDO PARRA HERNANDEZ').
+                return True
+            return (inter_count / total_words) >= 0.60
 
         return False
 

@@ -1414,39 +1414,62 @@ class ExtractorService:
         """
         nombres = None
         apellidos = None
+        es_digital = any(
+            "NUIP" in l.upper() or "DIGITAL" in l.upper() or "NACIONALIDAD" in l.upper()
+            for l in lineas
+        )
 
         for idx, linea in enumerate(lineas):
             linea_up = linea.upper().strip()
 
             if re.search(r"\b(APELLIDOS?|PRIMER\s+APELLIDO|SEGUNDO\s+APELLIDO|SURNAMES?)\b", linea_up):
-                cand_siguiente = self._siguiente_linea_valida(lineas, idx)
-                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
-                if cand_siguiente and not apellidos:
-                    apellidos = cand_siguiente
-                elif cand_anterior and not apellidos:
-                    apellidos = cand_anterior
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1], permitir_minusculas=es_digital) if idx > 0 else None
+                cand_siguiente = self._siguiente_linea_valida(lineas, idx, permitir_minusculas=es_digital)
+                if not es_digital:
+                    # En Cédula Amarilla, el apellido está ARRIBA de la etiqueta APELLIDOS
+                    if cand_anterior and not apellidos:
+                        apellidos = cand_anterior
+                    elif cand_siguiente and not apellidos:
+                        apellidos = cand_siguiente
+                else:
+                    # En Cédula Digital/TI, el apellido está DEBAJO de la etiqueta Apellidos
+                    if cand_siguiente and not apellidos:
+                        apellidos = cand_siguiente
+                    elif cand_anterior and not apellidos:
+                        apellidos = cand_anterior
 
-            if re.search(r"\b(NOMBRES?|PRIMER\s+NOMBRE|SEGUNDO\s+NOMBRE|GIVEN\s+NAMES?)\b", linea_up):
-                cand_siguiente = self._siguiente_linea_valida(lineas, idx)
-                cand_anterior = self._linea_valida_texto(lineas[idx - 1]) if idx > 0 else None
-                if cand_siguiente and cand_siguiente != apellidos and not nombres:
-                    nombres = cand_siguiente
-                elif cand_anterior and cand_anterior != apellidos and not nombres:
-                    nombres = cand_anterior
+            if re.search(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|NOMERES?|NOMPRES?|NOMBPE|NONBRES?|MOMBRES?|NQMBRES?|MOUSEES|THOUSEES|POMAHEB)\b", linea_up):
+                cand_anterior = self._linea_valida_texto(lineas[idx - 1], permitir_minusculas=es_digital) if idx > 0 else None
+                cand_siguiente = self._siguiente_linea_valida(lineas, idx, permitir_minusculas=es_digital)
+                if not es_digital:
+                    # En Cédula Amarilla, el nombre está ARRIBA de la etiqueta NOMBRES
+                    if cand_anterior and cand_anterior != apellidos and not nombres:
+                        nombres = cand_anterior
+                    elif cand_siguiente and cand_siguiente != apellidos and not nombres:
+                        nombres = cand_siguiente
+                else:
+                    # En Cédula Digital/TI, el nombre está DEBAJO de la etiqueta Nombres
+                    if cand_siguiente and cand_siguiente != apellidos and not nombres:
+                        nombres = cand_siguiente
+                    elif cand_anterior and cand_anterior != apellidos and not nombres:
+                        nombres = cand_anterior
 
         return nombres, apellidos
 
-    def _linea_valida_texto(self, linea: str) -> Optional[str]:
+    def _linea_valida_texto(self, linea: str, permitir_minusculas: bool = False) -> Optional[str]:
         if not linea:
             return None
-        from app.utils.name_cleaner import es_linea_ruido_administrativo
+        from app.utils.name_cleaner import es_linea_ruido_administrativo, es_token_ruido
         if es_linea_ruido_administrativo(linea):
             return None
         txt = linea.strip()
         if re.search(r"\d", txt):
             return None
+        # En Cédula Amarilla, las firmas manuscritas contienen minúsculas
+        if not permitir_minusculas and re.search(r"[a-z]", txt):
+            return None
         txt_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ\s]", "", txt.upper()).strip()
-        tokens = [t for t in txt_clean.split() if len(t) >= 2 and not NO_NOMBRE_HEADER.search(t)]
+        tokens = [t for t in txt_clean.split() if len(t) >= 2 and not NO_NOMBRE_HEADER.search(t) and not es_token_ruido(t)]
         if not tokens or len(tokens) > 5:
             return None
         res = " ".join(tokens)
@@ -1460,19 +1483,22 @@ class ExtractorService:
         return res if len(res) >= 3 else None
 
     def _siguiente_linea_valida(
-        self, lineas: List[str], desde: int
+        self, lineas: List[str], desde: int, permitir_minusculas: bool = False
     ) -> Optional[str]:
         """
         Devuelve la primera línea posterior a `desde` que parezca
         un nombre/apellido válido (solo letras, 3-60 chars, sin palabras prohibidas).
         """
-        from app.utils.name_cleaner import es_linea_ruido_administrativo
+        from app.utils.name_cleaner import es_linea_ruido_administrativo, es_token_ruido
         for linea in lineas[desde + 1 : desde + 5]:
             linea = linea.strip()
             if not linea or es_linea_ruido_administrativo(linea):
                 continue
             # Ignorar si es solo dígitos o números
             if re.search(r"\d", linea):
+                continue
+            # En Cédula Amarilla, firmas manuscritas y registradores contienen minúsculas
+            if not permitir_minusculas and re.search(r"[a-z]", linea):
                 continue
             # Solo letras, espacios y guiones, entre 3 y 60 chars
             if re.match(r"^[A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s\-]{3,60}$", linea):
@@ -1484,6 +1510,8 @@ class ExtractorService:
                     if any(r in norm_up for r in ["REGISTRADOR", "INDICE DERECHO", "FIRMA", "ESTATURA", "EXPEDICION", "NACIMIENTO", "ESTADO CIVIL"]):
                         continue
                     if NO_NOMBRE_HEADER.search(norm_up):
+                        continue
+                    if any(es_token_ruido(t) for t in norm_up.split()):
                         continue
                     if colombia_geo.es_geografico(nombre_norm):
                         continue

@@ -109,15 +109,23 @@ class DocumentSideClassifier:
             )
         )
         if es_antecedentes:
-            m_no = re.search(r"No\.?\s*(\d{6,15})", texto)
+            m_no = re.search(r"(?:No\.?|N°|NUMERO|NÚMERO|No:)\s*(\d{6,15})", texto, re.I)
+            if not m_no:
+                m_no = re.search(r"CERTIFICADO\s+(?:ORDINARIO|ESPECIAL)\s*(\d{6,15})", texto, re.I)
             cert_no = m_no.group(1) if m_no else None
-            m_hoja = re.search(r"Hoja\s*(\d{1,2})\s*de\s*(\d{1,2})", texto, re.I)
+
+            m_hoja = re.search(r"\b(?:Hoja|P[aá]gina|P[aá]g\.?)\s*(?:No\.?)?\s*(\d{1,2})\s*de\s*(\d{1,2})\b", texto, re.I)
             h_act = int(m_hoja.group(1)) if m_hoja else 1
             h_tot = int(m_hoja.group(2)) if m_hoja else 1
+
             tiene_titular = bool(re.search(
-                r"(?:el\(la\)\s*se[ñn]or\(a\)|el\s+se[ñn]or|la\s+se[ñn]ora|ciudadan[oa])\s+([A-ZÁÉÍÓÚÜÑ\s]{3,60}?)\s+identificado",
+                r"(?:(?:el\(la\)\s*se[ñn]or\(a\)|el\s+se[ñn]or|la\s+se[ñn]ora|ciudadan[oa]|a\s+nombre\s+de)\s+([A-ZÁÉÍÓÚÜÑ\s]{3,60}?)\s+identificado|"
+                r"identificado(?:\(a\))?\s+(?:con\s+)?(?:c[eé]dula|tarjeta|nuip|documento|c\.?c\.?)\s*(?:de\s+ciudadan[ií]a)?\s*(?:n[uú]mero|no\.?)?\s*\d{6,10})",
                 texto, re.I
             ))
+            # Si explícitamente es la hoja 2 o posterior y contiene firma de funcionario de la Procuraduría, no tiene titular
+            if h_act > 1 and re.search(r"\b(Jefe\s+Divisi[oó]n|Firma\s+mec[aá]nica\s+autorizada|Relacionamiento\s+Con\s+El\s+Ciudadano)\b", texto, re.I):
+                tiene_titular = False
 
             cara = "ANTECEDENTES_FRONT" if (h_act == 1 or tiene_titular) else "ANTECEDENTES_BACK"
             return {

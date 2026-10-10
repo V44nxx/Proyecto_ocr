@@ -152,3 +152,140 @@ def test_validacion_completitud_antecedentes():
 def test_exportacion_tipo_documento_antecedentes():
     tipo_resuelto = exportacion_service._resolver_tipo_documento("CERTIFICADO_ANTECEDENTES")
     assert tipo_resuelto == "Certificado de Antecedentes"
+
+
+def test_agrupacion_antecedentes_3_paginas_y_extraccion():
+    # Certificado de 3 páginas:
+    # Pág 1: titular y consulta
+    # Pág 2: detalle/anotaciones
+    # Pág 3: firma de funcionario
+    p1 = {
+        "pagina_numero": 1,
+        "tipo_documento": "CERTIFICADO_ANTECEDENTES",
+        "cara": "ANTECEDENTES_FRONT",
+        "certificado_numero": "304290303",
+        "hoja_actual": 1,
+        "hoja_total": 3,
+        "tiene_titular": True,
+        "numero_identificacion": "1030580731",
+        "texto": (
+            "PROCURADURÍA GENERAL DE LA NACIÓN\n"
+            "CERTIFICADO DE ANTECEDENTES\n"
+            "CERTIFICADO ORDINARIO No. 304290303\n"
+            "Hoja 1 de 03\n"
+            "el(la) señor(a) ANDRES CAMILO PEREZ BELLO identificado(a) con Cédula de ciudadanía número 1030580731:\n"
+            "NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES"
+        )
+    }
+    p2 = {
+        "pagina_numero": 2,
+        "tipo_documento": "CERTIFICADO_ANTECEDENTES",
+        "cara": "ANTECEDENTES_BACK",
+        "certificado_numero": "304290303",
+        "hoja_actual": 2,
+        "hoja_total": 3,
+        "tiene_titular": False,
+        "numero_identificacion": None,
+        "texto": (
+            "PROCURADURÍA GENERAL DE LA NACIÓN\n"
+            "CERTIFICADO DE ANTECEDENTES\n"
+            "CERTIFICADO ORDINARIO No. 304290303\n"
+            "Hoja 2 de 03\n"
+            "REGISTRO DE INHABILIDADES Y SANCIONES - ANEXO CONTINUACIÓN"
+        )
+    }
+    p3 = {
+        "pagina_numero": 3,
+        "tipo_documento": "CERTIFICADO_ANTECEDENTES",
+        "cara": "ANTECEDENTES_BACK",
+        "certificado_numero": "304290303",
+        "hoja_actual": 3,
+        "hoja_total": 3,
+        "tiene_titular": False,
+        "numero_identificacion": None,
+        "texto": (
+            "PROCURADURÍA GENERAL DE LA NACIÓN\n"
+            "CERTIFICADO DE ANTECEDENTES\n"
+            "CERTIFICADO ORDINARIO No. 304290303\n"
+            "Hoja 3 de 03\n"
+            "Mario Enrique Castro González\n"
+            "Jefe División de Relacionamiento Con El Ciudadano"
+        )
+    }
+
+    grupos = document_pairing_service.agrupar_paginas([p1, p2, p3])
+    # Debe haber exactamente 1 solo grupo que abarque las 3 páginas
+    assert len(grupos) == 1
+    g = grupos[0]
+    assert g.tipo_documento == "CERTIFICADO_ANTECEDENTES"
+    assert g.pages == [1, 2, 3]
+
+    # Extracción consolidada del grupo
+    datos = extractor_service.extraer_grupo(g)
+    assert datos["identificacion"] == "1030580731"
+    assert datos["nombre_completo"] == "ANDRES CAMILO PEREZ BELLO"
+    assert datos["estado_registro"] == "VALID"
+    assert datos["requiere_revision"] is False
+
+
+def test_caso_real_captura_usuario_dos_paginas_sin_duplicado():
+    # Simula el caso exacto de la captura donde la hoja 2 causaba 'Sin doc. POR REVISAR'
+    texto_p1 = (
+        "PROCURADURÍA GENERAL DE LA NACIÓN\n"
+        "CERTIFICADO DE ANTECEDENTES\n"
+        "CERTIFICADO ORDINARIO No. 304290303\n"
+        "Hoja 1 de 02\n"
+        "el(la) señor(a) ANDRES CAMILO PEREZ BELLO identificado(a) con Cédula de ciudadanía número 1030580731:\n"
+        "NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES"
+    )
+    texto_p2 = (
+        "PROCURADURÍA GENERAL DE LA NACIÓN\n"
+        "CERTIFICADO DE ANTECEDENTES\n"
+        "CERTIFICADO ORDINARIO No. 304290303\n"
+        "Hoja 2 de 02\n"
+        "Mario Enrique Castro González\n"
+        "Jefe División de Relacionamiento Con El Ciudadano"
+    )
+
+    c1 = document_side_classifier.clasificar_cara(texto_p1)
+    c2 = document_side_classifier.clasificar_cara(texto_p2)
+
+    assert c1["tiene_titular"] is True
+    assert c2["tiene_titular"] is False
+    assert c2["hoja_actual"] == 2
+
+    # Simulamos el flujo de páginas procesadas
+    p1 = {
+        "pagina_numero": 1,
+        "tipo_documento": c1["tipo_documento"],
+        "cara": c1["cara"],
+        "certificado_numero": c1["certificado_numero"],
+        "hoja_actual": c1["hoja_actual"],
+        "hoja_total": c1["hoja_total"],
+        "tiene_titular": c1["tiene_titular"],
+        "numero_identificacion": "1030580731",
+        "texto": texto_p1,
+    }
+    p2 = {
+        "pagina_numero": 2,
+        "tipo_documento": c2["tipo_documento"],
+        "cara": c2["cara"],
+        "certificado_numero": c2["certificado_numero"],
+        "hoja_actual": c2["hoja_actual"],
+        "hoja_total": c2["hoja_total"],
+        "tiene_titular": c2["tiene_titular"],
+        "numero_identificacion": None,
+        "texto": texto_p2,
+    }
+
+    grupos = document_pairing_service.agrupar_paginas([p1, p2])
+    # Exactamente 1 grupo, CERO duplicados, CERO personas "Sin doc."
+    assert len(grupos) == 1
+    g = grupos[0]
+    assert g.pages == [1, 2]
+
+    res = extractor_service.extraer_grupo(g)
+    assert res["identificacion"] == "1030580731"
+    assert res["nombre_completo"] == "ANDRES CAMILO PEREZ BELLO"
+    assert res["estado_registro"] == "VALID"
+

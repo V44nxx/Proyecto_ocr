@@ -480,9 +480,14 @@ class ExtractorService:
                 apellidos = " ".join(toks[2:])
 
         # Metadatos del certificado
-        m_no = re.search(r"No\.?\s*(\d{6,15})", texto_limpio)
+        m_no = re.search(r"(?:No\.?|N[°º]|NUMERO|ORDINARIO)\s*[:.]?\s*(\d{6,15})", texto_limpio, re.I)
         cert_no = m_no.group(1) if m_no else None
-        m_hoja = re.search(r"Hoja\s*(\d{1,2})\s*de\s*(\d{1,2})", texto_limpio, re.I)
+        if not cert_no:
+            m_no_alt = re.search(r"CERTIFICADO\s+ORDINARIO\s+(\d{6,15})", texto_limpio, re.I)
+            if m_no_alt:
+                cert_no = m_no_alt.group(1)
+
+        m_hoja = re.search(r"(?:Hoja|P[aá]gina|P[aá]g\.?)\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})", texto_limpio, re.I)
         h_act = int(m_hoja.group(1)) if m_hoja else 1
         h_tot = int(m_hoja.group(2)) if m_hoja else 1
 
@@ -860,9 +865,43 @@ class ExtractorService:
 
     def extraer_grupo(self, group: Any, ocr_engine: str = "google_document_ai") -> Dict[str, Any]:
         """
-        Extrae y combina la información complementaria de un grupo de documento físico (Frente + Reverso).
+        Extrae y combina la información complementaria de un grupo de documento físico (Frente + Reverso o Certificado multipágina).
         Aplica validación cruzada entre caras y la regla Cero Invención.
         """
+        # Manejo especializado de Certificados de Antecedentes (pueden ser de 1, 2, 3 o más páginas)
+        if (
+            getattr(group, "tipo_documento", "") == "CERTIFICADO_ANTECEDENTES"
+            or (getattr(group, "front_page", None) and group.front_page.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES")
+        ):
+            all_pages_objs = []
+            if getattr(group, "front_page", None):
+                all_pages_objs.append(group.front_page)
+            if getattr(group, "back_page", None):
+                all_pages_objs.append(group.back_page)
+            for op in getattr(group, "other_pages", []):
+                if op:
+                    all_pages_objs.append(op)
+
+            textos_ant = [p.get("texto", "") for p in all_pages_objs if p and p.get("texto")]
+            texto_completo_ant = "\n\n".join(textos_ant)
+            lineas_completas = [l.strip() for l in texto_completo_ant.splitlines() if l.strip()]
+
+            primera_pag = getattr(group, "pagina_frente", 1) or (group.pages[0] if getattr(group, "pages", None) else 1)
+            res_ant = self._extraer_antecedentes(
+                texto_completo_ant,
+                lineas_completas,
+                pagina_num=primera_pag,
+                ocr_engine=ocr_engine
+            )
+            res_ant["grupo_documento_id"] = getattr(group, "group_id", "DOC-001")
+            res_ant["pagina_frente"] = getattr(group, "pagina_frente", 1)
+            res_ant["pagina_reverso"] = getattr(group, "pagina_reverso", None)
+            res_ant["paginas"] = getattr(group, "pages", [])
+            if "detalles_campos" in res_ant:
+                res_ant["detalles_campos"]["grouping"] = group.to_dict() if hasattr(group, "to_dict") else {}
+                res_ant["detalles_campos"]["paginas"] = getattr(group, "pages", [])
+            return res_ant
+
         front_data = {}
         back_data = {}
 

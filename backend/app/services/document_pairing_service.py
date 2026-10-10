@@ -202,15 +202,45 @@ class DocumentPairingService:
                 h_act = p.get("hoja_actual", 1)
                 h_tot = p.get("hoja_total", 1)
                 cert_no = p.get("certificado_numero")
-                tiene_titular = p.get("tiene_titular", False) or bool(p.get("numero_identificacion"))
+                tiene_titular = p.get("tiene_titular", False)
+                p_id = validador.limpiar_identificacion(p.get("numero_identificacion"))
 
-                # Inicia nuevo certificado si es hoja 1, tiene titular explícito, o difiere el número de certificado
-                es_inicio = (
-                    (h_act == 1)
-                    or tiene_titular
-                    or (current_ant_grp and cert_no and cert_no != getattr(current_ant_grp, "cert_no", None))
-                    or (current_ant_grp and getattr(current_ant_grp, "hojas_totales", 0) > 0 and len(current_ant_grp.pages) >= getattr(current_ant_grp, "hojas_totales", 0))
-                )
+                # Inicia nuevo certificado si:
+                if current_ant_grp is None:
+                    es_inicio = True
+                else:
+                    curr_cert = getattr(current_ant_grp, "cert_no", None)
+                    curr_tot = getattr(current_ant_grp, "hojas_totales", 0)
+                    paginas_actuales = len(current_ant_grp.pages)
+                    curr_id = getattr(current_ant_grp, "numero_identificacion", None)
+
+                    # 1. Si el número de certificado coincide exactamente: es del mismo certificado
+                    if cert_no and curr_cert and cert_no == curr_cert:
+                        es_inicio = False
+                    # 2. Si explícitamente es la hoja 2 o posterior (ej: Hoja 2 de 02, Hoja 3 de 03):
+                    # NUNCA es inicio de certificado, es continuación / anexos / firmas.
+                    elif h_act > 1:
+                        es_inicio = False
+                    # 3. Si no tiene titular y el grupo actual no ha alcanzado sus hojas totales:
+                    elif not tiene_titular and curr_tot > 0 and paginas_actuales < curr_tot:
+                        es_inicio = False
+                    # 4. Si no tiene titular ni ID detectado:
+                    elif not tiene_titular and not p_id:
+                        es_inicio = False
+                    # 5. Si es explícitamente Hoja 1:
+                    elif h_act == 1:
+                        es_inicio = True
+                    # 6. Si difiere el número de certificado:
+                    elif cert_no and curr_cert and cert_no != curr_cert:
+                        es_inicio = True
+                    # 7. Si el grupo actual ya completó todas sus hojas totales:
+                    elif curr_tot > 0 and paginas_actuales >= curr_tot:
+                        es_inicio = True
+                    # 8. Si tiene un nuevo titular legítimo con cédula distinta a la del grupo actual:
+                    elif tiene_titular and p_id and curr_id and p_id != curr_id:
+                        es_inicio = True
+                    else:
+                        es_inicio = False
 
                 if es_inicio or current_ant_grp is None:
                     if current_ant_grp:
@@ -221,7 +251,7 @@ class DocumentPairingService:
                     current_ant_grp.tipo_documento = "CERTIFICADO_ANTECEDENTES"
                     current_ant_grp.cert_no = cert_no
                     current_ant_grp.hojas_totales = h_tot
-                    current_ant_grp.numero_identificacion = validador.limpiar_identificacion(p.get("numero_identificacion"))
+                    current_ant_grp.numero_identificacion = p_id
                     current_ant_grp.grouping_confidence = 0.98
                     current_ant_grp.status = "VALID"
                     current_ant_grp.reasons = [f"Certificado de Antecedentes No. {cert_no or ''} (Hoja {h_act} de {h_tot})"]
@@ -230,6 +260,12 @@ class DocumentPairingService:
                         current_ant_grp.back_page = p
                     else:
                         current_ant_grp.other_pages.append(p)
+                    # Si la primera página no tenía ID pero esta página sí lo tiene:
+                    if not getattr(current_ant_grp, "numero_identificacion", None) and p_id:
+                        current_ant_grp.numero_identificacion = p_id
+                    # Actualizar hojas totales si en la hoja anexa se detecta mayor precisión
+                    if h_tot > getattr(current_ant_grp, "hojas_totales", 0):
+                        current_ant_grp.hojas_totales = h_tot
                     current_ant_grp.reasons.append(f"Hoja anexa {h_act} de {h_tot} (página {p_num})")
 
             if current_ant_grp:

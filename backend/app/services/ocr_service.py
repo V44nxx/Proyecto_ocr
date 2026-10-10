@@ -167,6 +167,9 @@ class OCRService:
                     lines=layout.pages[0].lines if (layout and layout.pages) else []
                 )
                 id_pre = self.parser._extraer_identificacion(txt_pag, txt_pag.split("\n"))
+                if clasif.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES" and not clasif.get("tiene_titular", True):
+                    id_pre = None
+
                 return {
                     "pagina_numero": p_num,
                     "texto": txt_pag,
@@ -175,7 +178,11 @@ class OCRService:
                     "cara": clasif["cara"],
                     "tipo_documento": clasif["tipo_documento"],
                     "confianza": clasif["confianza"],
-                    "numero_identificacion": id_pre
+                    "numero_identificacion": id_pre,
+                    "certificado_numero": clasif.get("certificado_numero"),
+                    "hoja_actual": clasif.get("hoja_actual", 1),
+                    "hoja_total": clasif.get("hoja_total", 1),
+                    "tiene_titular": clasif.get("tiene_titular", True),
                 }
 
             # Concurrencia adaptativa para llamadas I/O a Google Document AI
@@ -273,13 +280,20 @@ class OCRService:
                 confianza = datos_grupo.get("confianza_extraccion", 0.0)
                 confianzas.append(confianza)
 
+                pags_desc = ", ".join(map(str, grp.pages)) if getattr(grp, "pages", None) else str(grp.pagina_frente or 1)
+                texto_desc = (
+                    f"Certificado de Antecedentes Pág(s) {pags_desc}"
+                    if getattr(grp, "tipo_documento", "") == "CERTIFICADO_ANTECEDENTES"
+                    else f"Frente Pag {grp.pagina_frente} | Reverso Pag {grp.pagina_reverso}"
+                )
+
                 persona = self._guardar_persona(
                     datos_grupo,
-                    texto_ocr=f"Frente Pag {grp.pagina_frente} | Reverso Pag {grp.pagina_reverso}",
+                    texto_ocr=texto_desc,
                     documento_id=documento_id,
                     db=db,
                     ocr_engine=motor_real,
-                    pagina_num=grp.pagina_frente or grp.pagina_reverso or 1,
+                    pagina_num=grp.pagina_frente or (grp.pages[0] if getattr(grp, "pages", None) else 1),
                     excel_lookup=excel_lookup,
                 )
                 if persona:
@@ -780,12 +794,13 @@ class OCRService:
 
             # ── Determinar estado del registro y si requiere revisión manual ─
             umbral_confianza = settings.OCR_CONFIDENCE_THRESHOLD * 100
+            es_antecedentes = (datos.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES")
             requiere_revision = (
                 confianza < umbral_confianza
                 or not datos.get("nombres")
                 or not datos.get("apellidos")
                 or not datos.get("identificacion")
-                or not (datos.get("fecha_expedicion") or datos.get("fecha_nacimiento"))
+                or (not (datos.get("fecha_expedicion") or datos.get("fecha_nacimiento")) and not es_antecedentes)
                 or not num_doc
                 or "SIN_ID" in str(num_doc)
             )

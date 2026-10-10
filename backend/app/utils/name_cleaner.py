@@ -51,6 +51,9 @@ JUNK_WORDS = {
     "BIA", "MBIA", "ER", "EN", "IA", "POMAHEB", "THOUSEES", "HOUSEES", "RAJONAL", "APELLIDORAJONAL",
     # Ruidos de firmas manuscritas y registradores
     "ALERGIF", "BEREN", "AMEL", "SANZ", "PRIST", "NUC", "ARLO", "SF",
+    # Palabras de cursos, anotaciones del postulante y notas externas
+    "MANICURE", "PEDICURE", "SISTEMAS", "ESTETICA", "BELLEZA", "COCINA", "PANADERIA", "MERCADEO",
+    "ADMINISTRACION", "URA", "OK",
 }
 
 # Diccionario canónico de nombres y apellidos comunes colombianos para desegmentación de tokens pegados
@@ -76,7 +79,7 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "STEFANY", "STEPHANIE", "ELIZABETH", "CARMEN", "ROCIO", "XIMENA", "JIMENA", "INGRID",
     "AURA", "CECILIA", "CLEMENCIA", "NUBIA", "STELLA", "ESTELLA", "YOLANDA", "AMPARO",
     "AYDE", "AIDE", "HAYDEE", "NURY", "LUCY", "LUCENY", "RUBY", "DARY", "MIRYAM", "MIRIAM",
-    "ORNEIDA", "ELVA", "ROSA",
+    "ORNEIDA", "ELVA", "ROSA", "LORENA", "ANGELICA", "ANGÉLICA", "SHARIT", "KIMELA", "YULI", "KAHREN",
     # Apellidos comunes colombianos
     "RODRIGUEZ", "GOMEZ", "GONZALEZ", "MARTINEZ", "GARCIA", "PEREZ", "LOPEZ", "HERNANDEZ",
     "SANCHEZ", "RAMIREZ", "TORRES", "FLORES", "FLOREZ", "DIAZ", "VASQUEZ", "CASTRO",
@@ -99,7 +102,8 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "SALGADO", "SIERRA", "SOLER", "TRIANA", "URIBE", "VALLEJO", "VEGA", "VERA",
     "VILLAMIZAR", "VILLEGAS", "YEPES", "ZAMBRANO", "DAZA", "IQUINAS", "NOSCUE",
     "SAMBONY", "COLLAZOS", "TIRADO", "PERAFAN", "PALENCIA", "BOLANOS", "BOLAÑOS",
-    "CASTANEDA", "CASTAÑEDA", "VILLANUEVA", "FIERRO", "SABI", "SABÍ"
+    "CASTANEDA", "CASTAÑEDA", "VILLANUEVA", "FIERRO", "SABI", "SABÍ", "NUNEZ", "NUÑEZ",
+    "VALDERRAMA", "FAJARDO", "MENDEZ", "GAONA",
 }
 
 PATRON_RUIDO_ADMINISTRATIVO = re.compile(
@@ -396,11 +400,12 @@ def limpiar_tokens_ruido(texto: str) -> str:
         t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\-]", "", t).strip()
         t_upper = t_clean.upper()
         # Remover sufijos pegados de sellos de fondo (ej: PECHENELICA -> PECHENE)
-        for suf in SUFIJOS_FONDO_SEGURIDAD:
-            if t_upper.endswith(suf) and len(t_upper) - len(suf) >= 4:
-                t_clean = t_clean[:-len(suf)]
-                t_upper = t_clean.upper()
-                break
+        if t_upper not in NOMBRES_COLOMBIANOS_COMUNES and t_upper not in {"ANGELICA", "ANGÉLICA", "NUBIA", "EUSEBIA", "ZENOBIA", "FABIA", "BASILICA"}:
+            for suf in SUFIJOS_FONDO_SEGURIDAD:
+                if t_upper.endswith(suf) and len(t_upper) - len(suf) >= 4:
+                    t_clean = t_clean[:-len(suf)]
+                    t_upper = t_clean.upper()
+                    break
         if t_clean and not es_token_ruido(t_clean):
             limpios.append(t_clean)
     # Quitar conectores al final o al inicio que queden huérfanos

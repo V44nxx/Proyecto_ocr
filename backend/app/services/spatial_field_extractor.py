@@ -441,12 +441,43 @@ class SpatialFieldExtractor:
         else:
             y_doc_top = None
 
+        # Identificar la coordenada inferior del documento físico (reverso / barcode / MRZ)
+        BOTTOM_CARD_ANCHORS = re.compile(
+            r"(\b(REGISTRADOR|REGISTRADONACIONAL|INDICE\s+DERECHO|ÍNDICE\s+DERECHO|MANCE\s+DERECHO|FECHA\s+DE\s+VENCIMIENTO)\b|"
+            r"^[AP]-[0-9]+-[0-9]+-[MF]-|[0-9]{6,8}[MF][0-9]{7}C[0O]L|"
+            r"<<|<{2,}|I[<A-Z0-9]{1,4}COL)",
+            re.I
+        )
+        card_bottom_lines = [
+            l for l in lines
+            if BOTTOM_CARD_ANCHORS.search(getattr(l, "text", ""))
+            and not es_linea_ruido_administrativo(getattr(l, "text", ""))
+        ]
+        if card_bottom_lines:
+            y_doc_bottom = max(getattr(l, "y", 0.0) for l in card_bottom_lines)
+        else:
+            y_doc_bottom = None
+
         def es_linea_externa_al_documento(line_obj) -> bool:
             txt_l = getattr(line_obj, "text", "").upper().strip()
             if not txt_l:
                 return True
+            y_l = getattr(line_obj, "y", 0.0)
+            # Si contiene palabras clave explícitas del documento de identidad, nunca es externa
+            if re.search(r"\b(REPUBLICA|REPÚBLICA|COLOMBIA|IDENTIFICACION|IDENTIFICACIÓN|CEDULA|CÉDULA|TARJETA|NUIP|NUMERO|NÚMERO|APELLIDOS|NOMBRES|NACIMIENTO|EXPEDICION|EXPEDICIÓN|ESTATURA|SEXO|REGISTRADOR)\b", txt_l):
+                # A menos que sea un membrete de trámite administrativo evidente
+                if es_linea_ruido_administrativo(txt_l):
+                    return True
+                # Si está físicamente por encima del encabezado del documento
+                if y_doc_top is not None and y_l < (y_doc_top - 0.015):
+                    return True
+                return False
+
             # Línea ubicada físicamente por encima del encabezado de la cédula
-            if y_doc_top is not None and getattr(line_obj, "y", 0.0) < (y_doc_top - 0.015):
+            if y_doc_top is not None and y_l < (y_doc_top - 0.015):
+                return True
+            # Línea ubicada físicamente por debajo del documento (fotocopia)
+            if y_doc_bottom is not None and y_l > (y_doc_bottom + 0.040):
                 return True
             # Líneas con ruido administrativo (fotocopia, sellos, matricula, ficha...)
             if es_linea_ruido_administrativo(txt_l):
@@ -454,14 +485,31 @@ class SpatialFieldExtractor:
             # Teléfonos celulares o indicadores de contacto
             if re.search(r"\b(?:TEL|CEL|WHATSAPP|TELEFONO|TELÉFONO|CELULAR|CONTACTO|CORREO|EMAIL|APRENDIZ|FICHA|PROCESO)\b", txt_l):
                 return True
-            # Correos electrónicos externos o dominios de correo
-            if "@" in txt_l or any(d in txt_l for d in ["@GMAIL", "@HOTMAIL", "@OUTLOOK", "@YAHOO", "@MISENA", "GMAIL", "HOTMAIL", "OUTLOOK", "YAHOO", ".COM", ".CO"]):
+            # Correos electrónicos externos o dominios de correo (ej: Jonatanramirez508@gmail.com)
+            if "@" in txt_l or any(d in txt_l for d in ["@GMAIL", "@HOTMAIL", "@OUTLOOK", "@YAHOO", "@MISENA", "GMAIL", "HOTMAIL", "OUTLOOK", "YAHOO", ".COM", ".CO", ".EDU", ".ORG"]):
                 return True
-            # Nombres de usuario de correo con números (ej: Angiecarolina001) - descartando fechas compactas (ej: 22OCT2006)
-            if not validador.parsear_fecha(txt_l) and re.search(r"^[A-Za-z]{4,}\d{2,}$", txt_l):
+            # Nombres de cursos, oficios o programas de formación externos (ej: Manicure, Sistemas)
+            PALABRAS_CURSOS_EXTERNOS = {
+                "MANICURE", "PEDICURE", "SISTEMAS", "ESTETICA", "ESTÉTICA", "BELLEZA", "COCINA",
+                "PANADERIA", "PANADERÍA", "MERCADEO", "ADMINISTRACION", "ADMINISTRACIÓN",
+                "CONTABILIDAD", "ENFERMERIA", "ENFERMERÍA", "MECANICA", "MECÁNICA", "SOLDADURA",
+                "SALUD", "AGRICULTURA", "GESTION", "GESTIÓN", "AGROPECUARIA", "AGROPECUARIO",
+                "PEINADOS", "CORTE", "MODISTERIA", "CONFECCION", "CONFECCIÓN", "BARBERIA", "BARBERÍA", "MAQUILLAJE"
+            }
+            toks_linea = set(re.findall(r"[A-ZÁÉÍÓÚÜÑ]+", txt_l))
+            if toks_linea and toks_linea.issubset(PALABRAS_CURSOS_EXTERNOS | {"OK", "URA", "DE", "Y"}):
                 return True
-            # Número celular colombiano de 10 dígitos aislado
+            # Anotaciones marginales o marcas de revisión aisladas (ej: 'ok', 'Ura', 'bien', 'revisado')
+            if txt_l in {"OK", "O.K.", "URA", "BIEN", "REVISADO", "APROBADO", "CORRECTO", "VALIDO"}:
+                return True
+            # Nombres de usuario o correos residuales con números (ej: Jonatanramirez508, Angiecarolina001)
+            if not validador.parsear_fecha(txt_l) and re.search(r"^[A-ZÁÉÍÓÚÜÑ]{3,}\d{2,}$", txt_l):
+                return True
+            # Secuencias numéricas de 11+ dígitos que no son códigos de barras (ej: teléfonos o notas como 46153271817)
             num_clean = re.sub(r"[^\d]", "", txt_l)
+            if len(num_clean) >= 11 and not re.search(r"[AP]-\d+", txt_l) and not validador.parsear_fecha(txt_l):
+                return True
+            # Número celular colombiano de 10 dígitos (prefijos 30, 31, 32, 33, 35, 37)
             if len(num_clean) == 10 and num_clean.startswith(("30", "31", "32", "33", "35", "37")) and not validador.parsear_fecha(txt_l):
                 return True
             # Número de ficha institucional: 10 dígitos que empieza por 31 (ej: 3105701005)
@@ -470,8 +518,12 @@ class SpatialFieldExtractor:
             # Encabezado externo tipo 'CC. 30507543 NOMBRE APELLIDO'
             if re.search(r"^\s*(?:CC|C\.C\.)[\.\s:]+\d{6,10}\s+[A-ZÁÉÍÓÚÜÑ]{2,}", txt_l):
                 return True
-            # También si está por encima del documento y contiene el patrón CC NÚMERO
-            if y_doc_top is not None and getattr(line_obj, "y", 0.0) < y_doc_top and re.search(r"\bCC[\.\s:]*\d+", txt_l):
+            # Encabezado externo manuscrito tipo 'CC. 1117534655', 'TI 1117235164', 'CC 1117931091 OK'
+            if re.search(r"^\s*(?:CC|C\.C\.|TI|T\.I\.|RC|R\.C\.|CE|C\.E\.)[\.\s:]*\d{6,10}(?:\s+[A-ZÁÉÍÓÚÜÑ0-9\.\s]+)?$", txt_l):
+                if y_doc_top is not None and y_l < (y_doc_top + 0.02):
+                    return True
+            # También si está por encima del documento y contiene el patrón CC/TI NÚMERO
+            if y_doc_top is not None and y_l < y_doc_top and re.search(r"\b(?:CC|TI|RC|CE)[\.\s:]*\d+", txt_l):
                 return True
             return False
 
@@ -786,12 +838,16 @@ class SpatialFieldExtractor:
                             resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                     else:
                         # Layout estándar (Cédula Digital / PPT / CE con rótulos arriba del valor):
-                        if cand_between and not resultado_campos["apellidos"]["value"]:
+                        if cand_between:
                             val_ape_vis = " ".join(cand_between)
-                            resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
-                        if cand_after_nom and not resultado_campos["nombres"]["value"]:
+                            val_ape_act = resultado_campos["apellidos"]["value"]
+                            if val_ape_vis and (not val_ape_act or len(val_ape_vis.split()) > len(val_ape_act.split()) or (len(val_ape_vis.replace(" ", "")) > len(val_ape_act.replace(" ", "")) and val_ape_vis.replace(" ", "").startswith(val_ape_act.replace(" ", "")))):
+                                resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
+                        if cand_after_nom:
                             val_nom_vis = " ".join(cand_after_nom)
-                            resultado_campos["nombres"] = {"value": val_nom_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES"}
+                            val_nom_act = resultado_campos["nombres"]["value"]
+                            if val_nom_vis and (not val_nom_act or len(val_nom_vis.split()) > len(val_nom_act.split()) or (len(val_nom_vis.replace(" ", "")) > len(val_nom_act.replace(" ", "")) and val_nom_vis.replace(" ", "").startswith(val_nom_act.replace(" ", "")))):
+                                resultado_campos["nombres"] = {"value": val_nom_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES"}
                 else:
                     # Layout Inverso de rótulos: NOMBRES_LABEL -> NOMBRES_VAL -> APELLIDOS_LABEL -> APELLIDOS_VAL
                     inline_nom = self.limpiar_nombre(re.sub(r"\b(N[O0]?M[BDRPE]*[EÉ]S?|N[O0]?[MRD]+[BDR]*[EÉ]S?|MOUSEES|THOUSEES)\b", "", getattr(lineas_frente[idx_nom], "text", ""), flags=re.I))

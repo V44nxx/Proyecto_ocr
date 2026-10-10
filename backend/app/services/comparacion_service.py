@@ -202,6 +202,10 @@ class ComparacionService:
         nom_total_bd = f"{norm_nb} {norm_ab}".strip()
         nom_total_excel = f"{norm_ne} {norm_ae}".strip()
 
+        # Si los nombres completos totales son exactamente idénticos (tras normalización básica)
+        if nom_total_bd and nom_total_bd == nom_total_excel:
+            return True
+
         raw_w_bd = [w for w in re.findall(r"[A-Z0-9]+", nom_total_bd) if w not in PALABRAS_RUIDO and len(w) > 1]
         w_excel = [w for w in re.findall(r"[A-Z0-9]+", nom_total_excel) if w not in PALABRAS_RUIDO and len(w) > 1]
 
@@ -209,10 +213,11 @@ class ComparacionService:
         w_bd = []
         for w in raw_w_bd:
             w_limpio = w
-            for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM", "BIA", "MBIA"):
-                if w_limpio.endswith(suf) and len(w_limpio) - len(suf) >= 4:
-                    w_limpio = w_limpio[:-len(suf)]
-                    break
+            if w_limpio not in w_excel and w_limpio not in {"ANGELICA", "ANGÉLICA", "NUBIA", "EUSEBIA", "ZENOBIA", "FABIA", "BASILICA"}:
+                for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM", "BIA", "MBIA"):
+                    if w_limpio.endswith(suf) and len(w_limpio) - len(suf) >= 4:
+                        w_limpio = w_limpio[:-len(suf)]
+                        break
             if w_limpio not in PALABRAS_RUIDO and len(w_limpio) > 1:
                 w_bd.append(w_limpio)
 
@@ -252,10 +257,11 @@ class ComparacionService:
                     if dividido:
                         break
                 if not dividido:
-                    for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM"):
-                        if wb.endswith(suf) and len(wb) - len(suf) >= 4:
-                            wb = wb[:-len(suf)]
-                            break
+                    if wb not in w_ap_ex:
+                        for suf in ("LICA", "BLICA", "ELICA", "COLOM", "COLOMS", "DILOM"):
+                            if wb.endswith(suf) and len(wb) - len(suf) >= 4:
+                                wb = wb[:-len(suf)]
+                                break
                     w_ap_bd.append(wb)
             if w_ap_bd and w_ap_ex:
                 primer_ap_bd = w_ap_bd[0]
@@ -445,8 +451,8 @@ class ComparacionService:
             if f_obj:
                 return f_obj.isoformat()
 
-        # Quitar tildes
-        repl = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U"}
+        # Quitar tildes y normalizar caracteres equivalentes (ej: Ñ -> N)
+        repl = {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ü": "U", "Ñ": "N"}
         for k, v in repl.items():
             s = s.replace(k, v)
         s = re.sub(r"\s+", " ", s).strip()

@@ -6,10 +6,9 @@ import toast from "react-hot-toast";
 import {
   Users, Search, AlertTriangle, AlertCircle, CheckCircle,
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
-  UserCheck, FileText, Eye, EyeOff,
-  ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
-  ChevronDown, ChevronUp, Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
-  FileCheck2
+  UserCheck, FileText, Eye, ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
+  Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
+  ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
@@ -18,6 +17,7 @@ import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
+// ─── Helpers de Clasificación ──────────────────────────────────────────────
 const personaFaltaEnPdf = (p: Persona): boolean => {
   if (!p) return false;
   if (p.en_pdf === false) return true;
@@ -47,11 +47,9 @@ const personaTieneDiscrepanciaFaltante = (p: Persona): boolean => {
 
 const esPersonaValidada = (p: Persona): boolean => {
   if (!p) return false;
-  // Aprobación manual explícita
   if ((p.detalles_campos as any)?.aprobado_manual === true || (p.detalles_campos as any)?.validado_manual === true) {
     return true;
   }
-  // Si falta en el PDF o en el Excel, NO se considera válidada automáticamente sin atención
   if (personaFaltaEnPdf(p) || personaFaltaEnExcel(p)) {
     return false;
   }
@@ -63,12 +61,8 @@ const esPersonaValidada = (p: Persona): boolean => {
 
 const esPersonaEnRevision = (p: Persona): boolean => {
   if (!p) return false;
-  if (esPersonaValidada(p)) {
-    return false;
-  }
-  if (personaFaltaEnPdf(p) || personaFaltaEnExcel(p)) {
-    return true;
-  }
+  if (esPersonaValidada(p)) return false;
+  if (personaFaltaEnPdf(p) || personaFaltaEnExcel(p)) return true;
   const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
   const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
   const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
@@ -83,6 +77,99 @@ const esPersonaEnRevision = (p: Persona): boolean => {
     (!discDocEdadAprobada && discDocEdad) ||
     (!discExcelAprobada && discExcel)
   );
+};
+
+const formatearCedulaPuntos = (val: string | number | undefined | null): string => {
+  if (!val) return "—";
+  const str = String(val).trim();
+  if (str.startsWith("SIN_ID")) return "Sin doc.";
+  const soloDigitos = str.replace(/\D/g, "");
+  if (soloDigitos.length >= 4) {
+    return soloDigitos.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  return str;
+};
+
+const formatearFechaCO = (val: string | undefined | null): string => {
+  if (!val) return "—";
+  const str = String(val).trim();
+  const partes = str.split(/[-/]/);
+  if (partes.length === 3) {
+    if (partes[0].length === 4) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+  }
+  return str;
+};
+
+const getMotivoExplicacion = (p: Persona): string => {
+  if (personaFaltaEnExcel(p)) {
+    return "La cédula se leyó bien en el PDF, pero no está en la planilla Excel cargada.";
+  }
+  if (personaFaltaEnPdf(p)) {
+    return "La persona está registrada en la planilla Excel, pero no se encontró su cédula en el PDF.";
+  }
+  const discExcel = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
+  if (discExcel && !discExcel.aprobado_manual) {
+    if (discExcel.campo === "apellidos" || discExcel.motivo?.toLowerCase().includes("apellido")) {
+      return "El segundo apellido es distinto entre el PDF y el Excel.";
+    }
+    return discExcel.motivo || "Existen diferencias entre los datos leídos del PDF y la planilla Excel.";
+  }
+  const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
+  const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edad);
+  if (inc.esInvalido) {
+    return inc.motivo || "Inconsistencia detectada entre el tipo de documento y la edad calculada.";
+  }
+  const confGeneral = p.confianza_extraccion != null ? Number(p.confianza_extraccion) : 90;
+  if (confGeneral < 70) {
+    return "La fecha de nacimiento se leyó con baja confianza. Confírmala contra la imagen.";
+  }
+  const motivosRev = (p.detalles_campos as any)?.motivos_revision;
+  if (Array.isArray(motivosRev) && motivosRev.length > 0) {
+    return motivosRev[0];
+  }
+  if (esPersonaValidada(p)) {
+    return "Todos los datos han sido validados exitosamente y coinciden con los registros.";
+  }
+  return "Uno o más datos esenciales requieren verificación.";
+};
+
+const getEstadoConfig = (p: Persona) => {
+  if (personaFaltaEnExcel(p)) {
+    return {
+      key: "falta_excel",
+      label: "Falta en Excel",
+      colorHex: "#ec4899",
+      badgeClass: "text-[#ec4899] font-medium",
+      iconType: "square",
+    };
+  }
+  if (personaFaltaEnPdf(p)) {
+    return {
+      key: "falta_pdf",
+      label: "Falta en PDF",
+      colorHex: "#c084fc",
+      badgeClass: "text-[#d8b4fe] font-medium",
+      iconType: "outline_square",
+    };
+  }
+  if (esPersonaValidada(p)) {
+    return {
+      key: "valido",
+      label: "Válido",
+      colorHex: "#34d399",
+      badgeClass: "text-[#34d399] font-medium",
+      iconType: "dot",
+    };
+  }
+  return {
+    key: "revision",
+    label: "Por revisar",
+    colorHex: "#fbbf24",
+    badgeClass: "text-[#fbbf24] font-medium",
+    iconType: "triangle",
+  };
 };
 
 function PersonasContent() {
@@ -101,11 +188,18 @@ function PersonasContent() {
   const [exportando, setExportando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [buscar, setBuscar] = useState("");
-  type FiltroEstado = "todos" | "validas" | "revision" | "discrepancia" | "falta_pdf" | "falta_excel" | "menores";
+  
+  type FiltroEstado = "todos" | "validas" | "revision" | "falta_excel" | "falta_pdf" | "discrepancia" | "menores";
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
-  const soloRevision = filtroEstado === "revision";
+
+  // Persona seleccionada para el Drawer Lateral
+  const [personaSeleccionadaId, setPersonaSeleccionadaId] = useState<string | null>(null);
+
+  // Edición
   const [editando, setEditando] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PersonaUpdate>({});
+
+  // Estadísticas
   const [stats, setStats] = useState({
     total: 0,
     validas: 0,
@@ -116,28 +210,20 @@ function PersonasContent() {
     menores: 0,
   });
 
-  // Modales de eliminación masiva y vaciado de tabla
+  // Modales
   const [modalVaciarAbierto, setModalVaciarAbierto] = useState(false);
   const [modalEliminarSeleccionadosAbierto, setModalEliminarSeleccionadosAbierto] = useState(false);
   const [eliminandoEnLote, setEliminandoEnLote] = useState(false);
 
-  // Acordeón: solo una fila expandida a la vez
-  const [expandidoId, setExpandidoId] = useState<string | null>(null);
-  // Control de campos secundarios (fecha exp, lugar exp, género)
-  const [detallesExpandidos, setDetallesExpandidos] = useState<Set<string>>(new Set());
-  const toggleDetallesExtra = (id: string) => {
-    setDetallesExpandidos((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // Modal de Vista Previa de Documento PDF
+  const [modalPdfAbierto, setModalPdfAbierto] = useState(false);
+  const [personaPdfModal, setPersonaPdfModal] = useState<Persona | null>(null);
+  const [paginaPreviaModal, setPaginaPreviaModal] = useState<number>(1);
+  const [imgCargandoModal, setImgCargandoModal] = useState(false);
+  const [imgErrorModal, setImgErrorModal] = useState(false);
+  const [zoomModal, setZoomModal] = useState(1);
 
-  const [paginaPrevia, setPaginaPrevia] = useState<number>(1);
-  const [imgCargando, setImgCargando] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const [zoom, setZoom] = useState(1);
+  // Subida de PDF individual para persona
   const [subiendoPdfId, setSubiendoPdfId] = useState<string | null>(null);
   const [personaParaPdf, setPersonaParaPdf] = useState<Persona | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +264,6 @@ function PersonasContent() {
         setTotalPersonasGlobal(resStatsGlobal.data.total_personas);
       }
 
-      // Prioridad 1: si hay ?documento_id=... en la URL
       const docQuery = searchParams.get("documento_id");
       if (docQuery && docs.some((d) => d.id === docQuery)) {
         setFiltroDocumento(docQuery);
@@ -190,7 +275,6 @@ function PersonasContent() {
         return;
       }
 
-      // Prioridad 2: si se acaba de enviar/subir un archivo nuevo
       const nuevoEnviado = typeof window !== "undefined" && localStorage.getItem("nuevo_archivo_enviado") === "true";
       if (nuevoEnviado) {
         if (typeof window !== "undefined") {
@@ -209,7 +293,6 @@ function PersonasContent() {
         }
       }
 
-      // Prioridad 3: si el usuario eligió explícitamente "ver todos los archivos"
       const verTodosManual = typeof window !== "undefined" && sessionStorage.getItem("ver_todos_los_archivos") === "true";
       if (verTodosManual) {
         setFiltroDocumento("todos");
@@ -217,7 +300,6 @@ function PersonasContent() {
         return;
       }
 
-      // Por defecto: mostrar SOLO el último archivo enviado (el más reciente en el sistema)
       const ultimoId = typeof window !== "undefined" ? localStorage.getItem("ultimo_documento_id") : null;
       const targetDoc = (ultimoId && docs.find((d) => d.id === ultimoId)) || docs[0];
       if (targetDoc) {
@@ -258,8 +340,6 @@ function PersonasContent() {
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
       const validasCount = items.filter(esPersonaValidada).length;
       const revCount = items.filter((p: Persona) => !esPersonaValidada(p) && esPersonaEnRevision(p)).length;
-
-      // Conteo DIRECTO Y COMPLETO: cuenta SIEMPRE todas las personas que faltan en PDF o en Excel
       const faltaPdfCount = items.filter(personaFaltaEnPdf).length;
       const faltaExcelCount = items.filter(personaFaltaEnExcel).length;
       const discCount = items.filter(personaTieneDiscrepanciaFaltante).length;
@@ -282,7 +362,6 @@ function PersonasContent() {
         setTotalPersonasGlobal(tot);
       }
 
-      // Solo mostrar notificación si el usuario ejecutó la recarga manualmente
       if (esManual) {
         toast.success(`${items.length} persona(s) sincronizada(s)`, { id: "personas-sync" });
       }
@@ -294,6 +373,41 @@ function PersonasContent() {
     } finally {
       if (mostrarSpinner) setCargando(false);
     }
+  };
+
+  const personaActiva = personas.find((p) => p.id === personaSeleccionadaId) || null;
+
+  const abrirDetalleDrawer = (p: Persona) => {
+    setPersonaSeleccionadaId(p.id);
+    setEditando(null);
+    precargarPaginaPersona(p);
+  };
+
+  const cerrarDetalleDrawer = () => {
+    setPersonaSeleccionadaId(null);
+    setEditando(null);
+  };
+
+  const precargarPaginaPersona = (p: Persona) => {
+    const docId = p.documento_pdf_id || p.documento_id;
+    if (!docId) return;
+    const pagsList = (p.detalles_campos as any)?.paginas;
+    const pag = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
+    if (pag) {
+      const img = new Image();
+      img.src = apiDocumentos.paginaPdfUrl(String(docId), pag, 130);
+    }
+  };
+
+  const abrirModalPdf = (p: Persona) => {
+    setPersonaPdfModal(p);
+    const pagsList = (p.detalles_campos as any)?.paginas;
+    const pagInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
+    setPaginaPreviaModal(pagInicial);
+    setImgCargandoModal(true);
+    setImgErrorModal(false);
+    setZoomModal(1);
+    setModalPdfAbierto(true);
   };
 
   const abrirSubirPdf = (p: Persona) => {
@@ -321,29 +435,17 @@ function PersonasContent() {
       const res = await apiPersonas.subirPdfCedula(targetPersona.id, file);
       const personaActualizada = res.data;
 
-      // 1. Asegurar que la persona se mantenga expandida y abierta en la vista
-      setExpandidoId(targetPersona.id);
-
-      // 2. Actualizar inmediatamente en el estado local de personas
       setPersonas((prev) =>
         prev.map((p) => (p.id === personaActualizada.id ? personaActualizada : p))
       );
-
-      // 3. Inicializar vista previa de la página del PDF individual
-      const pagInicial = personaActualizada.pagina_frente || personaActualizada.pagina_numero || 1;
-      setPaginaPrevia(pagInicial);
-      setImgCargando(true);
-      setImgError(false);
-      setZoom(1);
 
       toast.success(
         `¡PDF individual vinculado y datos extraídos exitosamente para ${personaActualizada.numero_identificacion}!`,
         { id: toastId }
       );
 
-      // 4. Sincronizar estadísticas y datos del backend manteniendo la vista activa
       await cargarPersonas(false);
-      setExpandidoId(targetPersona.id);
+      setPersonaSeleccionadaId(personaActualizada.id);
     } catch (err: unknown) {
       const msg = getErrorMessage(err, "Error al procesar el PDF de la cédula");
       toast.error(msg, { id: toastId });
@@ -353,59 +455,8 @@ function PersonasContent() {
     }
   };
 
-  const precargarPaginaPersona = (p: Persona) => {
-    const docId = p.documento_pdf_id || p.documento_id;
-    if (!docId) return;
-    const pagsList = (p.detalles_campos as any)?.paginas;
-    const pag = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
-    if (pag) {
-      const img = new Image();
-      img.src = apiDocumentos.paginaPdfUrl(String(docId), pag, 130);
-    }
-  };
-
-  const toggleExpandir = (p: Persona) => {
-    if (expandidoId === p.id) {
-      setExpandidoId(null);
-      setEditando(null);
-    } else {
-      setExpandidoId(p.id);
-      setEditando(null);
-      const pagsList = (p.detalles_campos as any)?.paginas;
-      const paginaInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
-      setPaginaPrevia(paginaInicial);
-      setImgCargando(true);
-      setImgError(false);
-      setZoom(1);
-
-      // Pre-cargar cara reversa o páginas continuas para que el cambio de cara sea instantáneo
-      const targetDocId = p.documento_pdf_id || p.documento_id;
-      if (targetDocId) {
-        if (p.pagina_reverso && p.pagina_reverso !== paginaInicial) {
-          const preRev = new Image();
-          preRev.src = apiDocumentos.paginaPdfUrl(String(targetDocId), p.pagina_reverso, 130);
-        }
-        if (Array.isArray(pagsList) && pagsList.length > 1) {
-          pagsList.slice(1, 3).forEach((numP) => {
-            const preH = new Image();
-            preH.src = apiDocumentos.paginaPdfUrl(String(targetDocId), numP, 130);
-          });
-        }
-      }
-    }
-  };
-
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
-    if (expandidoId !== p.id) {
-      setExpandidoId(p.id);
-      const pagsList = (p.detalles_campos as any)?.paginas;
-      const paginaInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
-      setPaginaPrevia(paginaInicial);
-      setImgCargando(true);
-      setImgError(false);
-      setZoom(1);
-    }
     const nomCompleto = formatNombreCompleto(p);
     const numIdLimpio = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     setEditForm({
@@ -451,57 +502,16 @@ function PersonasContent() {
     try {
       await apiPersonas.eliminar(id);
       toast.success("Registro eliminado", { id: "eliminar-persona" });
-      if (expandidoId === id) setExpandidoId(null);
+      if (personaSeleccionadaId === id) setPersonaSeleccionadaId(null);
       cargarPersonas(true);
     } catch {
       toast.error("Error al eliminar registro", { id: "eliminar-persona" });
     }
   };
 
-  const ejecutarEliminarSeleccionados = async () => {
-    if (seleccionados.size === 0) return;
-    setEliminandoEnLote(true);
-    const toastId = toast.loading(`Eliminando ${seleccionados.size} registros...`);
-    try {
-      const res = await apiPersonas.eliminarMultiples(Array.from(seleccionados));
-      const cant = res.data.eliminadas || seleccionados.size;
-      toast.success(`Se eliminaron ${cant} personas exitosamente`, { id: toastId });
-      setSeleccionados(new Set());
-      setModalEliminarSeleccionadosAbierto(false);
-      if (expandidoId && seleccionados.has(expandidoId)) setExpandidoId(null);
-      cargarPersonas(true);
-    } catch (err: unknown) {
-      const msg = getErrorMessage(err, "Error al eliminar personas seleccionadas");
-      toast.error(msg, { id: toastId });
-    } finally {
-      setEliminandoEnLote(false);
-    }
-  };
-
-  const ejecutarVaciarTabla = async () => {
-    setEliminandoEnLote(true);
-    const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
-    const toastId = toast.loading("Vaciando tabla de personas...");
-    try {
-      const res = await apiPersonas.vaciarTodas({ documento_id: docId });
-      const cant = res.data.eliminadas;
-      toast.success(`Tabla vaciada: ${cant} personas eliminadas`, { id: toastId });
-      setSeleccionados(new Set());
-      setExpandidoId(null);
-      setModalVaciarAbierto(false);
-      cargarPersonas(true);
-    } catch (err: unknown) {
-      const msg = getErrorMessage(err, "Error al vaciar la tabla de personas");
-      toast.error(msg, { id: toastId });
-    } finally {
-      setEliminandoEnLote(false);
-    }
-  };
-
   const aprobarRevision = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      // Feedback visual instantáneo: marcar como validado en el estado local de inmediato
       setPersonas((prev) =>
         prev.map((item) => {
           if (item.id === id) {
@@ -536,135 +546,51 @@ function PersonasContent() {
     }
   };
 
-  const aplicarNombreConflicto = async (p: Persona, nuevoNombre: string, e?: React.MouseEvent) => {
+  const copiarAlPortapapeles = (texto: string, etiqueta = "Cédula", e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!nuevoNombre || !nuevoNombre.trim()) return;
-    const nombreLimpio = nuevoNombre.trim().toUpperCase();
-
-    // 1. Si está en modo edición, sincronizar el formulario
-    if (editando === p.id) {
-      setEditForm(prev => ({
-        ...prev,
-        nombre_completo: nombreLimpio,
-        nombres: nombreLimpio,
-        apellidos: ""
-      }));
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(texto);
+      toast.success(`${etiqueta} copiada: ${texto}`, { id: `copy-${texto}` });
     }
+  };
 
-    // 2. Actualizar inmediatamente en el estado de la tabla (UI feedback instantáneo)
-    setPersonas(prev => prev.map(item => {
-      if (item.id === p.id) {
-        return {
-          ...item,
-          nombre_completo: nombreLimpio,
-          nombres: nombreLimpio,
-          apellidos: "",
-          // La alerta se mantiene activa como solicitó el usuario
-          requiere_revision: true,
-        };
-      }
-      return item;
-    }));
-
+  const ejecutarEliminarSeleccionados = async () => {
+    if (seleccionados.size === 0) return;
+    setEliminandoEnLote(true);
+    const toastId = toast.loading(`Eliminando ${seleccionados.size} registros...`);
     try {
-      // 3. Persistir en base de datos conservando la revisión requerida activa
-      await apiPersonas.actualizar(p.id, {
-        nombre_completo: nombreLimpio,
-        nombres: nombreLimpio,
-        apellidos: "",
-        requiere_revision: true,
-      });
-      toast.success(
-        `Nombre sobreescrito a "${nombreLimpio}". La alerta continuará activa hasta que haga clic en "Aprobar y Validar".`,
-        { id: `conflicto-nombre-${p.id}`, duration: 5500 }
-      );
-    } catch (err) {
-      console.error("Error al actualizar nombre desde conflicto:", err);
-      toast.error("Error al actualizar el nombre en el servidor", { id: `conflicto-nombre-err-${p.id}` });
-    }
-  };
-
-  // Filtrado local por estado y cédula / nombre
-  const personasFiltradas = (personas || []).filter((p) => {
-    if (!p) return false;
-    const estaVal = esPersonaValidada(p);
-    const esRev = esPersonaEnRevision(p);
-
-    if (filtroEstado === "revision") {
-      if (estaVal || !esRev) return false;
-    } else if (filtroEstado === "validas") {
-      if (!estaVal) return false;
-    } else if (filtroEstado === "discrepancia") {
-      if (!personaTieneDiscrepanciaFaltante(p)) return false;
-    } else if (filtroEstado === "falta_pdf") {
-      if (!personaFaltaEnPdf(p)) return false;
-    } else if (filtroEstado === "falta_excel") {
-      if (!personaFaltaEnExcel(p)) return false;
-    } else if (filtroEstado === "menores") {
-      const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
-      if (ed === null || ed >= 14) return false;
-    }
-
-    if (!buscar) return true;
-    const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
-    const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
-    const nom = formatNombreCompleto(p).toLowerCase();
-    return (
-      cedula.includes(q) ||
-      nom.includes(q)
-    );
-  });
-
-  // Manejo de selección múltiple
-  const toggleSeleccionarTodasVisibles = () => {
-    const todosVisiblesSeleccionados =
-      personasFiltradas.length > 0 &&
-      personasFiltradas.every((p) => seleccionados.has(p.id));
-
-    if (todosVisiblesSeleccionados) {
-      setSeleccionados((prev) => {
-        const next = new Set(prev);
-        personasFiltradas.forEach((p) => next.delete(p.id));
-        return next;
-      });
-    } else {
-      setSeleccionados((prev) => {
-        const next = new Set(prev);
-        personasFiltradas.forEach((p) => next.add(p.id));
-        return next;
-      });
-    }
-  };
-
-  const toggleSeleccionPersona = (id: string) => {
-    setSeleccionados((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const exportarSeleccion = async () => {
-    if (seleccionados.size === 0) {
-      toast.error("Selecciona al menos una persona para exportar", { id: "export-seleccion" });
-      return;
-    }
-    setExportando(true);
-    try {
-      const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
-      await apiExportacion.descargarXlsx({
-        documentoId: docId,
-        personaIds: Array.from(seleccionados),
-      });
-      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`, { id: "export-seleccion" });
-    } catch {
-      toast.error("Error al exportar personas a Excel", { id: "export-seleccion" });
+      const res = await apiPersonas.eliminarMultiples(Array.from(seleccionados));
+      const cant = res.data.eliminadas || seleccionados.size;
+      toast.success(`Se eliminaron ${cant} personas exitosamente`, { id: toastId });
+      setSeleccionados(new Set());
+      setModalEliminarSeleccionadosAbierto(false);
+      if (personaSeleccionadaId && seleccionados.has(personaSeleccionadaId)) setPersonaSeleccionadaId(null);
+      cargarPersonas(true);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error al eliminar personas seleccionadas");
+      toast.error(msg, { id: toastId });
     } finally {
-      setExportando(false);
+      setEliminandoEnLote(false);
+    }
+  };
+
+  const ejecutarVaciarTabla = async () => {
+    setEliminandoEnLote(true);
+    const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
+    const toastId = toast.loading("Vaciando tabla de personas...");
+    try {
+      const res = await apiPersonas.vaciarTodas({ documento_id: docId });
+      const cant = res.data.eliminadas;
+      toast.success(`Tabla vaciada: ${cant} personas eliminadas`, { id: toastId });
+      setSeleccionados(new Set());
+      setPersonaSeleccionadaId(null);
+      setModalVaciarAbierto(false);
+      cargarPersonas(true);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Error al vaciar la tabla de personas");
+      toast.error(msg, { id: toastId });
+    } finally {
+      setEliminandoEnLote(false);
     }
   };
 
@@ -688,1900 +614,1141 @@ function PersonasContent() {
     }
   };
 
-  // ─── Panel de detalle inline (acordeón) ───────────────────────────────────
-  const renderPanelDetalle = (p: Persona) => {
-    // Si la persona es de Excel o no tiene páginas físicas extraídas ni PDF individual, NO debe mostrar documento de otra persona
-    const esPersonaSinPdf = p.en_pdf === false || p.motor_ocr === "excel" || p.grupo_documento_id === "EXCEL-SIN-PDF" || (p.detalles_campos as any)?.en_pdf === false || (!p.pagina_frente && !p.pagina_numero && !p.documento_pdf_id);
-    const docIdParaImagen = !esPersonaSinPdf ? (p.documento_pdf_id || p.documento_id) : (p.documento_pdf_id || null);
-    const tienePdfValido = !esPersonaSinPdf && !!docIdParaImagen;
-    const docId = p.documento_id ? String(p.documento_id) : null;
-    const estaEditando = editando === p.id;
-
-    // Detección de Antecedentes y páginas múltiples
-    const tipoNormDoc = String(p.tipo_documento || (p.detalles_campos as any)?.tipo_documento?.valor || "").toUpperCase();
-    const esAntecedentesDoc = tipoNormDoc.includes("ANTECEDENTE");
-    const rawPaginas = (p.detalles_campos as any)?.paginas;
-    const paginasExtra: number[] = Array.isArray(rawPaginas)
-      ? rawPaginas.map((x: any) => Number(x)).filter((n: number) => !isNaN(n))
-      : [p.pagina_frente, p.pagina_reverso].filter((pg): pg is number => typeof pg === "number");
-    const listaPaginas = Array.from(new Set(paginasExtra.length > 0 ? paginasExtra : (p.pagina_frente ? [p.pagina_frente] : (p.pagina_numero ? [p.pagina_numero] : []))));
-    const tieneDosLados = !esAntecedentesDoc && !!(p.pagina_frente && p.pagina_reverso);
-
-    const nomCompleto = formatNombreCompleto(p);
-    const edadCalculada = p.edad ?? calcularEdad(p.fecha_nacimiento);
-    const esMenor14Detalle = !esAntecedentesDoc && edadCalculada !== null && edadCalculada < 14;
-    const numIdVisible = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
-    const estaValidada = esPersonaValidada(p);
-
-    const campos = esAntecedentesDoc ? [
-      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
-      { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
-      {
-        key: "tipo_documento",
-        label: "Tipo de Certificado",
-        icono: <FileText className="w-3.5 h-3.5" />,
-        valor: "Certificado de Antecedentes (Procuraduría General / SIRI)"
-      },
-    ] : [
-      { key: "numero_identificacion", label: "Número de Identidad", icono: <Hash className="w-3.5 h-3.5" />, valor: numIdVisible },
-      { key: "nombre_completo", label: "Nombre Completo", icono: <UserCheck className="w-3.5 h-3.5" />, valor: nomCompleto },
-      {
-        key: "fecha_nacimiento",
-        label: "Fecha de Nacimiento",
-        icono: <Calendar className="w-3.5 h-3.5" />,
-        valor: p.fecha_nacimiento ? String(p.fecha_nacimiento) : null
-      },
-      {
-        key: "edad",
-        label: "Edad Calculada",
-        icono: <Clock className="w-3.5 h-3.5" />,
-        valor: edadCalculada !== null ? `${edadCalculada} años cumplidos` : null,
-        esMenor: esMenor14Detalle,
-      },
-    ];
-
-    const camposSecundarios = esAntecedentesDoc ? [
-      {
-        key: "certificado_numero",
-        label: "No. Certificado",
-        icono: <Hash className="w-3.5 h-3.5" />,
-        valor: (p.detalles_campos as any)?.certificado_numero ? `No. ${(p.detalles_campos as any).certificado_numero}` : null
-      },
-      {
-        key: "hojas_total",
-        label: "Páginas del Certificado",
-        icono: <FileText className="w-3.5 h-3.5" />,
-        valor: listaPaginas.length > 0 ? `${listaPaginas.length} hoja(s) (págs. ${listaPaginas.join(", ")})` : null
-      }
-    ] : [
-      {
-        key: "fecha_expedicion",
-        label: "Fecha de Expedición",
-        icono: <Calendar className="w-3.5 h-3.5" />,
-        valor: p.fecha_expedicion ? String(p.fecha_expedicion) : null
-      },
-      {
-        key: "lugar_expedicion",
-        label: "Lugar de Expedición",
-        icono: <MapPin className="w-3.5 h-3.5" />,
-        valor: p.lugar_expedicion || null
-      },
-      {
-        key: "sexo",
-        label: "Género / Sexo",
-        icono: <Users className="w-3.5 h-3.5" />,
-        valor: p.sexo || null
-      },
-    ];
-
-    const conf = (key: string): number => {
-      const d = p.detalles_campos?.[key] as any;
-      if (d?.confidence != null) return Math.round(d.confidence * 100);
-      return p.confianza_extraccion != null ? Math.round(Number(p.confianza_extraccion)) : 85;
-    };
-
-    const color = (c: number) => {
-      if (c >= 85) return { bar: "from-emerald-500 to-emerald-400", badge: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" };
-      if (c >= 65) return { bar: "from-amber-500 to-yellow-400", badge: "bg-amber-500/15 border-amber-500/30 text-amber-400" };
-      return { bar: "from-rose-500 to-red-400", badge: "bg-rose-500/15 border-rose-500/30 text-rose-400" };
-    };
-
-    return (
-      <div className="flex flex-col lg:flex-row gap-0 bg-slate-950/70 border-t border-slate-800/60 w-full min-w-0 overflow-hidden">
-
-        {/* ── Panel izquierdo: PDF / Documento ── */}
-        <div className="lg:w-[44%] w-full flex flex-col border-b lg:border-b-0 lg:border-r border-slate-300 dark:border-slate-800/50 min-h-[300px] min-w-0 overflow-hidden">
-          {/* Toolbar PDF */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 dark:bg-slate-900/70 border-b border-slate-300 dark:border-slate-800/40 min-w-0 gap-1">
-            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-              <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider shrink-0">Vista Documento</span>
-              {p.nombre_documento_pdf ? (
-                <span className="text-[10px] font-mono text-emerald-800 dark:text-emerald-300 truncate max-w-[150px] bg-emerald-100 dark:bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-500/30 ml-1 shrink shadow-sm" title={`PDF Individual de cédula: ${p.nombre_documento_pdf}`}>
-                  📄 {p.nombre_documento_pdf}
-                </span>
-              ) : p.nombre_documento ? (
-                <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 truncate max-w-[130px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 ml-1 shrink shadow-sm" title={`Archivo origen del lote: ${p.nombre_documento}`}>
-                  {p.nombre_documento}
-                </span>
-              ) : null}
-              {esAntecedentesDoc && listaPaginas.length > 1 ? (
-                <div className="flex items-center gap-1 ml-1.5 shrink-0 flex-wrap">
-                  {listaPaginas.map((numPag, idx) => (
-                    <button
-                      key={numPag}
-                      onClick={() => { setPaginaPrevia(numPag); setImgCargando(true); setImgError(false); }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                        paginaPrevia === numPag
-                          ? "bg-indigo-500/25 border border-indigo-500/40 text-indigo-600 dark:text-indigo-300 shadow-sm"
-                          : "bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                      title={`Ver Hoja ${idx + 1} del certificado (Página ${numPag})`}
-                    >
-                      Hoja {idx + 1} (pág. {numPag})
-                    </button>
-                  ))}
-                </div>
-              ) : tieneDosLados ? (
-                <div className="flex items-center gap-1 ml-1.5 shrink-0">
-                  <button
-                    onClick={() => { setPaginaPrevia(p.pagina_frente!); setImgCargando(true); setImgError(false); }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${paginaPrevia === p.pagina_frente ? "bg-primary-500/25 border border-primary-500/40 text-primary-600 dark:text-primary-300" : "bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"}`}
-                  >
-                    Frente
-                  </button>
-                  <button
-                    onClick={() => { setPaginaPrevia(p.pagina_reverso!); setImgCargando(true); setImgError(false); }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${paginaPrevia === p.pagina_reverso ? "bg-primary-500/25 border border-primary-500/40 text-primary-600 dark:text-primary-300" : "bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"}`}
-                  >
-                    Reverso
-                  </button>
-                </div>
-              ) : (
-                <span className="text-[10px] text-slate-500 ml-1 shrink-0">pág. {paginaPrevia}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Alejar"><ZoomOut className="w-3 h-3" /></button>
-              <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Acercar"><ZoomIn className="w-3 h-3" /></button>
-              <button onClick={() => setZoom(1)} className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Restablecer"><RotateCw className="w-3 h-3" /></button>
-            </div>
-          </div>
-
-          {/* Imagen */}
-          <div className="flex-1 overflow-auto flex items-start justify-center p-3 bg-slate-200/50 dark:bg-slate-950/50 min-h-[260px] max-h-[480px]">
-            {!tienePdfValido ? (
-              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center px-4">
-                <div className={`w-12 h-12 rounded-full ${estaValidada ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-500" : "bg-amber-500/15 border-amber-500/30 text-amber-500"} flex items-center justify-center border`}>
-                  {estaValidada ? <CheckCircle className="w-6 h-6" /> : <ImageOff className="w-6 h-6" />}
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                    {estaValidada ? "Datos Validados Desde Planilla" : "No se encontró en el PDF"}
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
-                    {estaValidada
-                      ? "Esta persona fue verificada y aprobada con los datos de la planilla oficial. Si lo desea, puede asociar o subir su documento PDF de cédula en cualquier momento."
-                      : "Esta persona figura en la planilla oficial de Excel pero no fue detectada en las páginas del PDF adjunto. Puede asociar o subir su cédula en PDF individualmente si la tiene disponible."}
-                  </p>
-                </div>
-                <button
-                  onClick={() => abrirSubirPdf(p)}
-                  disabled={subiendoPdfId === p.id}
-                  className="px-3 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 text-primary-300 border border-primary-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-                  title="Subir documento PDF de la cédula para extraer datos automáticamente"
-                >
-                  {subiendoPdfId === p.id ? (
-                    <div className="spinner w-3.5 h-3.5" />
-                  ) : (
-                    <UploadCloud className="w-3.5 h-3.5 text-primary-400" />
-                  )}
-                  Subir PDF de Cédula
-                </button>
-              </div>
-            ) : imgError ? (
-              <div className="flex flex-col items-center justify-center gap-3 h-full w-full py-8 text-center">
-                <ImageOff className="w-8 h-8 text-slate-700" />
-                <p className="text-xs text-slate-500">PDF no disponible para vista previa</p>
-                <button
-                  onClick={() => abrirSubirPdf(p)}
-                  disabled={subiendoPdfId === p.id}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all"
-                  title="Subir nuevo PDF de la cédula"
-                >
-                  {subiendoPdfId === p.id ? (
-                    <div className="spinner w-3.5 h-3.5" />
-                  ) : (
-                    <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
-                  )}
-                  Subir nuevo PDF
-                </button>
-              </div>
-            ) : (
-              <div style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.2s ease" }}>
-                {imgCargando && (
-                  <div className="flex flex-col items-center gap-2 py-12 w-48">
-                    <div className="w-6 h-6 border-2 border-slate-700 border-t-primary-400 rounded-full animate-spin" />
-                    <span className="text-[11px] text-slate-500">Cargando página {paginaPrevia}…</span>
-                  </div>
-                )}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={`${docIdParaImagen}-${paginaPrevia}`}
-                  src={apiDocumentos.paginaPdfUrl(String(docIdParaImagen), paginaPrevia, 130)}
-                  alt={`Página ${paginaPrevia}`}
-                  loading="eager"
-                  decoding="async"
-                  className="rounded-lg shadow-xl max-w-full border border-slate-700/30"
-                  style={{ display: imgCargando ? "none" : "block" }}
-                  onLoad={() => setImgCargando(false)}
-                  onError={() => { setImgCargando(false); setImgError(true); }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Panel derecho: Datos OCR o Modo Edición ── */}
-        <div className="lg:w-[56%] w-full flex flex-col justify-between min-w-0 overflow-hidden">
-          <div>
-            {/* Meta info */}
-            <div className="px-3 py-2 border-b border-slate-300 dark:border-slate-800/40 bg-slate-100 dark:bg-slate-900/50 flex items-center justify-between flex-wrap gap-1.5 min-w-0">
-              <div className="flex items-center gap-2 text-[10px] flex-wrap min-w-0">
-                <span className={`px-2 py-0.5 rounded text-[10px] border font-bold shrink-0 ${getTipoDocInfo(p.tipo_documento).pill}`}>
-                  {getTipoDocInfo(p.tipo_documento).label} ({getTipoDocInfo(p.tipo_documento).codigo})
-                </span>
-                {p.nombre_documento && (
-                  <span className="flex items-center gap-1 text-slate-800 dark:text-slate-300 font-mono text-[10px] bg-blue-100 dark:bg-primary-500/10 border border-blue-300 dark:border-primary-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`Archivo origen del lote: ${p.nombre_documento}`}>
-                    <FileText className="w-3 h-3 text-blue-700 dark:text-primary-400 shrink-0" />
-                    <span className="text-blue-800 dark:text-primary-400 font-bold shrink-0">Lote:</span>
-                    <span className="truncate">{p.nombre_documento}</span>
-                  </span>
-                )}
-                {p.nombre_documento_pdf && (
-                  <span className="flex items-center gap-1 text-emerald-800 dark:text-emerald-300 font-mono text-[10px] bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 px-2 py-0.5 rounded max-w-[180px] shrink shadow-sm" title={`PDF individual de cédula: ${p.nombre_documento_pdf}`}>
-                    <FileCheck2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="text-emerald-800 dark:text-emerald-400 font-bold shrink-0">PDF:</span>
-                    <span className="truncate">{p.nombre_documento_pdf}</span>
-                  </span>
-                )}
-                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Cpu className="w-3 h-3" /> <span className="text-emerald-700 dark:text-emerald-400 font-mono font-semibold">{p.motor_ocr || "google_document_ai"}</span></span>
-                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-500 shrink-0"><Clock className="w-3 h-3" /> <span className="text-slate-700 dark:text-slate-400 font-medium">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString("es-CO") : "—"}</span></span>
-                {edadCalculada !== null && (() => {
-                  const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadCalculada);
-                  return (
-                    <span className={`flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded font-bold shrink-0 border shadow-sm ${
-                      inc.esInvalido
-                        ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
-                        : esMenor14Detalle
-                          ? "bg-rose-100 dark:bg-rose-500/20 border-rose-400 dark:border-rose-500/40 text-rose-800 dark:text-rose-300 font-extrabold animate-pulse"
-                          : "bg-amber-100 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300"
-                    }`} title={inc.esInvalido ? inc.motivo : `Edad: ${edadCalculada} años cumplidos`}>
-                      <span>{inc.esInvalido ? `⚠️ ${edadCalculada} años (${inc.tipo === "MAYOR_CON_TI" ? "Mayor con TI" : "Menor con CC"})` : esMenor14Detalle ? `⚠️ MENOR: ${edadCalculada} años` : `${edadCalculada} años`}</span>
-                    </span>
-                  );
-                })()}
-              </div>
-              {estaEditando ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0">
-                  <Edit3 className="w-3 h-3" /> Modo Edición
-                </span>
-              ) : (
-                p.grupo_documento_id && <span className="font-mono text-[10px] text-slate-600 truncate max-w-[90px] shrink-0">{p.grupo_documento_id}</span>
-              )}
-            </div>
-
-            {/* Alerta Destacada en Rojo: Menor de 14 Años */}
-            {esMenor14Detalle && !estaValidada && (
-              <div className="m-2.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-500/15 border-2 border-rose-400 dark:border-rose-500/50 text-rose-950 dark:text-rose-200 shadow-md animate-pulse min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider text-rose-800 dark:text-rose-300">
-                    ALERTA: PERSONA MENOR DE 14 AÑOS ({edadCalculada} AÑOS)
-                  </span>
-                </div>
-                <p className="text-xs text-rose-900 dark:text-rose-100 ml-6 break-words font-medium">
-                  Esta persona tiene <strong className="text-rose-950 dark:text-white font-bold underline">{edadCalculada} años cumplidos</strong> según su fecha de nacimiento registrada (<strong className="font-mono text-rose-950 dark:text-white">{p.fecha_nacimiento || "sin fecha"}</strong>).
-                </p>
-              </div>
-            )}
-
-            {/* Alerta Destacada: Archivo No Válido por Inconsistencia Documento vs Mayoría/Minoría de Edad */}
-            {(() => {
-              if (estaValidada) return null;
-              const edadVal = p.edad ?? calcularEdad(p.fecha_nacimiento);
-              const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
-              const inconsistencia = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadVal);
-
-              if (!discDocEdad && !inconsistencia.esInvalido) return null;
-
-              const esMayor = discDocEdad?.tipo === "MAYOR_CON_TI" || inconsistencia.tipo === "MAYOR_CON_TI" || (edadVal !== null && edadVal >= 18);
-              const edadMostrar = discDocEdad?.edad ?? inconsistencia.edad ?? edadVal;
-              const docInfo = getTipoDocInfo(p.tipo_documento);
-
-              return (
-                <div className="m-2.5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 dark:border-rose-500/70 text-rose-950 dark:text-rose-100 shadow-md min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
-                    <span className="text-xs font-black uppercase tracking-wider text-rose-900 dark:text-rose-200">
-                      {esMayor
-                        ? "Archivo No Válido: Persona Mayor de Edad con Tarjeta de Identidad"
-                        : "Archivo No Válido: Persona Menor de Edad con Cédula de Ciudadanía"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-2.5 font-medium leading-relaxed">
-                    {esMayor
-                      ? `El archivo presentado no es válido ya que la persona es mayor de edad (${edadMostrar !== null ? `${edadMostrar} años` : "18+ años"}) y presenta un archivo de Tarjeta de Identidad que solo corresponde a menores de edad. Cuando la persona cumple 18 años debe presentar Cédula de Ciudadanía o Contraseña vigente.`
-                      : `El archivo presentado no es válido ya que la persona es menor de edad (${edadMostrar !== null ? `${edadMostrar} años` : "< 18 años"}) y presenta Cédula de Ciudadanía, documento exclusivo de personas mayores de edad. Debe presentar Tarjeta de Identidad.`}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 ml-7 text-xs">
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-blue-400 dark:border-blue-600/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-blue-800 dark:text-blue-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Condición Legal y Edad Calculada
-                      </div>
-                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">
-                        {edadMostrar !== null ? `${edadMostrar} años cumplidos` : "Edad no determinada"} — {esMayor ? "Mayor de Edad (≥ 18 años)" : "Menor de Edad (< 18 años)"}
-                      </div>
-                      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 font-medium">
-                        {esMayor ? "Documento legal requerido: Cédula de Ciudadanía (CC) o Contraseña" : "Documento legal requerido: Tarjeta de Identidad (TI)"}
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-white/90 dark:bg-slate-900/80 border border-rose-400 dark:border-rose-600/50 shadow-sm">
-                      <div className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400 flex items-center gap-1">
-                        <FileText className="w-3 h-3 text-rose-600 dark:text-rose-400" /> Documento Presentado en PDF
-                      </div>
-                      <div className="font-extrabold text-rose-950 dark:text-rose-200 text-sm mt-0.5">
-                        {docInfo.label} ({docInfo.codigo}) — No Admisible
-                      </div>
-                      <div className="text-[11px] text-rose-800 dark:text-rose-300 mt-1 font-semibold">
-                        {esMayor ? "Incompatible: Tarjeta de Identidad solo es válida hasta los 17 años" : "Incompatible: Cédula de Ciudadanía reservada para mayores de edad"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Alerta Destacada: Discrepancia Crítica Cédula Física vs Planilla Excel */}
-            {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (() => {
-              const disc = p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel;
-              const nombreCedula = typeof disc === "object" ? (disc.nombre_cedula || p.nombre_completo) : p.nombre_completo;
-              const idOcr = typeof disc === "object" ? (disc.id_ocr || p.numero_identificacion) : p.numero_identificacion;
-              const nombreExcelParaId = typeof disc === "object" ? (disc.nombre_excel_para_id || disc.nombre_excel) : "";
-              const idExcelParaNombre = typeof disc === "object" ? (disc.id_excel_para_nombre || disc.id_excel_homonimo) : "";
-              const motivo = typeof disc === "object" ? disc.motivo : "Discrepancia entre la cédula leída por OCR y la planilla oficial Excel.";
-              const estaAprobadoManual = Boolean(disc?.aprobado_manual || estaValidada);
-
-              if (estaAprobadoManual) {
-                return (
-                  <div className="m-2.5 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/70 text-emerald-950 dark:text-emerald-100 shadow-sm min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span className="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
-                        Discrepancia Verificada y Aprobada
-                      </span>
-                    </div>
-                    <p className="text-xs text-emerald-800 dark:text-emerald-200 ml-7 font-medium">
-                      El registro ha sido validado manualmente con el nombre: <strong className="font-extrabold text-emerald-950 dark:text-white font-mono">{p.nombre_completo}</strong>.
-                    </p>
-                  </div>
-                );
-              }
-
-              const esNombreCedulaActivo = p.nombre_completo === nombreCedula;
-              const esNombreExcelActivo = nombreExcelParaId && p.nombre_completo === nombreExcelParaId;
-
-              return (
-                <div className="m-2.5 p-4 rounded-xl bg-gradient-to-br from-rose-50 to-amber-50 dark:from-rose-950/40 dark:to-amber-950/30 border-2 border-rose-500 dark:border-rose-500/80 text-rose-950 dark:text-rose-100 shadow-lg min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
-                    <span className="text-xs font-black uppercase tracking-wider text-rose-900 dark:text-rose-200">
-                      Discrepancia Crítica: Verificación Cédula Física (OCR) vs Planilla Oficial Excel
-                    </span>
-                  </div>
-                  <p className="text-xs text-rose-950 dark:text-rose-100 ml-7 mb-2 font-semibold leading-relaxed">
-                    {motivo}
-                  </p>
-                  <p className="text-[11px] text-slate-700 dark:text-slate-300 ml-7 mb-3 font-medium bg-white/70 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-                    💡 <strong>Instrucción rápida:</strong> Haga clic en el botón <strong>"Usar este nombre"</strong> de la opción correcta para sobreescribir el nombre completo sin tener que escribirlo todo a mano. La alerta continuará visible para su revisión hasta que haga clic en <strong>"Aprobar y Validar"</strong>.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-7 text-xs">
-                    {/* Caja 1: Documento Físico (PDF) */}
-                    <div className={`p-3 rounded-lg border transition-all ${
-                      esNombreCedulaActivo
-                        ? "bg-amber-100/90 dark:bg-amber-950/70 border-amber-500 shadow-md ring-2 ring-amber-400/50"
-                        : "bg-white/95 dark:bg-slate-900/90 border-amber-300 dark:border-amber-600/50 shadow-sm"
-                    }`}>
-                      <div className="text-[11px] uppercase font-bold text-amber-900 dark:text-amber-400 flex items-center justify-between gap-1.5 mb-1.5">
-                        <span className="flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>Documento Físico Escaneado (PDF)</span>
-                        </span>
-                        {esNombreCedulaActivo && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600 text-white font-extrabold flex items-center gap-0.5">
-                            <Check className="w-2.5 h-2.5" /> Nombre Actual
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula Extraída:</span>{" "}
-                          <span className="font-extrabold text-slate-900 dark:text-white font-mono">{idOcr || p.numero_identificacion}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium block">Titular en Documento:</span>
-                          <span className="font-extrabold text-amber-900 dark:text-amber-300 text-sm block mt-0.5 break-words">
-                            {nombreCedula || p.nombre_completo}
-                          </span>
-                        </div>
-                        {nombreCedula && (
-                          <button
-                            type="button"
-                            onClick={(e) => aplicarNombreConflicto(p, nombreCedula, e)}
-                            className={`w-full mt-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                              esNombreCedulaActivo
-                                ? "bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-400 dark:border-amber-700"
-                                : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm hover:scale-[1.01]"
-                            }`}
-                          >
-                            {esNombreCedulaActivo ? (
-                              <>
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Nombre actualmente en la tabla</span>
-                              </>
-                            ) : (
-                              <>
-                                <span>👆 Usar nombre del Documento</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Caja 2: Registro en Planilla Excel */}
-                    <div className={`p-3 rounded-lg border transition-all ${
-                      esNombreExcelActivo
-                        ? "bg-blue-100/90 dark:bg-blue-950/70 border-blue-500 shadow-md ring-2 ring-blue-400/50"
-                        : "bg-white/95 dark:bg-slate-900/90 border-blue-300 dark:border-blue-600/50 shadow-sm"
-                    }`}>
-                      <div className="text-[11px] uppercase font-bold text-blue-900 dark:text-blue-400 flex items-center justify-between gap-1.5 mb-1.5">
-                        <span className="flex items-center gap-1.5">
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                          <span>Registro en Planilla Excel</span>
-                        </span>
-                        {esNombreExcelActivo && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-extrabold flex items-center gap-0.5">
-                            <Check className="w-2.5 h-2.5" /> Nombre Actual
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        {nombreExcelParaId ? (
-                          <>
-                            <div>
-                              <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium block">Persona registrada con esa Cédula:</span>
-                              <span className="font-extrabold text-blue-950 dark:text-blue-200 text-sm block mt-0.5 break-words">
-                                {nombreExcelParaId}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => aplicarNombreConflicto(p, nombreExcelParaId, e)}
-                              className={`w-full mt-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                esNombreExcelActivo
-                                  ? "bg-blue-200 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 border border-blue-400 dark:border-blue-700"
-                                  : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:scale-[1.01]"
-                              }`}
-                            >
-                              {esNombreExcelActivo ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Nombre actualmente en la tabla</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>👆 Usar nombre oficial de Excel</span>
-                                </>
-                              )}
-                            </button>
-                          </>
-                        ) : null}
-
-                        {idExcelParaNombre ? (
-                          <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
-                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-medium">Cédula oficial del titular en Excel:</span>{" "}
-                            <span className="font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">{idExcelParaNombre}</span>
-                          </div>
-                        ) : null}
-
-                        {!nombreExcelParaId && !idExcelParaNombre ? (
-                          <div className="text-slate-600 dark:text-slate-400 italic text-[11px]">
-                            La cédula leída no se encuentra asignada al titular en la planilla.
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Barra inferior de estado y aprobación directa */}
-                  <div className="mt-3 ml-7 p-2.5 rounded-lg bg-rose-100/70 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800/60 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-slate-600 dark:text-slate-300 text-[11px] font-medium shrink-0">Nombre en la tabla:</span>
-                      <strong className="font-extrabold text-slate-900 dark:text-white truncate font-mono bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded border border-rose-300/50 dark:border-rose-700/50">
-                        {p.nombre_completo || "SIN NOMBRE"}
-                      </strong>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => aprobarRevision(p.id, e)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all shrink-0 cursor-pointer"
-                      title="Confirmar datos y marcar como válido"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Alerta: Falta en Planilla Excel */}
-            {p.en_excel === false && !estaValidada && (
-              <div className="m-2.5 p-3.5 rounded-xl bg-purple-100/90 dark:bg-purple-950/60 border-2 border-purple-600 dark:border-purple-500 text-purple-950 dark:text-purple-100 min-w-0 shadow-sm">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-purple-900 dark:text-purple-300 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider text-purple-950 dark:text-purple-200">
-                    {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID")
-                      ? "Alerta: No se encuentra en la Planilla Excel"
-                      : "Alerta: Documento Sin Número de Identificación"}
-                  </span>
-                </div>
-                <p className="text-xs text-purple-950 dark:text-purple-100 ml-6 break-words font-semibold leading-relaxed">
-                  {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
-                    <>
-                      El número de identificación <strong className="font-mono text-purple-950 dark:text-white font-black bg-purple-300/80 dark:bg-purple-900 px-2 py-0.5 rounded border border-purple-500 dark:border-purple-600">{p.numero_identificacion}</strong> no figura en la planilla oficial de Excel cargada para comparación.
-                    </>
-                  ) : (
-                    <>
-                      No se detectó el número de identificación en el documento PDF para cotejar con la planilla oficial de Excel. Ingrese el número haciendo clic en <strong>Editar Datos</strong>.
-                    </>
-                  )}
-                </p>
-              </div>
-            )}
-
-            {/* Alerta: Sin Documento PDF / No se encontró en el PDF */}
-            {(!tienePdfValido || p.en_pdf === false) && !estaValidada && (
-              <div className="m-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500/70 text-amber-950 dark:text-amber-100 min-w-0 shadow-sm">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                    Alerta: No se encontró en el PDF
-                  </span>
-                </div>
-                <p className="text-xs text-amber-900 dark:text-amber-100 ml-6 break-words font-semibold leading-relaxed">
-                  Esta persona figura en la planilla oficial de Excel pero no fue encontrada en el documento PDF adjunto. Se cargaron los datos provistos en el Excel para su verificación.
-                </p>
-              </div>
-            )}
-
-            {/* Motivos de Revisión / Alerta para Asistente */}
-            {Boolean(esPersonaEnRevision(p)) && (() => {
-              const rawMotivos: string[] = Array.isArray((p.detalles_campos as any)?.motivos_revision)
-                ? (p.detalles_campos as any).motivos_revision
-                : [];
-              const tieneDiscrepanciaSuperior = Boolean((p.detalles_campos as any)?.discrepancia_excel);
-              const tieneDiscrepanciaDocEdad = Boolean((p.detalles_campos as any)?.discrepancia_documento_edad) || verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadCalculada).esInvalido;
-              const motivosFiltrados = rawMotivos.filter((m: string) => {
-                const ml = m.toLowerCase();
-                if (ml.includes("expedici") || ml.includes("sexo") || ml.includes("lugar") || ml.includes("genero")) return false;
-                if (ml.includes("campo 'nombres'") || ml.includes("campo 'apellidos'")) return false;
-                // Si la tarjeta destacada de discrepancia ya se muestra arriba, no duplicar en las viñetas inferiores
-                if (tieneDiscrepanciaSuperior && (ml.includes("discrepancia") || ml.includes("campo 'nombre_completo'"))) return false;
-                if (tieneDiscrepanciaDocEdad && (ml.includes("mayor de edad") || ml.includes("menor de edad") || ml.includes("tarjeta de identidad"))) return false;
-                return true;
-              });
-              if (motivosFiltrados.length === 0 && (!p.requiere_revision || tieneDiscrepanciaSuperior || tieneDiscrepanciaDocEdad)) return null;
-              return (
-                <div className="m-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                      Pendiente de Revisión por Asistente
-                    </span>
-                  </div>
-                  {motivosFiltrados.length > 0 ? (
-                    <ul className="text-xs space-y-1 ml-6 list-disc text-amber-200/90 font-medium">
-                      {motivosFiltrados.map((m: string, i: number) => (
-                        <li key={i}>{m}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-amber-200/90 ml-6 break-words">
-                      Uno o más datos esenciales (número de identificación, nombre o fecha de nacimiento) requieren verificación.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Contenido: Si está editando muestra el formulario integrado; si no, las tarjetas compactas */}
-            {estaEditando ? (
-              <div className="p-3 space-y-2.5 min-w-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
-                  {/* Tipo de Documento */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Tipo de Documento
-                    </label>
-                    <select
-                      value={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, tipo_documento: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
-                    >
-                      <option value="CEDULA_CIUDADANIA">Cédula de Ciudadanía (CC)</option>
-                      <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad (TI)</option>
-                      <option value="CEDULA_EXTRANJERIA">Cédula de Extranjería (CE)</option>
-                      <option value="PPT">Permiso por Protección Temporal (PPT)</option>
-                      <option value="CONTRASEÑA">Contraseña / Trámite (CT)</option>
-                      <option value="PASAPORTE">Pasaporte (PAS)</option>
-                      <option value="CERTIFICADO_ANTECEDENTES">Certificado de Antecedentes (ANT)</option>
-                    </select>
-                  </div>
-
-                  {/* Número de Cédula */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Número de Identificación
-                    </label>
-                    <div className="relative">
-                      <Hash className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
-                      <input
-                        type="text"
-                        value={editForm.numero_identificacion || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
-                        placeholder="Ej: 1117513499"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono font-bold text-primary-300 focus:outline-none focus:border-primary-500 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nombre Completo */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Nombre Completo (Nombres y Apellidos)
-                    </label>
-                    <input
-                      type="text"
-                      value={editForm.nombre_completo || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditForm(prev => ({
-                          ...prev,
-                          nombre_completo: val,
-                          nombres: val,
-                          apellidos: ""
-                        }));
-                      }}
-                      placeholder="Ej: VALENCIA VILLEGAS ANTONIO"
-                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase font-medium"
-                    />
-                  </div>
-
-                  {/* Fecha de Nacimiento */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Fecha de Nacimiento (AAAA-MM-DD)
-                    </label>
-                    <div className="relative">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
-                      <input
-                        type="text"
-                        value={editForm.fecha_nacimiento || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
-                        placeholder="AAAA-MM-DD"
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Edad calculada automática */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                      Edad Calculada
-                    </label>
-                    <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      {editForm.fecha_nacimiento && calcularEdad(editForm.fecha_nacimiento) !== null ? (
-                        <span className="font-bold text-amber-300 font-mono">
-                          {calcularEdad(editForm.fecha_nacimiento)} años cumplidos
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 italic text-[11px]">
-                          {editForm.fecha_nacimiento ? "Fecha no válida" : "Ingrese fecha para calcular"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Campos adicionales desplegables en modo edición */}
-                  <div className="sm:col-span-2 pt-2 border-t border-slate-800/80">
-                    <button
-                      type="button"
-                      onClick={() => toggleDetallesExtra(p.id)}
-                      className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 font-semibold mb-2 transition-colors cursor-pointer"
-                    >
-                      {detallesExpandidos.has(p.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      <span>{detallesExpandidos.has(p.id) ? "Ocultar datos adicionales" : "Editar datos adicionales (Fecha/Lugar Expedición, Género)"}</span>
-                    </button>
-
-                    {detallesExpandidos.has(p.id) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80 animate-in fade-in duration-200">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Fecha de Expedición
-                          </label>
-                          <input
-                            type="text"
-                            value={editForm.fecha_expedicion || ""}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, fecha_expedicion: e.target.value }))}
-                            placeholder="AAAA-MM-DD"
-                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Lugar de Expedición
-                          </label>
-                          <input
-                            type="text"
-                            value={editForm.lugar_expedicion || ""}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, lugar_expedicion: e.target.value }))}
-                            placeholder="Ej: BOGOTA D.C."
-                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors uppercase"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Género / Sexo
-                          </label>
-                          <select
-                            value={editForm.sexo || ""}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, sexo: e.target.value }))}
-                            className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary-500 transition-colors"
-                          >
-                            <option value="">No especificado</option>
-                            <option value="M">MASCULINO (M)</option>
-                            <option value="F">FEMENINO (F)</option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Vista de Tarjetas (Compactas con content-start para evitar que se alarguen) */
-              <div className="p-2.5 space-y-2.5 min-w-0">
-                {p.nombre_documento && (
-                  <div className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 flex items-center justify-between text-xs min-w-0 shadow-sm">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider shrink-0">Documento PDF:</span>
-                      <span className="font-mono text-xs text-slate-800 dark:text-slate-200 truncate" title={p.nombre_documento}>{p.nombre_documento}</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-600 dark:text-slate-500 shrink-0 ml-2">
-                      {p.pagina_frente ? `Pág. ${p.pagina_frente}${p.pagina_reverso ? ` / ${p.pagina_reverso}` : ""}` : ""}
-                    </span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-2 content-start min-w-0">
-                  {campos.map(({ key, label, icono, valor, esMenor }) => {
-                    const c = conf(key);
-                    const col = color(valor ? c : 0);
-                    return (
-                      <div key={key} className={`rounded-lg p-2 transition-colors flex flex-col justify-between min-h-[58px] min-w-0 overflow-hidden shadow-sm ${
-                        esMenor
-                          ? "bg-rose-50 dark:bg-rose-950/20 border border-rose-300 dark:border-rose-500/40"
-                          : "bg-white dark:bg-slate-900/60 border border-slate-300 dark:border-slate-800/60 hover:border-slate-400 dark:hover:border-slate-700/80"
-                      }`}>
-                        <div className="flex items-center justify-between min-w-0">
-                          <div className={`flex items-center gap-1 min-w-0 ${esMenor ? "text-rose-600 dark:text-rose-400 font-semibold" : "text-slate-600 dark:text-slate-500"}`}>
-                            {icono}
-                            <span className="text-[10px] font-bold uppercase tracking-wider truncate">{label}</span>
-                          </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 ${
-                            esMenor
-                              ? "bg-rose-100 dark:bg-rose-500/20 border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 font-extrabold"
-                              : valor ? col.badge : "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400"
-                          }`}>
-                            {esMenor ? "MENOR" : valor ? `${c}%` : "N/D"}
-                          </span>
-                        </div>
-                        <div className="my-0.5 min-w-0">
-                          {valor
-                            ? (
-                              <div className="min-w-0">
-                                <span className={`text-xs font-semibold truncate block font-mono ${esMenor ? "text-rose-600 dark:text-rose-300 font-bold" : "text-slate-900 dark:text-white"}`} title={valor}>
-                                  {valor}
-                                </span>
-                                {key === "numero_identificacion" && (p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5 truncate" title={`Corregido desde planilla oficial Excel (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
-                                    <CheckCircle className="w-2.5 h-2.5 shrink-0" />
-                                    <span className="truncate">Corregido de {(p.detalles_campos as any).numero_identificacion_original_ocr}</span>
-                                  </span>
-                                )}
-                              </div>
-                            )
-                            : <span className="text-[11px] italic text-rose-500 dark:text-rose-400/80 font-medium block truncate">No detectado por OCR</span>
-                          }
-                        </div>
-                        {valor ? (
-                          <div className="h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div className={`h-full bg-gradient-to-r ${esMenor ? "from-rose-500 to-red-400" : col.bar} rounded-full transition-all duration-700`} style={{ width: `${c}%` }} />
-                          </div>
-                        ) : (
-                          <div className="h-1 bg-rose-200 dark:bg-rose-950/30 rounded-full overflow-hidden">
-                            <div className="h-full bg-rose-500/40 rounded-full w-full" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Botón Ver Más Detalles (Expedición, Género) — Sin alertas de revisión */}
-                <div className="pt-2 w-full">
-                  <div className="flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleDetallesExtra(p.id)}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/60 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm cursor-pointer"
-                    >
-                      {detallesExpandidos.has(p.id) ? (
-                        <>
-                          <ChevronUp className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
-                          <span>Ocultar datos adicionales</span>
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400" />
-                          <span>Ver más detalles (Fecha/Lugar Expedición, Género)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {detallesExpandidos.has(p.id) && (
-                    <div className="w-full mt-3 p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900/70 border border-slate-300 dark:border-slate-800 space-y-2.5 animate-in fade-in duration-200 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">
-                          Datos Adicionales
-                        </span>
-                        <span className="text-[9px] text-slate-500 italic">
-                          Opcionales • No generan motivo de revisión
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        {camposSecundarios.map(({ key, label, icono, valor }) => (
-                          <div
-                            key={key}
-                            className="rounded-lg bg-white dark:bg-slate-950/60 border border-slate-300 dark:border-slate-800/80 p-2.5 flex flex-col justify-between min-h-[58px] min-w-0 shadow-sm"
-                          >
-                            <div className="flex items-center justify-between gap-1.5 min-w-0">
-                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider min-w-0 flex-1">
-                                {icono}
-                                <span className="truncate" title={label}>{label}</span>
-                              </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-semibold shrink-0 border inline-flex items-center gap-0.5 ${
-                                valor
-                                  ? "bg-emerald-500/10 dark:bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
-                                  : "bg-slate-100 dark:bg-slate-800/80 border-slate-300 dark:border-slate-700/60 text-slate-500 dark:text-slate-400"
-                              }`}>
-                                {valor ? (
-                                  <>
-                                    <Check className="w-2.5 h-2.5 shrink-0" />
-                                    <span>OK</span>
-                                  </>
-                                ) : (
-                                  "Opcional"
-                                )}
-                              </span>
-                            </div>
-                            <div className="mt-1 min-w-0">
-                              {valor ? (
-                                <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 font-mono block truncate" title={valor}>
-                                  {valor}
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-slate-500 italic block">
-                                  No registrado
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Acciones del Panel */}
-          <div className="px-3 py-2 border-t border-slate-800/40 bg-slate-900/50 flex flex-wrap items-center justify-between gap-1.5 mt-auto min-w-0">
-            {estaEditando ? (
-              <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    onClick={() => guardarEdicion(p.id, false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold shadow-lg shadow-primary-500/20 transition-all shrink-0"
-                  >
-                    <Save className="w-3.5 h-3.5" /> Guardar Cambios
-                  </button>
-                  {Boolean(p.requiere_revision || (p.estado_registro && p.estado_registro !== "VALID")) && (
-                    <button
-                      onClick={() => guardarEdicion(p.id, true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0"
-                      title="Guardar datos y aprobar directamente"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Guardar y Aprobar
-                    </button>
-                  )}
-                </div>
-                <button
-                  onClick={() => setEditando(null)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold transition-all shrink-0 ml-auto"
-                >
-                  <X className="w-3.5 h-3.5" /> Cancelar
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    onClick={() => iniciarEdicion(p)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 text-xs font-semibold transition-all shrink-0"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" /> Editar Datos
-                  </button>
-                  <button
-                    onClick={() => abrirSubirPdf(p)}
-                    disabled={subiendoPdfId === p.id}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition-all shrink-0"
-                    title="Subir documento PDF de la cédula para extraer datos automáticamente con OCR"
-                  >
-                    {subiendoPdfId === p.id ? (
-                      <div className="spinner w-3.5 h-3.5" />
-                    ) : (
-                      <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
-                    )}
-                    Subir PDF Cédula
-                  </button>
-                  {!estaValidada ? (
-                    <button
-                      onClick={(e) => aprobarRevision(p.id, e)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-all shrink-0 cursor-pointer"
-                      title="Aprobar datos y marcar como válido"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" /> Aprobar y Validar
-                    </button>
-                  ) : (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold shrink-0">
-                      <CheckCircle className="w-3.5 h-3.5" /> ✓ Registro Validado
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => setExpandidoId(null)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 text-slate-400 hover:text-white text-xs font-medium transition-all shrink-0 ml-auto cursor-pointer"
-                  title="Subir y ocultar panel de detalles"
-                >
-                  <ChevronUp className="w-3.5 h-3.5" /> Subir
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  const exportarSeleccion = async () => {
+    if (seleccionados.size === 0) return;
+    setExportando(true);
+    try {
+      const docId = filtroDocumento !== "todos" ? filtroDocumento : undefined;
+      await apiExportacion.descargarXlsx({
+        documentoId: docId,
+        personaIds: Array.from(seleccionados),
+      });
+      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`, { id: "export-seleccion" });
+    } catch {
+      toast.error("Error al exportar personas a Excel", { id: "export-seleccion" });
+    } finally {
+      setExportando(false);
+    }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-  return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden">
-      <Sidebar />
+  // Filtrado de Personas
+  const personasFiltradas = (personas || []).filter((p) => {
+    if (!p) return false;
+    const estaVal = esPersonaValidada(p);
+    const esRev = esPersonaEnRevision(p);
 
-      <main className={`${collapsed ? "ml-20 max-w-[calc(100vw-5rem)]" : "ml-64 max-w-[calc(100vw-16rem)]"} transition-all duration-300 ease-in-out flex-1 min-w-0 p-4 lg:p-6 overflow-x-hidden`}>
-        {/* Header Superior Organizado */}
+    if (filtroEstado === "validas") {
+      if (!estaVal) return false;
+    } else if (filtroEstado === "revision") {
+      if (estaVal || !esRev) return false;
+    } else if (filtroEstado === "falta_excel") {
+      if (!personaFaltaEnExcel(p)) return false;
+    } else if (filtroEstado === "falta_pdf") {
+      if (!personaFaltaEnPdf(p)) return false;
+    } else if (filtroEstado === "discrepancia") {
+      if (!personaTieneDiscrepanciaFaltante(p)) return false;
+    } else if (filtroEstado === "menores") {
+      const ed = p.edad ?? calcularEdad(p.fecha_nacimiento);
+      if (ed === null || ed >= 14) return false;
+    }
+
+    if (!buscar) return true;
+    const q = buscar.toLowerCase().trim().replace(/[.\s]/g, "");
+    const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
+    const nom = formatNombreCompleto(p).toLowerCase();
+    return cedula.includes(q) || nom.includes(q);
+  });
+
+  // Lista de personas pendientes de resolver
+  const personasPorResolver = (personas || []).filter((p) => {
+    return personaFaltaEnExcel(p) || personaFaltaEnPdf(p) || (!esPersonaValidada(p) && esPersonaEnRevision(p));
+  });
+
+  // Porcentajes para la barra superior
+  const totalBase = stats.total > 0 ? stats.total : personas.length;
+  const pctValidas = totalBase > 0 ? Math.round((stats.validas / totalBase) * 100) : 0;
+  const pctRevision = totalBase > 0 ? Math.round((stats.revision / totalBase) * 100) : 0;
+  const pctFaltaExcel = totalBase > 0 ? Math.round((stats.faltaExcel / totalBase) * 100) : 0;
+  const pctFaltaPdf = totalBase > 0 ? Math.round((stats.faltaPdf / totalBase) * 100) : 0;
+
+  // Selección múltiple
+  const toggleSeleccionarTodas = () => {
+    const todosVisibles = personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id));
+    if (todosVisibles) {
+      setSeleccionados((prev) => {
+        const next = new Set(prev);
+        personasFiltradas.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSeleccionados((prev) => {
+        const next = new Set(prev);
+        personasFiltradas.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSeleccionFila = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Documento activo
+  const docActivo = documentos.find((d) => d.id === filtroDocumento);
+
+  return (
+    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100">
+      <Sidebar />
+      <main
+        className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 transition-all duration-300 ${
+          collapsed ? "ml-16 sm:ml-20" : "ml-64 sm:ml-72"
+        }`}
+      >
+        {/* ─── Encabezado Principal ─── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="p-1.5 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-600 dark:text-primary-400">
-                <Users className="w-4 h-4" />
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+                KONDID · BASE DE DATOS OCR
               </span>
-              <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Base de Datos OCR</span>
-              {filtroDocumento !== "todos" ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-primary-50 dark:bg-primary-500/10 border border-primary-200 dark:border-primary-500/30 text-primary-900 dark:text-primary-300 font-medium flex items-center gap-1.5 shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                    <span className="text-slate-600 dark:text-slate-400">Archivo:</span>
-                    <span className="font-bold text-slate-900 dark:text-white truncate max-w-[220px]" title={documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Archivo"}>
-                      {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
-                    </span>
-                    <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} {stats.total === 1 ? "persona" : "personas"})</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFiltroDocumento("todos");
-                      setSeleccionados(new Set());
-                      if (typeof window !== "undefined") {
-                        sessionStorage.setItem("ver_todos_los_archivos", "true");
-                      }
-                    }}
-                    className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition-colors cursor-pointer border border-slate-300 dark:border-slate-700 shadow-sm flex items-center gap-1"
-                    title="Ver todas las personas de todos los archivos"
-                  >
-                    <span>🌐 Ver todos los archivos</span>
-                    {totalPersonasGlobal ? <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">({totalPersonasGlobal})</span> : null}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-300 font-medium flex items-center gap-1.5 shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-                    <span className="font-bold text-slate-900 dark:text-white">Mostrando todos los archivos</span>
-                    <span className="text-slate-600 dark:text-slate-400 font-mono">({stats.total} personas en total)</span>
-                  </span>
-                  {documentos.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const primerDoc = documentos[0];
-                        if (primerDoc) {
-                          setFiltroDocumento(primerDoc.id);
-                          setSeleccionados(new Set());
-                          if (typeof window !== "undefined") {
-                            sessionStorage.removeItem("ver_todos_los_archivos");
-                            localStorage.setItem("ultimo_documento_id", primerDoc.id);
-                          }
-                        }
-                      }}
-                      className="text-[11px] px-2.5 py-0.5 rounded-full bg-primary-50 hover:bg-primary-100 dark:bg-primary-500/10 dark:hover:bg-primary-500/20 text-primary-700 dark:text-primary-300 font-semibold transition-colors cursor-pointer border border-primary-200 dark:border-primary-500/30 shadow-sm flex items-center gap-1"
-                      title="Ver solo el último archivo enviado"
-                    >
-                      <span>★ Ver último archivo enviado</span>
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Personas Registradas</h1>
-            <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-              Haz clic en el ícono <Eye className="inline w-3.5 h-3.5 text-primary-600 dark:text-primary-400 mx-1" /> para expandir el documento y los datos OCR de cada persona.
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Personas registradas
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+              {filtroDocumento !== "todos" ? (
+                <>
+                  <span>Archivo</span>
+                  <span className="text-slate-200 font-semibold">{docActivo?.nombre_original || "Documento activo"}</span>
+                  <span>·</span>
+                  <span className="text-slate-500">datos de ejemplo y OCR</span>
+                </>
+              ) : (
+                <>
+                  <span>Todos los archivos</span>
+                  <span>·</span>
+                  <span className="text-slate-400">{documentos.length} documento(s) procesados</span>
+                </>
+              )}
             </p>
           </div>
 
-          {/* Botones de acción organizados (alineados y con etiquetas completas) */}
           <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
-            <button
-              onClick={exportarVistaActual}
-              disabled={exportando || personas.length === 0}
-              className="btn-primary text-xs !py-2 !px-3.5 !rounded-xl !bg-[#34C759] hover:!bg-[#2fb350] shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
-              title="Exportar registros mostrados a Excel (.xlsx)"
-            >
-              <Download className="w-3.5 h-3.5 shrink-0 text-white" />
-              <span>Exportar a Excel</span>
-            </button>
             <button
               onClick={() => setModalVaciarAbierto(true)}
               disabled={personas.length === 0}
-              className="btn-danger text-xs !py-2 !px-3.5 !rounded-xl shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap flex items-center gap-1.5"
-              title={filtroDocumento !== "todos" ? "Vaciar personas de este archivo" : "Vaciar todas las personas de la tabla"}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#181d2c] hover:bg-[#20273b] text-slate-200 border border-slate-700/60 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Vaciar todos los registros de la tabla"
             >
-              <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
-              <span>Vaciar Tabla</span>
+              Vaciar tabla
+            </button>
+            <button
+              onClick={exportarVistaActual}
+              disabled={exportando || personas.length === 0}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+              title="Exportar registros a archivo Excel (.xlsx)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar a Excel</span>
             </button>
           </div>
         </div>
 
-        {/* Tarjetas de Estadísticas / Conteo Rápido Interactivas (5 estados) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-          {/* Card 1: Total por Archivo o General */}
-          <div
-            onClick={() => setFiltroEstado("todos")}
-            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
-              filtroEstado === "todos"
-                ? "border-[#0071E3]/60 ring-1 ring-[#0071E3]/30 bg-[#0071E3]/[0.08]"
-                : "hover:border-slate-300 dark:hover:border-white/15"
-            }`}
-            title={filtroDocumento !== "todos" ? "Mostrar todas las personas de este archivo" : "Mostrar todas las personas registradas"}
-          >
-            <div>
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {filtroDocumento !== "todos" ? "Total Archivo" : "Total Registradas"}
-              </p>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight font-feature-settings-tnum">{stats.total}</span>
-                <span className="text-[11px] text-slate-400">
-                  {filtroDocumento !== "todos" ? "en archivo" : "en sistema"}
-                </span>
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-[#0071E3]/10 border border-[#0071E3]/20 flex items-center justify-center text-[#0071E3]">
-              <Users className="w-4 h-4" />
-            </div>
+        {/* ─── Barra de Estadísticas Proporcional + Cajas Interactivas ─── */}
+        <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-[#111624] border border-slate-800/80 shadow-md">
+          {/* Barra segmentada con proporciones reales */}
+          <div className="w-full h-3 rounded-full bg-slate-800/80 overflow-hidden flex mb-5 p-0.5 gap-1">
+            {stats.validas > 0 && (
+              <div
+                onClick={() => setFiltroEstado("validas")}
+                style={{ width: `${Math.max(4, pctValidas)}%` }}
+                className="h-full bg-[#34d399] rounded-full cursor-pointer hover:brightness-110 transition-all"
+                title={`Válidos: ${stats.validas} (${pctValidas}%) - Clic para filtrar`}
+              />
+            )}
+            {stats.revision > 0 && (
+              <div
+                onClick={() => setFiltroEstado("revision")}
+                style={{ width: `${Math.max(4, pctRevision)}%` }}
+                className="h-full bg-[#f59e0b] rounded-full cursor-pointer hover:brightness-110 transition-all"
+                title={`Por revisar: ${stats.revision} (${pctRevision}%) - Clic para filtrar`}
+              />
+            )}
+            {stats.faltaExcel > 0 && (
+              <div
+                onClick={() => setFiltroEstado("falta_excel")}
+                style={{ width: `${Math.max(4, pctFaltaExcel)}%` }}
+                className="h-full bg-[#ec4899] rounded-full cursor-pointer hover:brightness-110 transition-all"
+                title={`Falta en Excel: ${stats.faltaExcel} (${pctFaltaExcel}%) - Clic para filtrar`}
+              />
+            )}
+            {stats.faltaPdf > 0 && (
+              <div
+                onClick={() => setFiltroEstado("falta_pdf")}
+                style={{ width: `${Math.max(4, pctFaltaPdf)}%` }}
+                className="h-full bg-[repeating-linear-gradient(45deg,#d946ef,#d946ef_4px,#a855f7_4px,#a855f7_8px)] rounded-full cursor-pointer hover:brightness-110 transition-all"
+                title={`Falta en PDF: ${stats.faltaPdf} (${pctFaltaPdf}%) - Clic para filtrar`}
+              />
+            )}
           </div>
 
-          {/* Card 2: Válidas */}
-          <div
-            onClick={() => setFiltroEstado("validas")}
-            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
-              filtroEstado === "validas"
-                ? "border-[#34C759]/60 ring-1 ring-[#34C759]/30 bg-[#34C759]/[0.08]"
-                : "hover:border-emerald-500/30"
-            }`}
-            title="Clic para ver solo personas con datos válidos y presentes"
-          >
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-semibold text-[#34C759] uppercase tracking-wider">Válidos</p>
-                {filtroEstado === "validas" && (
-                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#34C759]/20 text-[#34C759] border border-[#34C759]/30">
-                    Activo
-                  </span>
-                )}
+          {/* 5 Cajas Interactivas */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* 1. Todos */}
+            <button
+              type="button"
+              onClick={() => setFiltroEstado("todos")}
+              className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
+                filtroEstado === "todos"
+                  ? "bg-[#1c2336] border-2 border-indigo-500/70 shadow-sm"
+                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+              }`}
+            >
+              <span className="text-xs text-slate-400 font-medium block">Todos</span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+                {totalBase}
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-bold text-[#34C759] tracking-tight font-feature-settings-tnum">{stats.validas}</span>
-                <span className="text-[11px] text-slate-400">completos</span>
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-[#34C759]/10 border border-[#34C759]/20 flex items-center justify-center text-[#34C759]">
-              <CheckCircle className="w-4 h-4" />
-            </div>
-          </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5">
+                {filtroDocumento !== "todos" ? "en este archivo" : "en el sistema"}
+              </span>
+            </button>
 
-          {/* Card 3: Por Revisar */}
-          <div
-            onClick={() => setFiltroEstado("revision")}
-            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
-              filtroEstado === "revision"
-                ? "border-[#FF9500]/60 ring-1 ring-[#FF9500]/30 bg-[#FF9500]/[0.08]"
-                : "hover:border-amber-500/30"
-            }`}
-            title="Clic para ver personas con datos incompletos pendientes de revisión"
-          >
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-semibold text-[#FF9500] uppercase tracking-wider">Por Revisar</p>
-                {filtroEstado === "revision" && (
-                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#FF9500]/20 text-[#FF9500] border border-[#FF9500]/30">
-                    Activo
-                  </span>
-                )}
+            {/* 2. Válido */}
+            <button
+              type="button"
+              onClick={() => setFiltroEstado("validas")}
+              className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
+                filtroEstado === "validas"
+                  ? "bg-[#1c2336] border-2 border-emerald-500/70 shadow-sm"
+                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+              }`}
+            >
+              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Válido
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+                {stats.validas}
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-bold text-[#FF9500] tracking-tight font-feature-settings-tnum">{stats.revision}</span>
-                <span className="text-[11px] text-slate-400">pendientes</span>
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-[#FF9500]/10 border border-[#FF9500]/20 flex items-center justify-center text-[#FF9500]">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctValidas}%</span>
+            </button>
 
-          {/* Card 4: Menores de 14 Años */}
-          <div
-            onClick={() => setFiltroEstado("menores")}
-            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
-              filtroEstado === "menores"
-                ? "border-[#FF3B30]/60 ring-1 ring-[#FF3B30]/30 bg-[#FF3B30]/[0.08]"
-                : "hover:border-rose-500/30"
-            }`}
-            title="Clic para ver personas menores de 14 años detectadas"
-          >
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-semibold text-[#FF3B30] uppercase tracking-wider">Menores (&lt; 14)</p>
-                {filtroEstado === "menores" && (
-                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-[#FF3B30]/20 text-[#FF3B30] border border-[#FF3B30]/30">
-                    Activo
-                  </span>
-                )}
+            {/* 3. Por revisar */}
+            <button
+              type="button"
+              onClick={() => setFiltroEstado("revision")}
+              className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
+                filtroEstado === "revision"
+                  ? "bg-[#1c2336] border-2 border-amber-500/70 shadow-sm"
+                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+              }`}
+            >
+              <span className="text-xs text-amber-400 font-medium flex items-center gap-1.5">
+                <span>▲</span> Por revisar
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+                {stats.revision}
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-bold text-[#FF3B30] tracking-tight font-feature-settings-tnum">{stats.menores}</span>
-                <span className="text-[11px] text-slate-400">detectados</span>
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30]">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctRevision}%</span>
+            </button>
 
-          {/* Card 5: Falta en PDF o Excel */}
-          <div
-            onClick={() => setFiltroEstado("discrepancia")}
-            className={`cursor-pointer card-glass p-3.5 flex items-center justify-between transition-all duration-200 active:scale-[0.98] ${
-              filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel"
-                ? "border-purple-500/60 ring-1 ring-purple-500/30 bg-purple-500/[0.08]"
-                : stats.discrepancia > 0
-                  ? "border-purple-500/50 bg-purple-500/[0.04] shadow-sm hover:border-purple-500/70"
-                  : "hover:border-purple-500/30"
-            }`}
-            title="Clic para ver todas las personas que faltan en PDF o en la planilla Excel"
-          >
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Falta PDF / Excel</p>
-                {stats.discrepancia > 0 && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 animate-pulse">
-                    Error
-                  </span>
-                )}
-                {(filtroEstado === "discrepancia" || filtroEstado === "falta_pdf" || filtroEstado === "falta_excel") && (
-                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30">
-                    Activo
-                  </span>
-                )}
+            {/* 4. Falta en Excel */}
+            <button
+              type="button"
+              onClick={() => setFiltroEstado("falta_excel")}
+              className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
+                filtroEstado === "falta_excel"
+                  ? "bg-[#1c2336] border-2 border-pink-500/70 shadow-sm"
+                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+              }`}
+            >
+              <span className="text-xs text-pink-400 font-medium flex items-center gap-1.5">
+                <span>■</span> Falta en Excel
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+                {stats.faltaExcel}
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-2xl font-bold text-purple-600 dark:text-purple-400 tracking-tight font-feature-settings-tnum">{stats.discrepancia}</span>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  {stats.faltaPdf > 0 || stats.faltaExcel > 0
-                    ? `(${stats.faltaPdf} en PDF · ${stats.faltaExcel} en Excel)`
-                    : "faltantes"}
-                </span>
+              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctFaltaExcel}%</span>
+            </button>
+
+            {/* 5. Falta en PDF */}
+            <button
+              type="button"
+              onClick={() => setFiltroEstado("falta_pdf")}
+              className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
+                filtroEstado === "falta_pdf"
+                  ? "bg-[#1c2336] border-2 border-purple-500/70 shadow-sm"
+                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+              }`}
+            >
+              <span className="text-xs text-purple-300 font-medium flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span> Falta en PDF
+              </span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+                {stats.faltaPdf}
               </div>
-            </div>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stats.discrepancia > 0 ? "bg-purple-500/20 text-purple-600 border border-purple-500/40 shadow-sm" : "bg-purple-500/10 border border-purple-500/20 text-purple-500"}`}>
-              <AlertCircle className={`w-4 h-4 ${stats.discrepancia > 0 ? "animate-pulse" : ""}`} />
-            </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctFaltaPdf}%</span>
+            </button>
           </div>
         </div>
 
-        {/* 🚨 Banner Prominente de Alerta Global: Personas Faltantes en PDF o Excel */}
-        {stats.discrepancia > 0 && (
-          <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-purple-500/15 via-rose-500/10 to-amber-500/10 border-2 border-purple-500/50 dark:border-purple-500/60 backdrop-blur-xl shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-start md:items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-600 dark:text-purple-300 shrink-0 shadow-sm">
-                <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 px-2.5 py-0.5 rounded-lg border border-rose-300 dark:border-rose-700">
-                    Alerta de Personas Faltantes: {stats.discrepancia} en total
-                  </span>
-                  {stats.faltaPdf > 0 && (
-                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700">
-                      📄 {stats.faltaPdf} no {stats.faltaPdf === 1 ? "está" : "están"} en el PDF
-                    </span>
-                  )}
-                  {stats.faltaExcel > 0 && (
-                    <span className="text-xs font-bold text-purple-900 dark:text-purple-200 bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 rounded-lg border border-purple-300 dark:border-purple-700">
-                      📊 {stats.faltaExcel} no {stats.faltaExcel === 1 ? "está" : "están"} en el Excel
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 font-medium">
-                  Se detectaron discrepancias entre el archivo PDF y la planilla Excel. Haga clic en los botones para filtrar directamente y evitar buscarlas una por una:
-                </p>
-              </div>
+        {/* ─── Sección "Por resolver" (Si existen registros pendientes) ─── */}
+        {personasPorResolver.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3.5">
+              <h2 className="text-sm font-bold text-white tracking-wide">Por resolver</h2>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#1e2436] text-slate-300 border border-slate-700/60 font-mono">
+                {personasPorResolver.length}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {stats.faltaPdf > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFiltroEstado("falta_pdf")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                    filtroEstado === "falta_pdf"
-                      ? "bg-amber-600 text-white shadow-amber-600/30 ring-2 ring-amber-400"
-                      : "bg-white/90 dark:bg-slate-900/90 hover:bg-amber-600 hover:text-white text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60"
-                  }`}
-                  title="Filtrar personas que faltan en el documento PDF"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Ver faltantes en PDF ({stats.faltaPdf})</span>
-                </button>
-              )}
-              {stats.faltaExcel > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFiltroEstado("falta_excel")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                    filtroEstado === "falta_excel"
-                      ? "bg-purple-600 text-white shadow-purple-600/30 ring-2 ring-purple-400"
-                      : "bg-white/90 dark:bg-slate-900/90 hover:bg-purple-600 hover:text-white text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700/60"
-                  }`}
-                  title="Filtrar personas que faltan en la planilla Excel"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Ver faltantes en Excel ({stats.faltaExcel})</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setFiltroEstado("discrepancia")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                  filtroEstado === "discrepancia"
-                    ? "bg-rose-600 text-white shadow-rose-600/30 ring-2 ring-rose-400"
-                    : "bg-rose-600 hover:bg-rose-700 text-white"
-                }`}
-                title="Ver todas las personas con inconsistencias de falta en PDF o Excel"
-              >
-                <span>Ver todas ({stats.discrepancia})</span>
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {personasPorResolver.slice(0, 6).map((p) => {
+                const cfg = getEstadoConfig(p);
+                const motivo = getMotivoExplicacion(p);
+                const numPuntos = formatearCedulaPuntos(p.numero_identificacion);
+                const pag = p.pagina_frente || p.pagina_numero || (Array.isArray((p.detalles_campos as any)?.paginas) ? (p.detalles_campos as any).paginas[0] : null);
+
+                return (
+                  <div
+                    key={`resolver-${p.id}`}
+                    className="p-4 rounded-2xl bg-[#131724] border border-slate-800/90 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm"
+                  >
+                    <div>
+                      {/* Cabecera de la tarjeta */}
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <span className={`flex items-center gap-1.5 text-xs font-semibold ${cfg.badgeClass}`}>
+                          {cfg.iconType === "square" && <span>■</span>}
+                          {cfg.iconType === "triangle" && <span>▲</span>}
+                          {cfg.iconType === "outline_square" && <span className="inline-block w-2 h-2 border border-purple-300"></span>}
+                          <span>{cfg.label}</span>
+                        </span>
+                        <span className="text-slate-500 text-[11px] font-mono">
+                          {pag ? `pág. ${pag}` : "pág. —"}
+                        </span>
+                      </div>
+
+                      {/* Nombre y Documento */}
+                      <h3 className="text-sm font-bold text-white tracking-tight truncate" title={formatNombreCompleto(p)}>
+                        {formatNombreCompleto(p)}
+                      </h3>
+                      <p className="text-xs font-mono text-slate-400 mt-0.5">
+                        {numPuntos}
+                      </p>
+
+                      {/* Mensaje descriptivo */}
+                      <p className="text-xs text-slate-300/90 mt-2.5 leading-relaxed bg-[#191f31]/60 p-2.5 rounded-xl border border-slate-800/60">
+                        {motivo}
+                      </p>
+
+                      {/* Comparativa breve */}
+                      <div className="mt-2.5 text-[11px] font-mono space-y-1 text-slate-400">
+                        {personaFaltaEnExcel(p) ? (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">PDF</span>
+                              <span className="text-slate-300">{pag ? `Página ${pag}` : "Presente"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">EXCEL</span>
+                              <span className="text-pink-400">Sin registro</span>
+                            </div>
+                          </>
+                        ) : personaFaltaEnPdf(p) ? (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">PDF</span>
+                              <span className="text-purple-300">Sin registro</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">EXCEL</span>
+                              <span className="text-slate-300">Presente en planilla</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">LEÍDO</span>
+                            <span className="text-amber-300">
+                              {formatearFechaCO(p.fecha_nacimiento) !== "—" ? `${formatearFechaCO(p.fecha_nacimiento)} · ` : ""}
+                              {p.confianza_extraccion != null ? `${Math.round(Number(p.confianza_extraccion))}% confianza` : "Por verificar"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botones de acción rápida */}
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => abrirDetalleDrawer(p)}
+                        className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-[#1c2234] hover:bg-[#252c42] text-slate-200 border border-slate-700/60 transition-all text-center cursor-pointer"
+                      >
+                        Ver detalle
+                      </button>
+                      {personaFaltaEnExcel(p) ? (
+                        <button
+                          type="button"
+                          onClick={(e) => copiarAlPortapapeles(p.numero_identificacion || "", "Cédula", e)}
+                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-[#1c2234] hover:bg-[#252c42] text-slate-300 border border-slate-700/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                          title="Copiar número de documento"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar cédula</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => aprobarRevision(p.id, e)}
+                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                          title="Marcar registro como válido"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Marcar válido</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Barra de Búsqueda y Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 mb-5">
-          {/* Búsqueda unificada por cédula, nombres o apellidos */}
-          <div className="md:col-span-5 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              id="buscar-persona"
-              type="text"
-              inputMode="search"
-              value={buscar}
-              onChange={(e) => setBuscar(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && cargarPersonas(true)}
-              placeholder="Buscar por cédula o nombre y apellidos..."
-              className="w-full pl-9 pr-9 py-2 bg-white/70 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/40 transition-all shadow-sm h-10"
-            />
-            {buscar && (
-              <button
-                onClick={() => { setBuscar(""); cargarPersonas(true); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
-                title="Limpiar búsqueda"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Selector de Documento PDF */}
-          <div className="md:col-span-3 relative">
-            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0071E3] pointer-events-none" />
-            <select
-              value={filtroDocumento}
-              onChange={(e) => {
-                const val = e.target.value;
-                setFiltroDocumento(val);
-                setSeleccionados(new Set());
-                if (typeof window !== "undefined") {
-                  if (val === "todos") {
-                    sessionStorage.setItem("ver_todos_los_archivos", "true");
-                  } else {
-                    sessionStorage.removeItem("ver_todos_los_archivos");
-                    localStorage.setItem("ultimo_documento_id", val);
-                  }
-                }
-              }}
-              className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] font-medium truncate cursor-pointer shadow-sm h-10 [color-scheme:light] dark:[color-scheme:dark]"
-              title="Filtrar por archivo PDF de origen"
-            >
-              <option value="todos" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
-                🌐 Ver todos los archivos ({documentos.length} PDFs{totalPersonasGlobal ? ` - ${totalPersonasGlobal} personas` : ""})
-              </option>
-              {documentos.map((d, index) => (
-                <option key={d.id} value={d.id} className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">
-                  📄 {d.nombre_original} {index === 0 ? "★ (Último)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Selector de Estado */}
-          <div className="md:col-span-3 relative">
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value as FiltroEstado)}
-              className="w-full px-3 py-2 bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-xl rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#0071E3] cursor-pointer shadow-sm h-10 transition-all [color-scheme:light] dark:[color-scheme:dark]"
-              title="Filtrar por estado del registro"
-            >
-              <option value="todos" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📋 Todos los estados ({stats.total})</option>
-              <option value="validas" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">✅ Solo Válidos ({stats.validas})</option>
-              <option value="revision" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">⚠️ Por Revisar ({stats.revision})</option>
-              <option value="menores" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🚨 Menores de 14 Años ({stats.menores})</option>
-              <option value="discrepancia" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">🟣 Total Faltan en PDF o Excel ({stats.discrepancia})</option>
-              <option value="falta_pdf" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📄 Solo Falta en PDF ({stats.faltaPdf})</option>
-              <option value="falta_excel" className="bg-white dark:bg-[#121620] text-slate-900 dark:text-slate-100 py-1">📊 Solo Falta en Excel ({stats.faltaExcel})</option>
-            </select>
-          </div>
-
-          {/* Recargar */}
-          <div className="md:col-span-1 flex justify-end">
-            <button
-              onClick={recargarManual}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 btn-secondary !h-10 !rounded-xl !p-0 shadow-sm cursor-pointer"
-              title="Recargar datos manualmente"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#0071E3] ${cargando ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Barra Flotante de Selección y Exportación Múltiple */}
+        {/* ─── Barra de Selección Múltiple ─── */}
         {seleccionados.size > 0 && (
-          <div className="mb-4 p-3 bg-slate-900/90 dark:bg-[#121620]/90 backdrop-blur-xl border border-white/[0.12] rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="mb-4 p-3 bg-[#161d2d] border border-indigo-500/30 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
             <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-[#0071E3]/20 text-[#0071E3]">
+              <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
                 <CheckSquare className="w-4 h-4" />
               </span>
               <span className="text-xs font-semibold text-white">
                 {seleccionados.size} {seleccionados.size === 1 ? "persona seleccionada" : "personas seleccionadas"}
               </span>
-              {filtroDocumento !== "todos" && (
-                <span className="text-[11px] text-slate-300 bg-white/[0.08] px-2 py-0.5 rounded border border-white/[0.08] font-medium">
-                  Filtro PDF activo
-                </span>
-              )}
             </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setModalEliminarSeleccionadosAbierto(true)}
                 disabled={eliminandoEnLote}
-                className="btn-danger text-xs !py-1.5 !px-3 !rounded-xl font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Eliminar ({seleccionados.size})</span>
               </button>
-
               <button
                 onClick={exportarSeleccion}
                 disabled={exportando}
-                className="btn-primary text-xs !py-1.5 !px-3 !rounded-xl font-semibold"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 cursor-pointer"
               >
-                {exportando ? (
-                  <>
-                    <div className="spinner w-3.5 h-3.5" />
-                    <span>Generando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Exportar selección (.xlsx)</span>
-                  </>
-                )}
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar selección (.xlsx)</span>
               </button>
-
               <button
                 onClick={() => setSeleccionados(new Set())}
-                className="btn-secondary text-xs !py-1.5 !px-3 !rounded-xl"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
               >
-                Limpiar selección
+                Limpiar
               </button>
             </div>
           </div>
         )}
 
-        {/* Barra de estado de la tabla */}
-        <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2 text-xs">
-          <div className="flex items-center gap-2 flex-wrap text-slate-600 dark:text-slate-400 font-medium">
-            <span>
-              Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{stats.total}</strong> personas
-            </span>
-            {filtroDocumento !== "todos" ? (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary-500/10 text-primary-700 dark:text-primary-300 border border-primary-500/20 font-semibold">
-                <FileText className="w-3 h-3 text-primary-500" />
-                Archivo: {documentos.find(d => d.id === filtroDocumento)?.nombre_original || "Ficha seleccionada"}
+        {/* ─── Contenedor de la Tabla Principal (Image 1) ─── */}
+        <div className="rounded-2xl bg-[#111624] border border-slate-800/80 shadow-md overflow-hidden">
+          {/* Barra superior de la tabla */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-slate-800/80">
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+              <span>
+                Mostrando <strong className="text-white font-bold">{personasFiltradas.length}</strong> de{" "}
+                <strong className="text-white font-bold">{personas.length}</strong> personas
+              </span>
+              {filtroEstado !== "todos" && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setFiltroDocumento("todos");
-                    setSeleccionados(new Set());
-                    if (typeof window !== "undefined") {
-                      sessionStorage.setItem("ver_todos_los_archivos", "true");
-                    }
-                  }}
-                  className="ml-1 underline hover:text-primary-900 dark:hover:text-primary-200 cursor-pointer font-bold"
-                  title="Ver todas las personas registradas en todos los archivos"
+                  onClick={() => setFiltroEstado("todos")}
+                  className="text-xs text-indigo-400 hover:underline ml-1 cursor-pointer font-semibold"
                 >
-                  (Ver todos los archivos{totalPersonasGlobal ? `: ${totalPersonasGlobal} personas` : ""})
-                </button>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-semibold">
-                🌐 Todos los archivos activos ({documentos.length} PDFs)
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Tabla */}
-        <div className="card-glass border border-slate-200/80 dark:border-white/[0.08] rounded-2xl shadow-sm overflow-hidden w-full min-w-0">
-          {cargando ? (
-            <div className="p-8 space-y-3">
-              {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-12 bg-slate-100 dark:bg-white/[0.03] animate-pulse rounded-xl" />
-              ))}
-            </div>
-          ) : personasFiltradas.length === 0 ? (
-            <div className="text-center py-20 px-4">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] flex items-center justify-center text-slate-400">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No se encontraron registros</h3>
-              <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto">
-                {buscar ? `Sin resultados para "${buscar}"` : "No hay personas registradas."}
-              </p>
-              {buscar && (
-                <button onClick={() => setBuscar("")} className="mt-3 text-xs text-[#0071E3] hover:underline cursor-pointer">
-                  Limpiar búsqueda
+                  (Limpiar filtro de estado)
                 </button>
               )}
             </div>
-          ) : (
-            <>
-              <div className="w-full overflow-x-auto">
-              <table className="table-fixed w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200/80 dark:border-white/[0.06] bg-slate-100/70 dark:bg-white/[0.03] text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
-                    <th className="py-3 px-2 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
-                        onChange={toggleSeleccionarTodasVisibles}
-                        className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
-                        title="Seleccionar / Deseleccionar todas las personas mostradas"
-                      />
-                    </th>
-                    <th className="py-3 px-1 w-9 text-center"></th>
-                    <th className="py-3 px-2 w-36 lg:w-40">Documento / ID</th>
-                    <th className="py-3 px-3">Nombre Completo</th>
-                    <th className="py-3 px-1 w-16 lg:w-20 text-center">Edad</th>
-                    <th className="py-3 px-1 w-12 lg:w-14 text-center">Pág.</th>
-                    <th className="py-3 px-2 w-24 lg:w-28 text-center">Fuente</th>
-                    <th className="py-3 px-2 w-32 lg:w-36 text-center">Estado</th>
-                    <th className="py-3 px-2 w-10 text-center"></th>
-                  </tr>
-                </thead>
 
-                <tbody>
-                  {personasFiltradas.map((p) => {
-                    const estadoStr = p.estado_registro || (p.requiere_revision ? "REVIEW_REQUIRED" : "VALID");
-                    const isExpandida = expandidoId === p.id;
+            {/* Buscador */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                value={buscar}
+                onChange={(e) => setBuscar(e.target.value)}
+                placeholder="Buscar por cédula o nombre"
+                className="w-full pl-9 pr-8 py-1.5 bg-[#171d2e] border border-slate-700/60 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              />
+              {buscar && (
+                <button
+                  onClick={() => setBuscar("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tabla */}
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none bg-[#141928]/60">
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
+                      onChange={toggleSeleccionarTodas}
+                      className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-3 px-3">DOCUMENTO</th>
+                  <th className="py-3 px-3">NOMBRE COMPLETO</th>
+                  <th className="py-3 px-3 text-center">EDAD</th>
+                  <th className="py-3 px-3 text-center">PÁG.</th>
+                  <th className="py-3 px-3 text-center">FUENTE</th>
+                  <th className="py-3 px-3">ESTADO</th>
+                  <th className="py-3 px-3 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-xs">
+                {cargando ? (
+                  Array(6).fill(0).map((_, i) => (
+                    <tr key={`skel-${i}`}>
+                      <td colSpan={8} className="py-4 px-4">
+                        <div className="h-6 bg-slate-800/40 rounded animate-pulse" />
+                      </td>
+                    </tr>
+                  ))
+                ) : personasFiltradas.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-16 px-4">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-400">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-200">No se encontraron personas</h3>
+                      <p className="text-slate-500 text-xs mt-1">
+                        {buscar ? `Sin resultados para "${buscar}"` : "No hay registros disponibles."}
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  personasFiltradas.map((p) => {
+                    const cfg = getEstadoConfig(p);
                     const isSeleccionada = seleccionados.has(p.id);
+                    const isFilaActiva = personaSeleccionadaId === p.id;
                     const nombreCompleto = formatNombreCompleto(p);
                     const edadRow = p.edad ?? calcularEdad(p.fecha_nacimiento);
-                    const esMenor14 = edadRow !== null && edadRow < 14;
                     const tipoInfo = getTipoDocInfo(p.tipo_documento);
+                    const pag = p.pagina_frente || p.pagina_numero || (Array.isArray((p.detalles_campos as any)?.paginas) ? (p.detalles_campos as any).paginas[0] : null);
+                    const numPuntos = formatearCedulaPuntos(p.numero_identificacion);
+
+                    // Indicadores de Fuente PDF y Excel
+                    const tienePdf = !personaFaltaEnPdf(p);
+                    const tieneExcel = !personaFaltaEnExcel(p);
 
                     return (
-                      <Fragment key={p.id}>
-                        {/* ── Fila principal ── */}
-                        <tr
-                          className={`transition-colors cursor-pointer ${isExpandida
-                              ? "bg-[#0071E3]/[0.06] dark:bg-[#0071E3]/10"
-                              : isSeleccionada
-                                ? "bg-[#0071E3]/[0.08] dark:bg-[#0071E3]/15"
-                                : "hover:bg-slate-500/[0.04] active:bg-slate-500/[0.07]"
-                            }`}
-                          onClick={() => toggleExpandir(p)}
-                          onMouseEnter={() => precargarPaginaPersona(p)}
-                        >
-                          {/* Checkbox de selección */}
-                          <td className="py-2.5 px-2 w-10 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isSeleccionada}
-                              onChange={() => toggleSeleccionPersona(p.id)}
-                              className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
-                            />
-                          </td>
+                      <tr
+                        key={p.id}
+                        onClick={() => abrirDetalleDrawer(p)}
+                        className={`group transition-colors cursor-pointer ${
+                          isFilaActiva
+                            ? "bg-[#1c2336]"
+                            : isSeleccionada
+                            ? "bg-[#182033]"
+                            : "hover:bg-[#151b2a]"
+                        }`}
+                      >
+                        {/* Checkbox */}
+                        <td className="py-3 px-3 text-center" onClick={(e) => toggleSeleccionFila(p.id, e)}>
+                          <input
+                            type="checkbox"
+                            checked={isSeleccionada}
+                            onChange={() => {}}
+                            className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
 
-                          {/* Toggle expandir */}
-                          <td className="py-2.5 px-1 w-9 text-center">
-                            <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center transition-all ${isExpandida ? "bg-[#0071E3]/15 text-[#0071E3] border border-[#0071E3]/30" : "bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400"}`}>
-                              {isExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </div>
-                          </td>
-
-                          {/* Documento e ID con Badge compacto */}
-                          <td className="py-2.5 px-2 w-36 lg:w-40 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono font-bold tracking-wider shrink-0 ${tipoInfo.badge}`} title={tipoInfo.label}>
-                                {tipoInfo.codigo}
-                              </span>
-                              <span className="font-mono text-slate-900 dark:text-sky-300 font-bold text-xs sm:text-sm tracking-wide truncate">
-                                {p.numero_identificacion && !p.numero_identificacion.startsWith("SIN_ID") ? (
-                                  p.numero_identificacion
-                                ) : (
-                                  <span className="italic text-rose-500 dark:text-rose-400 font-medium text-xs">Sin doc.</span>
-                                )}
-                              </span>
-                              {(p.detalles_campos as any)?.numero_identificacion_original_ocr && (
-                                <span className="text-emerald-500 shrink-0 cursor-help" title={`Número auto-corregido desde planilla Excel oficial (OCR leyó: ${(p.detalles_campos as any).numero_identificacion_original_ocr})`}>
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Nombre completo — Celda fluida con truncamiento inteligente para evitar scroll horizontal */}
-                          <td className="py-2.5 px-3 min-w-0">
-                            <div className="truncate" title={nombreCompleto || "Sin nombre"}>
-                              {nombreCompleto ? (
-                                <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 truncate block tracking-tight">
-                                  {nombreCompleto}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-xs block">Sin nombre</span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Edad */}
-                          <td className="py-2.5 px-1 w-16 lg:w-20 text-center">
-                            {edadRow !== null ? (() => {
-                              const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
-                              if (inc.esInvalido) {
-                                return (
-                                  <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 font-bold shadow-sm" title={inc.motivo}>
-                                    ⚠️ {edadRow}
-                                  </span>
-                                );
-                              }
-                              return esMenor14 ? (
-                                <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 font-bold shadow-sm" title={`Persona menor de 14 años (${edadRow} años)`}>
-                                  {edadRow} a
-                                </span>
-                              ) : (
-                                <span className="inline-block text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 font-medium shadow-sm">
-                                  {edadRow} años
-                                </span>
-                              );
-                            })() : (
-                              <span className="text-slate-400 text-xs">—</span>
-                            )}
-                          </td>
-
-                          {/* Página */}
-                          <td className="py-2.5 px-1 w-12 lg:w-14 text-center">
-                            <span className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-semibold truncate block" title={
-                              Array.isArray((p.detalles_campos as any)?.paginas)
-                                ? `Páginas: ${(p.detalles_campos as any).paginas.join(", ")}`
-                                : undefined
-                            }>
-                              {(() => {
-                                const pags = (p.detalles_campos as any)?.paginas;
-                                if (Array.isArray(pags) && pags.length > 0) {
-                                  return pags.join(", ");
-                                }
-                                return p.pagina_frente ? `${p.pagina_frente}${p.pagina_reverso ? `/${p.pagina_reverso}` : ""}` : (p.pagina_numero || "—");
-                              })()}
+                        {/* Documento con CC badge */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#1d2436] text-slate-300 border border-slate-700/70 shrink-0">
+                              {tipoInfo.codigo || "CC"}
                             </span>
-                          </td>
+                            <span className="font-mono text-white font-medium tracking-wide">
+                              {numPuntos}
+                            </span>
+                          </div>
+                        </td>
 
-                          {/* Fuente: PDF y/o Excel */}
-                          <td className="py-2.5 px-2 w-24 lg:w-28 text-center">
-                            <div className="inline-flex items-center justify-center gap-1">
-                              {(p.documento_id || p.documento_pdf_id) && p.en_pdf !== false ? (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 shrink-0 shadow-sm"
-                                  title={p.nombre_documento_pdf ? `Cédula PDF individual: ${p.nombre_documento_pdf}` : "Extraído de documento PDF por OCR"}
-                                >
-                                  <FileText className="w-2.5 h-2.5 shrink-0" /> PDF
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-slate-400 shrink-0" title="Sin documento PDF asociado">
-                                  <FileText className="w-2.5 h-2.5 shrink-0" /> —
-                                </span>
-                              )}
-                              {p.en_excel === true ? (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 shrink-0 shadow-sm"
-                                  title="Encontrado en planilla Excel comparada"
-                                >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> Excel
-                                </span>
-                              ) : p.en_excel === false ? (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 shrink-0 shadow-sm"
-                                  title="No encontrado en ninguna planilla Excel"
-                                >
-                                  <FileSpreadsheet className="w-2.5 h-2.5 shrink-0" /> No Ex.
-                                </span>
-                              ) : null}
-                            </div>
-                          </td>
+                        {/* Nombre completo */}
+                        <td className="py-3 px-3 font-semibold text-slate-100">
+                          {nombreCompleto || <span className="text-slate-500 italic">Sin nombre</span>}
+                        </td>
 
-                          {/* Estado: Pills sobrias y organizadas */}
-                          <td className="py-2.5 px-2 w-32 lg:w-36 text-center">
-                            {(() => {
-                              const esRevRow = esPersonaEnRevision(p);
-                              const estaValidado = esPersonaValidada(p);
-                              const inc = verificarInconsistenciaDocumentoEdad(p.tipo_documento, p.fecha_nacimiento, edadRow);
-                              const discDocEdad = (p.detalles_campos as any)?.discrepancia_documento_edad;
-                              const tooltipMotivo = discDocEdad?.motivo || inc.motivo || (p.detalles_campos as any)?.discrepancia_excel?.motivo || (p.detalles_campos as any)?.motivo_no_en_pdf || (p.detalles_campos as any)?.motivos_revision?.[0] || "Requiere revisión manual de datos";
+                        {/* Edad */}
+                        <td className="py-3 px-3 text-center font-mono text-slate-300">
+                          {edadRow !== null ? edadRow : "—"}
+                        </td>
 
-                              if (estaValidado) {
-                                return (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold whitespace-nowrap shadow-sm"
-                                    title="Registro completo y verificado"
-                                  >
-                                    <CheckCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" /> VÁLIDO
-                                  </span>
-                                );
-                              }
+                        {/* Página */}
+                        <td className="py-3 px-3 text-center font-mono text-slate-400">
+                          {pag ?? "—"}
+                        </td>
 
-                              return (
-                                <div className="inline-flex flex-col items-center justify-center gap-1 whitespace-nowrap">
-                                  {/* Alerta: Menor de 14 años */}
-                                  {esMenor14 && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 text-rose-800 dark:text-rose-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                      title={`Alerta: Persona menor de 14 años detectada (${edadRow} años cumplidos)`}
-                                    >
-                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" /> MENOR (&lt; 14)
-                                    </span>
-                                  )}
+                        {/* Fuente: PDF / XLS */}
+                        <td className="py-3 px-3 text-center">
+                          <div className="inline-flex items-center gap-1">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                                tienePdf
+                                  ? "bg-[#1b2234] text-slate-300 border-slate-700/80"
+                                  : "bg-[#151a28] text-slate-600 border-slate-800 line-through opacity-60"
+                              }`}
+                              title={tienePdf ? "Presente en PDF" : "Falta en PDF"}
+                            >
+                              PDF
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                                tieneExcel
+                                  ? "bg-[#1b2234] text-slate-300 border-slate-700/80"
+                                  : "bg-[#151a28] text-slate-600 border-slate-800 line-through opacity-60"
+                              }`}
+                              title={tieneExcel ? "Presente en Excel" : "Falta en Excel"}
+                            >
+                              XLS
+                            </span>
+                          </div>
+                        </td>
 
-                                  {/* Alerta: Falta en PDF */}
-                                  {((!p.documento_id && !p.documento_pdf_id) || p.en_pdf === false) && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold whitespace-nowrap shadow-sm"
-                                      title="No se encontró en el PDF (datos cargados desde la planilla Excel)"
-                                    >
-                                      <FileText className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" /> NO EN PDF
-                                    </span>
-                                  )}
+                        {/* Estado */}
+                        <td className="py-3 px-3">
+                          <div className={`flex items-center gap-1.5 text-xs font-semibold ${cfg.badgeClass}`}>
+                            {cfg.iconType === "square" && <span>■</span>}
+                            {cfg.iconType === "triangle" && <span>▲</span>}
+                            {cfg.iconType === "dot" && <span>●</span>}
+                            {cfg.iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span>}
+                            <span>{cfg.label}</span>
+                          </div>
+                        </td>
 
-                                  {/* Alerta: Falta en Excel */}
-                                  {p.en_excel === false && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800/50 text-purple-800 dark:text-purple-300 text-[10px] font-medium whitespace-nowrap shadow-sm"
-                                      title="No encontrado en la planilla Excel comparada"
-                                    >
-                                      <FileSpreadsheet className="w-2.5 h-2.5" /> NO EN EXCEL
-                                    </span>
-                                  )}
-
-                                  {/* Alerta: Conflicto Cédula / Excel */}
-                                  {Boolean(p.discrepancia_excel || (p.detalles_campos as any)?.discrepancia_excel) && (
-                                    <span
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-[9.5px] font-bold shadow-sm"
-                                      title={((p.detalles_campos as any)?.discrepancia_excel?.motivo) || (p.discrepancia_excel as any)?.motivo || "Conflicto entre la cédula física del PDF y la planilla Excel"}
-                                    >
-                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-500" /> Conflicto Excel
-                                    </span>
-                                  )}
-
-                                  {/* Botón interactivo de validación: REVISAR */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => aprobarRevision(p.id, e)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-[9.5px] font-semibold shadow-sm transition-colors cursor-pointer active:scale-[0.98]"
-                                    title={`Haga clic para validar este registro. Motivo: ${tooltipMotivo}`}
-                                  >
-                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-500" /> REVISAR
-                                  </button>
-                                </div>
-                              );
-                            })()}
-                          </td>
-
-                          {/* Acciones */}
-                          <td className="py-2.5 px-2 w-10 text-center" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => eliminar(p.id, p.numero_identificacion)} title="Eliminar registro" className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors active:scale-[0.95]">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* ── Fila expandida (acordeón con visor PDF + tarjetas/edición) ── */}
-                        {isExpandida && (
-                          <tr key={`${p.id}-detalle`} className="border-b border-slate-800/40">
-                            <td colSpan={9} className="p-0">
-                              <div className="border-t border-primary-500/20 animate-slideDown w-full min-w-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                                {renderPanelDetalle(p)}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
+                        {/* Chevron */}
+                        <td className="py-3 px-3 text-right">
+                          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                        </td>
+                      </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            {/* Pie de Tabla con Conteo Detallado (fuera del scroll para no desbordar) */}
-            <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-3.5 bg-slate-50/80 dark:bg-white/[0.02] border-t border-slate-200/70 dark:border-white/[0.06] text-xs text-slate-500 dark:text-slate-400 gap-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-lg bg-[#0071E3]/10 text-[#0071E3]">
-                  <Users className="w-4 h-4" />
-                </div>
-                <span>
-                  Total en la tabla: <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> {personasFiltradas.length === 1 ? "persona" : "personas"}
-                  {buscar && (
-                    <span className="text-slate-400 ml-1">
-                      (de un total de <strong className="text-slate-600 dark:text-slate-300 font-semibold">{personas.length}</strong>)
+        {/* ─── Drawer Lateral de Detalles de Persona (Images 2 & 3) ─── */}
+        {personaActiva && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={cerrarDetalleDrawer}
+            />
+
+            {/* Panel Slide-Over */}
+            <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-md md:max-w-lg lg:max-w-[480px] bg-[#0e1320] border-l border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+              {/* Header del Drawer */}
+              <div className="p-5 border-b border-slate-800/80 flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                    PERSONA
+                  </span>
+                  <h2 className="text-xl font-extrabold text-white tracking-tight">
+                    {formatNombreCompleto(personaActiva)}
+                  </h2>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {getTipoDocInfo(personaActiva.tipo_documento).codigo || "CC"} ·{" "}
+                    {formatearCedulaPuntos(personaActiva.numero_identificacion)} ·{" "}
+                    {personaActiva.pagina_frente || personaActiva.pagina_numero ? `página ${personaActiva.pagina_frente || personaActiva.pagina_numero}` : "sin página"}
+                  </p>
+                  <div className="pt-1">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${getEstadoConfig(personaActiva).badgeClass}`}>
+                      {getEstadoConfig(personaActiva).iconType === "square" && <span>■</span>}
+                      {getEstadoConfig(personaActiva).iconType === "triangle" && <span>▲</span>}
+                      {getEstadoConfig(personaActiva).iconType === "dot" && <span>●</span>}
+                      {getEstadoConfig(personaActiva).iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span>}
+                      <span>{getEstadoConfig(personaActiva).label}</span>
                     </span>
-                  )}
-                </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cerrarDetalleDrawer}
+                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Cerrar detalles"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.validas}</strong> Válidas
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#FF9500]" />
-                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.revision}</strong> Por revisar
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#FF3B30]" />
-                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.menores}</strong> Menores (&lt; 14)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  <strong className="text-slate-700 dark:text-slate-200 font-semibold">{stats.discrepancia}</strong> Falta PDF/Excel
-                </span>
+
+              {/* Contenido scrolleable del Drawer */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {/* Cuadro de llamada/explicación */}
+                <div className="p-3.5 rounded-xl bg-[#161a2b] border border-indigo-500/30 text-xs text-slate-200 leading-relaxed shadow-sm">
+                  {getMotivoExplicacion(personaActiva)}
+                </div>
+
+                {/* Si está en modo edición, mostrar el formulario integrado */}
+                {editando === personaActiva.id ? (
+                  <div className="p-4 rounded-2xl bg-[#121624] border border-indigo-500/40 space-y-3">
+                    <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Edit3 className="w-3.5 h-3.5" /> Editar datos de la persona
+                    </h4>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Número de Documento</label>
+                      <input
+                        type="text"
+                        value={editForm.numero_identificacion || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
+                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre Completo</label>
+                      <input
+                        type="text"
+                        value={editForm.nombre_completo || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, nombre_completo: e.target.value, nombres: e.target.value, apellidos: "" }))}
+                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombres</label>
+                        <input
+                          type="text"
+                          value={editForm.nombres || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, nombres: e.target.value }))}
+                          className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Apellidos</label>
+                        <input
+                          type="text"
+                          value={editForm.apellidos || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, apellidos: e.target.value }))}
+                          className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fecha de Nacimiento (AAAA-MM-DD)</label>
+                      <input
+                        type="text"
+                        value={editForm.fecha_nacimiento || ""}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                      />
+                    </div>
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditando(null)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => guardarEdicion(personaActiva.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 flex items-center gap-1.5"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Guardar cambios</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Esquema físico de la Cédula (Image 2) */}
+                    <div className="rounded-2xl bg-[#141826] border border-slate-800 p-4 shadow-md">
+                      <div className="flex gap-4 items-start">
+                        {/* Silueta / Foto Cédula */}
+                        <div className="w-24 h-28 rounded-xl bg-[#20273a] border border-slate-700/60 flex items-center justify-center shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-slate-600/50 flex items-center justify-center">
+                            <Users className="w-6 h-6 text-slate-400" />
+                          </div>
+                        </div>
+
+                        {/* Cajas OCR sobre el esquema */}
+                        <div className="flex-1 space-y-2 min-w-0">
+                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                              NÚMERO
+                            </span>
+                            <span className="font-mono text-sm font-bold text-white tracking-wider truncate block">
+                              {formatearCedulaPuntos(personaActiva.numero_identificacion)}
+                            </span>
+                          </div>
+
+                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                              APELLIDOS
+                            </span>
+                            <span className="text-xs font-bold text-white uppercase truncate block">
+                              {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
+                            </span>
+                          </div>
+
+                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                              NOMBRES
+                            </span>
+                            <span className="text-xs font-bold text-white uppercase truncate block">
+                              {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-2.5 text-center">
+                        Zonas leídas por el OCR sobre un esquema del documento (ejemplo).
+                      </p>
+                    </div>
+
+                    {/* Cuadrícula 2x2 de métricas de confianza (Image 3) */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Documento */}
+                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          DOCUMENTO
+                        </span>
+                        <div className="font-mono text-xs font-bold text-white truncate">
+                          {formatearCedulaPuntos(personaActiva.numero_identificacion)}
+                        </div>
+                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-400 w-[99%]" />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block font-mono">99% confianza</span>
+                      </div>
+
+                      {/* Nacimiento */}
+                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          NACIMIENTO
+                        </span>
+                        <div className="font-mono text-xs font-bold text-white truncate">
+                          {personaActiva.fecha_nacimiento
+                            ? `${formatearFechaCO(personaActiva.fecha_nacimiento)} · ${personaActiva.edad ?? calcularEdad(personaActiva.fecha_nacimiento)} años`
+                            : "—"}
+                        </div>
+                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-400 w-[95%]" />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block font-mono">95% confianza</span>
+                      </div>
+
+                      {/* Nombres */}
+                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          NOMBRES
+                        </span>
+                        <div className="text-xs font-bold text-white uppercase truncate">
+                          {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
+                        </div>
+                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-400 w-[98%]" />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block font-mono">98% confianza</span>
+                      </div>
+
+                      {/* Apellidos */}
+                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          APELLIDOS
+                        </span>
+                        <div className="text-xs font-bold text-white uppercase truncate">
+                          {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
+                        </div>
+                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-400 w-[97%]" />
+                        </div>
+                        <span className="text-[10px] text-slate-500 block font-mono">97% confianza</span>
+                      </div>
+                    </div>
+
+                    {/* Tabla de Comparativa: LECTURA DEL PDF vs PLANILLA EXCEL (Image 3) */}
+                    <div className="rounded-xl bg-[#141826] border border-slate-800 p-3.5 space-y-2.5">
+                      <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-800/80">
+                        <div className="col-span-4"></div>
+                        <div className="col-span-4 text-center">LECTURA DEL PDF</div>
+                        <div className="col-span-4 text-center">PLANILLA EXCEL</div>
+                      </div>
+
+                      {/* Fila DOCUMENTO */}
+                      <div className="grid grid-cols-12 text-xs items-center py-1">
+                        <div className="col-span-4 text-[10px] font-bold text-slate-400 uppercase">DOCUMENTO</div>
+                        <div className="col-span-4 text-center font-mono text-white text-xs truncate">
+                          {formatearCedulaPuntos(personaActiva.numero_identificacion)}
+                        </div>
+                        <div className="col-span-4 text-center flex items-center justify-center gap-1 font-mono text-xs">
+                          {personaFaltaEnExcel(personaActiva) ? (
+                            <span className="text-pink-400 flex items-center gap-1">
+                              Sin registro <X className="w-3 h-3 text-pink-500" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              {formatearCedulaPuntos(personaActiva.numero_identificacion)}{" "}
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fila NOMBRE */}
+                      <div className="grid grid-cols-12 text-xs items-center py-1">
+                        <div className="col-span-4 text-[10px] font-bold text-slate-400 uppercase">NOMBRE</div>
+                        <div className="col-span-4 text-center text-white text-xs truncate uppercase">
+                          {formatNombreCompleto(personaActiva)}
+                        </div>
+                        <div className="col-span-4 text-center flex items-center justify-center gap-1 text-xs">
+                          {personaFaltaEnExcel(personaActiva) ? (
+                            <span className="text-pink-400 flex items-center gap-1">
+                              Sin registro <X className="w-3 h-3 text-pink-500" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 flex items-center gap-1 truncate uppercase">
+                              {formatNombreCompleto(personaActiva)}{" "}
+                              <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Barra de Acciones del Drawer (Bottom Bar) */}
+              <div className="p-4 bg-[#111624] border-t border-slate-800 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Botón Abrir Página X (Visor PDF Modal) */}
+                  <button
+                    type="button"
+                    onClick={() => abrirModalPdf(personaActiva)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    title="Ver página del PDF escaneado"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>
+                      {personaActiva.pagina_frente || personaActiva.pagina_numero
+                        ? `Abrir página ${personaActiva.pagina_frente || personaActiva.pagina_numero}`
+                        : "Abrir documento"}
+                    </span>
+                  </button>
+
+                  {/* Marcar válido si está en revisión */}
+                  {!esPersonaValidada(personaActiva) && (
+                    <button
+                      type="button"
+                      onClick={(e) => aprobarRevision(personaActiva.id, e)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Aprobar y marcar como válido"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Marcar válido</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => iniciarEdicion(personaActiva)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                    title="Editar datos"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => eliminar(personaActiva.id, personaActiva.numero_identificacion)}
+                    className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                    title="Eliminar persona"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </>
         )}
-        </div>
 
-        {/* Modal Confirmar Vaciar Tabla */}
+        {/* ─── Modal de Vista Previa Rápida del PDF (Optimizado) ─── */}
+        {modalPdfAbierto && personaPdfModal && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+            onClick={() => setModalPdfAbierto(false)}
+          >
+            <div
+              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Modal PDF */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-[#141928]">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold text-white">
+                    Vista previa: {formatNombreCompleto(personaPdfModal)} (pág. {paginaPreviaModal})
+                  </span>
+                </div>
+
+                {/* Controles de Zoom */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setZoomModal((z) => Math.max(0.5, z - 0.25))}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    title="Alejar"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-[10px] font-mono text-slate-400 w-10 text-center">
+                    {Math.round(zoomModal * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setZoomModal((z) => Math.min(2.5, z + 0.25))}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    title="Acercar"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoomModal(1)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    title="Restablecer zoom"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalPdfAbierto(false)}
+                    className="p-1.5 ml-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenedor de la Imagen del PDF */}
+              <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-[#0b0f19] min-h-[350px]">
+                {(() => {
+                  const docId = personaPdfModal.documento_pdf_id || personaPdfModal.documento_id;
+                  if (!docId) {
+                    return (
+                      <div className="text-center py-12">
+                        <ImageOff className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-400">Esta persona no tiene documento PDF asociado.</p>
+                        <button
+                          onClick={() => {
+                            setModalPdfAbierto(false);
+                            abrirSubirPdf(personaPdfModal);
+                          }}
+                          className="mt-3 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
+                        >
+                          Subir PDF individual de cédula
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ transform: `scale(${zoomModal})`, transformOrigin: "center center", transition: "transform 0.15s ease" }}>
+                      {imgCargandoModal && (
+                        <div className="flex flex-col items-center gap-2 py-12">
+                          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs text-slate-400">Cargando página {paginaPreviaModal}...</span>
+                        </div>
+                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={apiDocumentos.paginaPdfUrl(String(docId), paginaPreviaModal, 130)}
+                        alt={`Página ${paginaPreviaModal}`}
+                        className="rounded-xl shadow-2xl max-w-full max-h-[70vh] border border-slate-800"
+                        style={{ display: imgCargandoModal ? "none" : "block" }}
+                        onLoad={() => setImgCargandoModal(false)}
+                        onError={() => { setImgCargandoModal(false); setImgErrorModal(true); }}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Botón inferior para alternar cara si existen dos lados */}
+              {personaPdfModal.pagina_frente && personaPdfModal.pagina_reverso && (
+                <div className="p-3 border-t border-slate-800 bg-[#141928] flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_frente!); setImgCargandoModal(true); }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                      paginaPreviaModal === personaPdfModal.pagina_frente
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Frente (pág. {personaPdfModal.pagina_frente})
+                  </button>
+                  <button
+                    onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_reverso!); setImgCargandoModal(true); }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                      paginaPreviaModal === personaPdfModal.pagina_reverso
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Reverso (pág. {personaPdfModal.pagina_reverso})
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Modal Confirmar Vaciar Tabla ─── */}
         {modalVaciarAbierto && (
           <div
-            className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
             onClick={() => !eliminandoEnLote && setModalVaciarAbierto(false)}
           >
             <div
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto mb-4">
                 <Trash2 className="w-7 h-7" />
               </div>
-
-              <h3 className="text-xl font-black text-slate-900 dark:text-white text-center">
-                ¿Vaciar tabla de personas?
-              </h3>
-
-              <p className="text-xs text-slate-600 dark:text-slate-400 text-center mt-2 leading-relaxed">
-                {filtroDocumento !== "todos" ? (
-                  <>
-                    Estás a punto de eliminar permanentemente todas las personas del archivo{" "}
-                    <strong className="text-slate-900 dark:text-white">
-                      {documentos.find((d) => d.id === filtroDocumento)?.nombre_original || "seleccionado"}
-                    </strong>{" "}
-                    (<span className="font-bold text-rose-600 dark:text-rose-400">{stats.total} registros</span>).
-                  </>
-                ) : (
-                  <>
-                    Estás a punto de eliminar permanentemente{" "}
-                    <strong className="text-rose-600 dark:text-rose-400 font-bold">{stats.total} registros</strong>{" "}
-                    de la tabla de personas.
-                  </>
-                )}
+              <h3 className="text-xl font-bold text-white text-center">¿Vaciar tabla de personas?</h3>
+              <p className="text-xs text-slate-400 text-center mt-2 leading-relaxed">
+                Estás a punto de eliminar permanentemente todos los registros (<span className="text-rose-400 font-bold">{stats.total} personas</span>).
               </p>
-
-              <div className="p-3 my-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>Esta acción no se puede deshacer. Todos los datos asociados se borrarán permanentemente.</span>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 mt-5">
+              <div className="flex items-center justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setModalVaciarAbierto(false)}
                   disabled={eliminandoEnLote}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2589,60 +1756,38 @@ function PersonasContent() {
                   type="button"
                   onClick={ejecutarVaciarTabla}
                   disabled={eliminandoEnLote}
-                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all cursor-pointer shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer"
                 >
-                  {eliminandoEnLote ? (
-                    <>
-                      <div className="spinner w-3.5 h-3.5 border-white" />
-                      <span>Vaciando tabla...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Sí, vaciar tabla</span>
-                    </>
-                  )}
+                  {eliminandoEnLote ? "Vaciando..." : "Sí, vaciar tabla"}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Modal Confirmar Eliminar Seleccionados */}
+        {/* ─── Modal Confirmar Eliminar Seleccionados ─── */}
         {modalEliminarSeleccionadosAbierto && (
           <div
-            className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
             onClick={() => !eliminandoEnLote && setModalEliminarSeleccionadosAbierto(false)}
           >
             <div
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-500/20 border-2 border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400 mx-auto mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto mb-4">
                 <Trash2 className="w-7 h-7" />
               </div>
-
-              <h3 className="text-xl font-black text-slate-900 dark:text-white text-center">
-                ¿Eliminar personas seleccionadas?
-              </h3>
-
-              <p className="text-xs text-slate-600 dark:text-slate-400 text-center mt-2 leading-relaxed">
-                Has seleccionado{" "}
-                <strong className="text-rose-600 dark:text-rose-400 font-bold">{seleccionados.size} {seleccionados.size === 1 ? "persona" : "personas"}</strong>.
-                ¿Deseas eliminarlas definitivamente de la tabla de personas?
+              <h3 className="text-xl font-bold text-white text-center">¿Eliminar seleccionados?</h3>
+              <p className="text-xs text-slate-400 text-center mt-2 leading-relaxed">
+                Vas a eliminar <strong className="text-rose-400 font-bold">{seleccionados.size} personas</strong> definitivamente.
               </p>
-
-              <div className="p-3 my-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>Esta acción eliminará estos registros de forma permanente.</span>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 mt-5">
+              <div className="flex items-center justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setModalEliminarSeleccionadosAbierto(false)}
                   disabled={eliminandoEnLote}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2650,25 +1795,16 @@ function PersonasContent() {
                   type="button"
                   onClick={ejecutarEliminarSeleccionados}
                   disabled={eliminandoEnLote}
-                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all cursor-pointer shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer"
                 >
-                  {eliminandoEnLote ? (
-                    <>
-                      <div className="spinner w-3.5 h-3.5 border-white" />
-                      <span>Eliminando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Sí, eliminar seleccionados</span>
-                    </>
-                  )}
+                  {eliminandoEnLote ? "Eliminando..." : "Sí, eliminar seleccionados"}
                 </button>
               </div>
             </div>
           </div>
         )}
-        {/* Input oculto para subir PDF de la cédula para una persona */}
+
+        {/* Input oculto para subir PDF de la cédula individual */}
         <input
           type="file"
           ref={fileInputRef}
@@ -2687,7 +1823,7 @@ export default function PersonasPage() {
       fallback={
         <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-xs text-slate-400 font-medium">Cargando módulo de personas...</p>
           </div>
         </div>

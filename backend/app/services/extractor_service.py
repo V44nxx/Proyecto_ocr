@@ -30,7 +30,7 @@ NO_NOMBRE_HEADER = re.compile(
     r"CEDUL|CÉDUL|CEDUU|CEDUA|"
     r"CIUDAD|CIUDAN|GIUDAD|"
     r"IDENTIFIC|NUMERO|NÚMERO|NUIP|"
-    r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|TITULAR|DIGITAL|"
+    r"APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|PRIMER|SEGUNDO|FIRMA|TITULAR|TFTOLIB|TITOLIB|TFTULAR|TFTULAB|TFTO|TFTOUB|TITULAB|TITOLA|TFTOLA|TFT[A-Z]*|T[IF1!l]T[UO0]L[IA][RB]?|DIGITAL|"
     r"REGISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
     r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
     r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
@@ -778,6 +778,7 @@ class ExtractorService:
 
         # ── Sanitización y Corrección Cronológica Garantizada ─────────────
         self._sanitizar_y_corregir_fechas_y_lugares(resultado, texto, lineas)
+        self._sanitizar_nombres_y_apellidos(resultado)
 
         # Calcular confianza
         resultado["confianza_extraccion"] = self._calcular_confianza(
@@ -2087,6 +2088,43 @@ class ExtractorService:
             lugar_clean = colombia_geo.normalizar_municipio(lugar)
             if lugar_clean and lugar_clean not in colombia_geo.DEPARTAMENTOS:
                 resultado["lugar_expedicion"] = lugar_clean
+
+    def _sanitizar_nombres_y_apellidos(self, resultado: Dict[str, Any]) -> None:
+        """
+        Sanitiza y desegmenta nombres y apellidos al final del pipeline de extracción:
+          1. Desegmenta tokens unidos (ej: CORREDORMURCIA -> CORREDOR MURCIA).
+          2. Remueve letras residuales pegadas de campos adyacentes como SEXO (ej: LOSADAM -> LOSADA).
+          3. Elimina ruidos de OCR y falsos nombres (ej: TFTOLIB, TITOLIB, etc.).
+        """
+        from app.utils.name_cleaner import (
+            separar_nombres_pegados,
+            remover_letras_residuales_fin_palabra,
+            es_token_ruido,
+            limpiar_tokens_ruido,
+        )
+
+        for campo in ["apellidos", "nombres"]:
+            val = resultado.get(campo)
+            if not val or val == "POR REVISAR":
+                continue
+
+            val_strip = str(val).strip()
+            # Descartar deformaciones OCR imposibles fonotácticamente en español o corruptelas de TITULAR (ej: TFTOLIB)
+            if val_strip.upper().startswith("TFT") or val_strip.upper().startswith("TFF") or val_strip.upper() in {
+                "TFTOLIB", "TITOLIB", "TFTULAR", "TFTULAB", "TFTO", "TFTOUB", "TITULAB", "TITOLA", "TFTOLA"
+            }:
+                logger.info(f"[{campo}] Descartando alucinación/ruido OCR '{val_strip}'")
+                resultado[campo] = None
+                continue
+
+            # Desegmentar y limpiar residuos
+            val_limpio = limpiar_tokens_ruido(val_strip)
+            val_norm = validador.normalizar_nombre(val_limpio) or validador.normalizar_nombre(val_strip)
+
+            if val_norm and not val_norm.upper().startswith("TFT"):
+                resultado[campo] = val_norm
+            elif val_strip and not val_strip.upper().startswith("TFT"):
+                resultado[campo] = val_strip
 
     # ──────────────────────────────────────────
     # CÁLCULO DE CONFIANZA

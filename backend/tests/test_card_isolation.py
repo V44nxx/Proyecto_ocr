@@ -238,11 +238,64 @@ def test_separar_nombres_pegados():
 
     assert separar_nombres_pegados("BOTACHEVALERO") == "BOTACHE VALERO"
     assert separar_nombres_pegados("ANGICAROLINA") == "ANGI CAROLINA"
+    assert separar_nombres_pegados("CORREDORMURCIA") == "CORREDOR MURCIA"
     assert separar_nombres_pegados("MURCIACORREDOR") == "MURCIA CORREDOR"
     assert separar_nombres_pegados("SALASNARANJO") == "SALAS NARANJO"
+    assert separar_nombres_pegados("LOSADAM") == "LOSADA"
     assert separar_nombres_pegados("APELLIDOSBOTACHE") == "APELLIDOS BOTACHE"
     assert separar_nombres_pegados("NOMBRESANGI") == "NOMBRES ANGI"
     assert separar_nombres_pegados("BotacheValero") == "Botache Valero"
+
+
+def test_limpieza_errores_nombres_apellidos_usuario():
+    """
+    Valida los casos específicos solicitados por el usuario:
+      1. Surnames pegados: 'CORREDORMURCIA' -> 'CORREDOR MURCIA'
+      2. Letras residuales de sexo al final: 'LOSADAM' -> 'LOSADA', 'GOMEZM' -> 'GOMEZ', 'PEREZF' -> 'PEREZ'
+      3. Ruidos y alucinaciones OCR de cabecera/titular: 'TFTOLIB' -> descartado
+      4. Conservación de nombres legítimos con M o X: 'WILLIAM', 'MIRIAM', 'ALEX'
+    """
+    from app.utils.name_cleaner import (
+        separar_nombres_pegados,
+        limpiar_tokens_ruido,
+        remover_letras_residuales_fin_palabra,
+        es_token_ruido,
+        resolver_nombre_completo,
+    )
+    from app.utils.validators import validador
+
+    # 1. Separación de apellidos pegados
+    assert separar_nombres_pegados("CORREDORMURCIA") == "CORREDOR MURCIA"
+    assert validador.normalizar_nombre("CORREDORMURCIA") == "CORREDOR MURCIA"
+    assert limpiar_tokens_ruido("CORREDORMURCIA") == "CORREDOR MURCIA"
+
+    # 2. Letras residuales de sexo pegadas al final de un apellido/nombre
+    assert remover_letras_residuales_fin_palabra("LOSADAM") == "LOSADA"
+    assert remover_letras_residuales_fin_palabra("GOMEZM") == "GOMEZ"
+    assert remover_letras_residuales_fin_palabra("PEREZF") == "PEREZ"
+    assert validador.normalizar_nombre("LOSADAM") == "LOSADA"
+    assert validador.normalizar_nombre("GOMEZM") == "GOMEZ"
+    assert validador.normalizar_nombre("PEREZF") == "PEREZ"
+    assert validador.normalizar_nombre("CORREDOR MURCIA M") == "CORREDOR MURCIA"
+    assert limpiar_tokens_ruido("LOSADAM") == "LOSADA"
+
+    # 3. Descarte de alucinaciones y deformaciones OCR de TITULAR
+    assert es_token_ruido("TFTOLIB") is True
+    assert es_token_ruido("TITOLIB") is True
+    assert es_token_ruido("TFTULAR") is True
+    assert validador.normalizar_nombre("TFTOLIB") is None
+    assert limpiar_tokens_ruido("TFTOLIB") == ""
+
+    # 4. Conservación íntegra de nombres legítimos
+    assert remover_letras_residuales_fin_palabra("WILLIAM") == "WILLIAM"
+    assert remover_letras_residuales_fin_palabra("MIRIAM") == "MIRIAM"
+    assert remover_letras_residuales_fin_palabra("ALEX") == "ALEX"
+    assert validador.normalizar_nombre("WILLIAM ANDRES") == "WILLIAM ANDRES"
+    assert validador.normalizar_nombre("DIEGO ARMANDO PAZ CHAPAL") == "DIEGO ARMANDO PAZ CHAPAL"
+
+    # 5. Resolución completa combinada
+    assert resolver_nombre_completo(nombres="DIEGO ARMANDO", apellidos="CORREDORMURCIA") == "DIEGO ARMANDO CORREDOR MURCIA"
+    assert resolver_nombre_completo(nombres="DIEGO ARMANDO", apellidos="LOSADAM") == "DIEGO ARMANDO LOSADA"
 
 
 def test_header_rescue_gloria_botache_sin_etiquetas_visibles():

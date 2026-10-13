@@ -16,7 +16,9 @@ JUNK_WORDS = {
     "APELLIXIS", "APELLIXOS", "APELLIOS", "APELLIGOS", "APELLIZOS", "APELLIDS", "APELLXIS", "APELLIS", "APELLXOS",
     "NOMERES", "NOMERE", "NOMPRES", "NOMBPE", "NOMERO", "NONBRES", "MOMBRES", "NQMBRES",
     "ROOETTNA", "AESEPHGLPUAO", "ROOETINA",
-    "TITULAR", "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
+    # Deformaciones OCR comunes de TITULAR (FIRMA DEL TITULAR)
+    "TITULAR", "TFTOLIB", "TITOLIB", "TFTULAR", "TFTULAB", "TFTO", "TFTOUB", "TITULAB", "TITOLA", "TFTOLA",
+    "PRIMER", "SEGUNDO", "BLICA", "PUBLICA", 
     "PÚBLICA", "ICADE", "CADE", "MEIA", "DILOM", "COLOM", "COLOMS", "LICA",
     "ELICA", "DILOMBIA", "LOM", "REPUBLI", "NIMEPO", "EDULA", "NIMERO", "NUMEPO",
     "NÚMEPO", "NVYMERO", "NVMERO", "NRO", "CEDLA", "CEDUIA", "CEDUI",
@@ -67,7 +69,9 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "HERNAN", "JAIRO", "JAVIER", "JESUS", "NELSON", "NESTOR", "RAFAEL", "RODRIGO",
     "SERGIO", "VICTOR", "YESID", "FABIAN", "ALVARO", "GERMAN", "MAURICIO", "WILSON",
     "GUSTAVO", "EDWIN", "FREDY", "FREDDY", "ALEXIS", "DUVAN", "BRAYAN", "KEVIN",
-    "RAMON", "RAMÓN", "CONSUELO",
+    "RAMON", "RAMÓN", "CONSUELO", "ANTONIO", "ARMANDO", "ALBERTO", "ESTEBAN", "MANUEL",
+    "LEONARDO", "HUGO", "ORLANDO", "ALFONSO", "RUBEN", "RUBÉN", "IVAN", "IVÁN", "GONZALO",
+    "EVER", "JEFFERSON", "JOHN", "HENRY", "WALTER", "GUILERMO", "GUILLERMO",
     # Nombres femeninos
     "MARIA", "ANA", "ANGI", "ANGIE", "CAROLINA", "PAOLA", "ANDREA", "DIANA", "LINA",
     "LILIANA", "LUZ", "LUCIA", "LUISA", "GLORIA", "PATRICIA", "PAULA", "SANDRA", "SONIA",
@@ -80,6 +84,7 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "AURA", "CECILIA", "CLEMENCIA", "NUBIA", "STELLA", "ESTELLA", "YOLANDA", "AMPARO",
     "AYDE", "AIDE", "HAYDEE", "NURY", "LUCY", "LUCENY", "RUBY", "DARY", "MIRYAM", "MIRIAM",
     "ORNEIDA", "ELVA", "ROSA", "LORENA", "ANGELICA", "ANGÉLICA", "SHARIT", "KIMELA", "YULI", "KAHREN",
+    "BEATRIZ", "ELENA", "LAURA", "YURI", "YUDY", "LADY", "YERLIS", "YULEIDY", "DURY", "DERLY", "INDIRA",
     # Apellidos comunes colombianos
     "RODRIGUEZ", "GOMEZ", "GONZALEZ", "MARTINEZ", "GARCIA", "PEREZ", "LOPEZ", "HERNANDEZ",
     "SANCHEZ", "RAMIREZ", "TORRES", "FLORES", "FLOREZ", "DIAZ", "VASQUEZ", "CASTRO",
@@ -104,7 +109,32 @@ NOMBRES_COLOMBIANOS_COMUNES = {
     "SAMBONY", "COLLAZOS", "TIRADO", "PERAFAN", "PALENCIA", "BOLANOS", "BOLAÑOS",
     "CASTANEDA", "CASTAÑEDA", "VILLANUEVA", "FIERRO", "SABI", "SABÍ", "NUNEZ", "NUÑEZ",
     "VALDERRAMA", "FAJARDO", "MENDEZ", "GAONA",
+    # Apellidos colombianos adicionales frecuentes
+    "LOSADA", "PERDOMO", "CUELLAR", "TOVAR", "VERGARA", "BARRIOS", "LUNA", "CRUZ",
+    "CONDE", "SANDOVAL", "ACOSTA", "PACHECO", "BLANCO", "AVILA", "ÁVILA", "TANGARIFE",
+    "CANO", "SERRANO", "JOVEN", "URAZAN", "CASTELLANOS", "CORDOBA", "CÓRDOBA", "ARANGO",
+    "GRAJALES", "BOTERO", "CAICEDO", "AGUILAR", "REYES", "CAMARGO", "CHAPAL", "PAZ",
 }
+
+# Carga complementaria dinámica de diccionarios JSON del backend
+try:
+    import json
+    from pathlib import Path
+    _base_dir_dict = Path(__file__).resolve().parent.parent / "data" / "dictionaries"
+    for _json_path in [
+        _base_dir_dict / "apellidos" / "apellidos_colombianos.json",
+        _base_dir_dict / "nombres" / "nombres_frecuentes.json",
+    ]:
+        if _json_path.exists():
+            with open(_json_path, "r", encoding="utf-8") as _f_json:
+                _datos_json = json.load(_f_json)
+                for _pal in _datos_json.get("apellidos", []) + _datos_json.get("nombres", []):
+                    _norm_pal = unicodedata.normalize("NFKD", str(_pal))
+                    _norm_pal = "".join(_c for _c in _norm_pal if not unicodedata.combining(_c)).upper().strip()
+                    if _norm_pal:
+                        NOMBRES_COLOMBIANOS_COMUNES.add(_norm_pal)
+except Exception:
+    pass
 
 PATRON_RUIDO_ADMINISTRATIVO = re.compile(
     r"\b(FOTOCOPIA|PROCESO\s+DE\s+INSCRIPCI[OÓ]N|MATR[IÍ]CULA|EMPRENDEDOR[A]?S?|OFICINA\s+DEPARTAMENTAL|"
@@ -162,7 +192,8 @@ PATRON_FECHA_MES_RUIDO = re.compile(
 PALABRAS_ENCABEZADO_CANONICAS = (
     "NUMERO", "CEDULA", "CIUDADANIA", "REPUBLICA", "IDENTIFICACION",
     "PERSONAL", "COLOMBIA", "NACIONAL", "REGISTRADURIA", "APELLIDOS",
-    "NOMBRES", "EXPEDICION", "NACIMIENTO", "ESTATURA", "DERECHO", "INDICE", "FIRMA"
+    "NOMBRES", "EXPEDICION", "NACIMIENTO", "ESTATURA", "DERECHO", "INDICE", "FIRMA",
+    "TITULAR"
 )
 
 NOMBRES_LEGITIMOS_EXCEPCION = {
@@ -172,6 +203,65 @@ NOMBRES_LEGITIMOS_EXCEPCION = {
 }
 
 VOCALES_VALIDAS = set("AEIOUÁÉÍÓÚÜY")
+
+# Nombres legítimos conocidos que terminan con M o X
+NOMBRES_VALIDOS_FIN_M = {
+    "ABRAHAM", "ADAM", "WILLIAM", "WILIAM", "LIAM", "NOAM",
+    "MIRIAM", "MIRYAM", "IBRAHIM", "MAXIM", "SAM", "TOM", "SALOM", "GUILLEM"
+}
+
+NOMBRES_VALIDOS_FIN_X = {
+    "ALEX", "FELIX", "FÉLIX", "MAX", "BEATRIX", "SAX"
+}
+
+
+def remover_letras_residuales_fin_palabra(token: str) -> str:
+    """
+    Elimina letras residuales espurias pegadas al final de nombres o apellidos
+    debido a solapamiento con etiquetas adyacentes de la cédula como 'SEXO: M/F',
+    hologramas o marcas de agua.
+    Ejemplos reales:
+      - 'LOSADAM' -> 'LOSADA' (sufijo M de Sexo Masculino pegado al apellido)
+      - 'GOMEZM'  -> 'GOMEZ'
+      - 'PEREZF'  -> 'PEREZ' (sufijo F de Sexo Femenino pegado al apellido)
+      - 'MURCIAM' -> 'MURCIA'
+      - 'CORREDORM' -> 'CORREDOR'
+    Protege nombres legítimos que terminan en M (ej: WILLIAM, MIRIAM, LIAM, ABRAHAM)
+    y nombres legítimos que terminan en X (ej: ALEX, FELIX).
+    """
+    if not token or len(token) < 4:
+        return token
+
+    t_norm = normalizar_str(token)
+    t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", t_norm)
+    if len(t_clean) < 4:
+        return token
+
+    # Si la palabra completa es legítima con terminación en M o X, conservar intacta
+    if t_clean in NOMBRES_VALIDOS_FIN_M or t_clean in NOMBRES_VALIDOS_FIN_X:
+        return token
+    if t_clean in NOMBRES_COLOMBIANOS_COMUNES and len(t_clean) <= 9:
+        return token
+
+    # Caso 1: Sufijo 'M', 'F' (de Sexo) o 'X' pegado al final
+    if t_clean.endswith(("M", "F", "X")):
+        base = t_clean[:-1]
+        # Si la base sin esa letra es un nombre/apellido colombiano reconocido
+        if base in NOMBRES_COLOMBIANOS_COMUNES:
+            return base
+        # Si termina en M o F, no es nombre anglo/bíblico y la base tiene estructura silábica válida
+        if t_clean.endswith(("M", "F")) and len(base) >= 3 and any(v in VOCALES_VALIDAS for v in base):
+            # En español no existen apellidos autóctonos terminados en M o F
+            if base[-1] in "AEIOUÁÉÍÓÚÜZSRNLD":
+                return base
+
+    # Caso 2: Sufijo de ruido OCR de una sola letra pegado a un nombre colombiano muy claro
+    if len(t_clean) >= 5 and t_clean[-1] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        base = t_clean[:-1]
+        if base in NOMBRES_COLOMBIANOS_COMUNES and t_clean not in NOMBRES_COLOMBIANOS_COMUNES:
+            return base
+
+    return token
 
 
 def normalizar_str(s: str) -> str:
@@ -200,7 +290,7 @@ def _distancia_levenshtein(s1: str, s2: str) -> int:
 
 
 def es_token_ruido_difuso(t_alpha: str) -> bool:
-    """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA, APELLIXIS)."""
+    """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA, APELLIXIS, TFTOLIB)."""
     if not t_alpha or len(t_alpha) < 3:
         return False
     if t_alpha in NOMBRES_LEGITIMOS_EXCEPCION:
@@ -218,7 +308,7 @@ def es_token_ruido_difuso(t_alpha: str) -> bool:
 
 
 def es_token_ruido(t_raw: str) -> bool:
-    """Detecta si un token individual es ruido de OCR (IIII, números romanos, fechas, siglas, artefactos)."""
+    """Detecta si un token individual es ruido de OCR (IIII, números romanos, fechas, siglas, artefactos, TFTOLIB)."""
     if not t_raw:
         return True
     t_norm = normalizar_str(t_raw)
@@ -233,6 +323,11 @@ def es_token_ruido(t_raw: str) -> bool:
         return True
     # Palabras de encabezado y etiquetas de cédula/TI
     if t_alpha in JUNK_WORDS:
+        return True
+    # Deformaciones OCR imposibles fonotácticamente en español o corruptelas de TITULAR (ej: TFTOLIB, TFTULAR, TFTO)
+    if t_alpha.startswith("TFT") or t_alpha.startswith("TFF") or t_alpha.startswith("TFTO"):
+        return True
+    if re.fullmatch(r"T[IF1!L]T[UO0]L[IA][RB]?", t_alpha):
         return True
     # Detección de fechas o meses OCR deformados (ej: IOCTI, 10OCT, 21-OCT-2021, 03OCT, OCT2021)
     if PATRON_FECHA_MES_RUIDO.search(t_alpha) or PATRON_FECHA_MES_RUIDO.search(re.sub(r"[^A-Za-z0-9]", "", t_norm)):
@@ -282,31 +377,46 @@ def reparar_tokens_divididos(texto: str) -> str:
 def _descomponer_token_pegado(token: str) -> str:
     """
     Descompone un token si está formado por dos o más nombres/apellidos pegados
-    (ej: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'BOTACHEDAZA' -> 'BOTACHE DAZA',
-    'GLORIAAAYDE' -> 'GLORIA AYDE').
+    (ej: 'CORREDORMURCIA' -> 'CORREDOR MURCIA', 'BOTACHEVALERO' -> 'BOTACHE VALERO',
+    'BOTACHEDAZA' -> 'BOTACHE DAZA', 'GLORIAAAYDE' -> 'GLORIA AYDE',
+    'LOSADAM' -> 'LOSADA').
     """
-    if not token or len(token) < 5:
+    if not token or len(token) < 4:
         return token
     t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑ]", "", normalizar_str(token))
-    if len(t_clean) < 5:
-        return token
-    # Si la palabra completa ya es un nombre legítimo conocido en el diccionario, no dividir
-    if t_clean in NOMBRES_COLOMBIANOS_COMUNES and len(t_clean) <= 10:
+    if len(t_clean) < 4:
         return token
 
-    # Probar puntos de partición i entre 3 y len(t_clean)-2
-    for i in range(3, len(t_clean) - 2):
-        p1 = t_clean[:i]
-        p2 = t_clean[i:]
-        if p1 in NOMBRES_COLOMBIANOS_COMUNES and (p2 in NOMBRES_COLOMBIANOS_COMUNES or (len(p2) >= 5 and any(p2[:j] in NOMBRES_COLOMBIANOS_COMUNES and p2[j:] in NOMBRES_COLOMBIANOS_COMUNES for j in range(3, len(p2)-2)))):
-            p2_split = _descomponer_token_pegado(p2)
-            return f"{p1} {p2_split}"
+    # Si la palabra completa es un nombre legítimo conocido en el diccionario, no dividir
+    if t_clean in NOMBRES_COLOMBIANOS_COMUNES and len(t_clean) <= 9:
+        return token
+
+    # Probar si termina en residuo de Sexo o letra espuria (ej: 'LOSADAM' -> 'LOSADA')
+    t_clean_sin_residuo = remover_letras_residuales_fin_palabra(t_clean)
+    if t_clean_sin_residuo != t_clean and t_clean_sin_residuo in NOMBRES_COLOMBIANOS_COMUNES:
+        return t_clean_sin_residuo
+
+    # Usar el texto sin letra residual final para buscar particiones
+    t_trabajo = t_clean_sin_residuo
+
+    # Probar puntos de partición i entre 3 y len(t_trabajo)-2
+    for i in range(3, len(t_trabajo) - 2):
+        p1 = t_trabajo[:i]
+        p2 = t_trabajo[i:]
+        if p1 in NOMBRES_COLOMBIANOS_COMUNES:
+            p2_limpio = remover_letras_residuales_fin_palabra(p2)
+            if p2_limpio in NOMBRES_COLOMBIANOS_COMUNES:
+                return f"{p1} {p2_limpio}"
+            if len(p2_limpio) >= 5:
+                p2_split = _descomponer_token_pegado(p2_limpio)
+                if p2_split != p2_limpio:
+                    return f"{p1} {p2_split}"
 
     # Probar partición colapsando vocales repetidas en la frontera (ej: GLORIAAAYDE -> GLORIA + AYDE)
-    for i in range(3, len(t_clean) - 2):
-        p1 = t_clean[:i]
+    for i in range(3, len(t_trabajo) - 2):
+        p1 = t_trabajo[:i]
         if p1 in NOMBRES_COLOMBIANOS_COMUNES:
-            resto = t_clean[i:]
+            resto = t_trabajo[i:]
             char_fin = p1[-1]
             resto_strip = resto.lstrip(char_fin)
             if resto in NOMBRES_COLOMBIANOS_COMUNES:
@@ -315,6 +425,10 @@ def _descomponer_token_pegado(token: str) -> str:
                 return f"{p1} {resto_strip}"
             if (char_fin + resto_strip) in NOMBRES_COLOMBIANOS_COMUNES:
                 return f"{p1} {char_fin + resto_strip}"
+
+    # Si no se pudo partir pero tenía residuo al final
+    if t_clean_sin_residuo != t_clean:
+        return t_clean_sin_residuo
 
     return token
 
@@ -358,7 +472,8 @@ def separar_nombres_pegados(texto: str) -> str:
     Separa nombres y apellidos que fueron fusionados sin espacios por el OCR:
     1. CamelCase / PascalCase: 'BotacheValero' -> 'Botache Valero'
     2. Rótulos pegados al valor: 'APELLIDOSBOTACHE' -> 'APELLIDOS BOTACHE'
-    3. Nombres pegados en mayúsculas: 'BOTACHEVALERO' -> 'BOTACHE VALERO', 'ANGICAROLINA' -> 'ANGI CAROLINA'
+    3. Nombres pegados en mayúsculas: 'CORREDORMURCIA' -> 'CORREDOR MURCIA', 'BOTACHEVALERO' -> 'BOTACHE VALERO'
+    4. Limpia letras residuales pegadas al final: 'LOSADAM' -> 'LOSADA'
     """
     if not texto:
         return ""
@@ -366,11 +481,13 @@ def separar_nombres_pegados(texto: str) -> str:
     txt = re.sub(r"([a-záéíóúüñ])([A-ZÁÉÍÓÚÜÑ])", r"\1 \2", str(texto))
     # 2. Separar rótulos de cédula pegados al inicio
     txt = re.sub(r"\b(APELLIDOS?|NOMBRES?|CEDULA|NUMERO|CIUDADANIA)([A-ZÁÉÍÓÚÜÑ]{2,})\b", r"\1 \2", txt, flags=re.I)
-    # 3. Separar tokens individuales en mayúsculas
+    # 3. Separar tokens individuales en mayúsculas y limpiar letras residuales
     palabras = txt.split()
     resultado = []
     for p in palabras:
-        resultado.append(_descomponer_token_pegado(p))
+        p_descomp = _descomponer_token_pegado(p)
+        for sub_p in p_descomp.split():
+            resultado.append(remover_letras_residuales_fin_palabra(sub_p))
     return " ".join(resultado)
 
 
@@ -398,6 +515,7 @@ def limpiar_tokens_ruido(texto: str) -> str:
             continue
         # Limpiar cualquier caracter residual no alfabético del token
         t_clean = re.sub(r"[^A-ZÁÉÍÓÚÜÑa-záéíóúüñ\-]", "", t).strip()
+        t_clean = remover_letras_residuales_fin_palabra(t_clean)
         t_upper = t_clean.upper()
         # Remover sufijos pegados de sellos de fondo (ej: PECHENELICA -> PECHENE)
         if t_upper not in NOMBRES_COLOMBIANOS_COMUNES and t_upper not in {"ANGELICA", "ANGÉLICA", "NUBIA", "EUSEBIA", "ZENOBIA", "FABIA", "BASILICA"}:
@@ -413,6 +531,9 @@ def limpiar_tokens_ruido(texto: str) -> str:
         limpios.pop()
     while limpios and limpios[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "Y"}:
         limpios.pop(0)
+    # Quitar indicadores aislados de sexo o RH al final (ej: 'M', 'F', 'X', 'RH')
+    while limpios and limpios[-1].upper() in {"M", "F", "X", "RH"}:
+        limpios.pop()
     return " ".join(limpios)
 
 

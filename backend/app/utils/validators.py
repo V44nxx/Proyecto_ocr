@@ -25,7 +25,8 @@ class ValidadorColombia:
 
     # Palabras que no son nombres de persona válidos (etiquetas/artefactos de cédula, marcas de agua, membretes, códigos de país)
     _PALABRAS_NO_NOMBRE = re.compile(
-        r"\b(FIRMA|FIRMAS|TITULAR|HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
+        r"\b(FIRMA|FIRMAS|TITULAR|TFTOLIB|TITOLIB|TFTULAR|TFTULAB|TFTO|TFTOUB|TITULAB|TITOLA|TFTOLA|TFT[A-Z]*|T[IF1!l]T[UO0]L[IA][RB]?|"
+        r"HUELLA|DERECHO|IZQUIERDO|INDICE|ÍNDICE|REPUBLICA|REPÚBLICA|REPUBL|REPUBLI|PUBLICA|PÚBLICA|BLICA|"
         r"NUBLIC|NUBLICA|RUBLIC|RUBLICA|UBLIC|UBLICA|REUBLICA|REPUBLIC|CAPE|CAFE|\bCP\b|"
         r"COLOMBIA|CEDULA|CÉDULA|CIUDADANIA|CIUDADANÍA|IDENTIFICACION|IDENTIFICACIÓN|NUIP|"
         r"NUMERO|NÚMERO|NOMBRES|APELLIDOS|NOMBRE|APELLIDO|APELLIXIS|APELLIXOS|APELLIOS|APELLIGOS|APELLIZOS|APELLIDS|"
@@ -189,7 +190,11 @@ class ValidadorColombia:
         texto = cls.corregir_errores_ocr_nombre(texto)
 
         # Desegmentar nombres o rótulos pegados sin espacios
-        from app.utils.name_cleaner import separar_nombres_pegados
+        from app.utils.name_cleaner import (
+            separar_nombres_pegados,
+            remover_letras_residuales_fin_palabra,
+            NOMBRES_COLOMBIANOS_COMUNES
+        )
         texto = separar_nombres_pegados(texto)
 
         # Solo letras y espacios (incluyendo caracteres latinos)
@@ -201,23 +206,37 @@ class ValidadorColombia:
         if not texto:
             return None
 
-        # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR, DR, CDI)
+        # Filtrar palabras que son artefactos o etiquetas de la cédula (ej: FIRMA, TITULAR, TFTOLIB, DR, CDI)
         palabras_filtradas = []
         for p in texto.split():
-            if cls._PALABRAS_NO_NOMBRE.match(p) or len(p) <= 1:
+            # Limpiar letras residuales del final de cada palabra (ej: LOSADAM -> LOSADA)
+            p = remover_letras_residuales_fin_palabra(p)
+            if not p or len(p) <= 1:
                 continue
-            # Si p es un fragmento de una palabra ya admitida, ignorar
-            if any(p in ya for ya in palabras_filtradas):
+            if cls._PALABRAS_NO_NOMBRE.match(p) or cls._PALABRAS_NO_NOMBRE.search(p):
                 continue
-            # Si una palabra ya admitida es un fragmento de p, reemplazarla por la palabra más completa (ej: NTONI -> ANTONIO)
+            # Rechazar secuencias imposibles fonotácticamente en español (ej: TFTOLIB, TFTULAR)
+            if p.startswith("TFT") or p.startswith("TFF") or p.startswith("TFTO"):
+                continue
+            # Evitar palabras duplicadas exactas
+            if p in palabras_filtradas:
+                continue
+            # Si p es un fragmento estricto de una palabra ya admitida que es un nombre válido reconocido, ignorar
+            if any(p in ya and len(ya) > len(p) and ya in NOMBRES_COLOMBIANOS_COMUNES for ya in palabras_filtradas):
+                continue
+            # Si una palabra ya admitida es incompleta/ruido y p es un nombre legítimo reconocido completo
             reemplazada = False
             for idx_ya, ya in enumerate(palabras_filtradas):
-                if ya in p and len(p) > len(ya):
+                if ya in p and len(p) > len(ya) and p in NOMBRES_COLOMBIANOS_COMUNES and ya not in NOMBRES_COLOMBIANOS_COMUNES:
                     palabras_filtradas[idx_ya] = p
                     reemplazada = True
                     break
             if not reemplazada:
                 palabras_filtradas.append(p)
+
+        # Quitar indicadores aislados de sexo o grupo sanguíneo al final (ej: 'M', 'F', 'X', 'RH')
+        while palabras_filtradas and palabras_filtradas[-1] in ("M", "F", "X", "RH"):
+            palabras_filtradas.pop()
 
         if not palabras_filtradas:
             return None

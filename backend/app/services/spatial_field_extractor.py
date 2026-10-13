@@ -130,7 +130,7 @@ class SpatialFieldExtractor:
         r"EXTRANJER|RESIDENTE|TEMPORAL|PROTECCION|PROTECCIÓN|MIGRACION|MIGRACIÓN|VISIBLES|PERMISO|PASAPORTE|PASSPORT|CONTRASEÑA|COMPROBANTE|TRAMITE|TRÁMITE|"
         r"CIUDAD|CIUDAN|GIUDAD|CIUDADAMA|CIUDADANLA|CIUDADANA|"
         r"IDENTIFIC|IDENTIF|NUMERO|NÚMERO|NUIP|NIMEPO|NUMEPO|NIMERO|NÚMEPO|NVYMERO|NVMERO|NOMORO|"
-        r"AP[EÉI1]+L+[I10A-Z]*(?:D|X|G|Z|S|OS|IS)[O0I1A-Z]*|AP[EÉI1]+L+[A-Z]{2,6}|APELLIXIS|APELLIXOS|APELLIOS|APELLIGOS|APELLIZOS|APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|NOMERES|NOMPRES|NOMBPE|NONBRES|MOMBRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|DIGITAL|"
+        r"AP[EÉI1]+L+[I10A-Z]*(?:D|X|G|Z|S|OS|IS)[O0I1A-Z]*|AP[EÉI1]+L+[A-Z]{2,6}|APELLIXIS|APELLIXOS|APELLIOS|APELLIGOS|APELLIZOS|APEL+I*D|NOMBR|NOMRR|NOMDR|NOMRES|NOMERES|NOMPRES|NOMBPE|NONBRES|MOMBRES|PRIMER|SEGUNDO|FIRMA|FMRMA|FIRMAS|TITULAR|TFTOLIB|TITOLIB|TFTULAR|TFTULAB|TFTO|TFTOUB|TITULAB|TITOLA|TFTOLA|TFT[A-Z]*|T[IF1!l]T[UO0]L[IA][RB]?|DIGITAL|"
         r"REGISTRAD|GISTRAD|ISTRAD|OISTRAD|NATIONAL|NACIONAL|COLESARIA|COLOSARIA|PERSONAL|DOCUMENTO|CIVIL|GIVIL|ALDEL|ESTADOL|TARJETA|NACIMIENTO|"
         r"INDICE|ÍNDICE|DERECHO|IZQUIERDO|HUELLA|CAMSCANNER|POWERED|"
         r"ESTATURA|GRUPO|SANGUINEO|SANGUÍNEO|RH|"
@@ -830,21 +830,23 @@ class SpatialFieldExtractor:
                         # Layout Cédula Amarilla tradicional (valores antes de los rótulos: APELLIDOS arriba, NOMBRES abajo):
                         val_ape_actual = resultado_campos["apellidos"]["value"]
                         if not val_ape_actual or val_ape_actual in ["NAL", "ONAL", "RAJONAL", "NACIONA", "NACIONAL"] or len(cand_before_ape) >= len(val_ape_actual.split()):
-                            ape_val = " ".join(cand_before_ape[-2:])
-                            resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
+                            ape_val = self.limpiar_nombre(" ".join(cand_before_ape[-2:]))
+                            if ape_val:
+                                resultado_campos["apellidos"] = {"value": ape_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído antes de etiqueta APELLIDOS"}
                         val_nom_actual = resultado_campos["nombres"]["value"]
                         if cand_between and (not val_nom_actual or val_nom_actual in ["NAL", "ONAL", "RAJONAL", "IA", "NACIONA", "NACIONAL"]):
-                            nom_val = " ".join(cand_between[-2:])
-                            resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
+                            nom_val = self.limpiar_nombre(" ".join(cand_between[-2:]))
+                            if nom_val:
+                                resultado_campos["nombres"] = {"value": nom_val, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                     else:
                         # Layout estándar (Cédula Digital / PPT / CE con rótulos arriba del valor):
                         if cand_between:
-                            val_ape_vis = " ".join(cand_between)
+                            val_ape_vis = self.limpiar_nombre(" ".join(cand_between))
                             val_ape_act = resultado_campos["apellidos"]["value"]
                             if val_ape_vis and (not val_ape_act or len(val_ape_vis.split()) > len(val_ape_act.split()) or (len(val_ape_vis.replace(" ", "")) > len(val_ape_act.replace(" ", "")) and val_ape_vis.replace(" ", "").startswith(val_ape_act.replace(" ", "")))):
                                 resultado_campos["apellidos"] = {"value": val_ape_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído entre APELLIDOS y NOMBRES"}
                         if cand_after_nom:
-                            val_nom_vis = " ".join(cand_after_nom)
+                            val_nom_vis = self.limpiar_nombre(" ".join(cand_after_nom))
                             val_nom_act = resultado_campos["nombres"]["value"]
                             if val_nom_vis and (not val_nom_act or len(val_nom_vis.split()) > len(val_nom_act.split()) or (len(val_nom_vis.replace(" ", "")) > len(val_nom_act.replace(" ", "")) and val_nom_vis.replace(" ", "").startswith(val_nom_act.replace(" ", "")))):
                                 resultado_campos["nombres"] = {"value": val_nom_vis, "confidence": doc_ai_confidence, "status": "VALID", "page": page_num, "source": "universal_parser", "reason": "Extraído después de etiqueta NOMBRES"}

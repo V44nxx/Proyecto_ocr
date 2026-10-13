@@ -204,8 +204,8 @@ def create_tables():
                         p.nombre_completo = nom_ofic
                         modificados += 1
                 else:
-                    nomb_limp = limpiar_tokens_ruido(p.nombres or "")
-                    apel_limp = limpiar_tokens_ruido(p.apellidos or "")
+                    nomb_limp = validador.normalizar_nombre(limpiar_tokens_ruido(p.nombres or ""))
+                    apel_limp = validador.normalizar_nombre(limpiar_tokens_ruido(p.apellidos or ""))
                     nom_limpio = resolver_nombre_completo(nomb_limp, apel_limp, p.nombre_completo)
 
                     if nomb_limp != (p.nombres or ""):

@@ -903,27 +903,45 @@ class OCRService:
                 elif persona_oficial:
                     persona = persona_oficial
 
-            # Limpieza complementaria si el nombre proviene del documento físico
-            if fuente_nombre == "cedula_fisica" and nombres_final and nombres_final != "POR REVISAR":
+            # Limpieza complementaria si el nombre proviene del documento físico u OCR sin Excel
+            if fuente_nombre in ("cedula_fisica", "ocr"):
                 from app.services.spatial_field_extractor import spatial_field_extractor
-                toks = [w for w in nombres_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
-                    toks.pop(0)
-                nombres_final = " ".join(toks).strip() or "POR REVISAR"
+                from app.utils.name_cleaner import (
+                    separar_nombres_pegados,
+                    remover_letras_residuales_fin_palabra,
+                    es_token_ruido,
+                    limpiar_tokens_ruido,
+                    resolver_nombre_completo,
+                )
+
+                if nombres_final and nombres_final != "POR REVISAR":
+                    nomb_limp = validador.normalizar_nombre(limpiar_tokens_ruido(nombres_final))
+                    if nomb_limp and not nomb_limp.upper().startswith("TFT") and not es_token_ruido(nomb_limp):
+                        toks = [w for w in nomb_limp.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                        while toks and toks[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks) > 1:
+                            toks.pop(0)
+                        nombres_final = " ".join(toks).strip() or "POR REVISAR"
+                    else:
+                        nombres_final = "POR REVISAR"
 
                 if apellidos_final and apellidos_final != "POR REVISAR":
-                    toks_a = [w for w in apellidos_final.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
-                    while toks_a and toks_a[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks_a) > 1:
-                        toks_a.pop(0)
-                    apellidos_final = " ".join(toks_a).strip() or "POR REVISAR"
+                    apel_limp = validador.normalizar_nombre(limpiar_tokens_ruido(apellidos_final))
+                    if apel_limp and not apel_limp.upper().startswith("TFT") and not es_token_ruido(apel_limp):
+                        toks_a = [w for w in apel_limp.split() if not spatial_field_extractor.NO_NOMBRE_HEADER.search(w)]
+                        while toks_a and toks_a[0].upper() in {"DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"} and len(toks_a) > 1:
+                            toks_a.pop(0)
+                        apellidos_final = " ".join(toks_a).strip() or "POR REVISAR"
+                    else:
+                        apellidos_final = "POR REVISAR"
 
-                if not nombre_completo_final or nombre_completo_final == "POR REVISAR":
-                    from app.utils.name_cleaner import resolver_nombre_completo
-                    nombre_completo_final = resolver_nombre_completo(
+                if not nombre_completo_final or nombre_completo_final == "POR REVISAR" or fuente_nombre == "ocr":
+                    nom_resolv = resolver_nombre_completo(
                         nombres=nombres_final if nombres_final != "POR REVISAR" else "",
                         apellidos=apellidos_final if apellidos_final != "POR REVISAR" else "",
                         actual=nom_ocr_cedula
                     )
+                    if nom_resolv and nom_resolv != "POR REVISAR":
+                        nombre_completo_final = nom_resolv
 
             # ── Evaluación definitiva de completitud y validez ──
             detalles_payload = dict(datos.get("detalles_campos") or {})

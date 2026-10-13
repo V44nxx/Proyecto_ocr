@@ -353,11 +353,6 @@ export default function DocumentosPage() {
       return;
     }
 
-    if (!excelSeleccionado) {
-      toast.error("La planilla Excel oficial es obligatoria para poder extraer los nombres correctamente.");
-      return;
-    }
-
     uploadAbortControllerRef.current = new AbortController();
     setSubiendo(true);
     setFaseActual("subiendo");
@@ -1118,22 +1113,19 @@ export default function DocumentosPage() {
             <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">Formato admitido: PDF (Cédulas colombianas)</span>
           </div>
 
-          {/* ── PASO 1: PLANILLA EXCEL OFICIAL (OBLIGATORIO) ────────────────── */}
+          {/* ── PLANILLA EXCEL OFICIAL (OPCIONAL) ────────────────── */}
           <div className={`mb-6 p-4 rounded-2xl border transition-all ${
             excelSeleccionado
               ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-              : "border-dashed border-amber-500/30 bg-amber-500/[0.03]"
+              : "border-slate-200 dark:border-white/[0.08] bg-slate-50/50 dark:bg-white/[0.01]"
           }`}>
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-900">
-                1
-              </div>
               <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Planilla Excel Oficial</h3>
-              <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.2 rounded-full uppercase tracking-wider">Obligatorio</span>
+              <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-500/10 border border-slate-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Opcional</span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 ml-7">
-              Los nombres oficiales se extraerán cotejando el documento de identidad contra este archivo.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 ml-6">
+              (Opcional) Si la adjuntas, se cotejarán los nombres oficiales y se ejecutará la comparación automática. Si no, los datos se extraerán directamente de los PDFs mediante OCR.
             </p>
 
             {excelSeleccionado ? (
@@ -1283,19 +1275,15 @@ export default function DocumentosPage() {
                   <span>
                     {excelSeleccionado
                       ? "Planilla lista: los nombres oficiales se integran al OCR y se carga automáticamente en Comparación."
-                      : (
-                        <span className="text-amber-400 font-medium">
-                          ⚠️ Selecciona primero la planilla Excel oficial (Paso 1) para continuar.
-                        </span>
-                      )}
+                      : "Sin Excel adjunto: los datos se extraerán directamente de los documentos PDF mediante OCR."}
                   </span>
                 </div>
 
                 <button
                   onClick={subirArchivos}
-                  disabled={subiendo || !excelSeleccionado}
-                  className={`w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg transition-all transform ${
-                    excelSeleccionado && !subiendo
+                  disabled={subiendo || archivosSeleccionados.length === 0}
+                  className={`w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg transition-all transform cursor-pointer ${
+                    !subiendo && archivosSeleccionados.length > 0
                       ? "btn-primary hover:shadow-primary-500/40 hover:-translate-y-0.5 shadow-primary-500/25"
                       : "bg-dark-700 text-slate-500 border border-white/[0.06] cursor-not-allowed"
                   }`}
@@ -1312,7 +1300,7 @@ export default function DocumentosPage() {
                   ) : (
                     <>
                       <Sparkles className="w-5 h-5 text-blue-200" />
-                      <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Selecciona el Excel primero"}</span>
+                      <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Iniciar Procesamiento OCR"}</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </>
                   )}

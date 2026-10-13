@@ -527,23 +527,22 @@ def cancelar_subida_o_procesamiento(
     }
 @router.post(
     "/upload",
-    summary="Subir PDF(s) para procesamiento OCR con planilla oficial Excel",
+    summary="Subir PDF(s) para procesamiento OCR (planilla Excel opcional)",
     status_code=202
 )
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     files: Optional[List[UploadFile]] = File(default=None, description="Uno o multiples archivos PDF"),
     file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
-    excel: UploadFile = File(..., description="Planilla Excel oficial con nombres (.xlsx/.xls) — OBLIGATORIO"),
+    excel: Optional[UploadFile] = File(default=None, description="Planilla Excel oficial con nombres (.xlsx/.xls) — Opcional"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
-    Sube uno o multiples PDF junto con la planilla oficial Excel.
-    El Excel es OBLIGATORIO: los nombres y apellidos de cada persona
-    se toman de la planilla oficial buscando por numero de identificacion.
-    Los demas datos (fechas, lugar, genero) se extraen del PDF via OCR.
-    Al terminar el OCR, la comparacion se ejecuta automaticamente.
+    Sube uno o multiples PDF junto con la planilla oficial Excel (opcional).
+    Si se adjunta el Excel: los nombres y apellidos de cada persona
+    se cotejan con la planilla oficial y se ejecuta la comparacion automaticamente.
+    Si no se adjunta: los datos se extraen exclusivamente del PDF mediante OCR.
     """
     from app.models.comparacion import Comparacion
     from app.config import settings as cfg

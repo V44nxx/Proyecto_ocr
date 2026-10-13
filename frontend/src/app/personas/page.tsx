@@ -353,6 +353,17 @@ function PersonasContent() {
     }
   };
 
+  const precargarPaginaPersona = (p: Persona) => {
+    const docId = p.documento_pdf_id || p.documento_id;
+    if (!docId) return;
+    const pagsList = (p.detalles_campos as any)?.paginas;
+    const pag = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
+    if (pag) {
+      const img = new Image();
+      img.src = apiDocumentos.paginaPdfUrl(String(docId), pag, 130);
+    }
+  };
+
   const toggleExpandir = (p: Persona) => {
     if (expandidoId === p.id) {
       setExpandidoId(null);
@@ -366,6 +377,21 @@ function PersonasContent() {
       setImgCargando(true);
       setImgError(false);
       setZoom(1);
+
+      // Pre-cargar cara reversa o páginas continuas para que el cambio de cara sea instantáneo
+      const targetDocId = p.documento_pdf_id || p.documento_id;
+      if (targetDocId) {
+        if (p.pagina_reverso && p.pagina_reverso !== paginaInicial) {
+          const preRev = new Image();
+          preRev.src = apiDocumentos.paginaPdfUrl(String(targetDocId), p.pagina_reverso, 130);
+        }
+        if (Array.isArray(pagsList) && pagsList.length > 1) {
+          pagsList.slice(1, 3).forEach((numP) => {
+            const preH = new Image();
+            preH.src = apiDocumentos.paginaPdfUrl(String(targetDocId), numP, 130);
+          });
+        }
+      }
     }
   };
 
@@ -885,6 +911,8 @@ function PersonasContent() {
                   key={`${docIdParaImagen}-${paginaPrevia}`}
                   src={apiDocumentos.paginaPdfUrl(String(docIdParaImagen), paginaPrevia, 130)}
                   alt={`Página ${paginaPrevia}`}
+                  loading="eager"
+                  decoding="async"
                   className="rounded-lg shadow-xl max-w-full border border-slate-700/30"
                   style={{ display: imgCargando ? "none" : "block" }}
                   onLoad={() => setImgCargando(false)}
@@ -2240,6 +2268,7 @@ function PersonasContent() {
                                 : "hover:bg-slate-500/[0.04] active:bg-slate-500/[0.07]"
                             }`}
                           onClick={() => toggleExpandir(p)}
+                          onMouseEnter={() => precargarPaginaPersona(p)}
                         >
                           {/* Checkbox de selección */}
                           <td className="py-2.5 px-2 w-10 text-center" onClick={(e) => e.stopPropagation()}>

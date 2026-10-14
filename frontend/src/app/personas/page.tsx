@@ -703,7 +703,7 @@ function PersonasContent() {
   const docActivo = documentos.find((d) => d.id === filtroDocumento);
 
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100">
+    <div className="flex min-h-screen bg-[#F5F5F7] dark:bg-[#0A0D14] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden transition-colors duration-200">
       <Sidebar />
       <main
         className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 transition-all duration-300 ${
@@ -714,26 +714,26 @@ function PersonasContent() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+              <span className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase">
                 KONDID · BASE DE DATOS OCR
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Personas registradas
             </h1>
-            <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
               {filtroDocumento !== "todos" ? (
                 <>
                   <span>Archivo</span>
-                  <span className="text-slate-200 font-semibold">{docActivo?.nombre_original || "Documento activo"}</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-semibold">{docActivo?.nombre_original || "Documento activo"}</span>
                   <span>·</span>
-                  <span className="text-slate-500">datos de ejemplo y OCR</span>
+                  <span className="text-slate-400 dark:text-slate-500">datos de ejemplo y OCR</span>
                 </>
               ) : (
                 <>
                   <span>Todos los archivos</span>
                   <span>·</span>
-                  <span className="text-slate-400">{documentos.length} documento(s) procesados</span>
+                  <span className="text-slate-500 dark:text-slate-400">{documentos.length} documento(s) procesados</span>
                 </>
               )}
             </p>
@@ -743,7 +743,7 @@ function PersonasContent() {
             <button
               onClick={() => setModalVaciarAbierto(true)}
               disabled={personas.length === 0}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#181d2c] hover:bg-[#20273b] text-slate-200 border border-slate-700/60 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               title="Vaciar todos los registros de la tabla"
             >
               Vaciar tabla
@@ -751,7 +751,7 @@ function PersonasContent() {
             <button
               onClick={exportarVistaActual}
               disabled={exportando || personas.length === 0}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white transition-all shadow-sm shadow-[#0071E3]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
               title="Exportar registros a archivo Excel (.xlsx)"
             >
               <Download className="w-3.5 h-3.5" />
@@ -761,9 +761,9 @@ function PersonasContent() {
         </div>
 
         {/* ─── Barra de Estadísticas Proporcional + Cajas Interactivas ─── */}
-        <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-[#111624] border border-slate-800/80 shadow-md">
+        <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-white/80 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
           {/* Barra segmentada con proporciones reales */}
-          <div className="w-full h-3 rounded-full bg-slate-800/80 overflow-hidden flex mb-5 p-0.5 gap-1">
+          <div className="w-full h-3 rounded-full bg-slate-200/80 dark:bg-white/[0.08] overflow-hidden flex mb-5 p-0.5 gap-1">
             {stats.validas > 0 && (
               <div
                 onClick={() => setFiltroEstado("validas")}
@@ -806,15 +806,15 @@ function PersonasContent() {
               onClick={() => setFiltroEstado("todos")}
               className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
                 filtroEstado === "todos"
-                  ? "bg-[#1c2336] border-2 border-indigo-500/70 shadow-sm"
-                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+                  ? "bg-indigo-50/80 dark:bg-white/[0.1] border-2 border-indigo-500 shadow-sm"
+                  : "bg-slate-50/70 dark:bg-white/[0.03] hover:bg-slate-100/70 dark:hover:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.06]"
               }`}
             >
-              <span className="text-xs text-slate-400 font-medium block">Todos</span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Todos</span>
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight font-mono">
                 {totalBase}
               </div>
-              <span className="text-[11px] text-slate-500 block mt-0.5">
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5">
                 {filtroDocumento !== "todos" ? "en este archivo" : "en el sistema"}
               </span>
             </button>
@@ -825,17 +825,17 @@ function PersonasContent() {
               onClick={() => setFiltroEstado("validas")}
               className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
                 filtroEstado === "validas"
-                  ? "bg-[#1c2336] border-2 border-emerald-500/70 shadow-sm"
-                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+                  ? "bg-emerald-50/80 dark:bg-white/[0.1] border-2 border-emerald-500 shadow-sm"
+                  : "bg-slate-50/70 dark:bg-white/[0.03] hover:bg-slate-100/70 dark:hover:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.06]"
               }`}
             >
-              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Válido
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Válido
               </span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight font-mono">
                 {stats.validas}
               </div>
-              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctValidas}%</span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5 font-mono">{pctValidas}%</span>
             </button>
 
             {/* 3. Por revisar */}
@@ -844,17 +844,17 @@ function PersonasContent() {
               onClick={() => setFiltroEstado("revision")}
               className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
                 filtroEstado === "revision"
-                  ? "bg-[#1c2336] border-2 border-amber-500/70 shadow-sm"
-                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+                  ? "bg-amber-50/80 dark:bg-white/[0.1] border-2 border-amber-500 shadow-sm"
+                  : "bg-slate-50/70 dark:bg-white/[0.03] hover:bg-slate-100/70 dark:hover:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.06]"
               }`}
             >
-              <span className="text-xs text-amber-400 font-medium flex items-center gap-1.5">
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
                 <span>▲</span> Por revisar
               </span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight font-mono">
                 {stats.revision}
               </div>
-              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctRevision}%</span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5 font-mono">{pctRevision}%</span>
             </button>
 
             {/* 4. Falta en Excel */}
@@ -863,17 +863,17 @@ function PersonasContent() {
               onClick={() => setFiltroEstado("falta_excel")}
               className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
                 filtroEstado === "falta_excel"
-                  ? "bg-[#1c2336] border-2 border-pink-500/70 shadow-sm"
-                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+                  ? "bg-pink-50/80 dark:bg-white/[0.1] border-2 border-pink-500 shadow-sm"
+                  : "bg-slate-50/70 dark:bg-white/[0.03] hover:bg-slate-100/70 dark:hover:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.06]"
               }`}
             >
-              <span className="text-xs text-pink-400 font-medium flex items-center gap-1.5">
+              <span className="text-xs text-pink-600 dark:text-pink-400 font-medium flex items-center gap-1.5">
                 <span>■</span> Falta en Excel
               </span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight font-mono">
                 {stats.faltaExcel}
               </div>
-              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctFaltaExcel}%</span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5 font-mono">{pctFaltaExcel}%</span>
             </button>
 
             {/* 5. Falta en PDF */}
@@ -882,17 +882,17 @@ function PersonasContent() {
               onClick={() => setFiltroEstado("falta_pdf")}
               className={`p-3.5 rounded-xl text-left transition-all cursor-pointer ${
                 filtroEstado === "falta_pdf"
-                  ? "bg-[#1c2336] border-2 border-purple-500/70 shadow-sm"
-                  : "bg-[#161c2d]/70 hover:bg-[#1c2336]/60 border border-slate-800/80"
+                  ? "bg-purple-50/80 dark:bg-white/[0.1] border-2 border-purple-500 shadow-sm"
+                  : "bg-slate-50/70 dark:bg-white/[0.03] hover:bg-slate-100/70 dark:hover:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.06]"
               }`}
             >
-              <span className="text-xs text-purple-300 font-medium flex items-center gap-1.5">
-                <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span> Falta en PDF
+              <span className="text-xs text-purple-600 dark:text-purple-300 font-medium flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 border border-purple-500 dark:border-purple-300"></span> Falta en PDF
               </span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 tracking-tight font-mono">
+              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1 tracking-tight font-mono">
                 {stats.faltaPdf}
               </div>
-              <span className="text-[11px] text-slate-500 block mt-0.5 font-mono">{pctFaltaPdf}%</span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5 font-mono">{pctFaltaPdf}%</span>
             </button>
           </div>
         </div>
@@ -901,8 +901,8 @@ function PersonasContent() {
         {personasPorResolver.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-3.5">
-              <h2 className="text-sm font-bold text-white tracking-wide">Por resolver</h2>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#1e2436] text-slate-300 border border-slate-700/60 font-mono">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">Por resolver</h2>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200/70 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-300/60 dark:border-white/[0.08] font-mono">
                 {personasPorResolver.length}
               </span>
             </div>
@@ -917,7 +917,7 @@ function PersonasContent() {
                 return (
                   <div
                     key={`resolver-${p.id}`}
-                    className="p-4 rounded-2xl bg-[#131724] border border-slate-800/90 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm"
+                    className="p-4 rounded-2xl bg-white/80 dark:bg-[#121620]/70 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] flex flex-col justify-between hover:border-slate-300 dark:hover:border-white/[0.16] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.03)] dark:shadow-sm"
                   >
                     <div>
                       {/* Cabecera de la tarjeta */}
@@ -925,55 +925,55 @@ function PersonasContent() {
                         <span className={`flex items-center gap-1.5 text-xs font-semibold ${cfg.badgeClass}`}>
                           {cfg.iconType === "square" && <span>■</span>}
                           {cfg.iconType === "triangle" && <span>▲</span>}
-                          {cfg.iconType === "outline_square" && <span className="inline-block w-2 h-2 border border-purple-300"></span>}
+                          {cfg.iconType === "outline_square" && <span className="inline-block w-2 h-2 border border-purple-400"></span>}
                           <span>{cfg.label}</span>
                         </span>
-                        <span className="text-slate-500 text-[11px] font-mono">
+                        <span className="text-slate-400 dark:text-slate-500 text-[11px] font-mono">
                           {pag ? `pág. ${pag}` : "pág. —"}
                         </span>
                       </div>
 
                       {/* Nombre y Documento */}
-                      <h3 className="text-sm font-bold text-white tracking-tight truncate" title={formatNombreCompleto(p)}>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate" title={formatNombreCompleto(p)}>
                         {formatNombreCompleto(p)}
                       </h3>
-                      <p className="text-xs font-mono text-slate-400 mt-0.5">
+                      <p className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">
                         {numPuntos}
                       </p>
 
                       {/* Mensaje descriptivo */}
-                      <p className="text-xs text-slate-300/90 mt-2.5 leading-relaxed bg-[#191f31]/60 p-2.5 rounded-xl border border-slate-800/60">
+                      <p className="text-xs text-slate-600 dark:text-slate-300/90 mt-2.5 leading-relaxed bg-slate-50/80 dark:bg-white/[0.03] p-2.5 rounded-xl border border-slate-200/70 dark:border-white/[0.06]">
                         {motivo}
                       </p>
 
                       {/* Comparativa breve */}
-                      <div className="mt-2.5 text-[11px] font-mono space-y-1 text-slate-400">
+                      <div className="mt-2.5 text-[11px] font-mono space-y-1 text-slate-600 dark:text-slate-400">
                         {personaFaltaEnExcel(p) ? (
                           <>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">PDF</span>
-                              <span className="text-slate-300">{pag ? `Página ${pag}` : "Presente"}</span>
+                              <span className="text-slate-400 dark:text-slate-500">PDF</span>
+                              <span className="text-slate-700 dark:text-slate-300">{pag ? `Página ${pag}` : "Presente"}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">EXCEL</span>
-                              <span className="text-pink-400">Sin registro</span>
+                              <span className="text-slate-400 dark:text-slate-500">EXCEL</span>
+                              <span className="text-pink-600 dark:text-pink-400 font-semibold">Sin registro</span>
                             </div>
                           </>
                         ) : personaFaltaEnPdf(p) ? (
                           <>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">PDF</span>
-                              <span className="text-purple-300">Sin registro</span>
+                              <span className="text-slate-400 dark:text-slate-500">PDF</span>
+                              <span className="text-purple-600 dark:text-purple-300 font-semibold">Sin registro</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-500">EXCEL</span>
-                              <span className="text-slate-300">Presente en planilla</span>
+                              <span className="text-slate-400 dark:text-slate-500">EXCEL</span>
+                              <span className="text-slate-700 dark:text-slate-300">Presente en planilla</span>
                             </div>
                           </>
                         ) : (
                           <div className="flex justify-between">
-                            <span className="text-slate-500">LEÍDO</span>
-                            <span className="text-amber-300">
+                            <span className="text-slate-400 dark:text-slate-500">LEÍDO</span>
+                            <span className="text-amber-600 dark:text-amber-300 font-semibold">
                               {formatearFechaCO(p.fecha_nacimiento) !== "—" ? `${formatearFechaCO(p.fecha_nacimiento)} · ` : ""}
                               {p.confianza_extraccion != null ? `${Math.round(Number(p.confianza_extraccion))}% confianza` : "Por verificar"}
                             </span>
@@ -983,11 +983,11 @@ function PersonasContent() {
                     </div>
 
                     {/* Botones de acción rápida */}
-                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-200/80 dark:border-white/[0.08]">
                       <button
                         type="button"
                         onClick={() => abrirDetalleDrawer(p)}
-                        className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-[#1c2234] hover:bg-[#252c42] text-slate-200 border border-slate-700/60 transition-all text-center cursor-pointer"
+                        className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/[0.08] transition-all text-center cursor-pointer"
                       >
                         Ver detalle
                       </button>
@@ -995,7 +995,7 @@ function PersonasContent() {
                         <button
                           type="button"
                           onClick={(e) => copiarAlPortapapeles(p.numero_identificacion || "", "Cédula", e)}
-                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-[#1c2234] hover:bg-[#252c42] text-slate-300 border border-slate-700/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08] transition-all flex items-center gap-1.5 cursor-pointer"
                           title="Copiar número de documento"
                         >
                           <Copy className="w-3 h-3" />
@@ -1005,7 +1005,7 @@ function PersonasContent() {
                         <button
                           type="button"
                           onClick={(e) => aprobarRevision(p.id, e)}
-                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
                           title="Marcar registro como válido"
                         >
                           <Check className="w-3 h-3" />
@@ -1022,12 +1022,12 @@ function PersonasContent() {
 
         {/* ─── Barra de Selección Múltiple ─── */}
         {seleccionados.size > 0 && (
-          <div className="mb-4 p-3 bg-[#161d2d] border border-indigo-500/30 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="mb-4 p-3 bg-white dark:bg-[#121620] border border-[#0071E3]/40 rounded-2xl shadow-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
             <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+              <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-[#0071E3]/20 text-[#0071E3] dark:text-[#3894FF]">
                 <CheckSquare className="w-4 h-4" />
               </span>
-              <span className="text-xs font-semibold text-white">
+              <span className="text-xs font-semibold text-slate-900 dark:text-white">
                 {seleccionados.size} {seleccionados.size === 1 ? "persona seleccionada" : "personas seleccionadas"}
               </span>
             </div>
@@ -1035,7 +1035,7 @@ function PersonasContent() {
               <button
                 onClick={() => setModalEliminarSeleccionadosAbierto(true)}
                 disabled={eliminandoEnLote}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 dark:bg-rose-600/20 dark:hover:bg-rose-600/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Eliminar ({seleccionados.size})</span>
@@ -1043,14 +1043,14 @@ function PersonasContent() {
               <button
                 onClick={exportarSeleccion}
                 disabled={exportando}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5 cursor-pointer shadow-sm shadow-[#0071E3]/20"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Exportar selección (.xlsx)</span>
               </button>
               <button
                 onClick={() => setSeleccionados(new Set())}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08] cursor-pointer"
               >
                 Limpiar
               </button>
@@ -1059,19 +1059,19 @@ function PersonasContent() {
         )}
 
         {/* ─── Contenedor de la Tabla Principal (Image 1) ─── */}
-        <div className="rounded-2xl bg-[#111624] border border-slate-800/80 shadow-md overflow-hidden">
+        <div className="rounded-2xl bg-white/80 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] overflow-hidden">
           {/* Barra superior de la tabla */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-slate-800/80">
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-slate-200/80 dark:border-white/[0.08]">
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
               <span>
-                Mostrando <strong className="text-white font-bold">{personasFiltradas.length}</strong> de{" "}
-                <strong className="text-white font-bold">{personas.length}</strong> personas
+                Mostrando <strong className="text-slate-900 dark:text-white font-bold">{personasFiltradas.length}</strong> de{" "}
+                <strong className="text-slate-900 dark:text-white font-bold">{personas.length}</strong> personas
               </span>
               {filtroEstado !== "todos" && (
                 <button
                   type="button"
                   onClick={() => setFiltroEstado("todos")}
-                  className="text-xs text-indigo-400 hover:underline ml-1 cursor-pointer font-semibold"
+                  className="text-xs text-[#0071E3] dark:text-[#3894FF] hover:underline ml-1 cursor-pointer font-semibold"
                 >
                   (Limpiar filtro de estado)
                 </button>
@@ -1080,18 +1080,18 @@ function PersonasContent() {
 
             {/* Buscador */}
             <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <input
                 type="text"
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
                 placeholder="Buscar por cédula o nombre"
-                className="w-full pl-9 pr-8 py-1.5 bg-[#171d2e] border border-slate-700/60 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/20 transition-all"
               />
               {buscar && (
                 <button
                   onClick={() => setBuscar("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1103,13 +1103,13 @@ function PersonasContent() {
           <div className="w-full overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none bg-[#141928]/60">
+                <tr className="border-b border-slate-200/80 dark:border-white/[0.08] text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none bg-slate-50/70 dark:bg-white/[0.02]">
                   <th className="py-3 px-3 w-10 text-center">
                     <input
                       type="checkbox"
                       checked={personasFiltradas.length > 0 && personasFiltradas.every((p) => seleccionados.has(p.id))}
                       onChange={toggleSeleccionarTodas}
-                      className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3] cursor-pointer"
                     />
                   </th>
                   <th className="py-3 px-3">DOCUMENTO</th>
@@ -1121,22 +1121,22 @@ function PersonasContent() {
                   <th className="py-3 px-3 w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-xs">
+              <tbody className="divide-y divide-slate-200/70 dark:divide-white/[0.04] text-xs">
                 {cargando ? (
                   Array(6).fill(0).map((_, i) => (
                     <tr key={`skel-${i}`}>
                       <td colSpan={8} className="py-4 px-4">
-                        <div className="h-6 bg-slate-800/40 rounded animate-pulse" />
+                        <div className="h-6 bg-slate-200/60 dark:bg-slate-800/40 rounded animate-pulse" />
                       </td>
                     </tr>
                   ))
                 ) : personasFiltradas.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-16 px-4">
-                      <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-400">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-400">
                         <Users className="w-6 h-6" />
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-200">No se encontraron personas</h3>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">No se encontraron personas</h3>
                       <p className="text-slate-500 text-xs mt-1">
                         {buscar ? `Sin resultados para "${buscar}"` : "No hay registros disponibles."}
                       </p>
@@ -1163,10 +1163,10 @@ function PersonasContent() {
                         onClick={() => abrirDetalleDrawer(p)}
                         className={`group transition-colors cursor-pointer ${
                           isFilaActiva
-                            ? "bg-[#1c2336]"
+                            ? "bg-slate-100 dark:bg-white/[0.08]"
                             : isSeleccionada
-                            ? "bg-[#182033]"
-                            : "hover:bg-[#151b2a]"
+                            ? "bg-blue-50/70 dark:bg-blue-500/[0.08]"
+                            : "hover:bg-slate-50 dark:hover:bg-white/[0.03]"
                         }`}
                       >
                         {/* Checkbox */}
@@ -1175,34 +1175,34 @@ function PersonasContent() {
                             type="checkbox"
                             checked={isSeleccionada}
                             onChange={() => {}}
-                            className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0071E3] focus:ring-[#0071E3] cursor-pointer"
                           />
                         </td>
 
                         {/* Documento con CC badge */}
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#1d2436] text-slate-300 border border-slate-700/70 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shrink-0">
                               {tipoInfo.codigo || "CC"}
                             </span>
-                            <span className="font-mono text-white font-medium tracking-wide">
+                            <span className="font-mono text-slate-900 dark:text-white font-medium tracking-wide">
                               {numPuntos}
                             </span>
                           </div>
                         </td>
 
                         {/* Nombre completo */}
-                        <td className="py-3 px-3 font-semibold text-slate-100">
-                          {nombreCompleto || <span className="text-slate-500 italic">Sin nombre</span>}
+                        <td className="py-3 px-3 font-semibold text-slate-900 dark:text-slate-100">
+                          {nombreCompleto || <span className="text-slate-400 italic">Sin nombre</span>}
                         </td>
 
                         {/* Edad */}
-                        <td className="py-3 px-3 text-center font-mono text-slate-300">
+                        <td className="py-3 px-3 text-center font-mono text-slate-600 dark:text-slate-300">
                           {edadRow !== null ? edadRow : "—"}
                         </td>
 
                         {/* Página */}
-                        <td className="py-3 px-3 text-center font-mono text-slate-400">
+                        <td className="py-3 px-3 text-center font-mono text-slate-500 dark:text-slate-400">
                           {pag ?? "—"}
                         </td>
 
@@ -1212,8 +1212,8 @@ function PersonasContent() {
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
                                 tienePdf
-                                  ? "bg-[#1b2234] text-slate-300 border-slate-700/80"
-                                  : "bg-[#151a28] text-slate-600 border-slate-800 line-through opacity-60"
+                                  ? "bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/[0.08]"
+                                  : "bg-slate-50 dark:bg-white/[0.02] text-slate-400 dark:text-slate-600 border border-slate-200/60 dark:border-white/[0.04] line-through opacity-60"
                               }`}
                               title={tienePdf ? "Presente en PDF" : "Falta en PDF"}
                             >
@@ -1222,8 +1222,8 @@ function PersonasContent() {
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
                                 tieneExcel
-                                  ? "bg-[#1b2234] text-slate-300 border-slate-700/80"
-                                  : "bg-[#151a28] text-slate-600 border-slate-800 line-through opacity-60"
+                                  ? "bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/[0.08]"
+                                  : "bg-slate-50 dark:bg-white/[0.02] text-slate-400 dark:text-slate-600 border border-slate-200/60 dark:border-white/[0.04] line-through opacity-60"
                               }`}
                               title={tieneExcel ? "Presente en Excel" : "Falta en Excel"}
                             >
@@ -1238,14 +1238,14 @@ function PersonasContent() {
                             {cfg.iconType === "square" && <span>■</span>}
                             {cfg.iconType === "triangle" && <span>▲</span>}
                             {cfg.iconType === "dot" && <span>●</span>}
-                            {cfg.iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span>}
+                            {cfg.iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-400"></span>}
                             <span>{cfg.label}</span>
                           </div>
                         </td>
 
                         {/* Chevron */}
                         <td className="py-3 px-3 text-right">
-                          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
                         </td>
                       </tr>
                     );
@@ -1266,17 +1266,17 @@ function PersonasContent() {
             />
 
             {/* Panel Slide-Over */}
-            <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-md md:max-w-lg lg:max-w-[480px] bg-[#0e1320] border-l border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+            <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-md md:max-w-lg lg:max-w-[480px] bg-white dark:bg-[#0e1320] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
               {/* Header del Drawer */}
-              <div className="p-5 border-b border-slate-800/80 flex items-start justify-between gap-3">
+              <div className="p-5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
                     PERSONA
                   </span>
-                  <h2 className="text-xl font-extrabold text-white tracking-tight">
+                  <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                     {formatNombreCompleto(personaActiva)}
                   </h2>
-                  <p className="text-xs text-slate-400 font-mono">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                     {getTipoDocInfo(personaActiva.tipo_documento).codigo || "CC"} ·{" "}
                     {formatearCedulaPuntos(personaActiva.numero_identificacion)} ·{" "}
                     {personaActiva.pagina_frente || personaActiva.pagina_numero ? `página ${personaActiva.pagina_frente || personaActiva.pagina_numero}` : "sin página"}
@@ -1286,7 +1286,7 @@ function PersonasContent() {
                       {getEstadoConfig(personaActiva).iconType === "square" && <span>■</span>}
                       {getEstadoConfig(personaActiva).iconType === "triangle" && <span>▲</span>}
                       {getEstadoConfig(personaActiva).iconType === "dot" && <span>●</span>}
-                      {getEstadoConfig(personaActiva).iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-300"></span>}
+                      {getEstadoConfig(personaActiva).iconType === "outline_square" && <span className="inline-block w-2.5 h-2.5 border border-purple-400"></span>}
                       <span>{getEstadoConfig(personaActiva).label}</span>
                     </span>
                   </div>
@@ -1295,7 +1295,7 @@ function PersonasContent() {
                 <button
                   type="button"
                   onClick={cerrarDetalleDrawer}
-                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                   title="Cerrar detalles"
                 >
                   <X className="w-4 h-4" />
@@ -1305,75 +1305,75 @@ function PersonasContent() {
               {/* Contenido scrolleable del Drawer */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {/* Cuadro de llamada/explicación */}
-                <div className="p-3.5 rounded-xl bg-[#161a2b] border border-indigo-500/30 text-xs text-slate-200 leading-relaxed shadow-sm">
+                <div className="p-3.5 rounded-xl bg-blue-50/70 dark:bg-[#161a2b] border border-blue-200/80 dark:border-indigo-500/30 text-xs text-blue-950 dark:text-slate-200 leading-relaxed shadow-sm">
                   {getMotivoExplicacion(personaActiva)}
                 </div>
 
                 {/* Si está en modo edición, mostrar el formulario integrado */}
                 {editando === personaActiva.id ? (
-                  <div className="p-4 rounded-2xl bg-[#121624] border border-indigo-500/40 space-y-3">
-                    <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#121624] border border-[#0071E3]/40 space-y-3">
+                    <h4 className="text-xs font-bold text-[#0071E3] dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Edit3 className="w-3.5 h-3.5" /> Editar datos de la persona
                     </h4>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Número de Documento</label>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Número de Documento</label>
                       <input
                         type="text"
                         value={editForm.numero_identificacion || ""}
                         onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
-                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                        className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre Completo</label>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombre Completo</label>
                       <input
                         type="text"
                         value={editForm.nombre_completo || ""}
                         onChange={(e) => setEditForm(prev => ({ ...prev, nombre_completo: e.target.value, nombres: e.target.value, apellidos: "" }))}
-                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                        className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombres</label>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombres</label>
                         <input
                           type="text"
                           value={editForm.nombres || ""}
                           onChange={(e) => setEditForm(prev => ({ ...prev, nombres: e.target.value }))}
-                          className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Apellidos</label>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Apellidos</label>
                         <input
                           type="text"
                           value={editForm.apellidos || ""}
                           onChange={(e) => setEditForm(prev => ({ ...prev, apellidos: e.target.value }))}
-                          className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white uppercase"
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fecha de Nacimiento (AAAA-MM-DD)</label>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fecha de Nacimiento (AAAA-MM-DD)</label>
                       <input
                         type="text"
                         value={editForm.fecha_nacimiento || ""}
                         onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
-                        className="w-full bg-[#181d2e] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                        className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
                       />
                     </div>
                     <div className="flex items-center justify-end gap-2 pt-2">
                       <button
                         type="button"
                         onClick={() => setEditando(null)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
                       >
                         Cancelar
                       </button>
                       <button
                         type="button"
                         onClick={() => guardarEdicion(personaActiva.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5"
                       >
                         <Save className="w-3.5 h-3.5" />
                         <span>Guardar cambios</span>
@@ -1383,40 +1383,40 @@ function PersonasContent() {
                 ) : (
                   <>
                     {/* Esquema físico de la Cédula (Image 2) */}
-                    <div className="rounded-2xl bg-[#141826] border border-slate-800 p-4 shadow-md">
+                    <div className="rounded-2xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                       <div className="flex gap-4 items-start">
                         {/* Silueta / Foto Cédula */}
-                        <div className="w-24 h-28 rounded-xl bg-[#20273a] border border-slate-700/60 flex items-center justify-center shrink-0">
-                          <div className="w-12 h-12 rounded-full bg-slate-600/50 flex items-center justify-center">
-                            <Users className="w-6 h-6 text-slate-400" />
+                        <div className="w-24 h-28 rounded-xl bg-slate-200/80 dark:bg-[#20273a] border border-slate-300 dark:border-slate-700/60 flex items-center justify-center shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-slate-300 dark:bg-slate-600/50 flex items-center justify-center">
+                            <Users className="w-6 h-6 text-slate-500 dark:text-slate-400" />
                           </div>
                         </div>
 
                         {/* Cajas OCR sobre el esquema */}
                         <div className="flex-1 space-y-2 min-w-0">
-                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
                               NÚMERO
                             </span>
-                            <span className="font-mono text-sm font-bold text-white tracking-wider truncate block">
+                            <span className="font-mono text-sm font-bold text-slate-900 dark:text-white tracking-wider truncate block">
                               {formatearCedulaPuntos(personaActiva.numero_identificacion)}
                             </span>
                           </div>
 
-                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
                               APELLIDOS
                             </span>
-                            <span className="text-xs font-bold text-white uppercase truncate block">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate block">
                               {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
                             </span>
                           </div>
 
-                          <div className="border border-slate-700/70 rounded-lg p-2 bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
+                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
                               NOMBRES
                             </span>
-                            <span className="text-xs font-bold text-white uppercase truncate block">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate block">
                               {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
                             </span>
                           </div>
@@ -1430,67 +1430,67 @@ function PersonasContent() {
                     {/* Cuadrícula 2x2 de métricas de confianza (Image 3) */}
                     <div className="grid grid-cols-2 gap-3">
                       {/* Documento */}
-                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                           DOCUMENTO
                         </span>
-                        <div className="font-mono text-xs font-bold text-white truncate">
+                        <div className="font-mono text-xs font-bold text-slate-900 dark:text-white truncate">
                           {formatearCedulaPuntos(personaActiva.numero_identificacion)}
                         </div>
-                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-400 w-[99%]" />
+                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 w-[99%]" />
                         </div>
                         <span className="text-[10px] text-slate-500 block font-mono">99% confianza</span>
                       </div>
 
                       {/* Nacimiento */}
-                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                           NACIMIENTO
                         </span>
-                        <div className="font-mono text-xs font-bold text-white truncate">
+                        <div className="font-mono text-xs font-bold text-slate-900 dark:text-white truncate">
                           {personaActiva.fecha_nacimiento
                             ? `${formatearFechaCO(personaActiva.fecha_nacimiento)} · ${personaActiva.edad ?? calcularEdad(personaActiva.fecha_nacimiento)} años`
                             : "—"}
                         </div>
-                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-400 w-[95%]" />
+                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 w-[95%]" />
                         </div>
                         <span className="text-[10px] text-slate-500 block font-mono">95% confianza</span>
                       </div>
 
                       {/* Nombres */}
-                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                           NOMBRES
                         </span>
-                        <div className="text-xs font-bold text-white uppercase truncate">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate">
                           {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
                         </div>
-                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-400 w-[98%]" />
+                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 w-[98%]" />
                         </div>
                         <span className="text-[10px] text-slate-500 block font-mono">98% confianza</span>
                       </div>
 
                       {/* Apellidos */}
-                      <div className="p-3 rounded-xl bg-[#141826] border border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                           APELLIDOS
                         </span>
-                        <div className="text-xs font-bold text-white uppercase truncate">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate">
                           {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
                         </div>
-                        <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-400 w-[97%]" />
+                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 w-[97%]" />
                         </div>
                         <span className="text-[10px] text-slate-500 block font-mono">97% confianza</span>
                       </div>
                     </div>
 
                     {/* Tabla de Comparativa: LECTURA DEL PDF vs PLANILLA EXCEL (Image 3) */}
-                    <div className="rounded-xl bg-[#141826] border border-slate-800 p-3.5 space-y-2.5">
-                      <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-800/80">
+                    <div className="rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5">
+                      <div className="grid grid-cols-12 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-200 dark:border-slate-800/80">
                         <div className="col-span-4"></div>
                         <div className="col-span-4 text-center">LECTURA DEL PDF</div>
                         <div className="col-span-4 text-center">PLANILLA EXCEL</div>
@@ -1498,19 +1498,19 @@ function PersonasContent() {
 
                       {/* Fila DOCUMENTO */}
                       <div className="grid grid-cols-12 text-xs items-center py-1">
-                        <div className="col-span-4 text-[10px] font-bold text-slate-400 uppercase">DOCUMENTO</div>
-                        <div className="col-span-4 text-center font-mono text-white text-xs truncate">
+                        <div className="col-span-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">DOCUMENTO</div>
+                        <div className="col-span-4 text-center font-mono text-slate-900 dark:text-white text-xs truncate">
                           {formatearCedulaPuntos(personaActiva.numero_identificacion)}
                         </div>
                         <div className="col-span-4 text-center flex items-center justify-center gap-1 font-mono text-xs">
                           {personaFaltaEnExcel(personaActiva) ? (
-                            <span className="text-pink-400 flex items-center gap-1">
+                            <span className="text-pink-600 dark:text-pink-400 flex items-center gap-1 font-semibold">
                               Sin registro <X className="w-3 h-3 text-pink-500" />
                             </span>
                           ) : (
-                            <span className="text-emerald-400 flex items-center gap-1">
+                            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
                               {formatearCedulaPuntos(personaActiva.numero_identificacion)}{" "}
-                              <Check className="w-3 h-3 text-emerald-400" />
+                              <Check className="w-3 h-3 text-emerald-500" />
                             </span>
                           )}
                         </div>
@@ -1518,19 +1518,19 @@ function PersonasContent() {
 
                       {/* Fila NOMBRE */}
                       <div className="grid grid-cols-12 text-xs items-center py-1">
-                        <div className="col-span-4 text-[10px] font-bold text-slate-400 uppercase">NOMBRE</div>
-                        <div className="col-span-4 text-center text-white text-xs truncate uppercase">
+                        <div className="col-span-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">NOMBRE</div>
+                        <div className="col-span-4 text-center text-slate-900 dark:text-white text-xs truncate uppercase font-medium">
                           {formatNombreCompleto(personaActiva)}
                         </div>
                         <div className="col-span-4 text-center flex items-center justify-center gap-1 text-xs">
                           {personaFaltaEnExcel(personaActiva) ? (
-                            <span className="text-pink-400 flex items-center gap-1">
+                            <span className="text-pink-600 dark:text-pink-400 flex items-center gap-1 font-semibold">
                               Sin registro <X className="w-3 h-3 text-pink-500" />
                             </span>
                           ) : (
-                            <span className="text-emerald-400 flex items-center gap-1 truncate uppercase">
+                            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 truncate uppercase font-medium">
                               {formatNombreCompleto(personaActiva)}{" "}
-                              <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <Check className="w-3 h-3 text-emerald-500 shrink-0" />
                             </span>
                           )}
                         </div>
@@ -1541,13 +1541,13 @@ function PersonasContent() {
               </div>
 
               {/* Barra de Acciones del Drawer (Bottom Bar) */}
-              <div className="p-4 bg-[#111624] border-t border-slate-800 flex items-center justify-between gap-2">
+              <div className="p-4 bg-white dark:bg-[#111624] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {/* Botón Abrir Página X (Visor PDF Modal) */}
                   <button
                     type="button"
                     onClick={() => abrirModalPdf(personaActiva)}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                     title="Ver página del PDF escaneado"
                   >
                     <FileText className="w-3.5 h-3.5" />
@@ -1563,7 +1563,7 @@ function PersonasContent() {
                     <button
                       type="button"
                       onClick={(e) => aprobarRevision(personaActiva.id, e)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-600/20 dark:hover:bg-emerald-600/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
                       title="Aprobar y marcar como válido"
                     >
                       <Check className="w-3.5 h-3.5" />
@@ -1576,7 +1576,7 @@ function PersonasContent() {
                   <button
                     type="button"
                     onClick={() => iniciarEdicion(personaActiva)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                     title="Editar datos"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -1584,7 +1584,7 @@ function PersonasContent() {
                   <button
                     type="button"
                     onClick={() => eliminar(personaActiva.id, personaActiva.numero_identificacion)}
-                    className="p-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-600/20 dark:hover:bg-rose-600/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 transition-colors cursor-pointer"
                     title="Eliminar persona"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1598,18 +1598,18 @@ function PersonasContent() {
         {/* ─── Modal de Vista Previa Rápida del PDF (Optimizado) ─── */}
         {modalPdfAbierto && personaPdfModal && (
           <div
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
             onClick={() => setModalPdfAbierto(false)}
           >
             <div
-              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header Modal PDF */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-[#141928]">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141928]">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-bold text-white">
+                  <FileText className="w-4 h-4 text-[#0071E3] dark:text-indigo-400" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
                     Vista previa: {formatNombreCompleto(personaPdfModal)} (pág. {paginaPreviaModal})
                   </span>
                 </div>
@@ -1619,18 +1619,18 @@ function PersonasContent() {
                   <button
                     type="button"
                     onClick={() => setZoomModal((z) => Math.max(0.5, z - 0.25))}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
                     title="Alejar"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
-                  <span className="text-[10px] font-mono text-slate-400 w-10 text-center">
+                  <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 w-10 text-center">
                     {Math.round(zoomModal * 100)}%
                   </span>
                   <button
                     type="button"
                     onClick={() => setZoomModal((z) => Math.min(2.5, z + 0.25))}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
                     title="Acercar"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
@@ -1638,7 +1638,7 @@ function PersonasContent() {
                   <button
                     type="button"
                     onClick={() => setZoomModal(1)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
                     title="Restablecer zoom"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
@@ -1646,7 +1646,7 @@ function PersonasContent() {
                   <button
                     type="button"
                     onClick={() => setModalPdfAbierto(false)}
-                    className="p-1.5 ml-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                    className="p-1.5 ml-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1654,7 +1654,7 @@ function PersonasContent() {
               </div>
 
               {/* Contenedor de la Imagen del PDF */}
-              <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-[#0b0f19] min-h-[350px]">
+              <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-900 min-h-[350px]">
                 {(() => {
                   const docId = personaPdfModal.documento_pdf_id || personaPdfModal.documento_id;
                   if (!docId) {
@@ -1667,7 +1667,7 @@ function PersonasContent() {
                             setModalPdfAbierto(false);
                             abrirSubirPdf(personaPdfModal);
                           }}
-                          className="mt-3 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
+                          className="mt-3 px-3 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-xs text-white"
                         >
                           Subir PDF individual de cédula
                         </button>
@@ -1679,7 +1679,7 @@ function PersonasContent() {
                     <div style={{ transform: `scale(${zoomModal})`, transformOrigin: "center center", transition: "transform 0.15s ease" }}>
                       {imgCargandoModal && (
                         <div className="flex flex-col items-center gap-2 py-12">
-                          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-6 h-6 border-2 border-[#0071E3] border-t-transparent rounded-full animate-spin" />
                           <span className="text-xs text-slate-400">Cargando página {paginaPreviaModal}...</span>
                         </div>
                       )}
@@ -1699,13 +1699,13 @@ function PersonasContent() {
 
               {/* Botón inferior para alternar cara si existen dos lados */}
               {personaPdfModal.pagina_frente && personaPdfModal.pagina_reverso && (
-                <div className="p-3 border-t border-slate-800 bg-[#141928] flex items-center justify-center gap-2">
+                <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141928] flex items-center justify-center gap-2">
                   <button
                     onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_frente!); setImgCargandoModal(true); }}
                     className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
                       paginaPreviaModal === personaPdfModal.pagina_frente
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-800 text-slate-400 hover:text-white"
+                        ? "bg-[#0071E3] text-white"
+                        : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
                     Frente (pág. {personaPdfModal.pagina_frente})
@@ -1714,8 +1714,8 @@ function PersonasContent() {
                     onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_reverso!); setImgCargandoModal(true); }}
                     className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
                       paginaPreviaModal === personaPdfModal.pagina_reverso
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-800 text-slate-400 hover:text-white"
+                        ? "bg-[#0071E3] text-white"
+                        : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
                     Reverso (pág. {personaPdfModal.pagina_reverso})
@@ -1733,22 +1733,22 @@ function PersonasContent() {
             onClick={() => !eliminandoEnLote && setModalVaciarAbierto(false)}
           >
             <div
-              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 mx-auto mb-4">
                 <Trash2 className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white text-center">¿Vaciar tabla de personas?</h3>
-              <p className="text-xs text-slate-400 text-center mt-2 leading-relaxed">
-                Estás a punto de eliminar permanentemente todos los registros (<span className="text-rose-400 font-bold">{stats.total} personas</span>).
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">¿Vaciar tabla de personas?</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2 leading-relaxed">
+                Estás a punto de eliminar permanentemente todos los registros (<span className="text-rose-600 dark:text-rose-400 font-bold">{stats.total} personas</span>).
               </p>
               <div className="flex items-center justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setModalVaciarAbierto(false)}
                   disabled={eliminandoEnLote}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -1772,22 +1772,22 @@ function PersonasContent() {
             onClick={() => !eliminandoEnLote && setModalEliminarSeleccionadosAbierto(false)}
           >
             <div
-              className="bg-[#111624] border border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
+              className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 mx-auto mb-4">
                 <Trash2 className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white text-center">¿Eliminar seleccionados?</h3>
-              <p className="text-xs text-slate-400 text-center mt-2 leading-relaxed">
-                Vas a eliminar <strong className="text-rose-400 font-bold">{seleccionados.size} personas</strong> definitivamente.
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">¿Eliminar seleccionados?</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2 leading-relaxed">
+                Vas a eliminar <strong className="text-rose-600 dark:text-rose-400 font-bold">{seleccionados.size} personas</strong> definitivamente.
               </p>
               <div className="flex items-center justify-end gap-3 mt-6">
                 <button
                   type="button"
                   onClick={() => setModalEliminarSeleccionadosAbierto(false)}
                   disabled={eliminandoEnLote}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -1821,10 +1821,10 @@ export default function PersonasPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 items-center justify-center">
+        <div className="flex min-h-screen bg-[#F5F5F7] dark:bg-[#0A0D14] text-slate-900 dark:text-slate-100 items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-slate-400 font-medium">Cargando módulo de personas...</p>
+            <div className="w-8 h-8 border-2 border-[#0071E3] border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Cargando módulo de personas...</p>
           </div>
         </div>
       }

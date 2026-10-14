@@ -434,6 +434,22 @@ class ComparacionService:
             logger.error(f"Error cargando Excel: {e}")
             raise
 
+    def _personas_del_usuario(self, db: Session, usuario_id) -> list:
+        """Personas del usuario dueño de la comparación (nunca de otras cuentas)"""
+        from app.models.persona import Persona
+        from app.models.documento import Documento
+        from sqlalchemy import or_
+
+        if not usuario_id:
+            return []
+        return db.query(Persona).outerjoin(Persona.documento).filter(
+            or_(
+                Persona.usuario_id == usuario_id,
+                Documento.usuario_id == usuario_id,
+                Persona.detalles_campos["usuario_id"].astext == str(usuario_id)
+            )
+        ).all()
+
     def _normalizar_para_comparacion(self, val: Any, campo: str = "") -> str:
         """
         Normaliza un valor para comparación exacta sin falsos positivos por tildes,
@@ -494,20 +510,8 @@ class ComparacionService:
                 db.commit()
 
             # 1. Cargar datos de BD filtrados estrictamente por el usuario dueño de la comparación
-            from app.models.documento import Documento
-            from sqlalchemy import or_
-
-            if comparacion_actual and comparacion_actual.usuario_id:
-                uid = comparacion_actual.usuario_id
-                personas_bd = db.query(Persona).outerjoin(Persona.documento).filter(
-                    or_(
-                        Persona.usuario_id == uid,
-                        Documento.usuario_id == uid,
-                        Persona.detalles_campos["usuario_id"].astext == str(uid)
-                    )
-                ).all()
-            else:
-                personas_bd = []
+            uid = comparacion_actual.usuario_id if comparacion_actual else None
+            personas_bd = self._personas_del_usuario(db, uid)
 
             # Excluir registros que provienen exclusivamente del Excel y no del PDF físico
             personas_bd_pdf = [
@@ -646,12 +650,18 @@ class ComparacionService:
 
                         if nom_ex_ofic:
                             p_bd.nombre_completo = nom_ex_ofic
-                            if row_excel.get("nombres"):
-                                p_bd.nombres = str(row_excel.get("nombres")).strip()
-                            if row_excel.get("apellidos"):
-                                p_bd.apellidos = str(row_excel.get("apellidos")).strip()
+                            nombres_ex = str(row_excel.get("nombres") or "").strip()
+                            apellidos_ex = str(row_excel.get("apellidos") or "").strip()
+                            if nombres_ex or apellidos_ex:
+                                p_bd.nombres = nombres_ex or None
+                                p_bd.apellidos = apellidos_ex or None
+                            else:
+                                # La planilla solo trae el nombre completo: mantenerlo coherente con nombres/apellidos
+                                p_bd.nombres = nom_ex_ofic
+                                p_bd.apellidos = None
 
-                        # Si ya existiera un registro con id_ex_rec para este usuario, fusionar
+                        # Si ya existe un registro con la cédula de la planilla (creado desde el Excel, sin PDF),
+                        # se conserva el registro leído del PDF y se elimina el registro creado desde el Excel
                         query_duplicado = db.query(Persona).filter(
                             Persona.numero_identificacion == id_ex_rec
                         )
@@ -660,17 +670,18 @@ class ComparacionService:
                         p_duplicado = query_duplicado.first()
 
                         if p_duplicado and p_duplicado.id != p_bd.id:
-                            logger.info(f"[Comparacion] Fusionando registro '{id_bd_rec}' con registro existente '{id_ex_rec}'")
-                            db.delete(p_bd)
-                            p_bd = p_duplicado
-                        else:
-                            p_bd.numero_identificacion = id_ex_rec
+                            logger.info(f"[Comparacion] Fusionando registro de la planilla '{id_ex_rec}' en el registro del PDF '{id_bd_rec}'")
+                            for campo_dup in ("fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"):
+                                if not getattr(p_bd, campo_dup) and getattr(p_duplicado, campo_dup):
+                                    setattr(p_bd, campo_dup, getattr(p_duplicado, campo_dup))
+                            db.delete(p_duplicado)
+                            db.flush()
+                        p_bd.numero_identificacion = id_ex_rec
 
                         p_bd.detalles_campos = detalles
                         p_bd.fecha_actualizacion = datetime.utcnow()
 
                         # Re-evaluar estado completo
-                        from app.services.field_validator import validador
                         tiene_datos_c, motivos_c = validador.evaluar_persona_completa(
                             numero_identificacion=id_ex_rec,
                             nombres=p_bd.nombres,
@@ -683,6 +694,7 @@ class ComparacionService:
                             confianza=float(p_bd.confianza_extraccion or 0),
                             detalles_campos=detalles,
                             motor_ocr=p_bd.motor_ocr,
+                            tipo_documento=p_bd.tipo_documento,
                         )
                         if tiene_datos_c:
                             p_bd.requiere_revision = False
@@ -735,7 +747,10 @@ class ComparacionService:
                                 tipo_diferencia="diferente",
                             ))
                             # Forzar estado de revisión en la Persona por discrepancia con la planilla oficial
-                            p_actualizar = db.query(Persona).filter(Persona.numero_identificacion == id_comun).first()
+                            p_actualizar = next(
+                                (p for p in personas_bd_pdf if self._limpiar_numero_id(p.numero_identificacion) == id_comun),
+                                None,
+                            )
                             if p_actualizar:
                                 p_actualizar.requiere_revision = True
                                 p_actualizar.estado_registro = "REVIEW_REQUIRED"
@@ -831,6 +846,8 @@ class ComparacionService:
         except Exception as e:
             logger.error(f"Error en comparación: {e}")
             try:
+                # Descartar cambios a medias antes de guardar el estado de error
+                db.rollback()
                 comparacion = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
                 if comparacion:
                     comparacion.estado = "error"
@@ -862,8 +879,8 @@ class ComparacionService:
         if not comparacion:
             raise ValueError("Comparación no encontrada")
 
-        # 1. Cargar personas de la BD
-        personas_bd = db.query(Persona).all()
+        # 1. Cargar personas de la BD (solo las del dueño de la comparación)
+        personas_bd = self._personas_del_usuario(db, comparacion.usuario_id)
         bd_map: Dict[str, Persona] = {
             str(p.numero_identificacion).strip(): p for p in personas_bd if p.numero_identificacion
         }

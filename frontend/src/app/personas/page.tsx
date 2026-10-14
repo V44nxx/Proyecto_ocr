@@ -209,6 +209,8 @@ function PersonasContent() {
   // Edición
   const [editando, setEditando] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PersonaUpdate>({});
+  // El formulario tiene un solo campo de nombre: si se edita, nombres pasa a ser el nombre completo y apellidos queda vacío
+  const [nombreEditado, setNombreEditado] = useState(false);
 
   // Estadísticas
   const [stats, setStats] = useState({
@@ -482,6 +484,7 @@ function PersonasContent() {
 
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
+    setNombreEditado(false);
     const nomCompleto = formatNombreCompleto(p);
     const numIdLimpio = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     setEditForm({
@@ -504,8 +507,8 @@ function PersonasContent() {
         ...editForm,
         numero_identificacion: editForm.numero_identificacion?.trim() || undefined,
         nombre_completo: editForm.nombre_completo?.trim() || undefined,
-        nombres: editForm.nombres?.trim() || undefined,
-        apellidos: editForm.apellidos?.trim() || undefined,
+        nombres: nombreEditado ? editForm.nombre_completo?.trim() || undefined : undefined,
+        apellidos: nombreEditado && editForm.nombre_completo?.trim() ? "" : undefined,
         fecha_nacimiento: editForm.fecha_nacimiento?.trim() || undefined,
         fecha_expedicion: editForm.fecha_expedicion?.trim() || undefined,
         lugar_expedicion: editForm.lugar_expedicion?.trim() || undefined,
@@ -1338,7 +1341,10 @@ function PersonasContent() {
                       <input
                         type="text"
                         value={editForm.nombre_completo || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, nombre_completo: e.target.value, nombres: e.target.value, apellidos: "" }))}
+                        onChange={(e) => {
+                          setNombreEditado(true);
+                          setEditForm(prev => ({ ...prev, nombre_completo: e.target.value }));
+                        }}
                         className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                       />
                     </div>

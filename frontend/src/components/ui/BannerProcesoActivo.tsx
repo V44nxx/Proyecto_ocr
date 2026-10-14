@@ -94,10 +94,9 @@ export default function BannerProcesoActivo() {
             if (!window.confirm("¿Deseas cancelar la subida y procesamiento de los documentos?\n\nLos archivos serán removidos por completo del sistema.")) return;
             try {
               const ids = docs.map((d) => d.id).filter((id) => !id.startsWith("prep-") && !id.startsWith("doc-"));
-              await apiDocumentos.cancelar({
-                documento_ids: ids.length > 0 ? ids : undefined,
-                todos_en_proceso: true,
-              });
+              if (ids.length > 0) {
+                await apiDocumentos.cancelar({ documento_ids: ids });
+              }
               if (typeof window !== "undefined") {
                 localStorage.removeItem(LS_DOCS_EN_PROCESO);
                 localStorage.removeItem("ocr_fase_actual");

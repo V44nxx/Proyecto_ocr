@@ -1093,10 +1093,8 @@ class OCRService:
                         persona.apellidos = apellidos_final
                 elif nombre_completo_final and nombre_completo_final != "POR REVISAR":
                     # Si el registro en BD proviene de la planilla oficial Excel, no sobreescribirlo si el OCR leyó un nombre distinto
-                    es_fuente_excel = (
-                        isinstance(persona.detalles_campos, dict)
-                        and persona.detalles_campos.get("nombre_completo", {}).get("source") == "excel_oficial"
-                    )
+                    nombre_det = persona.detalles_campos.get("nombre_completo") if isinstance(persona.detalles_campos, dict) else None
+                    es_fuente_excel = isinstance(nombre_det, dict) and nombre_det.get("source") == "excel_oficial"
                     if not es_fuente_excel:
                         from app.utils.name_cleaner import deduplicar_tokens_nombre, deduplicar_ngrams
                         nom_bd_dedup = deduplicar_tokens_nombre(deduplicar_ngrams(persona.nombre_completo or ""))
@@ -1135,7 +1133,9 @@ class OCRService:
                 detalles_existentes = dict(persona.detalles_campos or {})
                 detalles_nuevos = dict(datos.get("detalles_campos") or {})
                 for k, v in detalles_nuevos.items():
-                    if k not in detalles_existentes or not detalles_existentes[k].get("valor"):
+                    existente = detalles_existentes.get(k)
+                    # Hay claves que no son campos (motivos_revision es una lista); esas se recalculan más abajo
+                    if existente is None or (isinstance(existente, dict) and not existente.get("valor")):
                         detalles_existentes[k] = v
                 if discrepancia_nombre_excel:
                     detalles_existentes["discrepancia_excel"] = discrepancia_nombre_excel

@@ -368,10 +368,14 @@ export default function UsuariosPage() {
             <h3 className="text-lg font-bold text-white text-center mb-2">
               ¿Eliminar usuario?
             </h3>
-            <p className="text-sm text-slate-400 text-center mb-6">
-              ¿Estás seguro de que deseas revocar el acceso a{" "}
-              <strong className="text-white">{usuarioAEliminar.email}</strong>? El usuario ya no
-              podrá iniciar sesión en el sistema.
+            <p className="text-sm text-slate-400 text-center mb-3">
+              ¿Estás seguro de que deseas eliminar a{" "}
+              <strong className="text-white">{usuarioAEliminar.email}</strong>? Ya no podrá
+              iniciar sesión.
+            </p>
+            <p className="text-xs font-medium text-rose-600 dark:text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center mb-6">
+              También se eliminarán de forma definitiva todas sus fichas, personas y comparaciones.
+              Esta acción no se puede deshacer.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -388,7 +392,7 @@ export default function UsuariosPage() {
                 disabled={eliminando}
                 className="btn-danger text-sm py-2 px-4 flex items-center gap-2"
               >
-                {eliminando ? "Eliminando..." : "Sí, eliminar acceso"}
+                {eliminando ? "Eliminando..." : "Sí, eliminar usuario"}
               </button>
             </div>
           </div>

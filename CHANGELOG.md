@@ -22,6 +22,34 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.2.1] - 2026-10-14
+
+**Resumen**
+
+- Correcciones de integridad de datos: los reinicios del servidor ya no cambian personas de ficha ni deshacen nombres corregidos a mano, y el OCR deja de perder personas.
+- Comparación, exportación y cancelación vuelven a funcionar en los casos que fallaban.
+
+### Cambiado
+
+- Eliminar un usuario elimina también sus fichas, personas y comparaciones, con sus archivos. Antes quedaban sin dueño y, en los siguientes reinicios, pasaban a la cuenta del administrador. El aviso de confirmación lo explica.
+- "Cancelar subida" (en Documentos y en el aviso flotante) cancela solo los documentos de esa subida y no otros procesos en curso. Una ficha que ya terminó no se borra desde "Cancelar".
+- Al editar el nombre completo de una persona, sus nombres y apellidos quedan coherentes con el nuevo valor.
+
+### Corregido
+
+- Al arrancar, el servidor movía las personas de las fichas de 1 o 2 páginas a la ficha grande más reciente y ocultaba la ficha original. Ahora solo devuelve a su ficha las personas de un PDF individual subido con "Subir PDF".
+- Al arrancar, el servidor rehacía el nombre completo desde nombres y apellidos y deshacía las correcciones manuales.
+- El reporte de una comparación incluye solo las personas de quien la hizo.
+- La comparación fallaba cuando encontraba a una persona por nombre con otra cédula. Ahora corrige la cédula y, si la persona ya existía como registro creado desde la planilla, conserva el registro leído del PDF.
+- Si la comparación falla, ya no deja guardados cambios a medias.
+- Al marcar una discrepancia de nombre, la comparación ya no modifica personas de otras cuentas.
+- El OCR perdía los datos al volver a encontrar una persona que ya estaba en revisión.
+- Solo se guardaba una persona sin cédula por cuenta; ahora se guardan todas.
+- "Corregir" una fecha desde Comparación respondía con error 500. Ahora guarda la fecha, y una fecha inválida responde 400.
+- Exportar con el filtro "Menores (< 14)" respondía con error 500.
+- El OCR quitaba el primer dígito a las cédulas pegadas a su etiqueta ("NUIP1098…" se leía como "NUIPI098…").
+- Con una contraseña incorrecta, la página de inicio de sesión se recargaba y no mostraba el error.
+
 ## [2.2.0] - 2026-10-14
 
 **Resumen**
@@ -542,7 +570,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...main
+[2.2.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/V44nxx/Proyecto_ocr/compare/9afaa4dda36d0a3b750747be7f249efef7dda425...v2.1.1
 [2.1.0]: https://github.com/V44nxx/Proyecto_ocr/compare/0aa89e21cd86739e557f122751a81d7729313119...9afaa4dda36d0a3b750747be7f249efef7dda425

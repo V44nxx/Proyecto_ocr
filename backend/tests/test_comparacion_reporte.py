@@ -110,7 +110,7 @@ def test_generar_reporte_xlsx_formato(tmp_path):
         if "Comparacion" in name:
             m.filter.return_value.first.return_value = mock_comp
         elif "Persona" in name:
-            m.all.return_value = [mock_p1, mock_p2, mock_p3]
+            m.outerjoin.return_value.filter.return_value.all.return_value = [mock_p1, mock_p2, mock_p3]
         elif "Diferencia" in name:
             m.filter.return_value.all.return_value = [mock_dif]
         return m

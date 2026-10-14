@@ -270,21 +270,66 @@ def eliminar_usuario(
     usuario_actual: Usuario = Depends(get_admin_actual),
     db: Session = Depends(get_db)
 ):
-    """Eliminar usuario por ID (solo admin)"""
+    """
+    Eliminar usuario por ID (solo admin).
+    Se eliminan también sus fichas, personas y comparaciones, con sus archivos en disco,
+    para que sus datos no queden sin dueño ni pasen a otra cuenta.
+    """
+    import uuid as uuid_pkg
+    from pathlib import Path
+    from app.models.comparacion import Comparacion
+    from app.models.documento import Documento
+    from app.models.persona import Persona
+
     if str(usuario_actual.id) == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No puedes eliminar tu propia cuenta de usuario"
         )
-    u = db.query(Usuario).filter(Usuario.id == user_id).first()
+    try:
+        uid = uuid_pkg.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    u = db.query(Usuario).filter(Usuario.id == uid).first()
     if not u:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
+
+    email_eliminado = u.email
+    docs = db.query(Documento.id, Documento.ruta_archivo).filter(Documento.usuario_id == uid).all()
+    comps = db.query(Comparacion.ruta_archivo).filter(Comparacion.usuario_id == uid).all()
+    doc_ids = [d.id for d in docs]
+
+    personas_eliminadas = db.query(Persona).filter(Persona.usuario_id == uid).delete(synchronize_session=False)
+    if doc_ids:
+        personas_eliminadas += db.query(Persona).filter(Persona.documento_id.in_(doc_ids)).delete(synchronize_session=False)
+    fichas_eliminadas = db.query(Documento).filter(Documento.usuario_id == uid).delete(synchronize_session=False)
+    db.query(Comparacion).filter(Comparacion.usuario_id == uid).delete(synchronize_session=False)
     db.delete(u)
     db.commit()
-    return {"message": "Usuario eliminado exitosamente"}
+
+    # Archivos en disco (PDF, planillas y vistas previas en caché)
+    rutas = [d.ruta_archivo for d in docs] + [c.ruta_archivo for c in comps]
+    cache_dir = settings.upload_path / "cache_previews"
+    for doc_id in doc_ids:
+        rutas.extend(str(p) for p in cache_dir.glob(f"{doc_id}_p*.*"))
+    for ruta in rutas:
+        try:
+            if ruta and Path(ruta).is_file():
+                Path(ruta).unlink()
+        except Exception as e:
+            logger.warning(f"No se pudo borrar el archivo {ruta} del usuario eliminado: {e}")
+
+    logger.info(
+        f"Usuario {email_eliminado} eliminado junto con {fichas_eliminadas} ficha(s) y {personas_eliminadas} persona(s)"
+    )
+    return {
+        "message": "Usuario eliminado exitosamente",
+        "fichas_eliminadas": fichas_eliminadas,
+        "personas_eliminadas": personas_eliminadas,
+    }
 
 
 @router.get("/me", response_model=UsuarioResponse, summary="Perfil actual")

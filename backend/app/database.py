@@ -96,13 +96,13 @@ def create_tables():
                 "CREATE INDEX IF NOT EXISTS ix_personas_usuario_id ON personas (usuario_id);",
                 "UPDATE personas p SET usuario_id = d.usuario_id FROM documentos d WHERE p.documento_id = d.id AND p.usuario_id IS NULL;",
                 "ALTER TABLE personas DROP CONSTRAINT IF EXISTS personas_numero_identificacion_key;",
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL;",
+                # La cédula es única por usuario, pero puede haber varias personas sin cédula ("") en la misma cuenta
+                "DROP INDEX IF EXISTS uq_personas_usuario_identificacion;",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_usuario_identificacion_v2 ON personas (usuario_id, numero_identificacion) WHERE usuario_id IS NOT NULL AND numero_identificacion <> '';",
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS visible_en_subida BOOLEAN DEFAULT TRUE;",
                 "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;",
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
-                "UPDATE documentos SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
-                "UPDATE comparaciones SET usuario_id = (SELECT id FROM usuarios WHERE email = 'murciacorredoremerson@gmail.com' OR rol = 'admin' ORDER BY fecha_creacion ASC LIMIT 1) WHERE usuario_id IS NULL AND EXISTS (SELECT 1 FROM usuarios WHERE rol = 'admin');",
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;",
                 "ALTER TABLE documentos DROP CONSTRAINT IF EXISTS documentos_estado_check;",
                 "ALTER TABLE documentos ADD CONSTRAINT documentos_estado_check CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision', 'cancelado'));"
@@ -118,66 +118,49 @@ def create_tables():
         logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
 
     # ── Auto-curación de personas con PDF individual desvinculadas de su lote principal ──
+    # Solo toca personas cuyo documento actual es un PDF individual subido desde "Subir PDF"
+    # (cedula_*.pdf o es_pdf_individual) y las devuelve a la ficha que las registró en su snapshot.
     try:
         from app.models.persona import Persona
         from app.models.documento import Documento
         db_s = SessionLocal()
         try:
-            # 1. Por snapshot en metadatos de documentos
+            def _es_pdf_individual(doc) -> bool:
+                if not doc:
+                    return False
+                meta = doc.metadatos if isinstance(doc.metadatos, dict) else {}
+                return bool(meta.get("es_pdf_individual")) or (doc.nombre_archivo or "").lower().startswith("cedula_")
+
             docs_lote = db_s.query(Documento).filter(Documento.metadatos.isnot(None)).all()
             for d_padre in docs_lote:
+                if _es_pdf_individual(d_padre):
+                    continue
                 snap = d_padre.metadatos.get("personas_extraidas_datos") if isinstance(d_padre.metadatos, dict) else None
-                if snap and isinstance(snap, list):
-                    for item in snap:
-                        pid = item.get("id")
-                        if pid:
-                            pers = db_s.query(Persona).filter(Persona.id == pid).first()
-                            if pers and pers.documento_id != d_padre.id:
-                                pers.documento_pdf_id = pers.documento_id
-                                pers.documento_id = d_padre.id
-                                det = dict(pers.detalles_campos or {})
-                                det["en_pdf"] = True
-                                det["documento_pdf_id"] = str(pers.documento_pdf_id)
-                                det["documento_padre_id"] = str(d_padre.id)
-                                det.pop("motivo_no_en_pdf", None)
-                                pers.detalles_campos = det
-                                doc_ind = db_s.query(Documento).filter(Documento.id == pers.documento_pdf_id).first()
-                                if doc_ind:
-                                    doc_ind.visible_en_subida = False
-                                    meta = dict(doc_ind.metadatos or {})
-                                    meta["es_pdf_individual"] = True
-                                    meta["documento_padre_id"] = str(d_padre.id)
-                                    doc_ind.metadatos = meta
-
-            # 2. Por coincidencia en lotes de usuario (documentos individuales cedula_... o cedulafaltante...)
-            personas_ind = db_s.query(Persona).join(Documento, Persona.documento_id == Documento.id).filter(
-                (Documento.nombre_archivo.ilike("cedula_%")) | (Documento.nombre_original.ilike("cedulafaltante%")) | (Documento.total_paginas <= 2)
-            ).all()
-            for p_ind in personas_ind:
-                if p_ind.documento and not p_ind.documento_pdf_id:
-                    # Buscar documento lote principal del usuario
-                    lote_cand = db_s.query(Documento).filter(
-                        Documento.usuario_id == p_ind.usuario_id,
-                        Documento.id != p_ind.documento_id,
-                        Documento.visible_en_subida == True,
-                        Documento.total_paginas > 2
-                    ).order_by(Documento.fecha_carga.desc()).first()
-                    if lote_cand:
-                        p_ind.documento_pdf_id = p_ind.documento_id
-                        p_ind.documento_id = lote_cand.id
-                        det = dict(p_ind.detalles_campos or {})
-                        det["en_pdf"] = True
-                        det["documento_pdf_id"] = str(p_ind.documento_pdf_id)
-                        det["documento_padre_id"] = str(lote_cand.id)
-                        det.pop("motivo_no_en_pdf", None)
-                        p_ind.detalles_campos = det
-                        doc_ind = db_s.query(Documento).filter(Documento.id == p_ind.documento_pdf_id).first()
-                        if doc_ind:
-                            doc_ind.visible_en_subida = False
-                            meta = dict(doc_ind.metadatos or {})
-                            meta["es_pdf_individual"] = True
-                            meta["documento_padre_id"] = str(lote_cand.id)
-                            doc_ind.metadatos = meta
+                if not snap or not isinstance(snap, list):
+                    continue
+                for item in snap:
+                    pid = item.get("id") if isinstance(item, dict) else None
+                    if not pid:
+                        continue
+                    pers = db_s.query(Persona).filter(Persona.id == pid).first()
+                    if not pers or pers.documento_id == d_padre.id or pers.documento_pdf_id:
+                        continue
+                    doc_ind = pers.documento
+                    if not _es_pdf_individual(doc_ind) or doc_ind.usuario_id != d_padre.usuario_id:
+                        continue
+                    pers.documento_pdf_id = doc_ind.id
+                    pers.documento_id = d_padre.id
+                    det = dict(pers.detalles_campos or {})
+                    det["en_pdf"] = True
+                    det["documento_pdf_id"] = str(doc_ind.id)
+                    det["documento_padre_id"] = str(d_padre.id)
+                    det.pop("motivo_no_en_pdf", None)
+                    pers.detalles_campos = det
+                    doc_ind.visible_en_subida = False
+                    meta = dict(doc_ind.metadatos or {})
+                    meta["es_pdf_individual"] = True
+                    meta["documento_padre_id"] = str(d_padre.id)
+                    doc_ind.metadatos = meta
 
             db_s.commit()
             logger.info("Auto-curación de documentos individuales completada con éxito.")
@@ -198,7 +181,13 @@ def create_tables():
             for p in personas:
                 detalles = p.detalles_campos or {}
                 disc_excel = detalles.get("discrepancia_excel") if isinstance(detalles, dict) else None
-                if disc_excel and isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
+                # Los nombres corregidos a mano (PUT de persona o "Corregir" en Comparación) no se recalculan
+                nombre_revisado_a_mano = bool(
+                    {"nombre_completo", "nombres", "apellidos"} & set(p.campos_revisados or [])
+                )
+                if nombre_revisado_a_mano:
+                    pass
+                elif disc_excel and isinstance(disc_excel, dict) and disc_excel.get("nombre_excel"):
                     nom_ofic = disc_excel["nombre_excel"].strip()
                     if nom_ofic and p.nombre_completo != nom_ofic:
                         p.nombre_completo = nom_ofic

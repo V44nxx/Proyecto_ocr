@@ -500,11 +500,13 @@ export default function DocumentosPage() {
         .map((d) => d.id)
         .filter((id) => id && !id.startsWith("prep-") && !id.startsWith("doc-"));
 
-      await apiDocumentos.cancelar({
-        documento_ids: idsValidos.length > 0 ? idsValidos : undefined,
-        comparacion_id: comparacionId,
-        todos_en_proceso: true,
-      });
+      // Solo se cancelan los documentos de esta subida, no otros procesos en curso
+      if (idsValidos.length > 0 || comparacionId) {
+        await apiDocumentos.cancelar({
+          documento_ids: idsValidos.length > 0 ? idsValidos : undefined,
+          comparacion_id: comparacionId,
+        });
+      }
 
       // 3. Limpiar estado local y storage
       setSubiendo(false);

@@ -266,14 +266,20 @@ def corregir_campo_desde_comparacion(
     valor_a_guardar = datos.nuevo_valor.strip()
     if campo in ["fecha_nacimiento", "fecha_expedicion"]:
         if valor_a_guardar:
-            fecha_dt = validador.parsear_fecha(valor_a_guardar)
-            setattr(persona, campo, fecha_dt.date() if fecha_dt else None)
+            fecha = validador.parsear_fecha(valor_a_guardar)
+            if not fecha:
+                raise HTTPException(status_code=400, detail=f"La fecha '{valor_a_guardar}' no es válida")
+            setattr(persona, campo, fecha)
         else:
             setattr(persona, campo, None)
     elif campo == "numero_identificacion":
         setattr(persona, "numero_identificacion", valor_a_guardar)
     else:
         setattr(persona, campo, valor_a_guardar if valor_a_guardar else None)
+        if campo == "nombre_completo" and valor_a_guardar:
+            # La planilla trae el nombre en un solo campo: nombres/apellidos deben quedar coherentes con él
+            persona.nombres = valor_a_guardar
+            persona.apellidos = None
 
     # Marcar campo en campos_revisados
     revisados = list(persona.campos_revisados or [])

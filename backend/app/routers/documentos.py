@@ -429,14 +429,25 @@ def cancelar_subida_o_procesamiento(
     from app.models.persona import Persona
     from app.models.comparacion import Comparacion
 
+    # Solo se cancela lo que todavía no terminó: una ficha completada no se borra desde aquí
+    estados_cancelables = ["pendiente", "procesando", "error", "cancelado"]
     docs_a_eliminar = []
     if payload.documento_ids:
-        docs_a_eliminar = db.query(Documento).filter(
-            Documento.usuario_id == usuario.id,
-            Documento.id.in_(payload.documento_ids)
-        ).all()
+        ids_validos = []
+        for doc_id in payload.documento_ids:
+            try:
+                ids_validos.append(uuid.UUID(str(doc_id)))
+            except ValueError:
+                continue
+        if ids_validos:
+            docs_a_eliminar = db.query(Documento).filter(
+                Documento.usuario_id == usuario.id,
+                Documento.id.in_(ids_validos),
+                Documento.estado.in_(estados_cancelables),
+            ).all()
 
-    if payload.todos_en_proceso or not docs_a_eliminar:
+    # Todo lo que está en proceso solo se cancela si se pide de forma explícita
+    if payload.todos_en_proceso:
         docs_activos = db.query(Documento).filter(
             Documento.usuario_id == usuario.id,
             Documento.estado.in_(["pendiente", "procesando"])

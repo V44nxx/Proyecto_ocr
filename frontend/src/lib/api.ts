@@ -101,7 +101,9 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // En el login un 401 significa credenciales incorrectas: se muestra el error sin recargar la página
+    const esLogin = String(error.config?.url || "").includes("/api/auth/login");
+    if (error.response?.status === 401 && !esLogin) {
       auth.cerrarSesion();
       if (typeof window !== "undefined") {
         window.location.href = "/";

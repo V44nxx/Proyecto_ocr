@@ -107,9 +107,6 @@ class ExportacionService:
                 p_ids = filtros["persona_ids"]
                 query = query.filter(Persona.id.in_(p_ids))
 
-            if filtros.get("solo_menores"):
-                query = query.filter(Persona.edad.isnot(None), Persona.edad < 14)
-
             if filtros.get("requiere_revision") is not None:
                 if filtros["requiere_revision"] is True:
                     query = query.filter(
@@ -124,6 +121,10 @@ class ExportacionService:
                     )
 
         personas = query.order_by(Persona.fecha_registro.desc()).all()
+
+        # La edad es una propiedad calculada (no una columna), así que se filtra en Python
+        if filtros and filtros.get("solo_menores"):
+            personas = [p for p in personas if p.edad is not None and p.edad < 14]
         logger.info(f"Exportando {len(personas)} registros")
 
         # Convertir a DataFrame

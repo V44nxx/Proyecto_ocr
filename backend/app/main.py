@@ -7,7 +7,7 @@ os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["PADDLE_DISABLE_PIR"] = "1"
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +19,7 @@ from app.config import settings
 from app.database import check_db_connection, create_tables
 from app.utils.logger import app_logger as logger
 from app.routers import auth, documentos, personas, exportacion, comparacion
+from app.routers.auth import get_admin_actual
 
 
 # ──────────────────────────────────────────
@@ -176,9 +177,14 @@ def health_check():
     }
 
 
-@app.api_route("/api/sistema/migrar-db", methods=["GET", "POST"], tags=["Sistema"])
+@app.api_route(
+    "/api/sistema/migrar-db",
+    methods=["GET", "POST"],
+    tags=["Sistema"],
+    dependencies=[Depends(get_admin_actual)],
+)
 def migrar_base_datos():
-    """Ejecuta migraciones de esquema idempotentes en PostgreSQL"""
+    """Ejecuta migraciones de esquema idempotentes en PostgreSQL (solo admin)"""
     try:
         create_tables()
         return {"status": "ok", "message": "Migración de esquema ejecutada exitosamente."}

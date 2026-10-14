@@ -89,6 +89,8 @@ copy .env.example .env
 
 Edita `.env` para ingresar tu configuración de Google Cloud y contraseñas:
 ```ini
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=una_contrasena_larga_y_propia
 GOOGLE_CLOUD_PROJECT=tu-proyecto-gcp
 GOOGLE_DOCUMENT_AI_LOCATION=us
 GOOGLE_DOCUMENT_AI_PROCESSOR_ID=tu_processor_id_aqui
@@ -120,11 +122,13 @@ docker-compose ps
 docker-compose logs -f backend
 ```
 
-### 4. Acceso y Credenciales por Defecto
+### 4. Acceso y Credenciales
 
-| Servicio | URL | Credenciales por Defecto |
+El administrador inicial se crea al arrancar con `ADMIN_EMAIL` y `ADMIN_PASSWORD` si ese correo no existe; nunca se modifican usuarios existentes.
+
+| Servicio | URL | Credenciales |
 |:---------|:----|:-------------------------|
-| **Frontend Web** | [http://localhost:3000](http://localhost:3000) | `admin@ocr.com` / `Admin123!` |
+| **Frontend Web** | [http://localhost:3000](http://localhost:3000) | `ADMIN_EMAIL` / `ADMIN_PASSWORD` de tu `.env` |
 | **Documentación Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | Autenticación con Bearer Token |
 | **Health Check API** | [http://localhost:8000/health](http://localhost:8000/health) | Acceso público |
 | **pgAdmin 4** | [http://localhost:5050](http://localhost:5050) | `admin@ocr.com` / `admin123` |

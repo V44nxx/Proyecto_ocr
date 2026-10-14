@@ -4,6 +4,7 @@ Endpoints: Upload PDF, listar, detalle, eliminar, preview de página
 """
 import uuid
 import io
+import re
 import shutil
 from pathlib import Path
 from typing import List, Optional, Union
@@ -23,6 +24,7 @@ from app.schemas.documento import DocumentoResponse, PersonaResponse
 from app.routers.auth import get_usuario_actual, get_usuario_desde_token_o_query
 from app.services.ocr_service import ocr_service
 from app.config import settings
+from app.utils.archivos import verificar_tamano_archivo
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
@@ -556,10 +558,15 @@ async def upload_pdf(
     if not archivos_recibidos:
         raise HTTPException(status_code=400, detail="No se enviaron archivos PDF válidos")
 
-    # ── Procesar Excel adjunto (si existe) ────────────────────────────────
-    comparacion_id: Optional[str] = None
-    excel_path_str: Optional[str] = None
+    # ── Validar todos los archivos antes de guardar nada ──────────────────
+    contenidos_pdf: List[bytes] = []
+    for pdf_file in archivos_recibidos:
+        _validar_pdf(pdf_file)
+        contenido_pdf = await pdf_file.read()
+        verificar_tamano_archivo(contenido_pdf, pdf_file.filename)
+        contenidos_pdf.append(contenido_pdf)
 
+    excel_content: Optional[bytes] = None
     if excel and excel.filename:
         ext = Path(excel.filename).suffix.lower()
         if ext not in (".xlsx", ".xls"):
@@ -568,6 +575,13 @@ async def upload_pdf(
                 detail=f"El archivo Excel debe tener extensión .xlsx o .xls. Recibido: {ext}"
             )
         excel_content = await excel.read()
+        verificar_tamano_archivo(excel_content, excel.filename)
+
+    # ── Procesar Excel adjunto (si existe) ────────────────────────────────
+    comparacion_id: Optional[str] = None
+    excel_path_str: Optional[str] = None
+
+    if excel_content is not None:
         nombre_excel = f"comp_{uuid.uuid4()}{ext}"
         ruta_excel = settings.upload_path / nombre_excel
         ruta_excel.write_bytes(excel_content)
@@ -594,13 +608,9 @@ async def upload_pdf(
     resultados = []
     items_para_procesar = []
 
-    for pdf_file in archivos_recibidos:
-        _validar_pdf(pdf_file)
-
+    for pdf_file, content in zip(archivos_recibidos, contenidos_pdf):
         nombre_unico = f"{uuid.uuid4()}_{pdf_file.filename}"
         ruta_archivo = settings.upload_path / nombre_unico
-
-        content = await pdf_file.read()
         ruta_archivo.write_bytes(content)
 
         documento = Documento(

@@ -223,8 +223,12 @@ def login_form(
 
 
 @router.post("/register", response_model=UsuarioResponse, status_code=201, summary="Registrar usuario")
-def registrar(request: UsuarioCreate, db: Session = Depends(get_db)):
-    """Registrar nuevo usuario en el sistema"""
+def registrar(
+    request: UsuarioCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(get_admin_actual),
+):
+    """Registrar nuevo usuario en el sistema (solo admin)"""
     if db.query(Usuario).filter(Usuario.email.ilike(request.email.strip())).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -158,22 +158,8 @@ CREATE TRIGGER trigger_personas_timestamp
 -- ============================================================
 -- DATOS INICIALES: Usuario administrador
 -- ============================================================
--- Contraseña: Admin123! (hash bcrypt generado)
-INSERT INTO usuarios (email, password_hash, nombre, rol) 
-VALUES (
-    'admin@ocr.com',
-    '$2b$12$o9fg6PwcDAYntMGW7sxtm.B1dS8xLBsZv6DT.VpGpXgoWGvUmeIn.',
-    'Administrador Sistema',
-    'admin'
-) ON CONFLICT (email) DO NOTHING;
-
-INSERT INTO usuarios (email, password_hash, nombre, rol) 
-VALUES (
-    'murciacorredoremerson@gmail.com',
-    '$2b$12$M.g61vdM2wJTYzuUQbP9uexLipMeRTuqa2MoAyFUzS4g7gK6skc0e',
-    'Emerson Murcia Corredor',
-    'admin'
-) ON CONFLICT (email) DO NOTHING;
+-- El backend crea el administrador inicial al arrancar a partir de
+-- ADMIN_EMAIL y ADMIN_PASSWORD (ver .env.example).
 
 -- ============================================================
 -- VISTA: Resumen de documentos con personas

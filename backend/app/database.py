@@ -267,46 +267,54 @@ def create_tables():
         logger.warning(f"Aviso saneando y reevaluando personas en BD: {san_err}")
 
     try:
-        from app.models.usuario import Usuario
         db = SessionLocal()
         try:
-            # Usuario Emerson Murcia Corredor
-            emerson_user = db.query(Usuario).filter(Usuario.email == "murciacorredoremerson@gmail.com").first()
-            emerson_hash = _hash_password("Emerson1722@")
-            if not emerson_user:
-                nuevo_emerson = Usuario(
-                    email="murciacorredoremerson@gmail.com",
-                    nombre="Emerson Murcia Corredor",
-                    password_hash=emerson_hash,
-                    rol="admin",
-                    activo=True
-                )
-                db.add(nuevo_emerson)
-                logger.info("Usuario administrador creado: murciacorredoremerson@gmail.com")
-            else:
-                emerson_user.password_hash = emerson_hash
-                emerson_user.activo = True
-                emerson_user.rol = "admin"
-
-            # Usuario admin de respaldo
-            admin_user = db.query(Usuario).filter(Usuario.email == "admin@ocr.com").first()
-            if not admin_user:
-                nuevo_hash = _hash_password("Admin123!")
-                nuevo_admin = Usuario(
-                    email="admin@ocr.com",
-                    nombre="Administrador Sistema",
-                    password_hash=nuevo_hash,
-                    rol="admin",
-                    activo=True
-                )
-                db.add(nuevo_admin)
-                logger.info("Usuario administrador inicial creado: admin@ocr.com")
-
-            db.commit()
+            crear_admin_inicial(db)
         finally:
             db.close()
     except Exception as err:
-        logger.warning(f"No se pudo verificar/crear usuarios administradores iniciales: {err}")
+        logger.warning(f"No se pudo verificar/crear el administrador inicial: {err}")
+
+
+def crear_admin_inicial(db) -> bool:
+    """
+    Crea el administrador inicial definido en ADMIN_EMAIL y ADMIN_PASSWORD si ese correo
+    aún no existe. Nunca modifica usuarios existentes ni sus contraseñas.
+    Retorna True si creó el usuario.
+    """
+    from pydantic import EmailStr, TypeAdapter
+    from sqlalchemy import func
+    from app.models.usuario import Usuario
+
+    email = (settings.ADMIN_EMAIL or "").strip().lower()
+    if not email or not settings.ADMIN_PASSWORD:
+        if not db.query(Usuario).filter(Usuario.rol == "admin").first():
+            logger.warning(
+                "No existe ningún administrador. Define ADMIN_EMAIL y ADMIN_PASSWORD "
+                "para crear el administrador inicial al arrancar."
+            )
+        return False
+
+    # El login valida el correo con EmailStr: un correo que no pase no podría iniciar sesión
+    try:
+        TypeAdapter(EmailStr).validate_python(email)
+    except ValueError:
+        logger.error(f"ADMIN_EMAIL no es un correo válido para iniciar sesión: {email}")
+        return False
+
+    if db.query(Usuario).filter(func.lower(Usuario.email) == email).first():
+        return False
+
+    db.add(Usuario(
+        email=email,
+        nombre=settings.ADMIN_NOMBRE,
+        password_hash=_hash_password(settings.ADMIN_PASSWORD),
+        rol="admin",
+        activo=True,
+    ))
+    db.commit()
+    logger.info(f"Administrador inicial creado: {email}")
+    return True
 
 
 def check_db_connection():

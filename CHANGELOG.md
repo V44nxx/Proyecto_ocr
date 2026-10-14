@@ -15,19 +15,45 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## Cómo registrar cambios nuevos
 
-1. Anota cada cambio en **[Sin publicar]**, en la categoría que corresponda.
-2. Al publicar, cambia ese título por el número de versión y la fecha, y crea la etiqueta (`git tag vX.Y.Z`).
-3. Mantén `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json`) con el mismo número.
+1. Anota cada cambio en **[Sin publicar]**, en la categoría que corresponda, en el mismo commit que lo introduce.
+2. Cada push a `main` se despliega en producción, así que cada push con cambios en la app se publica como versión: PATCH si solo trae correcciones y MINOR si trae funcionalidades nuevas.
+3. Al publicar, cambia ese título por el número de versión y la fecha, deja un [Sin publicar] vacío arriba y crea la etiqueta (`git tag vX.Y.Z`).
+4. Mantén `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json` y `package-lock.json`) con el mismo número.
 
 ## [Sin publicar]
 
+## [2.1.1] - 2026-10-13
+
+**Resumen**
+
+- Endurecimiento de seguridad: crear usuarios y ejecutar migraciones exige administrador, las subidas respetan el límite de tamaño y el administrador inicial se configura con variables de entorno.
+- Se agrega este changelog y la versión de la app queda alineada con él.
+
 ### Cambiado
 
-- `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json` y `package-lock.json`) pasan de 1.0.0 a 2.1.0 para coincidir con este changelog.
+- El administrador inicial se crea al arrancar con `ADMIN_EMAIL` y `ADMIN_PASSWORD`, solo si ese correo no existe; nunca modifica usuarios existentes ni sus contraseñas, y rechaza correos con los que no se podría iniciar sesión. **En una instalación nueva hay que definir esas dos variables** para tener un administrador.
+- Las subidas validan todos los archivos (extensión y tamaño) antes de guardar cualquiera; si uno falla, no queda ningún documento a medias en estado "procesando".
+- `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json` y `package-lock.json`) quedan alineados con este changelog.
+
+### Corregido
+
+- El listado de personas de un documento del historial ya no falla con error 500 cuando solo queda el snapshot guardado del documento (faltaba importar `re`).
+
+### Seguridad
+
+- `POST /api/auth/register` exige una sesión de administrador.
+- `/api/sistema/migrar-db` exige una sesión de administrador.
+- Las subidas de PDF y Excel respetan `MAX_FILE_SIZE_MB` (50 MB por defecto, el mismo límite que anuncia la pantalla de Documentos) y responden 413 si se supera.
+- Se quitan del código y de `database/init.sql` las credenciales fijas de administrador, y el backend deja de restablecer contraseñas al arrancar.
 
 ### Documentación
 
 - Se agrega este `CHANGELOG.md` con el historial de versiones 1.0.0 a 2.1.0 reconstruido desde git.
+- El README y `.env.example` documentan `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
+
+### Mantenimiento
+
+- Tests de seguridad de la API en `backend/tests/test_seguridad_api.py`.
 
 ## [2.1.0] - 2026-10-13
 
@@ -485,7 +511,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/9afaa4dda36d0a3b750747be7f249efef7dda425...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...main
+[2.1.1]: https://github.com/V44nxx/Proyecto_ocr/compare/9afaa4dda36d0a3b750747be7f249efef7dda425...v2.1.1
 [2.1.0]: https://github.com/V44nxx/Proyecto_ocr/compare/0aa89e21cd86739e557f122751a81d7729313119...9afaa4dda36d0a3b750747be7f249efef7dda425
 [2.0.0]: https://github.com/V44nxx/Proyecto_ocr/compare/410658978296be1a8da9a2fe40f83b5d7ab3271b...0aa89e21cd86739e557f122751a81d7729313119
 [1.8.0]: https://github.com/V44nxx/Proyecto_ocr/compare/021ed39c3f8d0a92ef4615b5441155768d988c1c...410658978296be1a8da9a2fe40f83b5d7ab3271b

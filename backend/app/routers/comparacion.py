@@ -19,6 +19,7 @@ from app.schemas.comparacion import ComparacionResponse, DiferenciaResponse, Rep
 from app.routers.auth import get_usuario_actual
 from app.services.comparacion_service import comparacion_service
 from app.config import settings
+from app.utils.archivos import verificar_tamano_archivo
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/comparacion", tags=["Comparación"])
@@ -60,10 +61,12 @@ async def upload_excel_comparacion(
             detail=f"Solo se aceptan archivos .xlsx o .xls. Recibido: {extension}"
         )
 
+    content = await file.read()
+    verificar_tamano_archivo(content, file.filename)
+
     # Guardar archivo
     nombre_unico = f"comp_{uuid.uuid4()}{extension}"
     ruta_archivo = settings.upload_path / nombre_unico
-    content = await file.read()
     ruta_archivo.write_bytes(content)
 
     # Crear registro de comparación

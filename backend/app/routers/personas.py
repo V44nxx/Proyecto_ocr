@@ -12,6 +12,7 @@ from app.models.documento import Documento
 from app.models.usuario import Usuario
 from app.schemas.documento import PersonaResponse, PersonaUpdate
 from app.routers.auth import get_usuario_actual
+from app.utils.archivos import verificar_tamano_archivo
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/personas", tags=["Personas"])
@@ -822,10 +823,12 @@ async def subir_pdf_persona(
         if persona.documento.metadatos.get("documento_padre_id"):
             doc_padre_id = persona.documento.metadatos.get("documento_padre_id")
 
+    content = await file.read()
+    verificar_tamano_archivo(content, file.filename)
+
     # Guardar archivo PDF en la carpeta de subidas
     nombre_guardado = f"cedula_{persona.numero_identificacion}_{uuid.uuid4().hex[:8]}.pdf"
     ruta_guardada = settings.upload_path / nombre_guardado
-    content = await file.read()
     ruta_guardada.write_bytes(content)
 
     # Crear registro de documento individual

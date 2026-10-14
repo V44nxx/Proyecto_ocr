@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.1.0"
+    APP_VERSION: str = "2.1.1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "supersecretkey_change_in_production_2024"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 horas
+
+    # ─────────────────────────────────────
+    # Administrador inicial
+    # ─────────────────────────────────────
+    # Si ambos están definidos y el correo no existe, se crea como admin al arrancar.
+    # Nunca modifica usuarios existentes ni sus contraseñas.
+    ADMIN_EMAIL: Optional[str] = None
+    ADMIN_PASSWORD: Optional[str] = None
+    ADMIN_NOMBRE: str = "Administrador Sistema"
 
     # ─────────────────────────────────────
     # Archivos

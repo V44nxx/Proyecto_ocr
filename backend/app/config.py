@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.1.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 

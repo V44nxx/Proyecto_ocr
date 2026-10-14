@@ -22,6 +22,37 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.2.0] - 2026-10-14
+
+**Resumen**
+
+- Panel de la persona más claro: arriba el nombre completo en un solo campo, el tipo de documento y el número; el resto de los datos queda en "Ver más".
+- Selector de fichas en Personas, visor del documento que se arrastra con el cursor y scroll solo dentro del panel abierto.
+
+### Agregado
+
+- Selector de fichas en Personas: lista todas las fichas subidas, las más recientes primero, con su fecha, páginas y personas, un buscador y la opción "Todas las fichas". La ficha elegida queda en el enlace (`?documento_id=`).
+- Botón "Ver más datos" en el panel de la persona con la fecha de nacimiento y la edad, el sexo y la fecha y el lugar de expedición.
+- Visor del documento: se arrastra con el cursor, hace zoom con la rueda (centrado en el cursor) y con botones, se ajusta con doble clic y se maneja con las flechas del teclado; Escape lo cierra. Al acercar, la página se carga a 200 dpi para que se lea nítida.
+- El formulario de edición incluye sexo, fecha de expedición y lugar de expedición.
+
+### Cambiado
+
+- El panel de la persona es más ancho (720 px en pantallas grandes y pantalla completa en el celular) y los nombres largos bajan de línea en vez de cortarse.
+- Nombres y apellidos ya no se muestran ni se editan por separado: el panel y el formulario usan el nombre completo.
+- Con el panel o un modal abierto solo se desplaza su contenido; la página de fondo queda quieta.
+
+### Corregido
+
+- El panel mostraba porcentajes de confianza fijos (99 %, 95 %, 98 % y 97 %) que no salían de los datos; ahora muestra la confianza real del OCR.
+- Al acercar el documento, la parte de arriba y la izquierda de la página quedaban fuera de alcance.
+- Soltar un arrastre encima del fondo oscuro ya no cierra el visor.
+- Contraste y soporte de modo claro y oscuro en Personas y Exportación.
+
+### Mantenimiento
+
+- El selector de fichas, el visor del documento y el bloqueo de scroll pasan a componentes propios (`components/personas/` y `hooks/useBloquearScroll.ts`), y la página de Personas queda 112 líneas más corta.
+
 ## [2.1.1] - 2026-10-13
 
 **Resumen**
@@ -511,7 +542,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...main
+[2.2.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/V44nxx/Proyecto_ocr/compare/9afaa4dda36d0a3b750747be7f249efef7dda425...v2.1.1
 [2.1.0]: https://github.com/V44nxx/Proyecto_ocr/compare/0aa89e21cd86739e557f122751a81d7729313119...9afaa4dda36d0a3b750747be7f249efef7dda425
 [2.0.0]: https://github.com/V44nxx/Proyecto_ocr/compare/410658978296be1a8da9a2fe40f83b5d7ab3271b...0aa89e21cd86739e557f122751a81d7729313119

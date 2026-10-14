@@ -6,12 +6,15 @@ import toast from "react-hot-toast";
 import {
   Users, Search, AlertTriangle, AlertCircle, CheckCircle,
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
-  UserCheck, FileText, Eye, ZoomIn, ZoomOut, RotateCw, ImageOff, Hash, Clock, Cpu,
+  UserCheck, FileText, Eye, Hash, Clock, Cpu,
   Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
-  ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2
+  ChevronDown, ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import SelectorFicha, { TODAS_LAS_FICHAS } from "@/components/personas/SelectorFicha";
+import VisorDocumento from "@/components/personas/VisorDocumento";
 import { useSidebar } from "@/context/SidebarContext";
+import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
@@ -100,6 +103,13 @@ const formatearFechaCO = (val: string | undefined | null): string => {
     }
   }
   return str;
+};
+
+const textoSexo = (val: string | undefined | null): string => {
+  const v = (val || "").trim().toUpperCase();
+  if (v.startsWith("F")) return "Femenino";
+  if (v.startsWith("M")) return "Masculino";
+  return v || "Sin dato";
 };
 
 const getMotivoExplicacion = (p: Persona): string => {
@@ -194,6 +204,7 @@ function PersonasContent() {
 
   // Persona seleccionada para el Drawer Lateral
   const [personaSeleccionadaId, setPersonaSeleccionadaId] = useState<string | null>(null);
+  const [verMasDatos, setVerMasDatos] = useState(false);
 
   // Edición
   const [editando, setEditando] = useState<string | null>(null);
@@ -219,9 +230,6 @@ function PersonasContent() {
   const [modalPdfAbierto, setModalPdfAbierto] = useState(false);
   const [personaPdfModal, setPersonaPdfModal] = useState<Persona | null>(null);
   const [paginaPreviaModal, setPaginaPreviaModal] = useState<number>(1);
-  const [imgCargandoModal, setImgCargandoModal] = useState(false);
-  const [imgErrorModal, setImgErrorModal] = useState(false);
-  const [zoomModal, setZoomModal] = useState(1);
 
   // Subida de PDF individual para persona
   const [subiendoPdfId, setSubiendoPdfId] = useState<string | null>(null);
@@ -377,15 +385,35 @@ function PersonasContent() {
 
   const personaActiva = personas.find((p) => p.id === personaSeleccionadaId) || null;
 
+  // Con el panel o un modal abierto solo se desplaza su contenido, no la página de fondo
+  useBloquearScroll(Boolean(personaActiva) || modalVaciarAbierto || modalEliminarSeleccionadosAbierto);
+
   const abrirDetalleDrawer = (p: Persona) => {
     setPersonaSeleccionadaId(p.id);
     setEditando(null);
+    setVerMasDatos(false);
     precargarPaginaPersona(p);
   };
 
   const cerrarDetalleDrawer = () => {
     setPersonaSeleccionadaId(null);
     setEditando(null);
+    setVerMasDatos(false);
+  };
+
+  const seleccionarFicha = (id: string) => {
+    setFiltroDocumento(id);
+    setPersonaSeleccionadaId(null);
+    setSeleccionados(new Set());
+    if (typeof window !== "undefined") {
+      if (id === TODAS_LAS_FICHAS) {
+        sessionStorage.setItem("ver_todos_los_archivos", "true");
+      } else {
+        sessionStorage.removeItem("ver_todos_los_archivos");
+        localStorage.setItem("ultimo_documento_id", id);
+      }
+    }
+    router.replace(id === TODAS_LAS_FICHAS ? pathname : `${pathname}?documento_id=${encodeURIComponent(id)}`, { scroll: false });
   };
 
   const precargarPaginaPersona = (p: Persona) => {
@@ -404,9 +432,6 @@ function PersonasContent() {
     const pagsList = (p.detalles_campos as any)?.paginas;
     const pagInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
     setPaginaPreviaModal(pagInicial);
-    setImgCargandoModal(true);
-    setImgErrorModal(false);
-    setZoomModal(1);
     setModalPdfAbierto(true);
   };
 
@@ -468,7 +493,7 @@ function PersonasContent() {
       fecha_nacimiento: p.fecha_nacimiento ? String(p.fecha_nacimiento) : "",
       fecha_expedicion: p.fecha_expedicion ? String(p.fecha_expedicion) : "",
       lugar_expedicion: p.lugar_expedicion || "",
-      sexo: p.sexo || "",
+      sexo: textoSexo(p.sexo) === "Femenino" ? "F" : textoSexo(p.sexo) === "Masculino" ? "M" : p.sexo || "",
       requiere_revision: undefined,
     });
   };
@@ -699,9 +724,6 @@ function PersonasContent() {
     });
   };
 
-  // Documento activo
-  const docActivo = documentos.find((d) => d.id === filtroDocumento);
-
   return (
     <div className="flex min-h-screen bg-[#F5F5F7] dark:bg-[#0A0D14] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden transition-colors duration-200">
       <Sidebar />
@@ -711,8 +733,8 @@ function PersonasContent() {
         }`}
       >
         {/* ─── Encabezado Principal ─── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase">
                 KONDID · BASE DE DATOS OCR
@@ -721,25 +743,12 @@ function PersonasContent() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Personas registradas
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-              {filtroDocumento !== "todos" ? (
-                <>
-                  <span>Archivo</span>
-                  <span className="text-slate-800 dark:text-slate-200 font-semibold">{docActivo?.nombre_original || "Documento activo"}</span>
-                  <span>·</span>
-                  <span className="text-slate-400 dark:text-slate-500">datos de ejemplo y OCR</span>
-                </>
-              ) : (
-                <>
-                  <span>Todos los archivos</span>
-                  <span>·</span>
-                  <span className="text-slate-500 dark:text-slate-400">{documentos.length} documento(s) procesados</span>
-                </>
-              )}
-            </p>
+            <div className="mt-4">
+              <SelectorFicha documentos={documentos} valor={filtroDocumento} onCambiar={seleccionarFicha} />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-end">
             <button
               onClick={() => setModalVaciarAbierto(true)}
               disabled={personas.length === 0}
@@ -1266,14 +1275,14 @@ function PersonasContent() {
             />
 
             {/* Panel Slide-Over */}
-            <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-md md:max-w-lg lg:max-w-[480px] bg-white dark:bg-[#0e1320] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+            <div className="fixed inset-y-0 right-0 z-50 w-full md:max-w-[640px] lg:max-w-[720px] bg-white dark:bg-[#0e1320] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
               {/* Header del Drawer */}
               <div className="p-5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-start justify-between gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
                     PERSONA
                   </span>
-                  <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight break-words">
                     {formatNombreCompleto(personaActiva)}
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
@@ -1303,7 +1312,7 @@ function PersonasContent() {
               </div>
 
               {/* Contenido scrolleable del Drawer */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
                 {/* Cuadro de llamada/explicación */}
                 <div className="p-3.5 rounded-xl bg-blue-50/70 dark:bg-[#161a2b] border border-blue-200/80 dark:border-indigo-500/30 text-xs text-blue-950 dark:text-slate-200 leading-relaxed shadow-sm">
                   {getMotivoExplicacion(personaActiva)}
@@ -1333,34 +1342,49 @@ function PersonasContent() {
                         className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombres</label>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fecha de Nacimiento (AAAA-MM-DD)</label>
                         <input
                           type="text"
-                          value={editForm.nombres || ""}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, nombres: e.target.value }))}
-                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
+                          value={editForm.fecha_nacimiento || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Apellidos</label>
+                        <label htmlFor="editar-sexo" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Sexo</label>
+                        <select
+                          id="editar-sexo"
+                          value={editForm.sexo || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, sexo: e.target.value }))}
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white"
+                        >
+                          <option value="">Sin dato</option>
+                          <option value="F">Femenino</option>
+                          <option value="M">Masculino</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="editar-fecha-expedicion" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fecha de Expedición (AAAA-MM-DD)</label>
                         <input
+                          id="editar-fecha-expedicion"
                           type="text"
-                          value={editForm.apellidos || ""}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, apellidos: e.target.value }))}
+                          value={editForm.fecha_expedicion || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, fecha_expedicion: e.target.value }))}
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="editar-lugar-expedicion" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Lugar de Expedición</label>
+                        <input
+                          id="editar-lugar-expedicion"
+                          type="text"
+                          value={editForm.lugar_expedicion || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, lugar_expedicion: e.target.value }))}
                           className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white uppercase"
                         />
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fecha de Nacimiento (AAAA-MM-DD)</label>
-                      <input
-                        type="text"
-                        value={editForm.fecha_nacimiento || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
-                        className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
-                      />
                     </div>
                     <div className="flex items-center justify-end gap-2 pt-2">
                       <button
@@ -1382,111 +1406,96 @@ function PersonasContent() {
                   </div>
                 ) : (
                   <>
-                    {/* Esquema físico de la Cédula (Image 2) */}
-                    <div className="rounded-2xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                      <div className="flex gap-4 items-start">
-                        {/* Silueta / Foto Cédula */}
-                        <div className="w-24 h-28 rounded-xl bg-slate-200/80 dark:bg-[#20273a] border border-slate-300 dark:border-slate-700/60 flex items-center justify-center shrink-0">
-                          <div className="w-12 h-12 rounded-full bg-slate-300 dark:bg-slate-600/50 flex items-center justify-center">
-                            <Users className="w-6 h-6 text-slate-500 dark:text-slate-400" />
-                          </div>
-                        </div>
-
-                        {/* Cajas OCR sobre el esquema */}
-                        <div className="flex-1 space-y-2 min-w-0">
-                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                              NÚMERO
-                            </span>
-                            <span className="font-mono text-sm font-bold text-slate-900 dark:text-white tracking-wider truncate block">
-                              {formatearCedulaPuntos(personaActiva.numero_identificacion)}
-                            </span>
-                          </div>
-
-                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                              APELLIDOS
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate block">
-                              {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
-                            </span>
+                    {/* Datos principales del documento + "Ver más" */}
+                    {(() => {
+                      const tipoDoc = getTipoDocInfo(personaActiva.tipo_documento);
+                      const edadActiva = personaActiva.edad ?? calcularEdad(personaActiva.fecha_nacimiento);
+                      const masDatos: [string, string][] = [
+                        [
+                          "Fecha de nacimiento",
+                          personaActiva.fecha_nacimiento
+                            ? `${formatearFechaCO(personaActiva.fecha_nacimiento)}${edadActiva !== null ? ` · ${edadActiva} años` : ""}`
+                            : "Sin dato",
+                        ],
+                        ["Sexo", textoSexo(personaActiva.sexo)],
+                        ["Fecha de expedición", personaActiva.fecha_expedicion ? formatearFechaCO(personaActiva.fecha_expedicion) : "Sin dato"],
+                        ["Lugar de expedición", personaActiva.lugar_expedicion || "Sin dato"],
+                      ];
+                      return (
+                        <div className="rounded-2xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-4">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <h3 className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                              Datos del documento
+                            </h3>
+                            {personaActiva.confianza_extraccion != null && !personaFaltaEnPdf(personaActiva) && (
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                                Confianza del OCR: {Math.round(Number(personaActiva.confianza_extraccion))}%
+                              </span>
+                            )}
                           </div>
 
-                          <div className="border border-slate-200 dark:border-slate-700/70 rounded-lg p-2 bg-white dark:bg-[#101420]">
-                            <span className="block text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
-                              NOMBRES
-                            </span>
-                            <span className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate block">
-                              {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
-                            </span>
+                          <div className="flex gap-4 items-start">
+                            {/* Silueta / Foto Cédula */}
+                            <div aria-hidden="true" className="w-20 h-24 rounded-xl bg-slate-200/80 dark:bg-[#20273a] border border-slate-300 dark:border-slate-700/60 flex items-center justify-center shrink-0">
+                              <div className="w-11 h-11 rounded-full bg-slate-300 dark:bg-slate-600/50 flex items-center justify-center">
+                                <Users className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                              </div>
+                            </div>
+
+                            <dl className="flex-1 min-w-0 space-y-3">
+                              <div>
+                                <dt className="text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">Nombre completo</dt>
+                                <dd className="text-base font-bold text-slate-900 dark:text-white uppercase break-words leading-snug mt-0.5">
+                                  {formatNombreCompleto(personaActiva) || "Sin nombre"}
+                                </dd>
+                              </div>
+                              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                <div>
+                                  <dt className="text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">Tipo de documento</dt>
+                                  <dd className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                                    {tipoDoc.label}
+                                    {tipoDoc.codigo && tipoDoc.codigo !== "?" && (
+                                      <span className="font-mono text-slate-500 dark:text-slate-400"> ({tipoDoc.codigo})</span>
+                                    )}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">Número</dt>
+                                  <dd className="font-mono text-sm font-bold text-slate-900 dark:text-white tracking-wider mt-0.5">
+                                    {formatearCedulaPuntos(personaActiva.numero_identificacion)}
+                                  </dd>
+                                </div>
+                              </div>
+                            </dl>
                           </div>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-2.5 text-center">
-                        Zonas leídas por el OCR sobre un esquema del documento (ejemplo).
-                      </p>
-                    </div>
 
-                    {/* Cuadrícula 2x2 de métricas de confianza (Image 3) */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Documento */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                          DOCUMENTO
-                        </span>
-                        <div className="font-mono text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {formatearCedulaPuntos(personaActiva.numero_identificacion)}
-                        </div>
-                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 w-[99%]" />
-                        </div>
-                        <span className="text-[10px] text-slate-500 block font-mono">99% confianza</span>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => setVerMasDatos((v) => !v)}
+                            aria-expanded={verMasDatos}
+                            aria-controls="mas-datos-persona"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-[#0071E3] dark:text-[#3894FF] border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
+                          >
+                            <span>{verMasDatos ? "Ver menos" : "Ver más datos"}</span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verMasDatos ? "rotate-180" : ""}`} />
+                          </button>
 
-                      {/* Nacimiento */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                          NACIMIENTO
-                        </span>
-                        <div className="font-mono text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {personaActiva.fecha_nacimiento
-                            ? `${formatearFechaCO(personaActiva.fecha_nacimiento)} · ${personaActiva.edad ?? calcularEdad(personaActiva.fecha_nacimiento)} años`
-                            : "—"}
+                          {verMasDatos && (
+                            <dl
+                              id="mas-datos-persona"
+                              className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700"
+                            >
+                              {masDatos.map(([etiqueta, valor]) => (
+                                <div key={etiqueta}>
+                                  <dt className="text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">{etiqueta}</dt>
+                                  <dd className="text-sm font-semibold text-slate-900 dark:text-white break-words mt-0.5">{valor}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
                         </div>
-                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 w-[95%]" />
-                        </div>
-                        <span className="text-[10px] text-slate-500 block font-mono">95% confianza</span>
-                      </div>
-
-                      {/* Nombres */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                          NOMBRES
-                        </span>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate">
-                          {personaActiva.nombres || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ")[0] : "—")}
-                        </div>
-                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 w-[98%]" />
-                        </div>
-                        <span className="text-[10px] text-slate-500 block font-mono">98% confianza</span>
-                      </div>
-
-                      {/* Apellidos */}
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                          APELLIDOS
-                        </span>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white uppercase truncate">
-                          {personaActiva.apellidos || (personaActiva.nombre_completo ? personaActiva.nombre_completo.split(" ").slice(1).join(" ") : "—")}
-                        </div>
-                        <div className="w-full h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 w-[97%]" />
-                        </div>
-                        <span className="text-[10px] text-slate-500 block font-mono">97% confianza</span>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     {/* Tabla de Comparativa: LECTURA DEL PDF vs PLANILLA EXCEL (Image 3) */}
                     <div className="rounded-xl bg-slate-50 dark:bg-[#141826] border border-slate-200 dark:border-slate-800 p-3.5 space-y-2.5">
@@ -1499,7 +1508,7 @@ function PersonasContent() {
                       {/* Fila DOCUMENTO */}
                       <div className="grid grid-cols-12 text-xs items-center py-1">
                         <div className="col-span-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">DOCUMENTO</div>
-                        <div className="col-span-4 text-center font-mono text-slate-900 dark:text-white text-xs truncate">
+                        <div className="col-span-4 text-center font-mono text-slate-900 dark:text-white text-xs break-words">
                           {formatearCedulaPuntos(personaActiva.numero_identificacion)}
                         </div>
                         <div className="col-span-4 text-center flex items-center justify-center gap-1 font-mono text-xs">
@@ -1519,7 +1528,7 @@ function PersonasContent() {
                       {/* Fila NOMBRE */}
                       <div className="grid grid-cols-12 text-xs items-center py-1">
                         <div className="col-span-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">NOMBRE</div>
-                        <div className="col-span-4 text-center text-slate-900 dark:text-white text-xs truncate uppercase font-medium">
+                        <div className="col-span-4 text-center text-slate-900 dark:text-white text-xs break-words uppercase font-medium">
                           {formatNombreCompleto(personaActiva)}
                         </div>
                         <div className="col-span-4 text-center flex items-center justify-center gap-1 text-xs">
@@ -1528,7 +1537,7 @@ function PersonasContent() {
                               Sin registro <X className="w-3 h-3 text-pink-500" />
                             </span>
                           ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 truncate uppercase font-medium">
+                            <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1 break-words uppercase font-medium">
                               {formatNombreCompleto(personaActiva)}{" "}
                               <Check className="w-3 h-3 text-emerald-500 shrink-0" />
                             </span>
@@ -1597,133 +1606,12 @@ function PersonasContent() {
 
         {/* ─── Modal de Vista Previa Rápida del PDF (Optimizado) ─── */}
         {modalPdfAbierto && personaPdfModal && (
-          <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-            onClick={() => setModalPdfAbierto(false)}
-          >
-            <div
-              className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header Modal PDF */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141928]">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-[#0071E3] dark:text-indigo-400" />
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">
-                    Vista previa: {formatNombreCompleto(personaPdfModal)} (pág. {paginaPreviaModal})
-                  </span>
-                </div>
-
-                {/* Controles de Zoom */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setZoomModal((z) => Math.max(0.5, z - 0.25))}
-                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
-                    title="Alejar"
-                  >
-                    <ZoomOut className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 w-10 text-center">
-                    {Math.round(zoomModal * 100)}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setZoomModal((z) => Math.min(2.5, z + 0.25))}
-                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
-                    title="Acercar"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setZoomModal(1)}
-                    className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800"
-                    title="Restablecer zoom"
-                  >
-                    <RotateCw className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalPdfAbierto(false)}
-                    className="p-1.5 ml-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Contenedor de la Imagen del PDF */}
-              <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-900 min-h-[350px]">
-                {(() => {
-                  const docId = personaPdfModal.documento_pdf_id || personaPdfModal.documento_id;
-                  if (!docId) {
-                    return (
-                      <div className="text-center py-12">
-                        <ImageOff className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                        <p className="text-xs text-slate-400">Esta persona no tiene documento PDF asociado.</p>
-                        <button
-                          onClick={() => {
-                            setModalPdfAbierto(false);
-                            abrirSubirPdf(personaPdfModal);
-                          }}
-                          className="mt-3 px-3 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-xs text-white"
-                        >
-                          Subir PDF individual de cédula
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div style={{ transform: `scale(${zoomModal})`, transformOrigin: "center center", transition: "transform 0.15s ease" }}>
-                      {imgCargandoModal && (
-                        <div className="flex flex-col items-center gap-2 py-12">
-                          <div className="w-6 h-6 border-2 border-[#0071E3] border-t-transparent rounded-full animate-spin" />
-                          <span className="text-xs text-slate-400">Cargando página {paginaPreviaModal}...</span>
-                        </div>
-                      )}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={apiDocumentos.paginaPdfUrl(String(docId), paginaPreviaModal, 130)}
-                        alt={`Página ${paginaPreviaModal}`}
-                        className="rounded-xl shadow-2xl max-w-full max-h-[70vh] border border-slate-800"
-                        style={{ display: imgCargandoModal ? "none" : "block" }}
-                        onLoad={() => setImgCargandoModal(false)}
-                        onError={() => { setImgCargandoModal(false); setImgErrorModal(true); }}
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Botón inferior para alternar cara si existen dos lados */}
-              {personaPdfModal.pagina_frente && personaPdfModal.pagina_reverso && (
-                <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141928] flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_frente!); setImgCargandoModal(true); }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                      paginaPreviaModal === personaPdfModal.pagina_frente
-                        ? "bg-[#0071E3] text-white"
-                        : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    Frente (pág. {personaPdfModal.pagina_frente})
-                  </button>
-                  <button
-                    onClick={() => { setPaginaPreviaModal(personaPdfModal.pagina_reverso!); setImgCargandoModal(true); }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                      paginaPreviaModal === personaPdfModal.pagina_reverso
-                        ? "bg-[#0071E3] text-white"
-                        : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    Reverso (pág. {personaPdfModal.pagina_reverso})
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <VisorDocumento
+            persona={personaPdfModal}
+            paginaInicial={paginaPreviaModal}
+            onCerrar={() => setModalPdfAbierto(false)}
+            onSubirPdf={abrirSubirPdf}
+          />
         )}
 
         {/* ─── Modal Confirmar Vaciar Tabla ─── */}

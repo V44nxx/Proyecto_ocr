@@ -632,6 +632,16 @@ def actualizar_persona(
     from app.utils.validators import validador
     from datetime import datetime
 
+    # Al corregir el nombre queda resuelta la sospecha de nombre recortado por el OCR
+    if (
+        {"nombre_completo", "nombres", "apellidos"} & set(campos_actualizados)
+        and isinstance(persona.detalles_campos, dict)
+        and "posible_nombre_recortado" in persona.detalles_campos
+    ):
+        det_nombre = dict(persona.detalles_campos)
+        det_nombre.pop("posible_nombre_recortado", None)
+        persona.detalles_campos = det_nombre
+
     if datos.estado_registro is not None:
         persona.estado_registro = datos.estado_registro
         campos_actualizados.append("estado_registro")
@@ -642,6 +652,7 @@ def actualizar_persona(
         if not datos.requiere_revision:
             persona.estado_registro = "VALID"
             det.pop("motivos_revision", None)
+            det.pop("posible_nombre_recortado", None)
             det["aprobado_manual"] = True
             det["validado_manual"] = True
             if isinstance(det.get("discrepancia_excel"), dict):
@@ -657,6 +668,7 @@ def actualizar_persona(
         persona.requiere_revision = False
         det = dict(persona.detalles_campos or {})
         det.pop("motivos_revision", None)
+        det.pop("posible_nombre_recortado", None)
         det["aprobado_manual"] = True
         det["validado_manual"] = True
         if isinstance(det.get("discrepancia_excel"), dict):

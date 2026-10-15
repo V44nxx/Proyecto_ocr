@@ -15,6 +15,7 @@ import SelectorFicha, { TODAS_LAS_FICHAS } from "@/components/personas/SelectorF
 import VisorDocumento from "@/components/personas/VisorDocumento";
 import { useSidebar } from "@/context/SidebarContext";
 import { useBloquearScroll } from "@/hooks/useBloquearScroll";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
@@ -80,6 +81,22 @@ const esPersonaEnRevision = (p: Persona): boolean => {
     (!discDocEdadAprobada && discDocEdad) ||
     (!discExcelAprobada && discExcel)
   );
+};
+
+// Orden alfabético por nombre completo (Á = A, Ñ después de N); las personas sin nombre van al final
+const comparadorNombres = new Intl.Collator("es", { sensitivity: "base", numeric: true });
+const ordenarPorNombre = (lista: Persona[]): Persona[] =>
+  [...lista].sort((a, b) => {
+    const na = formatNombreCompleto(a);
+    const nb = formatNombreCompleto(b);
+    if (!na || !nb) return na ? -1 : nb ? 1 : 0;
+    return comparadorNombres.compare(na, nb);
+  });
+
+// Página con la que se abre el documento de una persona
+const paginaInicialDe = (p: Persona): number => {
+  const pagsList = (p.detalles_campos as any)?.paginas;
+  return (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
 };
 
 const formatearCedulaPuntos = (val: string | number | undefined | null): string => {
@@ -345,7 +362,7 @@ function PersonasContent() {
       ]);
 
       const items: Persona[] = Array.isArray(resPersonas.data) ? resPersonas.data : (((resPersonas.data as any)?.items) || []);
-      setPersonas(items);
+      setPersonas(ordenarPorNombre(items));
 
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
       const validasCount = items.filter(esPersonaValidada).length;
@@ -386,6 +403,8 @@ function PersonasContent() {
   };
 
   const personaActiva = personas.find((p) => p.id === personaSeleccionadaId) || null;
+  // En pantallas grandes el documento se muestra a la izquierda del panel; en las pequeñas, con el botón "Abrir página"
+  const documentoAlLado = useMediaQuery("(min-width: 1024px)");
 
   // Con el panel o un modal abierto solo se desplaza su contenido, no la página de fondo
   useBloquearScroll(Boolean(personaActiva) || modalVaciarAbierto || modalEliminarSeleccionadosAbierto);
@@ -431,9 +450,7 @@ function PersonasContent() {
 
   const abrirModalPdf = (p: Persona) => {
     setPersonaPdfModal(p);
-    const pagsList = (p.detalles_campos as any)?.paginas;
-    const pagInicial = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
-    setPaginaPreviaModal(pagInicial);
+    setPaginaPreviaModal(paginaInicialDe(p));
     setModalPdfAbierto(true);
   };
 
@@ -1277,6 +1294,22 @@ function PersonasContent() {
               onClick={cerrarDetalleDrawer}
             />
 
+            {/* Documento de la persona, en el espacio libre a la izquierda del panel */}
+            {documentoAlLado && (
+              <div className="fixed inset-y-0 left-0 right-[720px] z-50 p-6 flex pointer-events-none">
+                <div className="flex-1 min-w-0 pointer-events-auto">
+                  <VisorDocumento
+                    key={personaActiva.id}
+                    persona={personaActiva}
+                    paginaInicial={paginaInicialDe(personaActiva)}
+                    onCerrar={cerrarDetalleDrawer}
+                    onSubirPdf={abrirSubirPdf}
+                    incrustado
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Panel Slide-Over */}
             <div className="fixed inset-y-0 right-0 z-50 w-full md:max-w-[640px] lg:max-w-[720px] bg-white dark:bg-[#0e1320] border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
               {/* Header del Drawer */}
@@ -1558,20 +1591,22 @@ function PersonasContent() {
               {/* Barra de Acciones del Drawer (Bottom Bar) */}
               <div className="p-4 bg-white dark:bg-[#111624] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  {/* Botón Abrir Página X (Visor PDF Modal) */}
-                  <button
-                    type="button"
-                    onClick={() => abrirModalPdf(personaActiva)}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                    title="Ver página del PDF escaneado"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>
-                      {personaActiva.pagina_frente || personaActiva.pagina_numero
-                        ? `Abrir página ${personaActiva.pagina_frente || personaActiva.pagina_numero}`
-                        : "Abrir documento"}
-                    </span>
-                  </button>
+                  {/* Botón Abrir Página X (Visor PDF Modal): solo cuando el documento no cabe al lado del panel */}
+                  {!documentoAlLado && (
+                    <button
+                      type="button"
+                      onClick={() => abrirModalPdf(personaActiva)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                      title="Ver página del PDF escaneado"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>
+                        {personaActiva.pagina_frente || personaActiva.pagina_numero
+                          ? `Abrir página ${personaActiva.pagina_frente || personaActiva.pagina_numero}`
+                          : "Abrir documento"}
+                      </span>
+                    </button>
+                  )}
 
                   {/* Marcar válido si está en revisión */}
                   {!esPersonaValidada(personaActiva) && (

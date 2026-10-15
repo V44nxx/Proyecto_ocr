@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from app.config import settings
 import logging
+import re
+from typing import Any, Dict
 
 # Motor de hashing: passlib (mismo que auth.py) con fallback a bcrypt directo
 try:
@@ -169,6 +171,16 @@ def create_tables():
     except Exception as heal_err:
         logger.warning(f"Aviso en curación de personas/documentos: {heal_err}")
 
+    # ── Reparación única de nombres dañados por el limpiador anterior a la 2.3.0 ──
+    try:
+        db_s = SessionLocal()
+        try:
+            reparar_nombres_recortados(db_s)
+        finally:
+            db_s.close()
+    except Exception as rep_err:
+        logger.warning(f"Aviso reparando nombres recortados: {rep_err}")
+
     # ── Saneamiento de nombres y reevaluación de estado de revisión ──
     try:
         from app.models.persona import Persona
@@ -263,6 +275,85 @@ def create_tables():
             db.close()
     except Exception as err:
         logger.warning(f"No se pudo verificar/crear el administrador inicial: {err}")
+
+
+def reparar_nombres_recortados(db) -> Dict[str, int]:
+    """
+    Repara una sola vez por persona los nombres dañados por el limpiador anterior a la 2.3.0
+    (ver app/utils/nombres_recortados.py) y quita la marca de sospecha cuando ya se resolvió a mano.
+    """
+    from app.models.comparacion import Comparacion
+    from app.models.persona import Persona
+    from app.services.excel_lookup_service import excel_lookup_service
+    from app.utils.nombres_recortados import (
+        CAMPO_SOSPECHA, MARCA_REVISADO, detalle_sospecha, nombre_recuperado, sospecha_de_recorte,
+    )
+
+    resumen = {"recuperados": 0, "marcados": 0, "resueltos": 0}
+    campos_nombre = {"nombre_completo", "nombres", "apellidos"}
+    lookups: Dict[Any, Dict[str, Dict[str, str]]] = {}
+
+    def lookup_de(usuario_id) -> Dict[str, Dict[str, str]]:
+        if usuario_id not in lookups:
+            combinado: Dict[str, Dict[str, str]] = {}
+            comps = db.query(Comparacion).filter(Comparacion.usuario_id == usuario_id).order_by(
+                Comparacion.fecha_carga.desc()
+            ).all()
+            for comp in comps:
+                ruta = comp.obtener_ruta_o_restaurar(db)
+                if ruta and ruta.exists():
+                    for cedula, entrada in excel_lookup_service.cargar_lookup(str(ruta)).items():
+                        combinado.setdefault(cedula, entrada)
+            lookups[usuario_id] = combinado
+        return lookups[usuario_id]
+
+    for p in db.query(Persona).all():
+        det = dict(p.detalles_campos or {})
+        revisado_a_mano = bool(campos_nombre & set(p.campos_revisados or []))
+
+        # Sospecha ya resuelta: la persona se aprobó o se corrigió su nombre
+        if CAMPO_SOSPECHA in det and (revisado_a_mano or det.get("aprobado_manual") or det.get("validado_manual")):
+            motivo = det.pop(CAMPO_SOSPECHA, {}).get("reason")
+            if isinstance(det.get("motivos_revision"), list):
+                det["motivos_revision"] = [m for m in det["motivos_revision"] if m != motivo]
+            p.detalles_campos = det
+            resumen["resueltos"] += 1
+            continue
+
+        if det.get(MARCA_REVISADO) or revisado_a_mano:
+            continue
+
+        cedula = re.sub(r"\D", "", str(p.numero_identificacion or ""))
+        entrada = lookup_de(p.usuario_id).get(cedula) if (p.usuario_id and cedula) else None
+        recuperado = nombre_recuperado(p.nombre_completo, entrada.get("nombre_completo")) if entrada else None
+        if recuperado:
+            logger.info(f"Nombre recuperado desde la planilla Excel para {p.numero_identificacion}: {p.nombre_completo} -> {recuperado}")
+            p.nombre_completo = recuperado
+            p.nombres = recuperado
+            p.apellidos = None
+            if isinstance(det.get("nombre_completo"), dict):
+                det["nombre_completo"] = {**det["nombre_completo"], "valor": recuperado, "value": recuperado}
+            det[MARCA_REVISADO] = "recuperado_de_excel"
+            resumen["recuperados"] += 1
+        else:
+            token = sospecha_de_recorte(p.nombre_completo, p.sexo)
+            if token:
+                det[CAMPO_SOSPECHA] = detalle_sospecha(token)
+                det[MARCA_REVISADO] = "marcado_para_revision"
+                motivos = list(det.get("motivos_revision") or [])
+                motivos.insert(0, det[CAMPO_SOSPECHA]["reason"])
+                det["motivos_revision"] = motivos
+                p.requiere_revision = True
+                p.estado_registro = "REVIEW_REQUIRED"
+                resumen["marcados"] += 1
+            else:
+                det[MARCA_REVISADO] = "sin_cambios"
+        p.detalles_campos = det
+
+    db.commit()
+    if any(resumen.values()):
+        logger.info(f"Reparación de nombres recortados: {resumen}")
+    return resumen
 
 
 def crear_admin_inicial(db) -> bool:

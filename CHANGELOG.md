@@ -22,6 +22,33 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.3.0] - 2026-10-14
+
+**Resumen**
+
+- El OCR ya no recorta nombres femeninos (JULIANA quedaba como JULIAN) ni borra nombres parecidos a un encabezado (ROMERO, INDIRA). Los que ya estaban dañados se recuperan desde la planilla Excel o se marcan para revisión.
+- Al abrir una persona, su documento se muestra a la izquierda del panel, sin botones ni ventanas extra.
+- La tabla de Personas queda en orden alfabético.
+
+### Agregado
+
+- En pantallas de 1024 px o más, el documento de la persona aparece en el espacio libre a la izquierda del panel. Usa el mismo visor: se arrastra, tiene zoom y permite pasar del frente al reverso. Al elegir otra persona, el visor cambia a su documento, y al cerrar el panel se cierra también el documento.
+
+### Cambiado
+
+- La tabla de Personas se ordena por nombre completo, de la A a la Z. Las tildes no alteran el orden y la Ñ va después de la N.
+- El botón "Abrir página" solo aparece en pantallas pequeñas, donde no cabe el documento al lado del panel.
+- El visor se vuelve a ajustar cuando cambia el tamaño de la ventana.
+
+### Corregido
+
+- El limpiador de nombres quitaba la vocal final de nombres como ANGELA, JULIANA, MANUELA, ISABELA, RAFAELA o MARTINA, que quedaban como ANGEL, JULIAN, MANUEL, etc. También borraba nombres y apellidos que se parecen a un encabezado de la cédula, como ROMERO (por NUMERO) o INDIRA (por INDICE). Esto pasaba al leer las cédulas y en cada reinicio del servidor.
+- Reparación única de los nombres ya dañados:
+  - si la persona está en una planilla Excel de su usuario y su nombre es justo la versión recortada del nombre de la planilla, se recupera el de la planilla;
+  - si no, a las mujeres con un nombre masculino que pudo quedar recortado (ANGEL, JULIAN, MANUEL…) se les marca "Por revisar" con el motivo, para confirmarlas contra la cédula;
+  - la marca se quita al corregir el nombre o al aprobar a la persona;
+  - los nombres corregidos a mano no se tocan.
+
 ## [2.2.1] - 2026-10-14
 
 **Resumen**
@@ -570,7 +597,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...main
+[2.3.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/V44nxx/Proyecto_ocr/compare/9afaa4dda36d0a3b750747be7f249efef7dda425...v2.1.1

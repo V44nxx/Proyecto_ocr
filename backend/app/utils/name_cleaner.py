@@ -255,8 +255,9 @@ def remover_letras_residuales_fin_palabra(token: str) -> str:
             if base[-1] in "AEIOUÁÉÍÓÚÜZSRNLD":
                 return base
 
-    # Caso 2: Sufijo de ruido OCR de una sola letra pegado a un nombre colombiano muy claro
-    if len(t_clean) >= 5 and t_clean[-1] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+    # Caso 2: Sufijo de ruido OCR de una sola letra pegado a un nombre colombiano muy claro.
+    # Nunca se quita una vocal final: JULIANA, ANGELA o MANUELA son nombres, no JULIAN/ANGEL/MANUEL con ruido.
+    if len(t_clean) >= 5 and t_clean[-1] in "BCDFGHJKLMNPQRSTVWXYZ":
         base = t_clean[:-1]
         if base in NOMBRES_COLOMBIANOS_COMUNES and t_clean not in NOMBRES_COLOMBIANOS_COMUNES:
             return base
@@ -293,7 +294,8 @@ def es_token_ruido_difuso(t_alpha: str) -> bool:
     """Detecta si un token es una deformación por OCR de encabezados de cédula (ej: NIMEPO, EDULA, APELLIXIS, TFTOLIB)."""
     if not t_alpha or len(t_alpha) < 3:
         return False
-    if t_alpha in NOMBRES_LEGITIMOS_EXCEPCION:
+    # Un nombre o apellido conocido nunca es un encabezado deformado (ej: ROMERO no es NUMERO, INDIRA no es INDICE)
+    if t_alpha in NOMBRES_LEGITIMOS_EXCEPCION or t_alpha in NOMBRES_COLOMBIANOS_COMUNES:
         return False
     if (t_alpha.startswith("APEL") or t_alpha.startswith("APIL")) and len(t_alpha) <= 12:
         return True

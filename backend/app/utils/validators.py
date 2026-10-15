@@ -708,6 +708,10 @@ class ValidadorColombia:
                         mot = f"Campo '{campo}' marcado como faltante en el documento"
                         if mot not in motivos:
                             motivos.append(mot)
+                    elif st in ("REVIEW_REQUIRED", "CONFLICT", "INVALID") and campo == "posible_nombre_recortado":
+                        # Aviso de nombre posiblemente recortado: se muestra tal cual, sin el prefijo técnico
+                        if info.get("reason") and info["reason"] not in motivos:
+                            motivos.append(info["reason"])
                     elif st in ("REVIEW_REQUIRED", "CONFLICT", "INVALID"):
                         reason = info.get("reason") or "requiere revisión manual"
                         # Si ya se agregó la discrepancia_excel, no repetir el mismo motivo en nombre_completo

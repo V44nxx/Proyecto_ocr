@@ -9,7 +9,6 @@ import {
   Download,
   GitCompare,
   LogOut,
-  Cpu,
   ShieldCheck,
   UserPlus,
   Sun,
@@ -20,6 +19,7 @@ import {
 import { auth } from "@/lib/auth";
 import toast from "react-hot-toast";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
+import LogoKondID, { HuellaKondID } from "@/components/ui/LogoKondID";
 import { useTheme } from "@/context/ThemeContext";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -100,18 +100,11 @@ export default function Sidebar() {
         {/* ── Logo & Toggle ─────────────────────────────────────── */}
         {!collapsed ? (
           <div className="px-4 py-4 border-b border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between min-w-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold shadow-sm shrink-0">
-                <Cpu className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-sm font-semibold text-slate-900 dark:text-white block truncate tracking-tight">
-                  KondID
-                </span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-400 font-medium block truncate">
-                  Motor OCR • v2.0
-                </span>
-              </div>
+            <div className="min-w-0">
+              <LogoKondID className="h-8" />
+              <span className="mt-1 text-[8px] text-slate-400 dark:text-slate-400 font-medium block truncate uppercase tracking-[0.22em]">
+                OCR · Documentos · Identidad
+              </span>
             </div>
             <button
               onClick={toggleSidebar}
@@ -124,11 +117,8 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="py-4 border-b border-slate-200/70 dark:border-white/[0.06] flex flex-col items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold shadow-sm shrink-0"
-              title="KondID - Motor OCR"
-            >
-              <Cpu className="w-4 h-4" />
+            <div className="shrink-0" title="KondID - Motor OCR">
+              <HuellaKondID className="w-8 h-8" />
             </div>
             <button
               onClick={toggleSidebar}

@@ -22,6 +22,7 @@ import {
 import { apiAuth } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useTheme } from "@/context/ThemeContext";
+import LogoKondID from "@/components/ui/LogoKondID";
 import type { TokenResponse } from "@/types";
 
 export default function LoginPage() {
@@ -70,17 +71,10 @@ export default function LoginPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
           {/* Marca / Logotipo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center font-semibold text-xs tracking-tight shadow-sm">
-              <Fingerprint className="w-4 h-4 stroke-[2.2]" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold tracking-tight text-sm text-slate-900 dark:text-white">
-                KondID
-              </span>
-              <span className="hidden sm:inline-block text-[11px] text-slate-400 dark:text-slate-500 font-normal">
-                / Document Intelligence
-              </span>
-            </div>
+            <LogoKondID className="h-6" />
+            <span className="hidden sm:inline-block text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+              / Document Intelligence
+            </span>
           </div>
 
           {/* Telemetría & Acciones */}

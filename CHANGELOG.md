@@ -22,6 +22,21 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.4.0] - 2026-10-14
+
+**Resumen**
+
+- La app usa el logo de KondID en el menú lateral, en el inicio de sesión y en la pestaña del navegador.
+
+### Cambiado
+
+- El logo de KondID reemplaza al ícono genérico en el menú lateral y en el encabezado del inicio de sesión. Hay una versión para el modo claro y otra para el oscuro. Con el menú lateral cerrado se ve solo la huella del logo.
+- Debajo del logo, el menú lateral muestra el lema "OCR · Documentos · Identidad" en lugar de "Motor OCR • v2.0".
+
+### Corregido
+
+- La pestaña del navegador no tenía ícono (`/favicon.ico` respondía 404). Ahora muestra la huella del logo.
+
 ## [2.3.0] - 2026-10-14
 
 **Resumen**
@@ -597,7 +612,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...main
+[2.4.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.1.1...v2.2.0

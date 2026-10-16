@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.6.0"
+    APP_VERSION: str = "2.6.1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     EXPORT_DIR: str = "./exports"
     MAX_FILE_SIZE_MB: int = 50
+    MAX_SUBIDA_TOTAL_MB: int = 500           # tope de una petición de subida (varios PDF + planilla)
     ALLOWED_PDF_EXTENSIONS: list = [".pdf"]
     ALLOWED_EXCEL_EXTENSIONS: list = [".xlsx", ".xls"]
 
@@ -122,6 +123,10 @@ class Settings(BaseSettings):
     @property
     def max_file_size_bytes(self) -> int:
         return self.MAX_FILE_SIZE_MB * 1024 * 1024
+
+    @property
+    def max_subida_total_bytes(self) -> int:
+        return self.MAX_SUBIDA_TOTAL_MB * 1024 * 1024
 
 
 @lru_cache()

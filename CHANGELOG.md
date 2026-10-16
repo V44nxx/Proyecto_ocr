@@ -22,6 +22,31 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.6.1] - 2026-10-16
+
+**Resumen**
+
+- Límite de intentos en el inicio de sesión y en la recuperación y el cambio de contraseña, validación más estricta del inicio de sesión y límites de tamaño antes de recibir las subidas.
+
+### Seguridad
+
+- **Límite de intentos** (ventanas de 15 minutos; al llegar al tope, la app dice cuánto esperar):
+  - inicio de sesión: 5 contraseñas equivocadas con un mismo correo, o 20 desde una misma conexión;
+  - pedidos de "¿Olvidaste tu contraseña?": 5 por conexión;
+  - enlaces de recuperación inválidos: 10 por conexión;
+  - contraseña actual equivocada al cambiarla: 5 por usuario.
+- El inicio de sesión compara el correo exacto (mayúsculas aparte) y tarda lo mismo exista o no la cuenta.
+- Las subidas revisan la sesión y el tamaño antes de recibir los archivos. Cada envío admite hasta 500 MB (`MAX_SUBIDA_TOTAL_MB`), con el tope de 50 MB por archivo de siempre, y las demás peticiones hasta 2 MB.
+- La vista previa de páginas solo acepta las resoluciones que usa el visor (130, 150 y 200 dpi).
+
+### Cambiado
+
+- En el inicio de sesión, cada error reemplaza al aviso anterior en lugar de apilarse, así el último mensaje queda a la vista.
+
+### Eliminado
+
+- La ruta `/api/auth/login/form`, que solo usaba la documentación interactiva de la API.
+
 ## [2.6.0] - 2026-10-16
 
 **Resumen**
@@ -656,7 +681,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.0...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.1...main
+[2.6.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...v2.4.0

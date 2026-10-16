@@ -31,7 +31,10 @@ def _usuario(rol):
 
 @pytest.fixture
 def client():
-    yield TestClient(app)
+    # Las subidas exigen un token firmado antes de leer el cuerpo; la sesión la simulan las pruebas
+    from app.routers.auth import crear_token_acceso
+    token = crear_token_acceso({"sub": str(uuid.uuid4()), "email": "prueba@example.com", "ver": 0})
+    yield TestClient(app, headers={"Authorization": f"Bearer {token}"})
     app.dependency_overrides.clear()
 
 
@@ -94,6 +97,7 @@ def create_tables_mock(monkeypatch):
 
 
 def test_migrar_db_sin_token_responde_401(client, create_tables_mock):
+    client.headers.pop("Authorization")
     assert client.get("/api/sistema/migrar-db").status_code == 401
     assert client.post("/api/sistema/migrar-db").status_code == 401
     create_tables_mock.assert_not_called()

@@ -54,11 +54,12 @@ export default function LoginPage() {
         response?: { data?: { detail?: string }; status?: number };
         message?: string;
       };
+      // Un solo aviso que se reemplaza en cada intento: así el último (por ejemplo, el de esperar) queda a la vista
       if (!error.response) {
-        toast.error(`Error de conexión con la API (${error.message || "Servidor no responde"})`);
+        toast.error(`Error de conexión con la API (${error.message || "Servidor no responde"})`, { id: "login-error" });
       } else {
         const mensaje = error.response?.data?.detail || "Credenciales incorrectas";
-        toast.error(typeof mensaje === "string" ? mensaje : "Error de autenticación");
+        toast.error(typeof mensaje === "string" ? mensaje : "Error de autenticación", { id: "login-error" });
       }
     } finally {
       setCargando(false);

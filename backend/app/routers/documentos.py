@@ -977,6 +977,10 @@ def debug_espacial_documento(
     return spatial_debug_service.generar_reporte_debug(lines=[], page_num=pagina)
 
 
+# Resoluciones de la vista previa: 130 y 200 las usa el visor, 150 es la de por defecto
+DPI_PERMITIDOS = (130, 150, 200)
+
+
 @router.get(
     "/{documento_id}/pagina/{numero}",
     summary="Vista previa de página del PDF como imagen optimizada",
@@ -995,7 +999,11 @@ def preview_pagina_pdf(
     Renderiza la página `numero` (1-indexed) del PDF asociado al documento
     y la devuelve como imagen JPEG optimizada con caché en disco de alta velocidad.
     Permite al frontend mostrar la vista previa al instante (< 10ms en caché).
+    Solo acepta las resoluciones que usa el frontend: cada dpi distinto renderiza y guarda otra imagen.
     """
+    if dpi not in DPI_PERMITIDOS:
+        raise HTTPException(status_code=400, detail="Resolución no permitida para la vista previa")
+
     # 1. Validar que el documento pertenece al usuario
     documento = db.query(Documento).filter(
         Documento.id == documento_id,

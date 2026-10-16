@@ -20,6 +20,7 @@ from app.database import check_db_connection, create_tables
 from app.utils.logger import app_logger as logger
 from app.routers import auth, documentos, personas, exportacion, comparacion
 from app.routers.auth import get_admin_actual
+from app.utils.limite_peticiones import LimitePeticionesMiddleware
 
 
 # ──────────────────────────────────────────
@@ -84,6 +85,10 @@ desde documentos PDF mediante OCR con PaddleOCR.
 # ──────────────────────────────────────────
 # Middlewares
 # ──────────────────────────────────────────
+# Revisa token y tamaño antes de leer el cuerpo. Va antes que CORS para quedar por dentro:
+# así sus respuestas 401/413 también llevan las cabeceras CORS.
+app.add_middleware(LimitePeticionesMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

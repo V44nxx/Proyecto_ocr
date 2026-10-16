@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -39,12 +39,21 @@ from app.schemas.usuario import (
     OlvidePasswordRequest, RestablecerPasswordRequest, CambiarPasswordRequest, RestablecerPasswordAdminRequest,
 )
 from app.config import settings
+from app.utils.limitador import Limitador, ip_cliente, mensaje_espera
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
 # OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login/form")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# Límites de intentos (ventanas de 15 minutos)
+VENTANA_INTENTOS = 15 * 60
+limite_login_correo = Limitador(5, VENTANA_INTENTOS)        # fallos por correo
+limite_login_ip = Limitador(20, VENTANA_INTENTOS)           # fallos por IP, con cualquier correo
+limite_cambio_password = Limitador(5, VENTANA_INTENTOS)     # contraseña actual equivocada, por usuario
+limite_recuperacion_ip = Limitador(5, VENTANA_INTENTOS)     # pedidos de enlace de recuperación por IP
+limite_restablecer_ip = Limitador(10, VENTANA_INTENTOS)     # enlaces inválidos por IP
 
 
 # ──────────────────────────────────────────
@@ -203,28 +212,55 @@ def get_admin_actual(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
 # ──────────────────────────────────────────
 # ENDPOINTS
 # ──────────────────────────────────────────
+_HASH_SENUELO: Optional[str] = None
+
+
+def _hash_senuelo() -> str:
+    """Hash de una clave al azar: se verifica contra él cuando el correo no existe, para que tarde lo mismo."""
+    global _HASH_SENUELO
+    if _HASH_SENUELO is None:
+        _HASH_SENUELO = crear_hash_password(secrets.token_urlsafe(16))
+    return _HASH_SENUELO
+
+
+def _demasiados_intentos(segundos: int, motivo: str = "Demasiados intentos fallidos") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=mensaje_espera(segundos, motivo),
+        headers={"Retry-After": str(segundos)},
+    )
+
+
 @router.post("/login", response_model=TokenResponse, summary="Iniciar sesión")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    """Autenticar usuario y obtener token JWT"""
+def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
+    """
+    Autenticar usuario y obtener token JWT.
+    El correo se compara exacto (sin comodines). Tras 5 fallos en 15 minutos con un correo, o 20 desde
+    una IP, responde 429 hasta que pase la ventana, exista o no la cuenta.
+    """
     email_limpio = request.email.strip().lower()
+    ip = ip_cliente(http)
+    espera = max(limite_login_correo.espera(email_limpio), limite_login_ip.espera(ip))
+    if espera:
+        logger.warning(f"Login bloqueado por demasiados intentos: {email_limpio} desde {ip}")
+        raise _demasiados_intentos(espera)
+
     usuario = db.query(Usuario).filter(
-        Usuario.email.ilike(email_limpio),
+        func.lower(Usuario.email) == email_limpio,
         Usuario.activo == True
     ).first()
 
-    if not usuario:
-        logger.warning(f"Login fallido (usuario no encontrado): {request.email}")
+    # Con un correo que no existe también se verifica una contraseña, para que la respuesta tarde lo mismo
+    clave_valida = verificar_password(request.password, usuario.password_hash if usuario else _hash_senuelo())
+    if not usuario or not clave_valida:
+        limite_login_correo.registrar(email_limpio)
+        limite_login_ip.registrar(ip)
+        logger.warning(f"Login fallido para {email_limpio} desde {ip}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
         )
-
-    if not verificar_password(request.password, usuario.password_hash):
-        logger.warning(f"Login fallido (password inválido): {request.email}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas"
-        )
+    limite_login_correo.reiniciar(email_limpio)
 
     # Actualizar último login
     usuario.ultimo_login = datetime.utcnow()
@@ -239,17 +275,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/login/form", summary="Login formato form (OAuth2)")
-def login_form(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    """Login compatible con OAuth2 (para Swagger UI)"""
-    request = LoginRequest(email=form_data.username, password=form_data.password)
-    resultado = login(request, db)
-    return {"access_token": resultado.access_token, "token_type": "bearer"}
-
-
 @router.post("/register", response_model=UsuarioResponse, status_code=201, summary="Registrar usuario")
 def registrar(
     request: UsuarioCreate,
@@ -257,7 +282,7 @@ def registrar(
     usuario_actual: Usuario = Depends(get_admin_actual),
 ):
     """Registrar nuevo usuario en el sistema (solo admin)"""
-    if db.query(Usuario).filter(Usuario.email.ilike(request.email.strip())).first():
+    if db.query(Usuario).filter(func.lower(Usuario.email) == request.email.strip().lower()).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El email ya está registrado"
@@ -393,8 +418,14 @@ def cambiar_password(
     Cambia la contraseña del usuario actual. Cierra las demás sesiones y devuelve un token nuevo
     para que esta siga abierta. Una contraseña actual incorrecta responde 400 (no 401, que cerraría la sesión).
     """
+    clave_usuario = str(usuario.id)
+    espera = limite_cambio_password.espera(clave_usuario)
+    if espera:
+        raise _demasiados_intentos(espera)
     if not verificar_password(request.password_actual, usuario.password_hash):
+        limite_cambio_password.registrar(clave_usuario)
         raise HTTPException(status_code=400, detail="La contraseña actual no es correcta.")
+    limite_cambio_password.reiniciar(clave_usuario)
     if request.password_nueva == request.password_actual:
         raise HTTPException(status_code=400, detail="La contraseña nueva debe ser distinta de la actual.")
     _establecer_password(usuario, request.password_nueva)
@@ -415,11 +446,13 @@ MENSAJE_OLVIDE = (
 def olvide_password(
     request: OlvidePasswordRequest,
     background_tasks: BackgroundTasks,
+    http: Request,
     db: Session = Depends(get_db),
 ):
     """
     Envía por correo un enlace de un solo uso que vence en RECUPERACION_MINUTOS.
     La respuesta es la misma exista o no el correo, y se envía como máximo un correo cada 2 minutos por cuenta.
+    Desde una misma IP se aceptan 5 pedidos cada 15 minutos.
     """
     from app.services.correo_service import correo_configurado, enviar_correo_recuperacion
 
@@ -433,6 +466,12 @@ def olvide_password(
             status_code=503,
             detail="La recuperación por correo todavía no está configurada. Pide al administrador que restablezca tu contraseña.",
         )
+
+    ip = ip_cliente(http)
+    espera = limite_recuperacion_ip.espera(ip)
+    if espera:
+        raise _demasiados_intentos(espera, "Demasiadas solicitudes de recuperación")
+    limite_recuperacion_ip.registrar(ip)
 
     email = request.email.strip().lower()
     usuario = db.query(Usuario).filter(func.lower(Usuario.email) == email, Usuario.activo == True).first()
@@ -454,7 +493,11 @@ def olvide_password(
 
 
 @router.post("/restablecer-password", summary="Elegir una contraseña nueva con el enlace del correo")
-def restablecer_password(request: RestablecerPasswordRequest, db: Session = Depends(get_db)):
+def restablecer_password(request: RestablecerPasswordRequest, http: Request, db: Session = Depends(get_db)):
+    ip = ip_cliente(http)
+    espera = limite_restablecer_ip.espera(ip)
+    if espera:
+        raise _demasiados_intentos(espera)
     token = (request.token or "").strip()
     usuario = db.query(Usuario).filter(Usuario.reset_token_hash == _hash_token(token)).first() if token else None
     if (
@@ -463,6 +506,7 @@ def restablecer_password(request: RestablecerPasswordRequest, db: Session = Depe
         or not usuario.reset_token_expira
         or usuario.reset_token_expira < datetime.now(timezone.utc)
     ):
+        limite_restablecer_ip.registrar(ip)
         raise HTTPException(
             status_code=400,
             detail="El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",

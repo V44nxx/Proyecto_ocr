@@ -2,12 +2,17 @@
 Router de Autenticación
 Endpoints: Login, Registro, Perfil
 """
-from datetime import datetime, timedelta
+import hashlib
+import secrets
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 # Usar passlib como motor principal (compatible con hashes de bcrypt directo Y de passlib)
@@ -30,7 +35,8 @@ except ImportError:
 from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
-    LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData
+    LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData,
+    OlvidePasswordRequest, RestablecerPasswordRequest, CambiarPasswordRequest, RestablecerPasswordAdminRequest,
 )
 from app.config import settings
 from app.utils.logger import app_logger as logger
@@ -91,8 +97,30 @@ def verificar_password(password_plano: str, hash_guardado: str) -> bool:
 def crear_token_acceso(data: dict) -> str:
     payload = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload.update({"exp": expire})
+    payload.update({"exp": expire, "iat": int(time.time())})
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def _token_vigente(payload: dict, usuario: Usuario) -> bool:
+    """Un cambio de contraseña sube la versión de sesión e invalida los tokens con la versión anterior."""
+    try:
+        version_token = int(payload.get("ver") or 0)
+    except (TypeError, ValueError):
+        return False
+    return version_token == int(usuario.version_sesion or 0)
+
+
+def _establecer_password(usuario: Usuario, password_nueva: str) -> None:
+    """Guarda la contraseña nueva, cierra las sesiones anteriores y anula cualquier enlace de recuperación."""
+    usuario.password_hash = crear_hash_password(password_nueva)
+    usuario.password_cambiada_en = datetime.now(timezone.utc)
+    usuario.version_sesion = (usuario.version_sesion or 0) + 1
+    usuario.reset_token_hash = None
+    usuario.reset_token_expira = None
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def get_usuario_actual(
@@ -114,7 +142,7 @@ def get_usuario_actual(
         raise credenciales_exception
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-    if not usuario or not usuario.activo:
+    if not usuario or not usuario.activo or not _token_vigente(payload, usuario):
         raise credenciales_exception
 
     return usuario
@@ -156,7 +184,7 @@ def get_usuario_desde_token_o_query(
         raise credenciales_exception
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-    if not usuario or not usuario.activo:
+    if not usuario or not usuario.activo or not _token_vigente(payload, usuario):
         raise credenciales_exception
 
     return usuario
@@ -202,7 +230,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     usuario.ultimo_login = datetime.utcnow()
     db.commit()
 
-    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email})
+    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0})
     logger.info(f"Login exitoso: {usuario.email}")
 
     return TokenResponse(
@@ -330,6 +358,119 @@ def eliminar_usuario(
         "fichas_eliminadas": fichas_eliminadas,
         "personas_eliminadas": personas_eliminadas,
     }
+
+
+@router.post("/users/{user_id}/password", summary="Restablecer la contraseña de un usuario (solo admin)")
+def restablecer_password_usuario(
+    user_id: str,
+    request: RestablecerPasswordAdminRequest,
+    usuario_actual: Usuario = Depends(get_admin_actual),
+    db: Session = Depends(get_db),
+):
+    """El administrador asigna una contraseña nueva a otro usuario; sus sesiones abiertas se cierran."""
+    if str(usuario_actual.id) == user_id:
+        raise HTTPException(status_code=400, detail="Para tu propia cuenta usa «Cambiar contraseña».")
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    u = db.query(Usuario).filter(Usuario.id == uid).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    _establecer_password(u, request.password_nueva)
+    db.commit()
+    logger.info(f"Contraseña de {u.email} restablecida por el administrador {usuario_actual.email}")
+    return {"message": f"Contraseña de {u.email} restablecida. Sus sesiones abiertas se cerraron."}
+
+
+@router.post("/cambiar-password", response_model=TokenResponse, summary="Cambiar la contraseña propia")
+def cambiar_password(
+    request: CambiarPasswordRequest,
+    usuario: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """
+    Cambia la contraseña del usuario actual. Cierra las demás sesiones y devuelve un token nuevo
+    para que esta siga abierta. Una contraseña actual incorrecta responde 400 (no 401, que cerraría la sesión).
+    """
+    if not verificar_password(request.password_actual, usuario.password_hash):
+        raise HTTPException(status_code=400, detail="La contraseña actual no es correcta.")
+    if request.password_nueva == request.password_actual:
+        raise HTTPException(status_code=400, detail="La contraseña nueva debe ser distinta de la actual.")
+    _establecer_password(usuario, request.password_nueva)
+    db.commit()
+    db.refresh(usuario)
+    logger.info(f"Contraseña cambiada por el propio usuario: {usuario.email}")
+    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion})
+    return TokenResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
+
+
+MENSAJE_OLVIDE = (
+    "Si el correo está registrado, te enviamos un enlace para restablecer la contraseña. "
+    "Revisa también la carpeta de spam."
+)
+
+
+@router.post("/olvide-password", summary="Pedir un enlace para restablecer la contraseña")
+def olvide_password(
+    request: OlvidePasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Envía por correo un enlace de un solo uso que vence en RECUPERACION_MINUTOS.
+    La respuesta es la misma exista o no el correo, y se envía como máximo un correo cada 2 minutos por cuenta.
+    """
+    from app.services.correo_service import correo_configurado, enviar_correo_recuperacion
+
+    base_frontend = settings.FRONTEND_URL.rstrip("/")
+    if settings.ENVIRONMENT == "production" and ("localhost" in base_frontend or "127.0.0.1" in base_frontend):
+        # Sin FRONTEND_URL los enlaces del correo apuntarían a localhost y no abrirían
+        logger.error("Recuperación por correo desactivada: falta FRONTEND_URL con la dirección pública del frontend")
+        base_frontend = ""
+    if not correo_configurado() or not base_frontend:
+        raise HTTPException(
+            status_code=503,
+            detail="La recuperación por correo todavía no está configurada. Pide al administrador que restablezca tu contraseña.",
+        )
+
+    email = request.email.strip().lower()
+    usuario = db.query(Usuario).filter(func.lower(Usuario.email) == email, Usuario.activo == True).first()
+    if usuario:
+        ahora = datetime.now(timezone.utc)
+        minutos = settings.RECUPERACION_MINUTOS
+        pedido_en = usuario.reset_token_expira - timedelta(minutes=minutos) if usuario.reset_token_expira else None
+        if pedido_en and pedido_en > ahora - timedelta(minutes=2):
+            logger.info(f"Recuperación de contraseña repetida en menos de 2 minutos para {usuario.email}; no se reenvía")
+        else:
+            token = secrets.token_urlsafe(32)
+            usuario.reset_token_hash = _hash_token(token)
+            usuario.reset_token_expira = ahora + timedelta(minutes=minutos)
+            db.commit()
+            enlace = f"{base_frontend}/restablecer-contrasena?token={token}"
+            background_tasks.add_task(enviar_correo_recuperacion, usuario.email, usuario.nombre, enlace, minutos)
+            logger.info(f"Recuperación de contraseña solicitada para {usuario.email}")
+    return {"message": MENSAJE_OLVIDE}
+
+
+@router.post("/restablecer-password", summary="Elegir una contraseña nueva con el enlace del correo")
+def restablecer_password(request: RestablecerPasswordRequest, db: Session = Depends(get_db)):
+    token = (request.token or "").strip()
+    usuario = db.query(Usuario).filter(Usuario.reset_token_hash == _hash_token(token)).first() if token else None
+    if (
+        not usuario
+        or not usuario.activo
+        or not usuario.reset_token_expira
+        or usuario.reset_token_expira < datetime.now(timezone.utc)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",
+        )
+    _establecer_password(usuario, request.password_nueva)
+    db.commit()
+    logger.info(f"Contraseña restablecida con el enlace del correo: {usuario.email}")
+    return {"message": "Tu contraseña se cambió. Ya puedes iniciar sesión con la nueva."}
 
 
 @router.get("/me", response_model=UsuarioResponse, summary="Perfil actual")

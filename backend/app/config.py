@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.5.0"
+    APP_VERSION: str = "2.6.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: Optional[str] = None
     ADMIN_PASSWORD: Optional[str] = None
     ADMIN_NOMBRE: str = "Administrador Sistema"
+
+    # ─────────────────────────────────────
+    # Correo (recuperación de contraseña)
+    # ─────────────────────────────────────
+    # Con Gmail: SMTP_HOST=smtp.gmail.com, SMTP_USER=la cuenta y SMTP_PASSWORD=una "contraseña de aplicación".
+    # Sin SMTP_HOST la recuperación por correo queda desactivada.
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587                     # 587 con STARTTLS; 465 con SSL directo
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_REMITENTE: Optional[str] = None     # por defecto, SMTP_USER
+    SMTP_TLS: bool = True
+    # Dirección pública del frontend, para el enlace del correo
+    FRONTEND_URL: str = "http://localhost:3000"
+    RECUPERACION_MINUTOS: int = 30
 
     # ─────────────────────────────────────
     # Archivos

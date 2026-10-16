@@ -22,6 +22,28 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.6.0] - 2026-10-16
+
+**Resumen**
+
+- Recuperar la contraseña por correo, cambiarla desde la app y restablecerla como administrador. Cada cambio cierra las sesiones abiertas con la contraseña anterior.
+
+### Agregado
+
+- **¿Olvidaste tu contraseña?** en el inicio de sesión:
+  - se escribe el correo y llega un enlace para elegir una contraseña nueva;
+  - el enlace sirve una sola vez y vence en 30 minutos;
+  - la respuesta es la misma exista o no el correo, y se envía como máximo un correo cada 2 minutos por cuenta.
+- **Cambiar contraseña** en el menú lateral: pide la contraseña actual y la nueva. La sesión desde donde se cambia sigue abierta.
+- En **Usuarios**, el administrador puede restablecer la contraseña de otro usuario (botón de la llave). Para su propia cuenta usa "Cambiar contraseña".
+- Configuración del correo para la recuperación: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_REMITENTE`, `SMTP_TLS`, `FRONTEND_URL` y `RECUPERACION_MINUTOS` (ver `.env.example`).
+  - Con Gmail se usa una contraseña de aplicación de la cuenta.
+  - Sin `SMTP_HOST`, o en producción sin `FRONTEND_URL`, la recuperación responde que no está configurada.
+
+### Cambiado
+
+- Cualquier cambio de contraseña (por correo, desde la app o por el administrador) cierra las sesiones abiertas con la contraseña anterior. Las sesiones iniciadas antes de esta versión siguen sirviendo hasta que la contraseña cambie.
+
 ## [2.5.0] - 2026-10-16
 
 **Resumen**
@@ -634,7 +656,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.0...main
+[2.6.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...v2.3.0

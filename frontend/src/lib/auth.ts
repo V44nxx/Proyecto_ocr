@@ -22,6 +22,13 @@ export const auth = {
     }
   },
 
+  /** Reemplaza solo el token (por ejemplo, al cambiar la contraseña) sin limpiar el resto de la sesión. */
+  actualizarToken(token: string): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TOKEN_KEY, token);
+    }
+  },
+
   getToken(): string | null {
     if (typeof window !== "undefined") {
       return localStorage.getItem(TOKEN_KEY);

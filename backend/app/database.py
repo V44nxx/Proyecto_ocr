@@ -106,6 +106,11 @@ def create_tables():
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_cambiada_en TIMESTAMPTZ;",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 0;",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(64);",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMPTZ;",
+                "CREATE INDEX IF NOT EXISTS ix_usuarios_reset_token_hash ON usuarios (reset_token_hash);",
                 "ALTER TABLE documentos DROP CONSTRAINT IF EXISTS documentos_estado_check;",
                 "ALTER TABLE documentos ADD CONSTRAINT documentos_estado_check CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision', 'cancelado'));"
             ]

@@ -9,6 +9,7 @@ import {
   Download,
   GitCompare,
   LogOut,
+  KeyRound,
   ShieldCheck,
   UserPlus,
   Sun,
@@ -20,6 +21,7 @@ import { auth } from "@/lib/auth";
 import toast from "react-hot-toast";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
 import LogoKondID, { HuellaKondID } from "@/components/ui/LogoKondID";
+import ModalCambiarPassword from "@/components/ui/ModalCambiarPassword";
 import { useTheme } from "@/context/ThemeContext";
 import { useSidebar } from "@/context/SidebarContext";
 
@@ -46,6 +48,7 @@ export default function Sidebar() {
   const { collapsed, toggleSidebar } = useSidebar();
   const [usuario, setUsuario] = useState<{ nombre: string; email: string; rol: string } | null>(null);
   const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
+  const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false);
 
   useEffect(() => {
     setUsuario(auth.getUsuario());
@@ -274,6 +277,16 @@ export default function Sidebar() {
               </div>
             )}
 
+            {/* Cambiar contraseña */}
+            <button
+              type="button"
+              onClick={() => setModalPasswordAbierto(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/[0.06] transition-all cursor-pointer active:scale-[0.98]"
+            >
+              <KeyRound className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Cambiar contraseña</span>
+            </button>
+
             {/* Botón Logout */}
             <button
               onClick={cerrarSesion}
@@ -310,6 +323,17 @@ export default function Sidebar() {
               </div>
             )}
 
+            {/* Cambiar contraseña compacto */}
+            <button
+              type="button"
+              onClick={() => setModalPasswordAbierto(true)}
+              title="Cambiar contraseña"
+              aria-label="Cambiar contraseña"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/[0.06] transition-all cursor-pointer active:scale-[0.95]"
+            >
+              <KeyRound className="w-4 h-4" />
+            </button>
+
             {/* Botón Logout compacto */}
             <button
               onClick={cerrarSesion}
@@ -322,6 +346,8 @@ export default function Sidebar() {
           </div>
         )}
       </aside>
+
+      <ModalCambiarPassword isOpen={modalPasswordAbierto} onClose={() => setModalPasswordAbierto(false)} />
 
       {/* Modal para crear nuevo usuario */}
       <ModalCrearUsuario

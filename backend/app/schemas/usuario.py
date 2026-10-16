@@ -1,6 +1,6 @@
 """Schemas Pydantic: Autenticación y Usuario"""
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from pydantic import AfterValidator, BaseModel, EmailStr, field_validator
+from typing import Annotated, Optional
 from datetime import datetime
 import uuid
 
@@ -42,6 +42,35 @@ class UsuarioResponse(UsuarioBase):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+def _validar_password_nueva(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("La contraseña debe tener al menos 8 caracteres")
+    if len(v.encode("utf-8")) > 72:
+        raise ValueError("La contraseña no puede tener más de 72 caracteres")
+    return v
+
+
+PasswordNueva = Annotated[str, AfterValidator(_validar_password_nueva)]
+
+
+class OlvidePasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class RestablecerPasswordRequest(BaseModel):
+    token: str
+    password_nueva: PasswordNueva
+
+
+class CambiarPasswordRequest(BaseModel):
+    password_actual: str
+    password_nueva: PasswordNueva
+
+
+class RestablecerPasswordAdminRequest(BaseModel):
+    password_nueva: PasswordNueva
 
 
 class TokenResponse(BaseModel):

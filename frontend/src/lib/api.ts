@@ -146,6 +146,23 @@ export const apiAuth = {
   eliminarUsuario: (userId: string) => apiClient.delete<{ message: string }>(`/api/auth/users/${userId}`),
 
   perfil: () => apiClient.get<Usuario>("/api/auth/me"),
+
+  /** Envía el enlace de recuperación; la respuesta es la misma exista o no el correo. */
+  olvidePassword: (email: string) =>
+    apiClient.post<{ message: string }>("/api/auth/olvide-password", { email: email.trim() }),
+
+  restablecerPassword: (token: string, passwordNueva: string) =>
+    apiClient.post<{ message: string }>("/api/auth/restablecer-password", { token, password_nueva: passwordNueva }),
+
+  /** Devuelve un token nuevo: las demás sesiones se cierran y esta sigue abierta con él. */
+  cambiarPassword: (passwordActual: string, passwordNueva: string) =>
+    apiClient.post<TokenResponse>("/api/auth/cambiar-password", {
+      password_actual: passwordActual,
+      password_nueva: passwordNueva,
+    }),
+
+  restablecerPasswordUsuario: (userId: string, passwordNueva: string) =>
+    apiClient.post<{ message: string }>(`/api/auth/users/${userId}/password`, { password_nueva: passwordNueva }),
 };
 
 // ──────────────────────────────────────────

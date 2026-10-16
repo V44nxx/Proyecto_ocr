@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -339,6 +340,14 @@ export default function LoginPage() {
                         <Eye className="w-3.5 h-3.5" />
                       )}
                     </button>
+                  </div>
+                  <div className="flex justify-end mt-1.5">
+                    <Link
+                      href="/olvide-contrasena"
+                      className="text-[11px] font-medium text-[#0071E3] hover:text-[#0077ED] dark:text-[#4C9BFF] hover:underline"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </Link>
                   </div>
                 </div>
 

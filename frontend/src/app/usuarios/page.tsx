@@ -8,6 +8,7 @@ import {
   Users,
   Search,
   Trash2,
+  KeyRound,
   RefreshCw,
   Mail,
   Calendar,
@@ -18,6 +19,7 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
+import ModalCambiarPassword from "@/components/ui/ModalCambiarPassword";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Usuario } from "@/types";
@@ -31,6 +33,7 @@ export default function UsuariosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
   const [usuarioAEliminar, setUsuarioAEliminar] = useState<Usuario | null>(null);
+  const [usuarioARestablecer, setUsuarioARestablecer] = useState<Usuario | null>(null);
   const [eliminando, setEliminando] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(null);
 
@@ -330,13 +333,23 @@ export default function UsuariosPage() {
                         {/* Acciones */}
                         <td className="px-4 py-3.5 text-right">
                           {!esActual && (
-                            <button
-                              onClick={() => setUsuarioAEliminar(u)}
-                              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                              title="Eliminar usuario"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => setUsuarioARestablecer(u)}
+                                className="p-1.5 text-slate-500 hover:text-[#0071E3] hover:bg-[#0071E3]/10 rounded-lg transition-colors"
+                                title="Restablecer contraseña"
+                                aria-label={`Restablecer contraseña de ${u.email}`}
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setUsuarioAEliminar(u)}
+                                className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                title="Eliminar usuario"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -356,6 +369,12 @@ export default function UsuariosPage() {
         onUsuarioCreado={(nuevo) => {
           setUsuarios((prev) => [nuevo, ...prev]);
         }}
+      />
+
+      <ModalCambiarPassword
+        isOpen={!!usuarioARestablecer}
+        usuarioObjetivo={usuarioARestablecer}
+        onClose={() => setUsuarioARestablecer(null)}
       />
 
       {/* Modal Confirmación de Eliminación */}

@@ -287,3 +287,31 @@ export function getTipoDocInfo(tipo?: string | null): TipoDocInfo {
   };
 }
 
+export interface OpcionTipoDoc {
+  valor: string;
+  codigo: string;
+  label: string;
+}
+
+export const OPCIONES_TIPO_DOCUMENTO: OpcionTipoDoc[] = [
+  { valor: "CEDULA_CIUDADANIA", codigo: "CC", label: "Cédula de Ciudadanía (CC)" },
+  { valor: "TARJETA_IDENTIDAD", codigo: "TI", label: "Tarjeta de Identidad (TI)" },
+  { valor: "CONTRASEÑA", codigo: "CT", label: "Contraseña / En trámite (CT)" },
+  { valor: "CEDULA_EXTRANJERIA", codigo: "CE", label: "Cédula de Extranjería (CE)" },
+  { valor: "PPT", codigo: "PPT", label: "Permiso Protección Temporal (PPT)" },
+  { valor: "PASAPORTE", codigo: "PAS", label: "Pasaporte (PAS)" },
+  { valor: "CERTIFICADO_ANTECEDENTES", codigo: "ANT", label: "Certificado de Antecedentes (ANT)" },
+];
+
+export function normalizarTipoDoc(tipo?: string | null): string {
+  const t = (tipo || "").toUpperCase().trim();
+  if (!t || t === "UNKNOWN") return "CEDULA_CIUDADANIA";
+  if (t.includes("ANTECEDENTE") || t === "ANT" || t === "CERTIFICADO_ANTECEDENTES") return "CERTIFICADO_ANTECEDENTES";
+  if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) return "PPT";
+  if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") return "CONTRASEÑA";
+  if (t.includes("TARJETA") || t === "TI") return "TARJETA_IDENTIDAD";
+  if (t.includes("EXTRANJERIA") || t === "CE" || t.includes("RESIDENTE")) return "CEDULA_EXTRANJERIA";
+  if (t.includes("PASAPORTE") || t === "PAS" || t.includes("PASSPORT")) return "PASAPORTE";
+  return "CEDULA_CIUDADANIA";
+}
+

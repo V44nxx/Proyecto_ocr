@@ -18,7 +18,7 @@ import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 // ─── Helpers de Clasificación ──────────────────────────────────────────────
@@ -506,7 +506,7 @@ function PersonasContent() {
     const numIdLimpio = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     setEditForm({
       numero_identificacion: numIdLimpio,
-      tipo_documento: p.tipo_documento || "CEDULA_CIUDADANIA",
+      tipo_documento: normalizarTipoDoc(p.tipo_documento),
       nombre_completo: nomCompleto,
       nombres: p.nombres || "",
       apellidos: p.apellidos || "",
@@ -523,6 +523,7 @@ function PersonasContent() {
       const payload: PersonaUpdate = {
         ...editForm,
         numero_identificacion: editForm.numero_identificacion?.trim() || undefined,
+        tipo_documento: editForm.tipo_documento?.trim() || undefined,
         nombre_completo: editForm.nombre_completo?.trim() || undefined,
         nombres: nombreEditado ? editForm.nombre_completo?.trim() || undefined : undefined,
         apellidos: nombreEditado && editForm.nombre_completo?.trim() ? "" : undefined,
@@ -1360,14 +1361,65 @@ function PersonasContent() {
                     <h4 className="text-xs font-bold text-[#0071E3] dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Edit3 className="w-3.5 h-3.5" /> Editar datos de la persona
                     </h4>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Número de Documento</label>
-                      <input
-                        type="text"
-                        value={editForm.numero_identificacion || ""}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
-                        className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label htmlFor="editar-tipo-documento" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                          Tipo de Documento
+                        </label>
+                        <select
+                          id="editar-tipo-documento"
+                          value={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, tipo_documento: e.target.value }))}
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium"
+                        >
+                          {OPCIONES_TIPO_DOCUMENTO.map((opc) => (
+                            <option key={opc.valor} value={opc.valor}>
+                              {opc.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="editar-numero-documento" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                          Número de Documento
+                        </label>
+                        <input
+                          id="editar-numero-documento"
+                          type="text"
+                          value={editForm.numero_identificacion || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, numero_identificacion: e.target.value }))}
+                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    {/* Accesos rápidos para alternar el tipo de documento */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mr-0.5">
+                        Cambiar a:
+                      </span>
+                      {[
+                        { valor: "CEDULA_CIUDADANIA", label: "Cédula (CC)" },
+                        { valor: "TARJETA_IDENTIDAD", label: "Tarjeta (TI)" },
+                        { valor: "CONTRASEÑA", label: "Contraseña (CT)" },
+                        { valor: "CEDULA_EXTRANJERIA", label: "Extranjería (CE)" },
+                        { valor: "PPT", label: "PPT" },
+                      ].map((item) => {
+                        const activo = (editForm.tipo_documento || "CEDULA_CIUDADANIA") === item.valor;
+                        return (
+                          <button
+                            key={item.valor}
+                            type="button"
+                            onClick={() => setEditForm((prev) => ({ ...prev, tipo_documento: item.valor }))}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                              activo
+                                ? "bg-[#0071E3] text-white shadow-xs font-semibold"
+                                : "bg-white dark:bg-[#181d2e] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-[#0071E3]/50"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombre Completo</label>

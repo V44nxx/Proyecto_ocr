@@ -592,8 +592,20 @@ def actualizar_persona(
         campos_actualizados.append("numero_identificacion")
 
     if datos.tipo_documento is not None:
-        persona.tipo_documento = str(datos.tipo_documento).strip()
+        tipo_normalizado = str(datos.tipo_documento).strip()
+        persona.tipo_documento = tipo_normalizado
+        if "tipo_documento" not in campos_revisados:
+            campos_revisados.append("tipo_documento")
         campos_actualizados.append("tipo_documento")
+        if isinstance(persona.detalles_campos, dict):
+            det_td = dict(persona.detalles_campos)
+            if "tipo_documento" in det_td:
+                if isinstance(det_td["tipo_documento"], dict):
+                    det_td["tipo_documento"]["valor"] = tipo_normalizado
+                    det_td["tipo_documento"]["corregido_manual"] = True
+                else:
+                    det_td["tipo_documento"] = tipo_normalizado
+            persona.detalles_campos = det_td
 
     if datos.nombre_completo is not None:
         persona.nombre_completo = datos.nombre_completo.upper()

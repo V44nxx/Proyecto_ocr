@@ -22,6 +22,10 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+### Agregado
+
+- Opción para cambiar el tipo de documento al editar los datos de una persona, con selector desplegable (CC, TI, Contraseña, CE, PPT, Pasaporte, Antecedentes) y botones de acceso rápido para alternar fácilmente en caso de lecturas erróneas por el OCR.
+
 ## [2.4.0] - 2026-10-14
 
 **Resumen**

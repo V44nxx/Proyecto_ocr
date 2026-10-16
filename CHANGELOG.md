@@ -25,6 +25,7 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 ### Agregado
 
 - Opción para cambiar el tipo de documento al editar los datos de una persona, con selector desplegable (CC, TI, Contraseña, CE, PPT, Pasaporte, Antecedentes) y botones de acceso rápido para alternar fácilmente en caso de lecturas erróneas por el OCR.
+- Extractor especializado para Contraseñas (Comprobantes de documento en trámite): procesa el rótulo unificado `APELLIDOS / NOMBRES:` asignando correctamente apellidos y nombres, extrae la fecha de expedición real excluyendo fechas de vigencia del comprobante (`VALIDO HASTA EL...`), detecta el subtipo de trámite (`DUPLICADO TI`, `DUPLICADO CC`) y previene falsas alertas de revisión.
 
 ## [2.4.0] - 2026-10-14
 

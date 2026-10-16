@@ -581,6 +581,265 @@ class ExtractorService:
             "errores": []
         }
 
+    def _extraer_contrasena(
+        self,
+        texto: str,
+        lineas: List[str],
+        pagina_num: int = 1,
+        ocr_engine: str = "google_document_ai"
+    ) -> Dict[str, Any]:
+        """
+        Extractor de precisión para Contraseñas / Comprobantes de documento en trámite
+        expedidos por la Registraduría Nacional del Estado Civil de Colombia.
+
+        Maneja la estructura específica:
+        - Rótulo combinado 'APELLIDOS / NOMBRES:' (Línea 1 = Apellidos, Línea 2 = Nombres)
+        - 'FECHA Y LUGAR DE NACIMIENTO:' (Línea 1 = Fecha Nac, Línea 2 = Lugar Nac)
+        - 'FECHA DE EXPEDICION:' (Fecha real de expedición, excluyendo vigencia del comprobante)
+        - Subtipo de trámite ('DUPLICADO TI' -> Tarjeta de Identidad, 'DUPLICADO CC' -> Cédula)
+        - Exclusión estricta de fechas de vigencia ('VALIDO HASTA EL ...')
+        """
+        logger.info(f"[Contraseña] Extrayendo campos de comprobante en trámite (página {pagina_num})")
+        texto_up = texto.upper()
+        lineas_limpias = [l.strip() for l in lineas if l and l.strip()]
+
+        # 1. Identificación
+        m_id = re.search(r'\b([0-9]{1,3}(?:\.[0-9]{3}){2,3})\b', texto)
+        if not m_id:
+            m_id = re.search(r'(?:TI|CC|NUMERO|NÚMERO|NUIP|DOC)?[\s:]*([0-9]{7,11})\b', texto)
+        id_extraido = m_id.group(1).replace('.', '') if m_id else None
+        if not id_extraido:
+            id_extraido = self._extraer_identificacion(texto, lineas)
+
+        # 2. Subtipo de trámite (DUPLICADO TI vs DUPLICADO CC)
+        es_ti = bool(re.search(r'\b(?:DUPLICADO|PRIMERA\s+VEZ|RENOVACI[OÓ]N|RECTIFICACI[OÓ]N)?\s*(?:TI|TARJETA(?:\s+DE\s+IDENTIDAD)?)\b', texto_up))
+        es_cc = bool(re.search(r'\b(?:DUPLICADO|PRIMERA\s+VEZ|RENOVACI[OÓ]N|RECTIFICACI[OÓ]N)?\s*(?:CC|C[EÉ]DULA(?:\s+DE\s+CIUDADAN[IÍ]A)?)\b', texto_up))
+        subtipo = "TARJETA_IDENTIDAD" if (es_ti and not es_cc) else ("CEDULA_CIUDADANIA" if es_cc else None)
+
+        # 3. Nombres y Apellidos desde rótulo combinado
+        apellidos = None
+        nombres = None
+        patron_ape_nom = re.compile(r'AP[EÉ]LL?IDOS?\s*[/I\\]\s*N[O0]?MBR[EÉ]S?', re.I)
+
+        for i, l in enumerate(lineas_limpias):
+            if patron_ape_nom.search(l):
+                resto = patron_ape_nom.sub('', l).strip().lstrip(':').strip()
+                candidatos = []
+                if resto:
+                    candidatos.append(resto)
+
+                for j in range(i + 1, min(len(lineas_limpias), i + 6)):
+                    l_j = lineas_limpias[j]
+                    if re.search(r'\b(FECHA|SEXO|LUGAR|OFICINA|ESTE\s+COMPROBANTE|REGISTRADUR)\b', l_j, re.I):
+                        break
+                    if not re.search(r'\d', l_j) and len(l_j) >= 2:
+                        candidatos.append(l_j)
+
+                if len(candidatos) >= 2:
+                    apellidos = validador.normalizar_nombre(candidatos[0])
+                    nombres = validador.normalizar_nombre(" ".join(candidatos[1:]))
+                elif len(candidatos) == 1:
+                    palabras = candidatos[0].split()
+                    if len(palabras) >= 3:
+                        apellidos = validador.normalizar_nombre(" ".join(palabras[:2]))
+                        nombres = validador.normalizar_nombre(" ".join(palabras[2:]))
+                    elif len(palabras) == 2:
+                        apellidos = validador.normalizar_nombre(palabras[0])
+                        nombres = validador.normalizar_nombre(palabras[1])
+                    else:
+                        apellidos = validador.normalizar_nombre(candidatos[0])
+                break
+
+        nombre_completo = None
+        if nombres and apellidos:
+            nombre_completo = f"{nombres} {apellidos}"
+        elif nombres or apellidos:
+            nombre_completo = nombres or apellidos
+
+        # 4. Fechas (Nacimiento, Expedición y Vigencia)
+        fecha_nacimiento = None
+        lugar_nacimiento = None
+        fecha_expedicion = None
+        sexo = None
+        lugar_expedicion = None
+        fecha_vencimiento_tramite = None
+
+        patron_f_nac = re.compile(r'FECHA(?:\s+Y\s+LUGAR)?\s+DE\s+NACIMIENTO', re.I)
+        patron_f_exp = re.compile(r'FECHA\s+DE\s+EXPEDICI[OÓ]N', re.I)
+        patron_valido_hasta = re.compile(r'V[AÁ]LIDO\s+HASTA\s+(?:EL\s+)?([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})', re.I)
+
+        m_vh = patron_valido_hasta.search(texto)
+        if m_vh:
+            dt_vh = validador.parsear_fecha(m_vh.group(1))
+            if dt_vh:
+                fecha_vencimiento_tramite = dt_vh.isoformat()
+
+        for i, l in enumerate(lineas_limpias):
+            if patron_f_nac.search(l):
+                resto = patron_f_nac.sub('', l).strip().lstrip(':').strip()
+                f_cand = validador.parsear_fecha(resto) if resto else None
+                idx_next = i + 1
+                if not f_cand and idx_next < len(lineas_limpias):
+                    f_cand = validador.parsear_fecha(lineas_limpias[idx_next])
+                    if f_cand:
+                        idx_next += 1
+                if f_cand:
+                    fecha_nacimiento = f_cand.isoformat()
+                    if idx_next < len(lineas_limpias):
+                        t_lug = lineas_limpias[idx_next]
+                        if not re.search(r'\b(FECHA|EXPEDICION|SEXO)\b', t_lug, re.I):
+                            lugar_nacimiento = t_lug.replace('-', ' ').strip()
+
+            elif patron_f_exp.search(l):
+                resto = patron_f_exp.sub('', l).strip().lstrip(':').strip()
+                f_cand = validador.parsear_fecha(resto) if resto else None
+                if not f_cand and i + 1 < len(lineas_limpias):
+                    f_cand = validador.parsear_fecha(lineas_limpias[i + 1])
+                if f_cand and f_cand.isoformat() != fecha_vencimiento_tramite:
+                    fecha_expedicion = f_cand.isoformat()
+
+            elif re.search(r'\bSEXO\b', l, re.I):
+                resto = re.sub(r'\bSEXO\b', '', l, flags=re.I).strip().lstrip(':').strip()
+                s_cand = validador.normalizar_sexo(resto) if resto else None
+                if not s_cand and i + 1 < len(lineas_limpias):
+                    s_cand = validador.normalizar_sexo(lineas_limpias[i + 1])
+                if s_cand:
+                    sexo = s_cand
+
+            elif re.search(r'\bLUGAR\s+DE\s+PREPARACI[OÓ]N\b|\bOFICINA\s+DE\s+ENTREGA\b', l, re.I):
+                if not lugar_expedicion:
+                    resto = re.sub(r'\b(?:LUGAR\s+DE\s+PREPARACI[OÓ]N|OFICINA\s+DE\s+ENTREGA)\b', '', l, flags=re.I).strip().lstrip(':').strip()
+                    t_lug = resto
+                    if not t_lug and i + 1 < len(lineas_limpias):
+                        t_lug = lineas_limpias[i + 1]
+                    if t_lug:
+                        partes = [p.strip() for p in re.split(r'[-–/]', t_lug) if p.strip()]
+                        if partes:
+                            lugar_limpio = validador.normalizar_lugar(partes[0])
+                            if lugar_limpio:
+                                lugar_expedicion = lugar_limpio
+
+        # Fallback de fecha de expedición evitando vencimiento de comprobante y nacimiento
+        if not fecha_expedicion:
+            for m in re.finditer(r'\b([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})\b', texto):
+                f_cand = validador.parsear_fecha(m.group(1))
+                if f_cand:
+                    f_iso = f_cand.isoformat()
+                    if f_iso != fecha_nacimiento and f_iso != fecha_vencimiento_tramite:
+                        if 1950 <= f_cand.year <= 2026:
+                            fecha_expedicion = f_iso
+                            break
+
+        if not sexo:
+            sexo = self._extraer_sexo(texto, lineas)
+        if not lugar_expedicion:
+            lugar_expedicion = self._extraer_lugar(texto, lineas)
+
+        detalles_campos = {
+            "paginas": [pagina_num],
+            "tipo_documento": {
+                "valor": "CONTRASEÑA",
+                "value": "CONTRASEÑA",
+                "subtipo_tramite": subtipo,
+                "confidence": 0.98,
+                "status": "VALID",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "identificacion": {
+                "valor": id_extraido,
+                "value": id_extraido,
+                "confidence": 0.98 if id_extraido else 0.0,
+                "status": "VALID" if id_extraido else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Número extraído de comprobante en trámite (Contraseña)"
+            },
+            "nombre_completo": {
+                "valor": nombre_completo,
+                "value": nombre_completo,
+                "confidence": 0.98 if nombre_completo else 0.0,
+                "status": "VALID" if (nombres and apellidos) else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+                "reason": "Extraído de rótulo unificado APELLIDOS / NOMBRES"
+            },
+            "nombres": {
+                "valor": nombres,
+                "value": nombres,
+                "confidence": 0.98 if nombres else 0.0,
+                "status": "VALID" if nombres else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "apellidos": {
+                "valor": apellidos,
+                "value": apellidos,
+                "confidence": 0.98 if apellidos else 0.0,
+                "status": "VALID" if apellidos else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "fecha_nacimiento": {
+                "valor": fecha_nacimiento,
+                "value": fecha_nacimiento,
+                "confidence": 0.98 if fecha_nacimiento else 0.0,
+                "status": "VALID" if fecha_nacimiento else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "fecha_expedicion": {
+                "valor": fecha_expedicion,
+                "value": fecha_expedicion,
+                "confidence": 0.95 if fecha_expedicion else 0.0,
+                "status": "VALID" if fecha_expedicion else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "lugar_expedicion": {
+                "valor": lugar_expedicion,
+                "value": lugar_expedicion,
+                "confidence": 0.95 if lugar_expedicion else 0.0,
+                "status": "VALID" if lugar_expedicion else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "sexo": {
+                "valor": sexo,
+                "value": sexo,
+                "confidence": 0.98 if sexo else 0.0,
+                "status": "VALID" if sexo else "REVIEW_REQUIRED",
+                "page": pagina_num,
+                "source": ocr_engine,
+            },
+            "es_contrasena": True,
+            "subtipo_tramite": subtipo,
+            "fecha_vencimiento_tramite": fecha_vencimiento_tramite,
+        }
+        if lugar_nacimiento:
+            detalles_campos["lugar_nacimiento"] = lugar_nacimiento
+
+        es_valido = bool(id_extraido and nombre_completo and fecha_nacimiento)
+        campos_enc = [k for k in ["identificacion", "nombre_completo", "nombres", "apellidos", "fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"] if locals().get(k)]
+
+        return {
+            "identificacion": id_extraido,
+            "nombre_completo": nombre_completo,
+            "nombres": nombres,
+            "apellidos": apellidos,
+            "fecha_nacimiento": fecha_nacimiento,
+            "fecha_expedicion": fecha_expedicion,
+            "lugar_expedicion": lugar_expedicion,
+            "sexo": sexo,
+            "confianza_extraccion": 98.0 if es_valido else 70.0,
+            "campos_encontrados": campos_enc,
+            "tipo_documento": "CONTRASEÑA",
+            "detalles_campos": detalles_campos,
+            "requiere_revision": not es_valido,
+            "estado_registro": "VALID" if es_valido else "REVIEW_REQUIRED",
+            "errores": []
+        }
+
     def extraer(
         self,
         texto_ocr: str,
@@ -600,6 +859,11 @@ class ExtractorService:
         tipo_doc = self.detectar_tipo_documento(texto)
         if tipo_doc == "CERTIFICADO_ANTECEDENTES":
             return self._extraer_antecedentes(texto, lineas, pagina_num=pagina_num, ocr_engine=ocr_engine)
+        if tipo_doc == "CONTRASEÑA" or (
+            re.search(r"\b(COMPROBANTE\s+DE\s+DOCUMENTO|CONTRASE[ÑN]A|DOCUMENTO\s+EN\s+TR[AÁ]MITE)\b", texto, re.I)
+            and re.search(r"\bAP[EÉ]LL?IDOS?\s*[/I\\]\s*N[O0]?MBR[EÉ]S?\b", texto, re.I)
+        ):
+            return self._extraer_contrasena(texto, lineas, pagina_num=pagina_num, ocr_engine=ocr_engine)
 
         resultado = {
             "identificacion": None,
@@ -1798,10 +2062,18 @@ class ExtractorService:
         fe_obj = validador.parsear_fecha(fe_str) if fe_str else None
         
         # Buscar todas las fechas candidatas en el documento ordenadas cronológicamente
+        # (excluyendo fechas de vigencia de comprobante tipo 'VALIDO HASTA EL...')
+        patron_excluir_vigencia = re.compile(r'\b(?:V[AÁ]LIDO\s+HASTA|COMPROBANTE\s+ES|HASTA\s+EL)\s*(?:[A-Z\s]{0,10})([0-9]{1,2}[\s/\-\.]+[A-Za-z0-9]{3,4}\.?[\s/\-\.]+[0-9]{2,4})', re.I)
+        fechas_vigencia_objs = set()
+        for m_v in patron_excluir_vigencia.finditer(texto):
+            dt_v = validador.parsear_fecha(m_v.group(1))
+            if dt_v:
+                fechas_vigencia_objs.add(dt_v)
+
         fechas_doc = []
         for match in re.finditer(r"\b(\d{1,2}[\s/\-\.](?:[A-Za-z0-9]{3,4}|\d{1,2})[\s/\-\.]\d{4}|\d{4}[\s/\-\.]\d{1,2}[\s/\-\.]\d{1,2})\b", texto, re.IGNORECASE):
             f_obj = validador.parsear_fecha(match.group(1))
-            if f_obj and f_obj not in fechas_doc:
+            if f_obj and f_obj not in fechas_doc and f_obj not in fechas_vigencia_objs:
                 fechas_doc.append(f_obj)
         fechas_doc.sort()
 

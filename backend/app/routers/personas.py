@@ -31,6 +31,34 @@ def _filtrar_persona_por_usuario(query, usuario: Usuario):
     )
 
 
+def _aviso_cambio_tipo_documento(tipo_documento: str, fecha_nacimiento) -> Optional[str]:
+    """
+    Al cambiar a mano el tipo de documento: la Tarjeta de Identidad es solo para menores de 18 años
+    y la Cédula de Ciudadanía solo para mayores. Devuelve el aviso si el cambio no cuadra con la edad.
+    """
+    from app.utils.validators import validador
+
+    edad = validador.calcular_edad(fecha_nacimiento) if fecha_nacimiento else None
+    if edad is None:
+        return None
+    tipo = str(tipo_documento or "").upper().strip()
+    es_ce = "EXTRANJER" in tipo or tipo == "CE"
+    es_ppt = "PPT" in tipo or "TEMPORAL" in tipo
+    es_ti = ("TARJETA" in tipo or tipo == "TI") and not es_ce and not es_ppt
+    es_cc = ("CEDULA" in tipo or "CÉDULA" in tipo or tipo == "CC") and not es_ti and not es_ce and not es_ppt
+    if es_ti and edad >= 18:
+        return (
+            f"No se puede cambiar a Tarjeta de Identidad: la persona tiene {edad} años "
+            f"y la tarjeta de identidad es solo para menores de 18 años."
+        )
+    if es_cc and edad < 18:
+        return (
+            f"No se puede cambiar a Cédula de Ciudadanía: la persona tiene {edad} años "
+            f"y la cédula de ciudadanía es solo para mayores de 18 años."
+        )
+    return None
+
+
 
 import os
 import re
@@ -581,6 +609,13 @@ def actualizar_persona(
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
+    # Solo al cambiar el tipo de documento: no se acepta TI para mayores de 18 ni CC para menores
+    tipo_actual = str(persona.tipo_documento or "").strip().upper()
+    if datos.tipo_documento is not None and str(datos.tipo_documento).strip().upper() != tipo_actual:
+        aviso = _aviso_cambio_tipo_documento(datos.tipo_documento, datos.fecha_nacimiento or persona.fecha_nacimiento)
+        if aviso:
+            raise HTTPException(status_code=400, detail=aviso)
+
     campos_revisados = list(persona.campos_revisados or [])
     campos_actualizados = []
 
@@ -601,8 +636,10 @@ def actualizar_persona(
             det_td = dict(persona.detalles_campos)
             if "tipo_documento" in det_td:
                 if isinstance(det_td["tipo_documento"], dict):
-                    det_td["tipo_documento"]["valor"] = tipo_normalizado
-                    det_td["tipo_documento"]["corregido_manual"] = True
+                    # Copia nueva: si se modifica el dict anidado en su sitio, SQLAlchemy no detecta el cambio
+                    det_td["tipo_documento"] = {
+                        **det_td["tipo_documento"], "valor": tipo_normalizado, "corregido_manual": True,
+                    }
                 else:
                     det_td["tipo_documento"] = tipo_normalizado
             persona.detalles_campos = det_td

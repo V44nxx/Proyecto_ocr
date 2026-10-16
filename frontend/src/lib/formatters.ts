@@ -210,6 +210,21 @@ export function verificarInconsistenciaDocumentoEdad(
   return { esInvalido: false, edad };
 }
 
+/**
+ * Al cambiar a mano el tipo de documento: TI solo para menores de 18 años y CC solo para mayores.
+ * Devuelve el aviso si el cambio no cuadra con la edad (el backend responde el mismo texto).
+ */
+export function validarCambioTipoDocumento(
+  tipoNuevo: string | null | undefined,
+  fechaNacimiento: string | Date | null | undefined
+): string | null {
+  const inc = verificarInconsistenciaDocumentoEdad(tipoNuevo, fechaNacimiento);
+  if (!inc.esInvalido || inc.edad === null) return null;
+  return inc.tipo === "MAYOR_CON_TI"
+    ? `No se puede cambiar a Tarjeta de Identidad: la persona tiene ${inc.edad} años y la tarjeta de identidad es solo para menores de 18 años.`
+    : `No se puede cambiar a Cédula de Ciudadanía: la persona tiene ${inc.edad} años y la cédula de ciudadanía es solo para mayores de 18 años.`;
+}
+
 export interface TipoDocInfo {
   codigo: string;
   label: string;

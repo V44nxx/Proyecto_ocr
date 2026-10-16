@@ -22,10 +22,27 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.5.0] - 2026-10-16
+
+**Resumen**
+
+- Al editar una persona se puede cambiar el tipo de documento. La app no deja poner Tarjeta de Identidad a un mayor de 18 años ni Cédula de Ciudadanía a un menor.
+- Las contraseñas de la Registraduría (documento en trámite) se leen con un extractor propio.
+
 ### Agregado
 
 - Opción para cambiar el tipo de documento al editar los datos de una persona, con selector desplegable (CC, TI, Contraseña, CE, PPT, Pasaporte, Antecedentes) y botones de acceso rápido para alternar fácilmente en caso de lecturas erróneas por el OCR.
 - Extractor especializado para Contraseñas (Comprobantes de documento en trámite): procesa el rótulo unificado `APELLIDOS / NOMBRES:` asignando correctamente apellidos y nombres, extrae la fecha de expedición real excluyendo fechas de vigencia del comprobante (`VALIDO HASTA EL...`), detecta el subtipo de trámite (`DUPLICADO TI`, `DUPLICADO CC`) y previene falsas alertas de revisión.
+- Al cambiar a mano el tipo de documento, la app no deja poner Tarjeta de Identidad a una persona de 18 años o más, ni Cédula de Ciudadanía a una persona menor de 18.
+  - El aviso dice la edad y aparece apenas se elige el tipo; mientras esté, no se puede guardar.
+  - La edad sale de la fecha de nacimiento del formulario: si se corrigen las dos cosas a la vez, cuenta la fecha nueva.
+  - El servidor también rechaza el cambio.
+  - Solo se valida al cambiar el tipo. Una persona que ya llegó con una tarjeta de identidad siendo mayor de edad (el OCR la marca como "Archivo no válido") se puede seguir editando.
+
+### Corregido
+
+- Al editar cualquier dato de una persona, el formulario enviaba también el tipo de documento, y a quien no tenía un tipo reconocido se le guardaba Cédula de Ciudadanía sin pedirlo. Ahora el tipo solo se envía si se cambia.
+- Al corregir el tipo de documento, el detalle de la persona conservaba el tipo anterior.
 
 ## [2.4.0] - 2026-10-14
 
@@ -617,7 +634,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...main
+[2.5.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.2.0...v2.2.1

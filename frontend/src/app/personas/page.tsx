@@ -18,7 +18,7 @@ import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc } from "@/lib/formatters";
+import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc, validarCambioTipoDocumento } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
 // ─── Helpers de Clasificación ──────────────────────────────────────────────
@@ -228,6 +228,7 @@ function PersonasContent() {
   const [editForm, setEditForm] = useState<PersonaUpdate>({});
   // El formulario tiene un solo campo de nombre: si se edita, nombres pasa a ser el nombre completo y apellidos queda vacío
   const [nombreEditado, setNombreEditado] = useState(false);
+  const [tipoOriginal, setTipoOriginal] = useState("");
 
   // Estadísticas
   const [stats, setStats] = useState({
@@ -502,6 +503,7 @@ function PersonasContent() {
   const iniciarEdicion = (p: Persona) => {
     setEditando(p.id);
     setNombreEditado(false);
+    setTipoOriginal(normalizarTipoDoc(p.tipo_documento));
     const nomCompleto = formatNombreCompleto(p);
     const numIdLimpio = p.numero_identificacion?.startsWith("SIN_ID") ? "" : (p.numero_identificacion || "");
     setEditForm({
@@ -518,12 +520,20 @@ function PersonasContent() {
     });
   };
 
+  // El tipo solo se envía (y se valida contra la edad) si se cambió en el formulario
+  const tipoEditado = editForm.tipo_documento !== tipoOriginal;
+  const avisoTipo = tipoEditado ? validarCambioTipoDocumento(editForm.tipo_documento, editForm.fecha_nacimiento) : null;
+
   const guardarEdicion = async (id: string, forzarAprobado = false) => {
+    if (avisoTipo) {
+      toast.error(avisoTipo, { id: "guardar-persona" });
+      return;
+    }
     try {
       const payload: PersonaUpdate = {
         ...editForm,
         numero_identificacion: editForm.numero_identificacion?.trim() || undefined,
-        tipo_documento: editForm.tipo_documento?.trim() || undefined,
+        tipo_documento: tipoEditado ? editForm.tipo_documento?.trim() || undefined : undefined,
         nombre_completo: editForm.nombre_completo?.trim() || undefined,
         nombres: nombreEditado ? editForm.nombre_completo?.trim() || undefined : undefined,
         apellidos: nombreEditado && editForm.nombre_completo?.trim() ? "" : undefined,
@@ -1421,6 +1431,15 @@ function PersonasContent() {
                         );
                       })}
                     </div>
+                    {avisoTipo && (
+                      <div
+                        role="alert"
+                        className="flex items-start gap-1.5 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-medium text-rose-700 dark:text-rose-300"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        <span>{avisoTipo}</span>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombre Completo</label>
                       <input
@@ -1488,7 +1507,9 @@ function PersonasContent() {
                       <button
                         type="button"
                         onClick={() => guardarEdicion(personaActiva.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5"
+                        disabled={!!avisoTipo}
+                        title={avisoTipo || undefined}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#0071E3]"
                       >
                         <Save className="w-3.5 h-3.5" />
                         <span>Guardar cambios</span>

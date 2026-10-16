@@ -22,6 +22,22 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.6.2] - 2026-10-16
+
+**Resumen**
+
+- Las credenciales por defecto salen del repositorio: se definen solo en el `.env` local o en Dokploy.
+
+### Seguridad
+
+- Ningún archivo del repositorio trae credenciales por defecto: la contraseña de la base de datos, el usuario y la contraseña de pgAdmin y la `SECRET_KEY` se definen solo en el `.env` local o en las variables de Dokploy (`.env.example` trae marcadores).
+- Sin `SECRET_KEY`, el backend genera una temporal en cada arranque y lo avisa en el log, en vez de usar una clave conocida. Con una temporal, las sesiones se cierran en cada reinicio.
+- La prueba que vigila que no queden contraseñas fijas en el código las busca por su huella SHA-256 y revisa todos los archivos del repositorio, no solo dos.
+
+### Cambiado
+
+- `docker-compose.yml` exige `POSTGRES_PASSWORD`, `SECRET_KEY`, `PGADMIN_EMAIL` y `PGADMIN_PASSWORD` en el `.env`; si falta alguna, avisa cuál antes de arrancar.
+
 ## [2.6.1] - 2026-10-16
 
 **Resumen**
@@ -681,7 +697,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.1...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.2...main
+[2.6.2]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.4.0...v2.5.0

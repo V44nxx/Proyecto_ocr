@@ -5,6 +5,9 @@ Tests de seguridad de la API:
 - administrador inicial por variables de entorno, sin tocar usuarios existentes
 - personas de un documento reconstruidas desde el snapshot del historial
 """
+import hashlib
+import os
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -234,12 +237,37 @@ def test_admin_inicial_rechaza_correo_que_no_podria_iniciar_sesion(monkeypatch, 
     db.add.assert_not_called()
 
 
+# Huellas SHA-256 de las contraseñas que estuvieron fijas en versiones viejas: se buscan sin escribirlas
+HUELLAS_CONTRASENAS_FILTRADAS = {
+    # Valores por defecto que se quitaron en la 2.6.2 (contraseña de la base, de pgAdmin y SECRET_KEY)
+    "8c00f9a3bb117335c7a60b89dacee8f2027ed5ffac2600f4af3ccc8a085e393c",
+    "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+    "11a3607fd8969ec2d737e66f1f57ae80cd1305cfe60dfabf0f8b4f3bb76efbe0",
+    "72e2ca83f0b90703fc2ed629ee1facbc975a8289d328c192d2579f660e1e63de",
+    "3b612c75a7b5048a435fb6ec81e52ff92d6d795a8b5a9c17070f6a63c97a53b2",
+}
+
+
 def test_sin_contrasenas_fijas_en_el_codigo():
     raiz = Path(__file__).resolve().parents[2]
+    ignorar = {"node_modules", ".next", ".venv", "__pycache__", ".git"}
+    extensiones = {".py", ".sql", ".md", ".yml", ".yaml", ".ts", ".tsx", ".js", ".mjs", ".json", ".example", ""}
+    revisados = 0
+    for carpeta, subcarpetas, archivos in os.walk(raiz):
+        subcarpetas[:] = [s for s in subcarpetas if s not in ignorar]
+        for nombre in archivos:
+            ruta = Path(carpeta) / nombre
+            if nombre.startswith(".env") and nombre != ".env.example":
+                continue  # archivos locales, fuera de git
+            if ruta.suffix.lower() not in extensiones or ruta.stat().st_size > 2_000_000:
+                continue
+            contenido = ruta.read_text(encoding="utf-8", errors="ignore")
+            palabras = set(re.findall(r"[A-Za-z0-9]{6,}", contenido)) | set(re.findall(r"[A-Za-z0-9_]{6,}", contenido))
+            assert not {hashlib.sha256(p.encode()).hexdigest() for p in palabras} & HUELLAS_CONTRASENAS_FILTRADAS, ruta
+            revisados += 1
+    assert revisados > 50
     for ruta in (raiz / "backend" / "app" / "database.py", raiz / "database" / "init.sql"):
-        contenido = ruta.read_text(encoding="utf-8")
-        assert "Emerson1722" not in contenido and "Admin123" not in contenido, ruta
-        assert "$2b$12$" not in contenido, ruta
+        assert "$2b$12$" not in ruta.read_text(encoding="utf-8"), ruta
 
 
 # ── Personas desde el snapshot del historial ────────────────────────
@@ -278,3 +306,14 @@ def test_personas_de_documento_desde_snapshot(client, db_mock, monkeypatch):
     (persona,) = r.json()
     assert persona["id"] == str(persona_id)
     assert persona["en_excel"] is True and persona["en_pdf"] is True
+
+
+def test_sin_secret_key_usa_una_clave_temporal(monkeypatch):
+    from app import config
+
+    monkeypatch.setenv("SECRET_KEY", "")
+    monkeypatch.setattr(config, "secret_key_temporal", False)
+    una = config.get_settings.__wrapped__()
+    otra = config.get_settings.__wrapped__()
+    assert config.secret_key_temporal is True
+    assert len(una.SECRET_KEY) > 40 and una.SECRET_KEY != otra.SECRET_KEY

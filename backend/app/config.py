@@ -2,6 +2,7 @@
 Configuración global del sistema OCR
 v2: agrega soporte para Google Cloud Document AI
 """
+import secrets
 from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import AnyUrl
@@ -14,19 +15,20 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.6.1"
+    APP_VERSION: str = "2.6.2"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
     # ─────────────────────────────────────
     # Base de Datos
     # ─────────────────────────────────────
-    DATABASE_URL: str = "postgresql://ocr_user:ocr_password_2024@localhost:5432/ocr_documentos"
+    DATABASE_URL: str = "postgresql://ocr_user@localhost:5432/ocr_documentos"  # se define en .env o en Dokploy
 
     # ─────────────────────────────────────
     # Seguridad JWT
     # ─────────────────────────────────────
-    SECRET_KEY: str = "supersecretkey_change_in_production_2024"
+    # Obligatoria en producción. Sin ella se usa una aleatoria por proceso (ver get_settings)
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 horas
 
@@ -129,9 +131,18 @@ class Settings(BaseSettings):
         return self.MAX_SUBIDA_TOTAL_MB * 1024 * 1024
 
 
+# True si no se definió SECRET_KEY: se generó una temporal y las sesiones se cierran en cada reinicio
+secret_key_temporal = False
+
+
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    global secret_key_temporal
+    configuracion = Settings()
+    if not configuracion.SECRET_KEY.strip():
+        configuracion.SECRET_KEY = secrets.token_urlsafe(64)
+        secret_key_temporal = True
+    return configuracion
 
 
 settings = get_settings()

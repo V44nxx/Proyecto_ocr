@@ -33,6 +33,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"  {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"  Entorno: {settings.ENVIRONMENT}")
     logger.info("=" * 60)
+    from app import config as config_mod
+    if config_mod.secret_key_temporal:
+        logger.warning(
+            "SECRET_KEY no está definida: se generó una temporal y las sesiones se cerrarán en cada reinicio. "
+            "Defínela en las variables de entorno."
+        )
 
     # Verificar conexión a base de datos
     if not check_db_connection():

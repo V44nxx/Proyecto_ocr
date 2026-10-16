@@ -11,7 +11,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ocr_documentos}
       POSTGRES_USER: ${POSTGRES_USER:-ocr_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ocr_password_2024}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -36,8 +36,8 @@ services:
     container_name: ocr_backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ocr_user}:${POSTGRES_PASSWORD:-ocr_password_2024}@postgres:5432/${POSTGRES_DB:-ocr_documentos}
-      SECRET_KEY: ${SECRET_KEY:-supersecretkey_change_in_production_2024}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ocr_user}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}@postgres:5432/${POSTGRES_DB:-ocr_documentos}
+      SECRET_KEY: ${SECRET_KEY:?Define SECRET_KEY en .env}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
@@ -100,8 +100,8 @@ services:
     container_name: ocr_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@ocr.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?Define PGADMIN_EMAIL en .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Define PGADMIN_PASSWORD en .env}
     ports:
       - "5050:80"
     depends_on:

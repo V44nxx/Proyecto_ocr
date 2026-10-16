@@ -214,7 +214,7 @@ proyecto_ocr/
 ### 4.3. Variables de Entorno Fundamentales (.env)
 ```ini
 # Base de Datos
-DATABASE_URL=postgresql://ocr_user:ocr_password_2024@ocr_postgres:5432/ocr_documentos
+DATABASE_URL=postgresql://ocr_user:<tu_contraseña>@ocr_postgres:5432/ocr_documentos
 
 # Seguridad
 SECRET_KEY=clave_secreta_jwt_muy_segura_de_produccion_2024

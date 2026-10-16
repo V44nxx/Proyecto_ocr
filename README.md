@@ -131,7 +131,7 @@ El administrador inicial se crea al arrancar con `ADMIN_EMAIL` y `ADMIN_PASSWORD
 | **Frontend Web** | [http://localhost:3000](http://localhost:3000) | `ADMIN_EMAIL` / `ADMIN_PASSWORD` de tu `.env` |
 | **Documentación Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | Autenticación con Bearer Token |
 | **Health Check API** | [http://localhost:8000/health](http://localhost:8000/health) | Acceso público |
-| **pgAdmin 4** | [http://localhost:5050](http://localhost:5050) | `admin@ocr.com` / `admin123` |
+| **pgAdmin 4** | [http://localhost:5050](http://localhost:5050) | `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` de tu `.env` |
 
 ---
 
@@ -152,7 +152,7 @@ pip install -r requirements.txt
 
 # Configurar variables de entorno locales
 copy ..\.env.example .env
-# Ajustar DATABASE_URL=postgresql://ocr_user:ocr_password_2024@localhost:5432/ocr_documentos
+# Ajustar DATABASE_URL=postgresql://ocr_user:<tu_contraseña>@localhost:5432/ocr_documentos
 # Ajustar GOOGLE_APPLICATION_CREDENTIALS=../credentials/google-document-ai.json
 
 # Ejecutar el servidor de desarrollo

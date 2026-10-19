@@ -11,6 +11,13 @@ export interface Usuario {
   fecha_creacion: string;
 }
 
+export interface SeguimientoConfig {
+  url_panel: string;
+  correo_google: string | null;
+  url_hoja: string | null;
+  fecha_actualizacion: string | null;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;

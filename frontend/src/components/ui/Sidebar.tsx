@@ -16,6 +16,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  ClipboardList,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import toast from "react-hot-toast";
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { href: "/personas", icon: <Users className="w-4 h-4" />, label: "Personas" },
   { href: "/exportacion", icon: <Download className="w-4 h-4" />, label: "Exportación" },
   { href: "/comparacion", icon: <GitCompare className="w-4 h-4" />, label: "Comparación" },
+  { href: "/seguimiento", icon: <ClipboardList className="w-4 h-4" />, label: "Seguimiento de fichas" },
   { href: "/usuarios", icon: <ShieldCheck className="w-4 h-4" />, label: "Usuarios", adminOnly: true },
 ];
 

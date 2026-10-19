@@ -11,6 +11,7 @@ import type {
   Comparacion,
   Diferencia,
   DashboardStats,
+  SeguimientoConfig,
 } from "@/types";
 
 /**
@@ -395,6 +396,18 @@ export const apiComparacion = {
       `/api/comparacion/${comparacionId}/agregar-persona-bd`,
       data
     ),
+};
+
+// ──────────────────────────────────────────
+// SEGUIMIENTO DE FICHAS
+// ──────────────────────────────────────────
+export const apiSeguimiento = {
+  obtenerConfig: () => apiClient.get<SeguimientoConfig | null>("/api/seguimiento/config"),
+
+  guardarConfig: (data: { url_panel: string; correo_google?: string; url_hoja?: string }) =>
+    apiClient.put<SeguimientoConfig>("/api/seguimiento/config", data),
+
+  eliminarConfig: () => apiClient.delete<{ message: string }>("/api/seguimiento/config"),
 };
 
 export default apiClient;

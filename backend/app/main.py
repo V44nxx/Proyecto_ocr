@@ -18,7 +18,7 @@ import logging
 from app.config import settings
 from app.database import check_db_connection, create_tables
 from app.utils.logger import app_logger as logger
-from app.routers import auth, documentos, personas, exportacion, comparacion
+from app.routers import auth, documentos, personas, exportacion, comparacion, seguimiento
 from app.routers.auth import get_admin_actual
 from app.utils.limite_peticiones import LimitePeticionesMiddleware
 
@@ -144,6 +144,7 @@ app.include_router(documentos.router)
 app.include_router(personas.router)
 app.include_router(exportacion.router)
 app.include_router(comparacion.router)
+app.include_router(seguimiento.router)
 
 
 # ──────────────────────────────────────────

@@ -74,7 +74,7 @@ def _hash_password(password: str) -> str:
 
 def create_tables():
     """Crear todas las tablas del modelo e inicializar usuario admin si no existe"""
-    from app.models import usuario, documento, persona, comparacion, diferencia
+    from app.models import usuario, documento, persona, comparacion, diferencia, seguimiento_config
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas de base de datos creadas/verificadas")
 

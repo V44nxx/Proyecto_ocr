@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ClipboardList,
   ExternalLink,
   FileSpreadsheet,
+  Link2,
   Mail,
   RefreshCw,
   Settings,
   Trash2,
-  Info,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
@@ -20,9 +19,21 @@ import type { SeguimientoConfig } from "@/types";
 import toast from "react-hot-toast";
 
 const TARJETA =
-  "relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden";
+  "rounded-2xl bg-white/80 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)]";
+const CAJA = "p-3.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] min-w-0";
+const ETIQUETA = "block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5";
 const CAMPO =
-  "w-full bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all";
+  "w-full bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all";
+const BOTON_SECUNDARIO =
+  "px-4 py-2 rounded-xl text-xs font-semibold bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2";
+const BOTON_PRIMARIO =
+  "px-4 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white transition-all shadow-sm shadow-[#0071E3]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2";
+
+const PASOS = [
+  { titulo: "Crea la hoja", texto: "En Google Drive crea la hoja «BD Seguimiento de Fichas» y abre Extensiones → Apps Script." },
+  { titulo: "Publica el panel", texto: "Implementar → Nueva implementación → Aplicación web. En «Quién tiene acceso» elige «Cualquier persona» para verlo aquí dentro." },
+  { titulo: "Copia el enlace", texto: "En Gestionar implementaciones copia la URL de la aplicación web (termina en /exec) y pégala en el formulario." },
+];
 
 export default function SeguimientoPage() {
   const router = useRouter();
@@ -98,53 +109,97 @@ export default function SeguimientoPage() {
     }
   };
 
+  const actualizado = config?.fecha_actualizacion
+    ? new Date(config.fecha_actualizacion).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
 
-      <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0 flex flex-col`}>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 page-enter">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <ClipboardList className="w-5 h-5 text-primary-400" />
-              <span className="text-primary-400 text-sm font-medium">Google Apps Script</span>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Seguimiento de fichas</h1>
-            <p className="text-slate-400 mt-1 text-sm">
-              Panel de seguimiento conectado a tu Google Drive, guardado en tu cuenta de KondID.
+      <main
+        className={`flex-1 min-w-0 p-4 sm:p-6 lg:p-8 transition-all duration-300 flex flex-col ${
+          collapsed ? "ml-16 sm:ml-20" : "ml-64 sm:ml-72"
+        }`}
+      >
+        {/* ─── Encabezado Principal ─── */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">
+              KONDID · GOOGLE APPS SCRIPT
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Seguimiento de fichas
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Panel conectado a tu Google Drive, guardado en tu cuenta de KondID.
             </p>
           </div>
 
           {config && !editando && (
-            <div className="flex flex-wrap items-center gap-3">
-              {config.correo_google && (
-                <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08]">
-                  <Mail className="w-3.5 h-3.5" />
-                  {config.correo_google}
-                </span>
-              )}
-              <button onClick={() => setRecarga((n) => n + 1)} className="btn-secondary text-sm py-2.5 px-4" title="Recargar panel">
-                <RefreshCw className="w-4 h-4" />
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-end">
+              <button onClick={() => setRecarga((n) => n + 1)} className={BOTON_SECUNDARIO} title="Recargar panel">
+                <RefreshCw className="w-3.5 h-3.5" />
                 <span>Recargar</span>
               </button>
-              <a href={config.url_panel} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm py-2.5 px-4">
-                <ExternalLink className="w-4 h-4" />
+              <a href={config.url_panel} target="_blank" rel="noopener noreferrer" className={BOTON_SECUNDARIO}>
+                <ExternalLink className="w-3.5 h-3.5" />
                 <span>Abrir en pestaña nueva</span>
               </a>
-              {config.url_hoja && (
-                <a href={config.url_hoja} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm py-2.5 px-4">
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Abrir hoja</span>
-                </a>
-              )}
-              <button onClick={abrirFormulario} className="btn-primary text-sm py-2.5 px-4">
-                <Settings className="w-4 h-4" />
+              <button onClick={abrirFormulario} className={BOTON_PRIMARIO}>
+                <Settings className="w-3.5 h-3.5" />
                 <span>Configurar</span>
               </button>
             </div>
           )}
         </div>
+
+        {/* ─── Resumen de la conexión ─── */}
+        {!cargando && (
+          <div className={`${TARJETA} mb-6 p-4 sm:p-5`}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={CAJA}>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Estado</span>
+                <div className="mt-1.5 flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+                  <span className={`w-2 h-2 rounded-full ${config ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  {config ? "Conectado" : "Sin conectar"}
+                </div>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5">
+                  {actualizado ? `Actualizado el ${actualizado}` : "Completa el formulario para empezar"}
+                </span>
+              </div>
+
+              <div className={CAJA}>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Cuenta de Google
+                </span>
+                <div className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-white truncate" title={config?.correo_google || ""}>
+                  {config?.correo_google || "Sin registrar"}
+                </div>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5">Dueña de la hoja de seguimiento</span>
+              </div>
+
+              <div className={CAJA}>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Hoja de cálculo
+                </span>
+                {config?.url_hoja ? (
+                  <a
+                    href={config.url_hoja}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 text-sm font-semibold text-[#0071E3] hover:underline inline-flex items-center gap-1"
+                  >
+                    BD Seguimiento de Fichas <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <div className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-white">Sin enlace</div>
+                )}
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 block mt-0.5">Google Sheets</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {cargando ? (
           <div className="py-16 text-center text-slate-500">
@@ -152,85 +207,117 @@ export default function SeguimientoPage() {
             <p className="text-xs">Cargando seguimiento de fichas...</p>
           </div>
         ) : editando ? (
-          <div className={`${TARJETA} p-6 max-w-2xl`}>
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Conectar tu panel de seguimiento</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 mb-5">
-              Se guarda solo en tu usuario. Cada persona que inicie sesión puede conectar su propio panel.
-            </p>
-
-            <form onSubmit={guardar} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  Correo de Google <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input
-                  type="email"
-                  value={correo}
-                  onChange={(e) => setCorreo(e.target.value)}
-                  placeholder="tucorreo@gmail.com"
-                  className={CAMPO}
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  La cuenta con la que creaste la hoja «BD Seguimiento de Fichas». KondID nunca pide ni guarda tu contraseña de Google.
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* ─── Formulario ─── */}
+            <form onSubmit={guardar} className={`${TARJETA} lg:col-span-2`}>
+              <div className="p-5 sm:p-6 border-b border-slate-200/80 dark:border-white/[0.06]">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">Conectar tu panel de seguimiento</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Se guarda solo en tu usuario. Cada persona que inicie sesión puede conectar su propio panel.
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  Enlace del panel (aplicación web) <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={urlPanel}
-                  onChange={(e) => setUrlPanel(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  className={CAMPO}
-                />
+              <div className="p-5 sm:p-6 space-y-5">
+                <div>
+                  <label htmlFor="url-panel" className={ETIQUETA}>
+                    Enlace del panel (aplicación web) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      id="url-panel"
+                      type="url"
+                      required
+                      value={urlPanel}
+                      onChange={(e) => setUrlPanel(e.target.value)}
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                      className={`${CAMPO} pl-10`}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label htmlFor="correo-google" className={ETIQUETA}>
+                      Correo de Google <span className="normal-case font-normal tracking-normal text-slate-400">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        id="correo-google"
+                        type="email"
+                        value={correo}
+                        onChange={(e) => setCorreo(e.target.value)}
+                        placeholder="tucorreo@gmail.com"
+                        className={`${CAMPO} pl-10`}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="url-hoja" className={ETIQUETA}>
+                      Hoja de cálculo <span className="normal-case font-normal tracking-normal text-slate-400">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <FileSpreadsheet className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        id="url-hoja"
+                        type="url"
+                        value={urlHoja}
+                        onChange={(e) => setUrlHoja(e.target.value)}
+                        placeholder="https://docs.google.com/spreadsheets/d/..."
+                        className={`${CAMPO} pl-10`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  El correo es la cuenta con la que creaste la hoja. KondID nunca pide ni guarda tu contraseña de Google.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  Enlace de la hoja de cálculo <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input
-                  type="url"
-                  value={urlHoja}
-                  onChange={(e) => setUrlHoja(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className={CAMPO}
-                />
-              </div>
-
-              <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] p-3">
-                <Info className="w-4 h-4 shrink-0 mt-0.5 text-primary-400" />
-                <span>
-                  En Apps Script: <b>Implementar → Gestionar implementaciones</b> y copia la <b>URL de la aplicación web</b> (termina en <code>/exec</code>).
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <button type="submit" disabled={guardando} className="btn-primary text-sm py-2.5 px-5">
-                  {guardando ? "Guardando..." : "Guardar"}
-                </button>
+              <div className="px-5 sm:px-6 py-4 border-t border-slate-200/80 dark:border-white/[0.06] flex flex-wrap items-center gap-2.5">
                 {config && (
-                  <>
-                    <button type="button" onClick={() => setEditando(false)} className="btn-secondary text-sm py-2.5 px-4">
+                  <button type="button" onClick={quitar} className={`${BOTON_SECUNDARIO} text-red-600 dark:text-red-400`}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Quitar conexión</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-2.5 ml-auto">
+                  {config && (
+                    <button type="button" onClick={() => setEditando(false)} className={BOTON_SECUNDARIO}>
                       Cancelar
                     </button>
-                    <button type="button" onClick={quitar} className="btn-secondary text-sm py-2.5 px-4 text-red-500 ml-auto">
-                      <Trash2 className="w-4 h-4" />
-                      <span>Quitar conexión</span>
-                    </button>
-                  </>
-                )}
+                  )}
+                  <button type="submit" disabled={guardando || !urlPanel.trim()} className={BOTON_PRIMARIO}>
+                    {guardando ? "Guardando..." : "Guardar conexión"}
+                  </button>
+                </div>
               </div>
             </form>
+
+            {/* ─── Cómo conectarlo ─── */}
+            <div className={`${TARJETA} p-5 sm:p-6`}>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide mb-4">Cómo obtener el enlace</h2>
+              <ol className="space-y-4">
+                {PASOS.map((paso, i) => (
+                  <li key={paso.titulo} className="flex gap-3">
+                    <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold font-mono bg-[#0071E3]/10 text-[#0071E3] border border-[#0071E3]/20">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white">{paso.titulo}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{paso.texto}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         ) : config ? (
           <div className="flex-1 flex flex-col min-h-0">
-            <div className={`${TARJETA} flex-1 min-h-[70vh]`}>
+            <div className={`${TARJETA} flex-1 min-h-[70vh] overflow-hidden`}>
               <iframe
                 key={recarga}
                 src={config.url_panel}
@@ -239,7 +326,7 @@ export default function SeguimientoPage() {
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-top-navigation-by-user-activation"
               />
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
               ¿El panel sale en blanco o pide iniciar sesión con Google? Usa «Abrir en pestaña nueva».
             </p>
           </div>

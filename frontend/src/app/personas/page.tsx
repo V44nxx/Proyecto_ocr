@@ -8,7 +8,8 @@ import {
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
   UserCheck, FileText, Eye, Hash, Clock, Cpu,
   Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
-  ChevronDown, ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2
+  ChevronDown, ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2,
+  ArrowDownAZ, ArrowUpZA, ArrowDown01, ArrowUp10
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import SelectorFicha, { TODAS_LAS_FICHAS } from "@/components/personas/SelectorFicha";
@@ -92,6 +93,46 @@ const ordenarPorNombre = (lista: Persona[]): Persona[] =>
     if (!na || !nb) return na ? -1 : nb ? 1 : 0;
     return comparadorNombres.compare(na, nb);
   });
+
+// Página donde aparece la persona (la misma que muestra la columna PÁG.)
+const paginaDe = (p: Persona): number | null =>
+  p.pagina_frente || p.pagina_numero || (Array.isArray((p.detalles_campos as any)?.paginas) ? (p.detalles_campos as any).paginas[0] : null) || null;
+
+type CampoOrden = "nombre" | "pagina";
+type Orden = { campo: CampoOrden; asc: boolean };
+const ORDEN_INICIAL: Orden = { campo: "nombre", asc: true };
+const CLAVE_ORDEN = "personas_orden";
+
+const leerOrdenGuardado = (): Orden => {
+  try {
+    const o = JSON.parse(localStorage.getItem(CLAVE_ORDEN) || "null");
+    if (o && (o.campo === "nombre" || o.campo === "pagina") && typeof o.asc === "boolean") return o;
+  } catch {}
+  return ORDEN_INICIAL;
+};
+
+// Ordena por nombre (A-Z / Z-A) o por número de página; sin nombre o sin página van siempre al final
+const ordenarPersonas = (lista: Persona[], { campo, asc }: Orden): Persona[] => {
+  const dir = asc ? 1 : -1;
+  const porNombre = (a: Persona, b: Persona) => {
+    const na = formatNombreCompleto(a);
+    const nb = formatNombreCompleto(b);
+    if (!na || !nb) return na ? -1 : nb ? 1 : 0;
+    return comparadorNombres.compare(na, nb);
+  };
+  return [...lista].sort((a, b) => {
+    if (campo === "pagina") {
+      const pa = paginaDe(a);
+      const pb = paginaDe(b);
+      if (pa == null || pb == null) return pa != null ? -1 : pb != null ? 1 : porNombre(a, b);
+      return (pa - pb) * dir || porNombre(a, b);
+    }
+    const na = formatNombreCompleto(a);
+    const nb = formatNombreCompleto(b);
+    if (!na || !nb) return na ? -1 : nb ? 1 : 0;
+    return comparadorNombres.compare(na, nb) * dir;
+  });
+};
 
 // Página con la que se abre el documento de una persona
 const paginaInicialDe = (p: Persona): number => {
@@ -218,6 +259,7 @@ function PersonasContent() {
   
   type FiltroEstado = "todos" | "validas" | "revision" | "falta_excel" | "falta_pdf" | "discrepancia" | "menores";
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
+  const [orden, setOrden] = useState<Orden>(ORDEN_INICIAL);
 
   // Persona seleccionada para el Drawer Lateral
   const [personaSeleccionadaId, setPersonaSeleccionadaId] = useState<string | null>(null);
@@ -687,8 +729,22 @@ function PersonasContent() {
     }
   };
 
+  // Recordar el orden elegido entre visitas
+  useEffect(() => {
+    setOrden(leerOrdenGuardado());
+  }, []);
+
+  // Clic en el campo activo invierte la dirección; en otro campo empieza ascendente
+  const cambiarOrden = (campo: CampoOrden) => {
+    setOrden((prev) => {
+      const next = { campo, asc: prev.campo === campo ? !prev.asc : true };
+      try { localStorage.setItem(CLAVE_ORDEN, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   // Filtrado de Personas
-  const personasFiltradas = (personas || []).filter((p) => {
+  const personasFiltradas = ordenarPersonas((personas || []).filter((p) => {
     if (!p) return false;
     const estaVal = esPersonaValidada(p);
     const esRev = esPersonaEnRevision(p);
@@ -713,7 +769,7 @@ function PersonasContent() {
     const cedula = String(p.numero_identificacion || "").replace(/[.\s]/g, "");
     const nom = formatNombreCompleto(p).toLowerCase();
     return cedula.includes(q) || nom.includes(q);
-  });
+  }), orden);
 
   // Lista de personas pendientes de resolver
   const personasPorResolver = (personas || []).filter((p) => {
@@ -1118,6 +1174,33 @@ function PersonasContent() {
               )}
             </div>
 
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+            {/* Organizador */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ordenar</span>
+              <div className="inline-flex p-0.5 rounded-xl bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08]">
+                {([
+                  { campo: "nombre" as const, etiqueta: orden.campo === "nombre" && !orden.asc ? "Z-A" : "A-Z", Icono: orden.campo === "nombre" && !orden.asc ? ArrowUpZA : ArrowDownAZ, titulo: "Ordenar alfabéticamente por nombre" },
+                  { campo: "pagina" as const, etiqueta: "Página", Icono: orden.campo === "pagina" && !orden.asc ? ArrowUp10 : ArrowDown01, titulo: "Ordenar por número de página" },
+                ]).map(({ campo, etiqueta, Icono, titulo }) => (
+                  <button
+                    key={campo}
+                    type="button"
+                    onClick={() => cambiarOrden(campo)}
+                    title={`${titulo} (clic otra vez para invertir)`}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      orden.campo === campo
+                        ? "bg-white dark:bg-white/[0.1] text-[#0071E3] dark:text-[#3894FF] shadow-sm"
+                        : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Icono className="w-3.5 h-3.5" />
+                    <span>{etiqueta}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Buscador */}
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
@@ -1137,6 +1220,7 @@ function PersonasContent() {
                 </button>
               )}
             </div>
+            </div>
           </div>
 
           {/* Tabla */}
@@ -1153,9 +1237,19 @@ function PersonasContent() {
                     />
                   </th>
                   <th className="py-3 px-3">DOCUMENTO</th>
-                  <th className="py-3 px-3">NOMBRE COMPLETO</th>
+                  <th className="py-3 px-3">
+                    <button type="button" onClick={() => cambiarOrden("nombre")} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-slate-900 dark:hover:text-white cursor-pointer" title="Ordenar alfabéticamente">
+                      NOMBRE COMPLETO
+                      {orden.campo === "nombre" && (orden.asc ? <ArrowDownAZ className="w-3.5 h-3.5 text-[#0071E3]" /> : <ArrowUpZA className="w-3.5 h-3.5 text-[#0071E3]" />)}
+                    </button>
+                  </th>
                   <th className="py-3 px-3 text-center">EDAD</th>
-                  <th className="py-3 px-3 text-center">PÁG.</th>
+                  <th className="py-3 px-3 text-center">
+                    <button type="button" onClick={() => cambiarOrden("pagina")} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-slate-900 dark:hover:text-white cursor-pointer" title="Ordenar por número de página">
+                      PÁG.
+                      {orden.campo === "pagina" && (orden.asc ? <ArrowDown01 className="w-3.5 h-3.5 text-[#0071E3]" /> : <ArrowUp10 className="w-3.5 h-3.5 text-[#0071E3]" />)}
+                    </button>
+                  </th>
                   <th className="py-3 px-3 text-center">FUENTE</th>
                   <th className="py-3 px-3">ESTADO</th>
                   <th className="py-3 px-3 w-8"></th>

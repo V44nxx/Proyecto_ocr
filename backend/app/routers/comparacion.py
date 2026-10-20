@@ -7,8 +7,7 @@ import threading
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +16,8 @@ from app.models.diferencia import Diferencia
 from app.models.usuario import Usuario
 from app.schemas.comparacion import ComparacionResponse, DiferenciaResponse, ReporteComparacion
 from app.routers.auth import get_usuario_actual
+from app.routers.exportacion import descarga_xlsx
+from app.services import auditoria
 from app.services.comparacion_service import comparacion_service
 from app.config import settings
 from app.utils.archivos import verificar_tamano_archivo
@@ -193,6 +194,7 @@ def descargar_reporte(
     comparacion_id: str,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """Genera y descarga el reporte detallado de diferencias en XLSX"""
     comparacion = db.query(Comparacion).filter(
@@ -209,13 +211,8 @@ def descargar_reporte(
         )
 
     ruta_reporte = comparacion_service.generar_reporte_xlsx(comparacion_id, db)
-
-    return FileResponse(
-        path=ruta_reporte,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=Path(ruta_reporte).name,
-        headers={"Content-Disposition": f"attachment; filename={Path(ruta_reporte).name}"}
-    )
+    auditoria.registrar("exportacion_reporte_comparacion", request, usuario=usuario, comparacion_id=str(comparacion.id))
+    return descarga_xlsx(ruta_reporte)
 
 
 from pydantic import BaseModel

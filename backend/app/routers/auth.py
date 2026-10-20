@@ -9,9 +9,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -37,8 +37,10 @@ from app.models.usuario import Usuario
 from app.schemas.usuario import (
     LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData,
     OlvidePasswordRequest, RestablecerPasswordRequest, CambiarPasswordRequest, RestablecerPasswordAdminRequest,
+    RegistrosAuditoriaResponse,
 )
 from app.config import settings
+from app.services import auditoria
 from app.utils.limitador import Limitador, ip_cliente, mensaje_espera
 from app.utils.logger import app_logger as logger
 
@@ -147,7 +149,7 @@ def get_usuario_actual(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credenciales_exception
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise credenciales_exception
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
@@ -157,51 +159,10 @@ def get_usuario_actual(
     return usuario
 
 
-def get_usuario_desde_token_o_query(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Usuario:
-    """
-    Dependency especial: acepta JWT tanto del header 'Authorization: Bearer ...'
-    como del query param '?token=...' (necesario para usar en <img src> del frontend).
-    """
-    credenciales_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token invalido o expirado",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    raw_token: Optional[str] = None
-
-    # 1. Intentar leer desde header Authorization
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        raw_token = auth_header[7:]
-
-    # 2. Fallback: query param ?token=
-    if not raw_token:
-        raw_token = request.query_params.get("token")
-
-    if not raw_token:
-        raise credenciales_exception
-
-    try:
-        payload = jwt.decode(raw_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credenciales_exception
-    except JWTError:
-        raise credenciales_exception
-
-    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-    if not usuario or not usuario.activo or not _token_vigente(payload, usuario):
-        raise credenciales_exception
-
-    return usuario
-
-
-def get_admin_actual(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
-    """Dependency: requiere rol de administrador"""
+def get_admin_actual(request: Request, usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+    """Dependency: requiere rol de administrador. Los intentos sin permiso quedan en la auditoría."""
     if usuario.rol != "admin":
+        auditoria.registrar("acceso_denegado", request, usuario=usuario, ruta=f"{request.method} {request.url.path}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol de administrador"
@@ -243,6 +204,7 @@ def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
     espera = max(limite_login_correo.espera(email_limpio), limite_login_ip.espera(ip))
     if espera:
         logger.warning(f"Login bloqueado por demasiados intentos: {email_limpio} desde {ip}")
+        auditoria.registrar("login_bloqueado", http, email=email_limpio)
         raise _demasiados_intentos(espera)
 
     usuario = db.query(Usuario).filter(
@@ -256,6 +218,7 @@ def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
         limite_login_correo.registrar(email_limpio)
         limite_login_ip.registrar(ip)
         logger.warning(f"Login fallido para {email_limpio} desde {ip}")
+        auditoria.registrar("login_fallido", http, usuario=usuario, email=email_limpio)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas"
@@ -268,6 +231,7 @@ def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
 
     token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0})
     logger.info(f"Login exitoso: {usuario.email}")
+    auditoria.registrar("login_exitoso", http, usuario=usuario)
 
     return TokenResponse(
         access_token=token,
@@ -280,6 +244,7 @@ def registrar(
     request: UsuarioCreate,
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(get_admin_actual),
+    http: Request = None,
 ):
     """Registrar nuevo usuario en el sistema (solo admin)"""
     if db.query(Usuario).filter(func.lower(Usuario.email) == request.email.strip().lower()).first():
@@ -304,6 +269,7 @@ def registrar(
     db.commit()
     db.refresh(usuario)
     logger.info(f"Usuario registrado: {usuario.email}")
+    auditoria.registrar("usuario_creado", http, usuario=usuario_actual, usuario_creado=usuario.email, rol=usuario.rol)
 
     return UsuarioResponse.model_validate(usuario)
 
@@ -321,7 +287,8 @@ def listar_usuarios(
 def eliminar_usuario(
     user_id: str,
     usuario_actual: Usuario = Depends(get_admin_actual),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    http: Request = None,
 ):
     """
     Eliminar usuario por ID (solo admin).
@@ -378,6 +345,8 @@ def eliminar_usuario(
     logger.info(
         f"Usuario {email_eliminado} eliminado junto con {fichas_eliminadas} ficha(s) y {personas_eliminadas} persona(s)"
     )
+    auditoria.registrar("usuario_eliminado", http, usuario=usuario_actual, usuario_eliminado=email_eliminado,
+                        usuario_eliminado_id=str(uid), fichas=fichas_eliminadas, personas=personas_eliminadas)
     return {
         "message": "Usuario eliminado exitosamente",
         "fichas_eliminadas": fichas_eliminadas,
@@ -391,6 +360,7 @@ def restablecer_password_usuario(
     request: RestablecerPasswordAdminRequest,
     usuario_actual: Usuario = Depends(get_admin_actual),
     db: Session = Depends(get_db),
+    http: Request = None,
 ):
     """El administrador asigna una contraseña nueva a otro usuario; sus sesiones abiertas se cierran."""
     if str(usuario_actual.id) == user_id:
@@ -405,6 +375,7 @@ def restablecer_password_usuario(
     _establecer_password(u, request.password_nueva)
     db.commit()
     logger.info(f"Contraseña de {u.email} restablecida por el administrador {usuario_actual.email}")
+    auditoria.registrar("contrasena_restablecida_admin", http, usuario=usuario_actual, usuario_afectado=u.email)
     return {"message": f"Contraseña de {u.email} restablecida. Sus sesiones abiertas se cerraron."}
 
 
@@ -413,6 +384,7 @@ def cambiar_password(
     request: CambiarPasswordRequest,
     usuario: Usuario = Depends(get_usuario_actual),
     db: Session = Depends(get_db),
+    http: Request = None,
 ):
     """
     Cambia la contraseña del usuario actual. Cierra las demás sesiones y devuelve un token nuevo
@@ -424,6 +396,7 @@ def cambiar_password(
         raise _demasiados_intentos(espera)
     if not verificar_password(request.password_actual, usuario.password_hash):
         limite_cambio_password.registrar(clave_usuario)
+        auditoria.registrar("cambio_contrasena_fallido", http, usuario=usuario)
         raise HTTPException(status_code=400, detail="La contraseña actual no es correcta.")
     limite_cambio_password.reiniciar(clave_usuario)
     if request.password_nueva == request.password_actual:
@@ -432,6 +405,7 @@ def cambiar_password(
     db.commit()
     db.refresh(usuario)
     logger.info(f"Contraseña cambiada por el propio usuario: {usuario.email}")
+    auditoria.registrar("contrasena_cambiada", http, usuario=usuario)
     token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion})
     return TokenResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
 
@@ -489,6 +463,8 @@ def olvide_password(
             enlace = f"{base_frontend}/restablecer-contrasena?token={token}"
             background_tasks.add_task(enviar_correo_recuperacion, usuario.email, usuario.nombre, enlace, minutos)
             logger.info(f"Recuperación de contraseña solicitada para {usuario.email}")
+    # La auditoría es interna (solo la ve el administrador): ahí sí se anota si la cuenta existe
+    auditoria.registrar("recuperacion_solicitada", http, usuario=usuario, email=email, cuenta_existe=bool(usuario))
     return {"message": MENSAJE_OLVIDE}
 
 
@@ -507,6 +483,7 @@ def restablecer_password(request: RestablecerPasswordRequest, http: Request, db:
         or usuario.reset_token_expira < datetime.now(timezone.utc)
     ):
         limite_restablecer_ip.registrar(ip)
+        auditoria.registrar("enlace_recuperacion_invalido", http)
         raise HTTPException(
             status_code=400,
             detail="El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",
@@ -514,6 +491,7 @@ def restablecer_password(request: RestablecerPasswordRequest, http: Request, db:
     _establecer_password(usuario, request.password_nueva)
     db.commit()
     logger.info(f"Contraseña restablecida con el enlace del correo: {usuario.email}")
+    auditoria.registrar("contrasena_restablecida_correo", http, usuario=usuario)
     return {"message": "Tu contraseña se cambió. Ya puedes iniciar sesión con la nueva."}
 
 
@@ -521,6 +499,27 @@ def restablecer_password(request: RestablecerPasswordRequest, http: Request, db:
 def perfil_actual(usuario: Usuario = Depends(get_usuario_actual)):
     """Obtener información del usuario autenticado"""
     return UsuarioResponse.model_validate(usuario)
+
+
+@router.get("/auditoria", response_model=RegistrosAuditoriaResponse, summary="Registro de auditoría (solo admin)")
+def listar_auditoria(
+    limite: int = Query(100, ge=1, le=500),
+    desde: int = Query(0, ge=0),
+    accion: Optional[str] = Query(None, max_length=60),
+    email: Optional[str] = Query(None, max_length=255),
+    usuario_actual: Usuario = Depends(get_admin_actual),
+    db: Session = Depends(get_db),
+):
+    """Acciones registradas (inicios de sesión, cambios de contraseña, exportaciones, eliminaciones...), lo más reciente primero."""
+    from app.models.auditoria import RegistroAuditoria
+    consulta = db.query(RegistroAuditoria)
+    if accion:
+        consulta = consulta.filter(RegistroAuditoria.accion == accion)
+    if email:
+        consulta = consulta.filter(func.lower(RegistroAuditoria.email) == email.strip().lower())
+    total = consulta.count()
+    registros = (consulta.order_by(RegistroAuditoria.fecha.desc()).offset(desde).limit(limite).all())
+    return RegistrosAuditoriaResponse(total=total, registros=registros)
 
 
 @router.get("/health", tags=["Sistema"], summary="Health check del backend")

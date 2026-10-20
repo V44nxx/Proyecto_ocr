@@ -3,6 +3,7 @@ Servicio de exportación a Excel (XLSX)
 Usa Pandas + OpenPyXL para generar reportes formateados
 """
 import re
+import uuid
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import (
@@ -268,7 +269,8 @@ class ExportacionService:
         df.columns = list(self.COLUMNAS.values())
 
         # Generar nombre de archivo
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # El sufijo evita que dos exportaciones del mismo segundo (de cuentas distintas) usen el mismo archivo
+        timestamp = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
         if nombre_doc_especifico:
             doc_seguro = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', Path(nombre_doc_especifico).stem)
             nombre_archivo = f"personas_{doc_seguro}_{timestamp}.xlsx"
@@ -471,10 +473,11 @@ class ExportacionService:
         ws["B3"] = total_filas
         ws["A4"] = "Fecha de exportación"
         ws["B4"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-    def exportar_reporte_diferencias(self, db: Session, comparacion_id: str) -> str:
+    def exportar_reporte_diferencias(self, db: Session, comparacion_id: str, usuario_id=None) -> str:
         """
         Exporta el reporte estructurado de diferencias a Excel XLSX por Persona / DocumentGroup.
         12 Columnas: Número Documento | Grupo Documento | Página Frente | Página Reverso | Campo | Valor OCR | Valor Excel | Diferencia | Confianza OCR | Estado | Motor OCR | Motivo
+        Los datos de cada persona salen solo de la cuenta `usuario_id` (la misma cédula puede estar en otra cuenta).
         """
         from app.models.diferencia import Diferencia
         from app.models.persona import Persona
@@ -482,7 +485,10 @@ class ExportacionService:
         difs = db.query(Diferencia).filter(Diferencia.comparacion_id == comparacion_id).all()
         datos = []
         for d in difs:
-            p = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion).first()
+            consulta_persona = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion)
+            if usuario_id is not None:
+                consulta_persona = consulta_persona.filter(Persona.usuario_id == usuario_id)
+            p = consulta_persona.first()
             grupo_id = p.grupo_documento_id if p and p.grupo_documento_id else "DOC-001"
             pag_f = p.pagina_frente if p and p.pagina_frente else (p.pagina_numero if p else 1)
             pag_r = p.pagina_reverso if p and p.pagina_reverso else "-"
@@ -520,7 +526,8 @@ class ExportacionService:
 
         df = pd.DataFrame(datos)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"reporte_diferencias_{timestamp}.xlsx"
+        # El sufijo evita que dos exportaciones del mismo segundo (de cuentas distintas) usen el mismo archivo
+        nombre_archivo = f"reporte_diferencias_{timestamp}_{uuid.uuid4().hex[:6]}.xlsx"
         ruta_archivo = settings.export_path / nombre_archivo
         df.to_excel(str(ruta_archivo), index=False, engine="openpyxl")
         return str(ruta_archivo)

@@ -12,6 +12,7 @@ import type {
   Diferencia,
   DashboardStats,
   SeguimientoConfig,
+  RegistrosAuditoria,
 } from "@/types";
 
 /**
@@ -32,6 +33,8 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
       const messages = data.detail.map((d: any) => {
         if (typeof d === "string") return d;
         if (d?.msg) {
+          // Los validadores propios del backend ya escriben una frase completa: se muestra tal cual
+          if (d.type === "value_error") return String(d.msg).replace(/^Value error, /, "");
           const loc = Array.isArray(d.loc) ? d.loc.filter((l: any) => l !== "body").join(".") : "";
           return loc ? `${loc}: ${d.msg}` : d.msg;
         }
@@ -164,6 +167,10 @@ export const apiAuth = {
 
   restablecerPasswordUsuario: (userId: string, passwordNueva: string) =>
     apiClient.post<{ message: string }>(`/api/auth/users/${userId}/password`, { password_nueva: passwordNueva }),
+
+  /** Registro de auditoría (solo administrador), lo más reciente primero. */
+  auditoria: (params: { limite?: number; desde?: number; accion?: string; email?: string } = {}) =>
+    apiClient.get<RegistrosAuditoria>("/api/auth/auditoria", { params }),
 };
 
 // ──────────────────────────────────────────
@@ -223,16 +230,14 @@ export const apiDocumentos = {
     apiClient.get<Persona[]>(`/api/documentos/${documentoId}/personas`),
 
   /**
-   * Construye la URL para la imagen de preview de una página del PDF.
-   * Incluye el token JWT como query param para autenticación en <img src>.
+   * Imagen de una página del PDF. Se pide con la sesión en la cabecera (no en la dirección);
+   * para mostrarla, usar usePaginaPdf de "@/lib/paginasPdf".
    */
-  paginaPdfUrl: (documentoId: string, pagina: number, dpi: number = 150): string => {
-    const base = getBaseUrl();
-    const token = auth.getToken();
-    const params = new URLSearchParams({ dpi: String(dpi) });
-    if (token) params.set("token", token);
-    return `${base}/api/documentos/${documentoId}/pagina/${pagina}?${params.toString()}`;
-  },
+  paginaPdf: (documentoId: string, pagina: number, dpi: number = 150) =>
+    apiClient.get<Blob>(`/api/documentos/${documentoId}/pagina/${pagina}`, {
+      params: { dpi },
+      responseType: "blob",
+    }),
 };
 
 // ──────────────────────────────────────────

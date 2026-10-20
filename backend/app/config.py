@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.6.2"
+    APP_VERSION: str = "2.7.0"
     ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    # Con DEBUG, SQLAlchemy escribe cada consulta (con sus datos) en el log: nunca en producción
+    DEBUG: bool = False
 
     # ─────────────────────────────────────
     # Base de Datos
@@ -104,11 +105,23 @@ class Settings(BaseSettings):
     # ─────────────────────────────────────
     # CORS
     # ─────────────────────────────────────
-    CORS_ORIGINS: list = ["*"]
+    # Orígenes del frontend que pueden llamar a la API desde el navegador: la lista exacta más
+    # la expresión regular (por defecto, cualquier subdominio https de v44nxx.online).
+    CORS_ORIGINS: list = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    CORS_ORIGIN_REGEX: Optional[str] = r"https://([a-z0-9-]+\.)*v44nxx\.online"
+
+    # ─────────────────────────────────────
+    # Auditoría
+    # ─────────────────────────────────────
+    AUDITORIA_RETENCION_DIAS: int = 365
 
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    @property
+    def es_produccion(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
 
     @property
     def upload_path(self) -> Path:

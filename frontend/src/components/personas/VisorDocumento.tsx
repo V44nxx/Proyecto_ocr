@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, ImageOff, Maximize2, ZoomIn, ZoomOut, X } from "lucide-react";
-import { apiDocumentos } from "@/lib/api";
+import { usePaginaPdf } from "@/lib/paginasPdf";
 import { formatNombreCompleto } from "@/lib/formatters";
 import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import type { Persona } from "@/types";
@@ -59,6 +59,8 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
   const [animar, setAnimar] = useState(false);
   const [arrastrando, setArrastrando] = useState(false);
   const [altaResolucion, setAltaResolucion] = useState<"no" | "cargando" | "lista">("no");
+  const paginaBase = usePaginaPdf(docId ? String(docId) : null, pagina, DPI_BASE);
+  const paginaAlta = usePaginaPdf(docId ? String(docId) : null, pagina, DPI_ALTA, altaResolucion !== "no");
 
   const escenarioRef = useRef<HTMLDivElement>(null);
   const arrastreRef = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
@@ -111,6 +113,14 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
   useEffect(() => {
     if (base) ajustar(false);
   }, [base, ajustar]);
+
+  // Si no se pudo traer la imagen (sin conexión, archivo no disponible), mostrar el aviso
+  useEffect(() => {
+    if (paginaBase.error) {
+      setCargando(false);
+      setError(true);
+    }
+  }, [paginaBase.error]);
 
   // Si cambia el tamaño del espacio (ventana o panel), volver a ajustar la página
   useEffect(() => {
@@ -313,29 +323,31 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
               visibility: base ? "visible" : "hidden",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              key={`base-${pagina}`}
-              src={apiDocumentos.paginaPdfUrl(String(docId), pagina, DPI_BASE)}
-              alt={`Página ${pagina} del documento`}
-              draggable={false}
-              onDragStart={(e) => e.preventDefault()}
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                setCargando(false);
-                setBase({ w: img.naturalWidth, h: img.naturalHeight });
-              }}
-              onError={() => {
-                setCargando(false);
-                setError(true);
-              }}
-              className="block w-full h-full rounded-sm shadow-2xl"
-            />
-            {altaResolucion !== "no" && (
+            {paginaBase.src && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`base-${pagina}`}
+                src={paginaBase.src}
+                alt={`Página ${pagina} del documento`}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setCargando(false);
+                  setBase({ w: img.naturalWidth, h: img.naturalHeight });
+                }}
+                onError={() => {
+                  setCargando(false);
+                  setError(true);
+                }}
+                className="block w-full h-full rounded-sm shadow-2xl"
+              />
+            )}
+            {altaResolucion !== "no" && paginaAlta.src && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={`alta-${pagina}`}
-                src={apiDocumentos.paginaPdfUrl(String(docId), pagina, DPI_ALTA)}
+                src={paginaAlta.src}
                 alt=""
                 aria-hidden="true"
                 draggable={false}

@@ -1,0 +1,8 @@
+# La imagen instala sus propias dependencias y compila desde cero
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+tsconfig.tsbuildinfo

@@ -5,5 +5,6 @@ from app.models.persona import Persona
 from app.models.comparacion import Comparacion
 from app.models.diferencia import Diferencia
 from app.models.seguimiento_config import SeguimientoConfig
+from app.models.auditoria import RegistroAuditoria
 
-__all__ = ["Usuario", "Documento", "Persona", "Comparacion", "Diferencia", "SeguimientoConfig"]
+__all__ = ["Usuario", "Documento", "Persona", "Comparacion", "Diferencia", "SeguimientoConfig", "RegistroAuditoria"]

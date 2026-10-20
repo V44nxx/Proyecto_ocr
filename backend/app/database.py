@@ -74,7 +74,7 @@ def _hash_password(password: str) -> str:
 
 def create_tables():
     """Crear todas las tablas del modelo e inicializar usuario admin si no existe"""
-    from app.models import usuario, documento, persona, comparacion, diferencia, seguimiento_config
+    from app.models import usuario, documento, persona, comparacion, diferencia, seguimiento_config, auditoria
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas de base de datos creadas/verificadas")
 
@@ -123,6 +123,19 @@ def create_tables():
             logger.info("Migraciones automáticas de esquema completadas con éxito.")
     except Exception as mig_err:
         logger.error(f"Error ejecutando migraciones automáticas: {mig_err}")
+
+    # ── Retención del registro de auditoría ──
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            borrados = conn.execute(
+                text("DELETE FROM auditoria WHERE fecha < now() - make_interval(days => :dias)"),
+                {"dias": settings.AUDITORIA_RETENCION_DIAS},
+            ).rowcount
+        if borrados:
+            logger.info(f"Auditoría: {borrados} registro(s) de más de {settings.AUDITORIA_RETENCION_DIAS} días eliminados")
+    except Exception as ret_err:
+        logger.warning(f"No se pudo aplicar la retención de la auditoría: {ret_err}")
 
     # ── Auto-curación de personas con PDF individual desvinculadas de su lote principal ──
     # Solo toca personas cuyo documento actual es un PDF individual subido desde "Subir PDF"

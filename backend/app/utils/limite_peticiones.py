@@ -10,7 +10,7 @@ La sesión completa (usuario activo, versión de sesión) la sigue revisando la 
 import json
 import re
 
-from jose import JWTError, jwt
+import jwt
 
 from app.config import settings
 
@@ -29,7 +29,7 @@ def _token_valido(cabecera: bytes) -> bool:
         return False
     try:
         payload = jwt.decode(texto[7:], settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except jwt.InvalidTokenError:
         return False
     return bool(payload.get("sub"))
 

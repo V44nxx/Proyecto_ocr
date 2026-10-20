@@ -129,7 +129,7 @@ El administrador inicial se crea al arrancar con `ADMIN_EMAIL` y `ADMIN_PASSWORD
 | Servicio | URL | Credenciales |
 |:---------|:----|:-------------------------|
 | **Frontend Web** | [http://localhost:3000](http://localhost:3000) | `ADMIN_EMAIL` / `ADMIN_PASSWORD` de tu `.env` |
-| **Documentación Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | Autenticación con Bearer Token |
+| **Documentación Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | Solo con `ENVIRONMENT` distinto de `production`; autenticación con Bearer Token |
 | **Health Check API** | [http://localhost:8000/health](http://localhost:8000/health) | Acceso público |
 | **pgAdmin 4** | [http://localhost:5050](http://localhost:5050) | `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` de tu `.env` |
 
@@ -241,7 +241,7 @@ npm run dev
 | `GET` | `/api/documentos/{id}/estado` | Consulta de progreso y paso actual en tiempo real |
 | `DELETE` | `/api/documentos/{id}` | Eliminar documento y sus registros asociados |
 | `GET` | `/api/documentos/dashboard/estadisticas` | Métricas agregadas para el Dashboard |
-| `GET` | `/api/documentos/{id}/pagina/{numero}` | Visualizar página del PDF renderizada en PNG (soporta query `?token=`) |
+| `GET` | `/api/documentos/{id}/pagina/{numero}` | Página del PDF como imagen JPEG (sesión en la cabecera `Authorization`; no se guarda en caché) |
 | `GET` | `/api/documentos/{id}/debug_espacial` | Reporte de depuración de cajas delimitadoras espaciales |
 
 ### 👥 Personas (`/api/personas`)
@@ -358,3 +358,8 @@ proyecto_ocr/
 - **Protección de Datos Multitenant**: Consultas aisladas por `usuario_id` en PostgreSQL para que ningún usuario acceda a documentos o registros de otro.
 - **Validación Estricta de Archivos**: Filtro de extensiones `.pdf`, `.xlsx`, `.xls` y tamaño máximo controlado por configuración (`MAX_FILE_SIZE_MB`).
 - **Respaldo Persistente**: Copia binaria de los PDFs en la base de datos para garantizar disponibilidad del visor incluso si el almacenamiento efímero se reinicia.
+- **Errores sin detalles internos**: el usuario ve un mensaje genérico con una referencia (`ERR-XXXXXXXX`) y el detalle queda solo en el log.
+- **Cabeceras de seguridad y CORS por lista**: API y frontend envían cabeceras contra incrustación, rastreo de tipos y filtración de la dirección de origen; la API solo acepta llamadas del navegador desde el frontend configurado.
+- **Auditoría**: el administrador consulta quién inició sesión, exportó, editó o eliminó datos, y desde qué IP, sin que se guarden contraseñas ni datos de las personas.
+- **Política de contraseñas**: largo mínimo y rechazo de contraseñas comunes o armadas con palabras del sistema.
+- **Pruebas**: unitarias, de integración, BDD (Gherkin en español), de interfaz, de carga y de seguridad, con regresión automática en GitHub Actions. Ver [docs/PRUEBAS.md](docs/PRUEBAS.md).

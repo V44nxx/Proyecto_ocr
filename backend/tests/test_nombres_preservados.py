@@ -36,7 +36,8 @@ import pandas as pd  # noqa: E402
 from app.models.comparacion import Comparacion  # noqa: E402
 from app.models.persona import Persona  # noqa: E402
 from app.utils.nombres_recortados import nombre_recuperado, sospecha_de_recorte  # noqa: E402
-from tests.test_regresiones_2_2_1 import _ficha, _persona, _usuario, bd, requiere_postgres  # noqa: E402,F401
+from tests.test_regresiones_2_2_1 import _ficha, _persona, _usuario  # noqa: E402
+from tests.utilidades_pg import requiere_postgres  # noqa: E402
 
 
 @pytest.mark.parametrize("actual, oficial, esperado", [

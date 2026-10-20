@@ -3,7 +3,7 @@ Router de Personas
 Endpoints: Listar, detalle, actualizar (corrección manual), eliminar
 """
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -12,8 +12,10 @@ from app.models.documento import Documento
 from app.models.usuario import Usuario
 from app.schemas.documento import PersonaResponse, PersonaUpdate
 from app.routers.auth import get_usuario_actual
+from app.services import auditoria
 from app.utils.archivos import verificar_tamano_archivo
-from app.utils.logger import app_logger as logger
+from app.utils.errores import mensaje_error_interno, nueva_referencia
+from app.utils.logger import app_logger as logger, enmascarar_documento
 
 router = APIRouter(prefix="/api/personas", tags=["Personas"])
 
@@ -512,6 +514,8 @@ def listar_personas(
                 ).order_by(Comparacion.fecha_carga.desc()).first()
 
             if comp_obj:
+                # Sin la planilla en disco ni en la base (comparaciones viejas) no hay contra qué corregir
+                lookup_excel = None
                 ruta_comp_obj = comp_obj.obtener_ruta_o_restaurar(db)
                 if ruta_comp_obj and ruta_comp_obj.exists():
                     lookup_excel = excel_lookup_service.cargar_lookup(str(ruta_comp_obj))
@@ -535,7 +539,7 @@ def listar_personas(
                                 # Solo corregir si la verificación exhaustiva confirma con certeza la auto-corrección
                                 if verif["id_final"] and str(verif["id_final"]) != str(p.numero_identificacion) and verif["fuente_identificacion"] == "corregido_desde_excel":
                                     id_ofic = verif["id_final"]
-                                    logger.info(f"[Personas] Auto-corrigiendo en BD por verificación exhaustiva: '{p.numero_identificacion}' -> '{id_ofic}'")
+                                    logger.info(f"[Personas] Auto-corrigiendo en BD por verificación exhaustiva: '{enmascarar_documento(p.numero_identificacion)}' -> '{enmascarar_documento(id_ofic)}'")
                                     detalles = dict(p.detalles_campos or {})
                                     detalles["numero_identificacion_original_ocr"] = p.numero_identificacion
                                     detalles["origen_identificacion"] = "corregido_desde_excel"
@@ -599,6 +603,7 @@ def actualizar_persona(
     datos: PersonaUpdate,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """
     Permite corrección manual de datos extraídos por OCR.
@@ -757,7 +762,9 @@ def actualizar_persona(
     db.commit()
     db.refresh(persona)
 
-    logger.info(f"Persona {persona.numero_identificacion} actualizada. Campos: {campos_actualizados}")
+    logger.info(f"Persona {enmascarar_documento(persona.numero_identificacion)} actualizada. Campos: {campos_actualizados}")
+    auditoria.registrar("persona_editada", request, usuario=usuario, persona_id=str(persona.id),
+                        campos=sorted(campos_actualizados) if campos_actualizados else None)
     ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
     return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
@@ -767,6 +774,7 @@ def eliminar_multiples_personas(
     payload: Dict[str, Any],
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """Elimina en lote una lista de personas seleccionadas por ID"""
     ids = payload.get("ids", [])
@@ -783,6 +791,7 @@ def eliminar_multiples_personas(
     eliminadas = db.query(Persona).filter(Persona.id.in_(persona_ids)).delete(synchronize_session=False)
     db.commit()
     logger.info(f"{eliminadas} personas eliminadas en lote por usuario {usuario.id}")
+    auditoria.registrar("personas_eliminadas", request, usuario=usuario, cantidad=eliminadas, modo="seleccion")
     return {"eliminadas": eliminadas}
 
 
@@ -791,6 +800,7 @@ def vaciar_tabla_personas(
     documento_id: Optional[str] = None,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """Elimina todas las personas del usuario (o solo las de un documento específico si se especifica documento_id)"""
     query = db.query(Persona.id)
@@ -804,6 +814,8 @@ def vaciar_tabla_personas(
     eliminadas = db.query(Persona).filter(Persona.id.in_(persona_ids)).delete(synchronize_session=False)
     db.commit()
     logger.info(f"Tabla de personas vaciada: {eliminadas} personas eliminadas por usuario {usuario.id}")
+    auditoria.registrar("personas_eliminadas", request, usuario=usuario, cantidad=eliminadas, modo="vaciar",
+                        documento_id=documento_id if documento_id and documento_id != "todos" else None)
     return {"eliminadas": eliminadas, "mensaje": f"{eliminadas} registros eliminados exitosamente"}
 
 
@@ -812,6 +824,7 @@ def eliminar_persona(
     persona_id: str,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """Elimina un registro de persona"""
     query = db.query(Persona).filter(Persona.id == persona_id)
@@ -819,9 +832,11 @@ def eliminar_persona(
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
+    id_persona = str(persona.id)
     db.delete(persona)
     db.commit()
-    logger.info(f"Persona eliminada: {persona.numero_identificacion}")
+    logger.info(f"Persona eliminada: {enmascarar_documento(persona.numero_identificacion)}")
+    auditoria.registrar("persona_eliminada", request, usuario=usuario, persona_id=id_persona)
 
 
 @router.get("/buscar/cedula/{cedula}", response_model=PersonaResponse, summary="Buscar por cédula")
@@ -844,7 +859,7 @@ def buscar_por_cedula(
 
 
 @router.post("/{persona_id}/subir-pdf", response_model=PersonaResponse, summary="Subir PDF de la cédula para una persona")
-async def subir_pdf_persona(
+def subir_pdf_persona(
     persona_id: str,
     file: UploadFile = File(..., description="Archivo PDF de la cédula de ciudadanía"),
     db: Session = Depends(get_db),
@@ -855,6 +870,8 @@ async def subir_pdf_persona(
     Ejecuta el proceso de OCR, unifica y completa los datos de la persona
     (fechas, lugar de expedición, sexo, nombres/apellidos, fotos/páginas de la cédula)
     y reevalúa el estado de revisión.
+    Es `def` (no `async def`): el OCR es síncrono y así FastAPI lo corre en un hilo aparte sin
+    detener las demás peticiones mientras procesa.
     """
     import uuid
     from datetime import datetime
@@ -868,7 +885,7 @@ async def subir_pdf_persona(
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
-    extension = Path(file.filename).suffix.lower()
+    extension = Path(file.filename or "").suffix.lower()
     if extension != ".pdf":
         raise HTTPException(
             status_code=400,
@@ -884,11 +901,12 @@ async def subir_pdf_persona(
         if persona.documento.metadatos.get("documento_padre_id"):
             doc_padre_id = persona.documento.metadatos.get("documento_padre_id")
 
-    content = await file.read()
+    content = file.file.read()
     verificar_tamano_archivo(content, file.filename)
 
-    # Guardar archivo PDF en la carpeta de subidas
-    nombre_guardado = f"cedula_{persona.numero_identificacion}_{uuid.uuid4().hex[:8]}.pdf"
+    # Guardar archivo PDF en la carpeta de subidas (el número editado a mano podría traer cualquier carácter)
+    numero_seguro = re.sub(r"[^0-9A-Za-z]", "", persona.numero_identificacion or "") or "sin_numero"
+    nombre_guardado = f"cedula_{numero_seguro}_{uuid.uuid4().hex[:8]}.pdf"
     ruta_guardada = settings.upload_path / nombre_guardado
     ruta_guardada.write_bytes(content)
 
@@ -896,7 +914,7 @@ async def subir_pdf_persona(
     doc = Documento(
         usuario_id=usuario.id,
         nombre_archivo=nombre_guardado,
-        nombre_original=file.filename,
+        nombre_original=(file.filename or "cedula.pdf")[:255],
         ruta_archivo=str(ruta_guardada),
         archivo_binario=content,
         estado="procesando",
@@ -1027,19 +1045,18 @@ async def subir_pdf_persona(
         doc.estado = "completado"
         db.commit()
         db.refresh(persona)
-        logger.info(f"PDF procesado para persona {persona.numero_identificacion} (ID: {persona.id}). Estado: {persona.estado_registro}")
+        logger.info(f"PDF procesado para persona {enmascarar_documento(persona.numero_identificacion)} (ID: {persona.id}). Estado: {persona.estado_registro}")
         ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
         return _enriquecer_persona_response(persona, ids_en_excel, hay_excel)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error procesando PDF para persona {persona.id}: {e}")
+        referencia = nueva_referencia()
+        logger.opt(exception=e).error(f"{referencia} Error procesando PDF para persona {persona.id}")
+        db.rollback()
         doc.estado = "error"
-        doc.mensaje_error = str(e)
+        doc.mensaje_error = f"No se pudo procesar el PDF (referencia {referencia})."
         db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al procesar el archivo PDF con OCR: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=mensaje_error_interno(referencia))
 

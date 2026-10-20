@@ -237,7 +237,7 @@ OCR_DPI=200
 
 * **`POST /api/auth/login`**: Autenticación con email y contraseña, retorna Bearer Token JWT.
 * **`POST /api/documentos/upload`**: Carga multipart de lote de archivos PDF (`archivos`) junto con la planilla obligatoria (`archivo_excel`).
-* **`GET /api/documentos/{id}/pagina/{numero}`**: Retorna la imagen rasterizada en PNG de una página específica del PDF (con autenticación por header o query `?token=`).
+* **`GET /api/documentos/{id}/pagina/{numero}`**: Retorna la imagen JPEG de una página específica del PDF. La sesión va en la cabecera `Authorization` (nunca en la dirección) y la respuesta no se guarda en caché.
 * **`GET /api/personas`**: Listado paginado de personas con filtros avanzados (`buscar`, `filtro_estado`, `documento_id`).
 * **`PUT /api/personas/{id}`**: Modificación directa de campos corregidos manualmente.
 * **`GET /api/exportacion/xlsx`**: Generación y descarga al vuelo del archivo Excel oficial con formatos, colores y metadatos.

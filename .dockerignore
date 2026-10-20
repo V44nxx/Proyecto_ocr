@@ -1,0 +1,19 @@
+# Para el Dockerfile de la raíz (docker-compose): secretos, datos personales y archivos de desarrollo fuera
+.git/
+**/.env
+**/.env.*
+!**/.env.example
+credentials/
+backend/credentials/
+backend/uploads/
+backend/exports/
+backend/logs/
+backend/tests/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/node_modules/
+**/.next/
+**/tsconfig.tsbuildinfo
+pruebas/

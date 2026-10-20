@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.models.usuario import Usuario
 from app.routers.auth import crear_hash_password
-from tests.test_regresiones_2_2_1 import bd, requiere_postgres  # noqa: F401
+from tests.utilidades_pg import requiere_postgres
 
 
 @pytest.fixture
@@ -206,7 +206,7 @@ def test_correo_de_recuperacion_escapa_el_nombre(monkeypatch):
 @requiere_postgres
 def test_sesiones_de_antes_del_cambio_siguen_sirviendo(cliente, bd):
     """Los tokens emitidos antes de esta versión no traen 'ver': valen mientras no se cambie la contraseña."""
-    from jose import jwt
+    import jwt
 
     uid = _crear(bd, "ana@example.com", "ClaveVieja2026")
     viejo = jwt.encode({"sub": str(uid), "email": "ana@example.com",

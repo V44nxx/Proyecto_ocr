@@ -2,6 +2,7 @@
 Servicio de comparación entre BD y archivos Excel externos.
 Usa Pandas para el análisis de diferencias.
 """
+import uuid
 import pandas as pd
 import re
 import time
@@ -844,14 +845,16 @@ class ComparacionService:
             return resultado
 
         except Exception as e:
-            logger.error(f"Error en comparación: {e}")
+            from app.utils.errores import nueva_referencia
+            referencia = nueva_referencia()
+            logger.opt(exception=e).error(f"{referencia} Error en comparación")
             try:
                 # Descartar cambios a medias antes de guardar el estado de error
                 db.rollback()
                 comparacion = db.query(Comparacion).filter(Comparacion.id == comp_uuid).first()
                 if comparacion:
                     comparacion.estado = "error"
-                    comparacion.mensaje_error = str(e)[:500]
+                    comparacion.mensaje_error = f"No se pudo completar la comparación (referencia {referencia})."
                     db.commit()
             except Exception:
                 pass
@@ -1537,7 +1540,8 @@ class ComparacionService:
 
         # Guardar archivo generado
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre = f"reporte_auditoria_comparacion_{timestamp}.xlsx"
+        # El sufijo evita que dos reportes del mismo segundo (de cuentas distintas) usen el mismo archivo
+        nombre = f"reporte_auditoria_comparacion_{timestamp}_{uuid.uuid4().hex[:6]}.xlsx"
         ruta = settings.export_path / nombre
         wb.save(str(ruta))
 

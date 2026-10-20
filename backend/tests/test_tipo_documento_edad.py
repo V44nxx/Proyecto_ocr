@@ -10,7 +10,8 @@ from fastapi import HTTPException
 from app.models.persona import Persona
 from app.routers.personas import _aviso_cambio_tipo_documento, actualizar_persona
 from app.schemas.documento import PersonaUpdate
-from tests.test_regresiones_2_2_1 import _ficha, _persona, _usuario, bd, requiere_postgres  # noqa: F401
+from tests.test_regresiones_2_2_1 import _ficha, _persona, _usuario
+from tests.utilidades_pg import requiere_postgres
 
 
 def _cumple(anios: int) -> date:

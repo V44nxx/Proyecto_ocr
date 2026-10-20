@@ -63,6 +63,8 @@ export const auth = {
       localStorage.removeItem("ocr_docs_en_proceso");
       localStorage.removeItem("ocr_fase_actual");
       sessionStorage.clear();
+      // Las vistas previas de documentos que quedaron en memoria se liberan (ver lib/paginasPdf.ts)
+      window.dispatchEvent(new Event("kondid:sesion-cerrada"));
     }
   },
 };

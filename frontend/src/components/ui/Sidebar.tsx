@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ClipboardList,
+  History,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import toast from "react-hot-toast";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { href: "/comparacion", icon: <GitCompare className="w-4 h-4" />, label: "Comparación" },
   { href: "/seguimiento", icon: <ClipboardList className="w-4 h-4" />, label: "Seguimiento de fichas" },
   { href: "/usuarios", icon: <ShieldCheck className="w-4 h-4" />, label: "Usuarios", adminOnly: true },
+  { href: "/auditoria", icon: <History className="w-4 h-4" />, label: "Auditoría", adminOnly: true },
 ];
 
 export default function Sidebar() {

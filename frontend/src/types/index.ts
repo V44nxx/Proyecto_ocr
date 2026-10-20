@@ -18,6 +18,19 @@ export interface SeguimientoConfig {
   fecha_actualizacion: string | null;
 }
 
+export interface RegistroAuditoria {
+  fecha: string;
+  email: string | null;
+  accion: string;
+  ip: string | null;
+  detalle: Record<string, unknown> | null;
+}
+
+export interface RegistrosAuditoria {
+  total: number;
+  registros: RegistroAuditoria[];
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;

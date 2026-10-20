@@ -7,20 +7,29 @@ os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["PADDLE_DISABLE_PIR"] = "1"
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from sqlalchemy.exc import DataError
 import time
-import logging
 
-from app.config import settings
+from app.config import Settings, settings
 from app.database import check_db_connection, create_tables
 from app.utils.logger import app_logger as logger
 from app.routers import auth, documentos, personas, exportacion, comparacion, seguimiento
 from app.routers.auth import get_admin_actual
+from app.utils.errores import mensaje_error_interno, nueva_referencia
 from app.utils.limite_peticiones import LimitePeticionesMiddleware
+from app.utils.seguridad_http import CabecerasSeguridadMiddleware, cabeceras_cors, cabeceras_seguridad
+
+
+def rutas_documentacion(configuracion: Settings) -> dict:
+    """La documentación interactiva describe toda la API: solo se publica fuera de producción."""
+    if configuracion.es_produccion:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
 
 
 # ──────────────────────────────────────────
@@ -39,6 +48,8 @@ async def lifespan(app: FastAPI):
             "SECRET_KEY no está definida: se generó una temporal y las sesiones se cerrarán en cada reinicio. "
             "Defínela en las variables de entorno."
         )
+    elif len(settings.SECRET_KEY.encode("utf-8")) < 32:
+        logger.warning("SECRET_KEY tiene menos de 32 bytes: usa una más larga (por ejemplo, la de secrets.token_urlsafe(64)).")
 
     # Verificar conexión a base de datos
     if not check_db_connection():
@@ -52,7 +63,8 @@ async def lifespan(app: FastAPI):
     settings.export_path
 
     logger.info("Backend OCR iniciado correctamente")
-    logger.info(f"Documentación API: http://localhost:8000/docs")
+    if app.docs_url:
+        logger.info(f"Documentación API: http://localhost:8000{app.docs_url}")
 
     yield  # La aplicación corre aquí
 
@@ -82,27 +94,32 @@ desde documentos PDF mediante OCR con PaddleOCR.
 1. Subir PDF → 2. OCR automático → 3. Extracción de campos → 4. Validación → 5. Almacenamiento
     """,
     version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
     lifespan=lifespan,
+    **rutas_documentacion(settings),
 )
 
 # ──────────────────────────────────────────
-# Middlewares
+# Middlewares (el último que se agrega queda por fuera)
 # ──────────────────────────────────────────
 # Revisa token y tamaño antes de leer el cuerpo. Va antes que CORS para quedar por dentro:
 # así sus respuestas 401/413 también llevan las cabeceras CORS.
 app.add_middleware(LimitePeticionesMiddleware)
 
+# Solo el frontend configurado. La sesión viaja en la cabecera Authorization, no en cookies,
+# así que no se habilitan credenciales.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=".*",
-    allow_credentials=True,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+    max_age=600,
 )
+
+# Por fuera de CORS para que también las respuestas de CORS y del límite de peticiones las lleven
+app.add_middleware(CabecerasSeguridadMiddleware)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -123,16 +140,25 @@ async def log_requests(request, call_next):
     return response
 
 
-# Exception handler global para asegurar que los errores 500 incluyan headers CORS y detalle legible
-from fastapi.responses import JSONResponse
+@app.exception_handler(DataError)
+async def datos_invalidos_handler(request: Request, exc: DataError):
+    """Un id u otro dato con formato inválido que llega hasta la base: es un error del cliente, no del servidor."""
+    logger.warning(f"Dato con formato inválido en {request.method} {request.url.path}: {type(exc.orig).__name__}")
+    return JSONResponse(status_code=400, content={"detail": "Uno de los datos enviados no tiene el formato esperado."})
+
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Excepción no controlada en {request.method} {request.url.path}: {exc}")
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Errores no controlados: el detalle queda en el log con una referencia y el usuario solo ve la referencia.
+    Esta respuesta no pasa por los middlewares, así que lleva a mano las cabeceras de CORS y de seguridad.
+    """
+    referencia = nueva_referencia()
+    logger.opt(exception=exc).error(f"{referencia} Excepción no controlada en {request.method} {request.url.path}")
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Error interno del servidor: {str(exc)}"},
-        headers={"Access-Control-Allow-Origin": "*"}
+        content={"detail": mensaje_error_interno(referencia), "referencia": referencia},
+        headers={**cabeceras_seguridad(request.url.path), **cabeceras_cors(request.headers.get("origin"))},
     )
 
 
@@ -152,13 +178,14 @@ app.include_router(seguimiento.router)
 # ──────────────────────────────────────────
 @app.get("/", tags=["Sistema"])
 def root():
-    return {
+    respuesta = {
         "sistema": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "entorno": settings.ENVIRONMENT,
-        "docs": "/docs",
         "status": "operativo",
     }
+    if app.docs_url:
+        respuesta["docs"] = app.docs_url
+    return respuesta
 
 
 @app.get("/health", tags=["Sistema"])
@@ -189,21 +216,18 @@ def health_check():
     }
 
 
-@app.api_route(
-    "/api/sistema/migrar-db",
-    methods=["GET", "POST"],
-    tags=["Sistema"],
-    dependencies=[Depends(get_admin_actual)],
-)
+# GET se mantiene por compatibilidad, fuera del esquema para que cada operación tenga un id único
+@app.post("/api/sistema/migrar-db", tags=["Sistema"], dependencies=[Depends(get_admin_actual)])
+@app.get("/api/sistema/migrar-db", tags=["Sistema"], dependencies=[Depends(get_admin_actual)], include_in_schema=False)
 def migrar_base_datos():
     """Ejecuta migraciones de esquema idempotentes en PostgreSQL (solo admin)"""
     try:
         create_tables()
         return {"status": "ok", "message": "Migración de esquema ejecutada exitosamente."}
     except Exception as e:
-        logger.error(f"Error en /api/sistema/migrar-db: {e}")
+        referencia = nueva_referencia()
+        logger.opt(exception=e).error(f"{referencia} Error en /api/sistema/migrar-db")
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "detail": str(e)},
-            headers={"Access-Control-Allow-Origin": "*"}
+            content={"status": "error", "detail": mensaje_error_interno(referencia), "referencia": referencia},
         )

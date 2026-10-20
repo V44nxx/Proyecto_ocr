@@ -22,6 +22,78 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.7.0] - 2026-10-20
+
+**Resumen**
+
+- Endurecimiento de seguridad y registro de auditoría.
+- Apartado Seguimiento de fichas.
+- Dependencias del backend sin avisos conocidos.
+- Una estrategia de pruebas completa: BDD, interfaz, carga, seguridad y regresión automática en cada push.
+
+### Agregado
+
+- **Seguimiento de fichas** (hecho por Emerson; se publica en esta versión). Cada usuario guarda el enlace de su panel de Google Apps Script, su correo de Google y la hoja de cálculo, y ve el panel dentro de KondID. El enlace solo acepta aplicaciones web de Apps Script y hojas de Google Sheets.
+- **Ordenar la tabla de Personas** (hecho por Emerson; se publica en esta versión): de la A a la Z, de la Z a la A o por número de página. Las personas sin nombre o sin página van al final, y el orden elegido se recuerda entre visitas.
+- **Auditoría**: pantalla solo para el administrador, en el menú lateral.
+  - Registra, con fecha, usuario e IP:
+    - inicios de sesión (correctos, fallidos y bloqueados);
+    - accesos denegados;
+    - creación y eliminación de usuarios;
+    - cambios y recuperación de contraseñas;
+    - exportaciones;
+    - ediciones y eliminaciones de personas y fichas.
+  - Se filtra por acción y por correo.
+  - No guarda contraseñas, cédulas ni nombres de las personas.
+  - Los registros se conservan un año (`AUDITORIA_RETENCION_DIAS`).
+- **Pruebas** (guía en `docs/PRUEBAS.md`):
+  - escenarios BDD en Gherkin en español (`backend/tests/bdd/`);
+  - pruebas de la interfaz con Playwright;
+  - batería de seguridad de caja negra y plan de OWASP ZAP;
+  - prueba de carga y estrés con JMeter (`pruebas/`).
+- **GitHub Actions** (`.github/workflows/pruebas.yml`): en cada push corren la suite completa con PostgreSQL, la compilación del frontend y el análisis de dependencias.
+- `backend/requirements-dev.txt` con las herramientas de prueba (pytest y pytest-bdd), fuera de la imagen de producción.
+
+### Seguridad
+
+- **Reportes de diferencias**: cada usuario solo descarga los de sus propias comparaciones, y el reporte toma los datos de las personas de su propia cuenta.
+- **Errores**:
+  - los errores internos responden con un mensaje genérico y una referencia (`ERR-XXXXXXXX`) que el administrador busca en el log;
+  - ni las respuestas ni los mensajes de error de fichas y comparaciones muestran detalles técnicos;
+  - un id con formato inválido responde 400 en vez de 500.
+- **Documentación interactiva de la API** (`/docs`, `/redoc`, `/openapi.json`): solo se publica fuera de producción; con `ENVIRONMENT=production` no aparece.
+- **Vista previa de los documentos**:
+  - se pide con la sesión en la cabecera, nunca en la dirección;
+  - el navegador no la guarda en disco (`Cache-Control: private, no-store`);
+  - el frontend la guarda solo en memoria y la libera al cerrar sesión.
+- **Cabeceras de seguridad**:
+  - en la API: `nosniff`, `X-Frame-Options`, `Referrer-Policy`, una CSP propia de API y HSTS en producción;
+  - en el frontend: las mismas, más `Permissions-Policy` y una política de contenido (CSP) en modo solo-reporte;
+  - las respuestas de la API no se guardan en cachés;
+  - el frontend ya no anuncia `X-Powered-By`.
+- **CORS**: solo para el frontend y sin credenciales de navegador. Se configura con `CORS_ORIGINS` y `CORS_ORIGIN_REGEX`; por defecto, localhost y los subdominios https de v44nxx.online.
+- **Contraseñas**:
+  - además del largo mínimo, se rechazan las más comunes y las armadas con palabras del sistema (por ejemplo, «kondid2026» o «Admin1234»);
+  - aplica al crear usuarios, al cambiar la contraseña y al restablecerla;
+  - crear usuarios también respeta el tope de 72 bytes.
+- **Archivos**:
+  - los subidos se guardan con un nombre saneado, sin carpetas ni caracteres especiales; el nombre original solo se muestra;
+  - los Excel exportados llevan un nombre único y se borran del servidor apenas se descargan.
+- **Registros (logs)**:
+  - muestran solo los últimos 4 dígitos de las cédulas;
+  - la consola usa el nivel INFO salvo con `DEBUG=true`;
+  - los archivos se conservan 14 días, y los de errores 30.
+- **Configuración**: `DEBUG` viene apagado por defecto, y al arrancar se avisa si la `SECRET_KEY` mide menos de 32 bytes.
+- **Docker**: `.dockerignore` en la raíz, el backend y el frontend; el `.env`, las credenciales, las subidas, los exports y los logs no entran a las imágenes.
+- **Dependencias del backend**: FastAPI 0.142.2, Starlette 1.7.0, python-multipart 0.0.32, Pillow 12.3.0, python-dotenv 1.2.4 y PyJWT 2.15.1 (en lugar de python-jose). `pip-audit` no reporta avisos conocidos.
+- **Dependencias del frontend**: Next 14.2.35 y axios 1.20.0.
+
+### Corregido
+
+- La autocorrección de la lista de Personas ya no falla cuando la planilla de una comparación vieja no está disponible.
+- «Subir PDF» de una persona procesa el OCR en un hilo aparte: ya no detiene las demás peticiones mientras trabaja.
+- Los mensajes de validación del backend se muestran como una frase completa, sin el prefijo «Value error».
+
 ## [2.6.2] - 2026-10-16
 
 **Resumen**

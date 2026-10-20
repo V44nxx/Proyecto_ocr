@@ -5,7 +5,6 @@ Los tests sin base de datos corren siempre. Los que necesitan PostgreSQL real (m
 arranque, índices, consultas por usuario) se ejecutan solo si TEST_DATABASE_URL apunta a una base
 de pruebas desechable: cada test borra y recrea el esquema `public`.
 """
-import os
 import uuid
 from datetime import date
 from types import SimpleNamespace
@@ -25,6 +24,7 @@ from app.models.usuario import Usuario
 from app.routers.comparacion import CorregirCampoRequest, corregir_campo_desde_comparacion
 from app.routers.documentos import CancelarSubidaRequest, cancelar_subida_o_procesamiento
 from app.services.google_document_ai_service import GoogleDocumentAIService
+from tests.utilidades_pg import requiere_postgres
 
 
 # ── Sin base de datos ───────────────────────────────────────────────
@@ -148,34 +148,7 @@ def test_exportar_solo_menores(tmp_path, monkeypatch):
     assert "1000000020" not in cedulas
 
 
-# ── Con PostgreSQL real ─────────────────────────────────────────────
-
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-requiere_postgres = pytest.mark.skipif(not TEST_DATABASE_URL, reason="Define TEST_DATABASE_URL para correr estos tests")
-
-
-@pytest.fixture
-def bd(monkeypatch, tmp_path):
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.orm import sessionmaker
-    import app.database as database
-
-    engine = create_engine(TEST_DATABASE_URL)
-    with engine.begin() as conn:
-        # Cerrar sesiones que un test fallido haya dejado abiertas, para que el DROP no se bloquee
-        conn.execute(text(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-            "WHERE datname = current_database() AND pid <> pg_backend_pid()"
-        ))
-        conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
-    monkeypatch.setattr(database, "engine", engine)
-    monkeypatch.setattr(database, "SessionLocal", sessionmaker(autocommit=False, autoflush=False, bind=engine))
-    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
-    monkeypatch.setattr(settings, "EXPORT_DIR", str(tmp_path / "exports"))
-    monkeypatch.setattr(settings, "ADMIN_EMAIL", None)
-    database.create_tables()
-    yield database
-    engine.dispose()
+# ── Con PostgreSQL real (fixture `bd` en conftest.py) ───────────────
 
 
 def _usuario(db, email, rol="usuario"):

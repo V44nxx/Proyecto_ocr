@@ -1,0 +1,14 @@
+# Lo que nunca debe entrar a la imagen: secretos, datos personales y archivos de desarrollo
+.env
+.env.*
+!.env.example
+credentials/
+uploads/
+exports/
+logs/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/

@@ -331,10 +331,13 @@ class OCRService:
 
         except Exception as e:
             import traceback
+            from app.utils.errores import nueva_referencia
             tiempo_ms = int((time.time() - inicio) * 1000)
             error_msg = f"{type(e).__name__}: {str(e)}"
             tb_str = traceback.format_exc()
-            logger.error(f"Error en OCR: {error_msg}\n{tb_str}")
+            # El detalle técnico queda solo en el log; la ficha muestra una referencia para buscarlo
+            referencia = nueva_referencia()
+            logger.error(f"{referencia} Error en OCR: {error_msg}\n{tb_str}")
             resultado["errores"].append(error_msg)
             resultado["tiempo_ms"] = tiempo_ms
 
@@ -343,11 +346,11 @@ class OCRService:
                 doc_db = db.query(Documento).filter(Documento.id == documento_id).first()
                 if doc_db and doc_db.estado != "cancelado":
                     doc_db.estado = "error"
-                    doc_db.mensaje_error = f"{error_msg}\n{tb_str[-500:]}"
+                    doc_db.mensaje_error = f"No se pudo procesar la ficha (referencia {referencia})."
                     meta = dict(doc_db.metadatos or {})
                     meta.update({
                         "progreso": 100,
-                        "paso": f"Error: {error_msg}",
+                        "paso": f"Error al procesar la ficha (referencia {referencia})",
                     })
                     doc_db.metadatos = meta
                     db.commit()

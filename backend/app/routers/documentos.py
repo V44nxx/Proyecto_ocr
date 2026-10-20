@@ -21,10 +21,12 @@ from app.database import get_db
 from app.models.documento import Documento
 from app.models.usuario import Usuario
 from app.schemas.documento import DocumentoResponse, PersonaResponse
-from app.routers.auth import get_usuario_actual, get_usuario_desde_token_o_query
+from app.routers.auth import get_usuario_actual
+from app.services import auditoria
 from app.services.ocr_service import ocr_service
 from app.config import settings
-from app.utils.archivos import verificar_tamano_archivo
+from app.utils.archivos import nombre_archivo_seguro, verificar_tamano_archivo
+from app.utils.errores import mensaje_error_interno, nueva_referencia
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
@@ -600,7 +602,7 @@ async def upload_pdf(
         comparacion = Comparacion(
             usuario_id=usuario.id,
             nombre_archivo=nombre_excel,
-            nombre_original=excel.filename,
+            nombre_original=excel.filename[:255],
             ruta_archivo=str(ruta_excel),
             archivo_binario=excel_content,
             estado="pendiente",
@@ -620,14 +622,15 @@ async def upload_pdf(
     items_para_procesar = []
 
     for pdf_file, content in zip(archivos_recibidos, contenidos_pdf):
-        nombre_unico = f"{uuid.uuid4()}_{pdf_file.filename}"
+        # En disco va un nombre saneado (sin carpetas ni caracteres especiales); el original solo se muestra
+        nombre_unico = f"{uuid.uuid4()}_{nombre_archivo_seguro(pdf_file.filename, 'ficha.pdf')}"
         ruta_archivo = settings.upload_path / nombre_unico
         ruta_archivo.write_bytes(content)
 
         documento = Documento(
             usuario_id=usuario.id,
             nombre_archivo=nombre_unico,
-            nombre_original=pdf_file.filename,
+            nombre_original=(pdf_file.filename or "ficha.pdf")[:255],
             ruta_archivo=str(ruta_archivo),
             archivo_binario=content,
             tamano_bytes=len(content),
@@ -843,6 +846,7 @@ def eliminar_documento(
     permanente: bool = Query(False, description="Si es False (default), solo se retira del apartado de subida preservando el historial y las personas extraídas"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
+    request: Request = None,
 ):
     """
     Retira un documento del apartado de subida.
@@ -900,9 +904,11 @@ def eliminar_documento(
         pass
 
     # 3. Eliminar el documento de la base de datos
+    id_ficha = str(documento.id)
     db.delete(documento)
     db.commit()
     logger.info(f"Documento eliminado permanentemente: {documento.nombre_original} (usuario: {usuario.email})")
+    auditoria.registrar("ficha_eliminada", request, usuario=usuario, documento_id=id_ficha, personas=personas_eliminadas)
     return {"ok": True, "mensaje": f"Ficha '{documento.nombre_original}' eliminada del historial permanentemente"}
 
 
@@ -989,17 +995,17 @@ DPI_PERMITIDOS = (130, 150, 200)
 def preview_pagina_pdf(
     documento_id: str,
     numero: int,
-    request: Request,
     dpi: int = 150,
-    token: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_desde_token_o_query),
+    usuario: Usuario = Depends(get_usuario_actual),
 ):
     """
     Renderiza la página `numero` (1-indexed) del PDF asociado al documento
     y la devuelve como imagen JPEG optimizada con caché en disco de alta velocidad.
     Permite al frontend mostrar la vista previa al instante (< 10ms en caché).
     Solo acepta las resoluciones que usa el frontend: cada dpi distinto renderiza y guarda otra imagen.
+    La sesión va en la cabecera Authorization (el frontend pide la imagen con fetch): nunca en la dirección,
+    que queda en historiales y registros. La imagen es una cédula: el navegador no la guarda en disco.
     """
     if dpi not in DPI_PERMITIDOS:
         raise HTTPException(status_code=400, detail="Resolución no permitida para la vista previa")
@@ -1016,17 +1022,14 @@ def preview_pagina_pdf(
     # 2. Verificar caché en disco de alta velocidad
     cache_dir = settings.upload_path / "cache_previews"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{documento_id}_p{numero}_{dpi}.jpg"
+    cache_file = cache_dir / f"{documento.id}_p{numero}_{dpi}.jpg"
+    cabeceras_imagen = {
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": f'inline; filename="doc_{documento.id}_p{numero}.jpg"',
+    }
 
     if cache_file.exists() and cache_file.stat().st_size > 0:
-        return FileResponse(
-            path=str(cache_file),
-            media_type="image/jpeg",
-            headers={
-                "Cache-Control": "public, max-age=604800, immutable",
-                "Content-Disposition": f'inline; filename="doc_{documento_id}_p{numero}.jpg"',
-            },
-        )
+        return FileResponse(path=str(cache_file), media_type="image/jpeg", headers=cabeceras_imagen)
 
     # 3. Si no existe en caché, verificar o auto-restaurar archivo PDF
     ruta = documento.obtener_ruta_o_restaurar(db)
@@ -1078,14 +1081,12 @@ def preview_pagina_pdf(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error renderizando página {numero} del PDF {documento_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al renderizar la página del PDF: {str(e)}")
+        referencia = nueva_referencia()
+        logger.opt(exception=e).error(f"{referencia} Error renderizando página {numero} del PDF {documento.id}")
+        raise HTTPException(status_code=500, detail=mensaje_error_interno(referencia))
 
     return Response(
         content=jpg_bytes,
         media_type="image/jpeg",
-        headers={
-            "Cache-Control": "public, max-age=604800, immutable",
-            "Content-Disposition": f'inline; filename="doc_{documento_id}_p{numero}.jpg"',
-        },
+        headers=cabeceras_imagen,
     )

@@ -1,7 +1,11 @@
 """Validaciones de archivos subidos"""
+import re
+
 from fastapi import HTTPException
 
 from app.config import settings
+
+LARGO_MAXIMO_NOMBRE = 150
 
 
 def verificar_tamano_archivo(contenido: bytes, nombre: str) -> None:
@@ -14,3 +18,22 @@ def verificar_tamano_archivo(contenido: bytes, nombre: str) -> None:
                 f"y el máximo permitido es {settings.MAX_FILE_SIZE_MB} MB"
             ),
         )
+
+
+def nombre_archivo_seguro(nombre: str | None, por_defecto: str = "archivo") -> str:
+    """
+    Nombre para guardar en disco a partir del que manda el navegador: sin carpetas (ni / ni \\), sin
+    caracteres que Windows o Linux interpreten, sin puntos al inicio y con un largo máximo.
+    Conserva letras con tilde, espacios, paréntesis y la extensión.
+    """
+    base = re.split(r"[\\/]", nombre or "")[-1]
+    base = re.sub(r"[\x00-\x1f<>:\"|?*]", "_", base).strip().lstrip(".").strip()
+    if not base:
+        return por_defecto
+    if len(base) > LARGO_MAXIMO_NOMBRE:
+        raiz, punto, extension = base.rpartition(".")
+        if punto and 0 < len(extension) <= 10:
+            base = raiz[: LARGO_MAXIMO_NOMBRE - len(extension) - 1] + "." + extension
+        else:
+            base = base[:LARGO_MAXIMO_NOMBRE]
+    return base

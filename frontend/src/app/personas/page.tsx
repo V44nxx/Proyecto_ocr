@@ -19,6 +19,7 @@ import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { precargarPaginaPdf } from "@/lib/paginasPdf";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc, validarCambioTipoDocumento } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 
@@ -485,10 +486,7 @@ function PersonasContent() {
     if (!docId) return;
     const pagsList = (p.detalles_campos as any)?.paginas;
     const pag = (Array.isArray(pagsList) && pagsList.length > 0 ? pagsList[0] : null) || p.pagina_frente || p.pagina_numero || 1;
-    if (pag) {
-      const img = new Image();
-      img.src = apiDocumentos.paginaPdfUrl(String(docId), pag, 130);
-    }
+    if (pag) precargarPaginaPdf(String(docId), pag, 130);
   };
 
   const abrirModalPdf = (p: Persona) => {

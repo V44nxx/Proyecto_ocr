@@ -6,7 +6,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
+import jwt
 
 from app.config import settings
 from app.models.usuario import Usuario
@@ -15,7 +15,7 @@ from app.routers.auth import crear_hash_password, crear_token_acceso
 from app.utils import limitador as limitador_mod
 from app.utils import limite_peticiones
 from app.utils.limitador import Limitador
-from tests.test_regresiones_2_2_1 import bd, requiere_postgres  # noqa: F401
+from tests.utilidades_pg import requiere_postgres
 
 
 # ── Limitador ───────────────────────────────────────────────────────

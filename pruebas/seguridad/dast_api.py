@@ -37,10 +37,22 @@ def caso(cid, nombre, categoria, esperado):
     return deco
 
 
-def token(email):
+def login(email):
+    """Inicia sesión y devuelve (token, cabecera Set-Cookie). No deja la cookie en el cliente:
+    los casos sin sesión deben ir de verdad sin sesión."""
     r = c.post("/api/auth/login", json={"email": email, "password": CLAVE})
     r.raise_for_status()
-    return r.json()["access_token"]
+    c.cookies.clear()
+    return r.json()["access_token"], r.headers.get("set-cookie", "")
+
+
+def token(email):
+    return login(email)[0]
+
+
+def cookie_de(set_cookie):
+    """'nombre=valor' para mandarla a mano (una cookie Secure no viaja sola por http local)."""
+    return set_cookie.split(";", 1)[0]
 
 
 def h(tok):
@@ -269,6 +281,51 @@ def _():
         if r.status_code >= 500 or "psycopg2" in r.text or "invalid input syntax" in r.text:
             malas[ruta] = r.status_code
     return not malas, f"{len(rutas)} rutas; con 500 o texto SQL: {malas or 'ninguna'}"
+
+
+@caso("SEG-27", "La cookie de sesión no la leen los scripts ni viaja a otros sitios", "A07 Autenticación / A02 Exposición",
+      "HttpOnly, Secure, SameSite=Strict, Path=/ y prefijo __Host- (sin Domain)")
+def _():
+    _, galleta = login("ana@example.com")
+    atributos = [a.strip().lower() for a in galleta.split(";")]
+    faltan = [n for n, ok in (
+        ("__Host-", galleta.startswith("__Host-")),
+        ("HttpOnly", "httponly" in atributos),
+        ("Secure", "secure" in atributos),
+        ("SameSite=Strict", "samesite=strict" in atributos),
+        ("Path=/", "path=/" in atributos),
+        ("sin Domain", not any(a.startswith("domain=") for a in atributos)),
+    ) if not ok]
+    return not faltan, "faltan: " + ", ".join(faltan) if faltan else "; ".join(a for a in galleta.split("; ")[1:])
+
+
+@caso("SEG-28", "Cerrar sesión invalida esa sesión en el servidor", "A07 Autenticación",
+      "200 al cerrar y 401 después con el mismo token; las otras sesiones siguen")
+def _():
+    tok, _ = login("ana@example.com")
+    antes = c.get("/api/auth/me", headers=h(tok)).status_code
+    salir = c.post("/api/auth/logout", headers=h(tok)).status_code
+    despues = c.get("/api/auth/me", headers=h(tok)).status_code
+    otra = c.get("/api/auth/me", headers=h(TOK_ANA)).status_code
+    return (antes, salir, despues, otra) == (200, 200, 401, 200), f"antes: {antes}, cerrar: {salir}, después: {despues}, otra sesión: {otra}"
+
+
+@caso("SEG-29", "Un sitio ajeno no puede cambiar datos usando la cookie del usuario (CSRF)", "A01 Control de acceso",
+      "403 con la cookie y un Origin ajeno; nada cambia")
+def _():
+    _, galleta = login("ana@example.com")
+    r = c.put("/api/seguimiento/config", json={"url_panel": "https://script.google.com/macros/s/ajeno/exec"},
+              headers={"Cookie": cookie_de(galleta), "Origin": ORIGEN_AJENO})
+    actual = c.get("/api/seguimiento/config", headers=h(TOK_ANA)).json() or {}
+    return r.status_code == 403 and "ajeno" not in str(actual.get("url_panel")), f"HTTP {r.status_code}: {r.text[:80]}"
+
+
+@caso("SEG-30", "La cookie sí sirve desde el frontend oficial", "A07 Autenticación", "200 con la cookie y el Origin del frontend")
+def _():
+    _, galleta = login("ana@example.com")
+    r = c.put("/api/seguimiento/config", json={"url_panel": "https://script.google.com/macros/s/oficial/exec"},
+              headers={"Cookie": cookie_de(galleta), "Origin": "https://proyectoocr.v44nxx.online"})
+    return r.status_code == 200, f"HTTP {r.status_code}"
 
 
 # Debe ir al final: llena el límite de intentos de beto

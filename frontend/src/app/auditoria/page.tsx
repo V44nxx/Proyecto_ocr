@@ -17,6 +17,7 @@ type Tipo = "alerta" | "datos" | "cuenta" | "sesion";
 const ACCIONES: Record<string, { etiqueta: string; tipo: Tipo }> = {
   login_exitoso: { etiqueta: "Inicio de sesión", tipo: "sesion" },
   login_fallido: { etiqueta: "Inicio de sesión fallido", tipo: "alerta" },
+  logout: { etiqueta: "Cierre de sesión", tipo: "sesion" },
   login_bloqueado: { etiqueta: "Bloqueo por intentos", tipo: "alerta" },
   acceso_denegado: { etiqueta: "Acceso denegado", tipo: "alerta" },
   enlace_recuperacion_invalido: { etiqueta: "Enlace de recuperación inválido", tipo: "alerta" },

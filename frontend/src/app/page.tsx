@@ -390,6 +390,9 @@ export default function LoginPage() {
                     </>
                   )}
                 </button>
+                <p className="text-[10px] leading-snug text-center text-slate-400 dark:text-slate-500">
+                  Al ingresar se guarda una cookie solo para mantener tu sesión. No usamos cookies de seguimiento.
+                </p>
               </form>
 
               {/* Pie de Seguridad y Cumplimiento Normativo */}

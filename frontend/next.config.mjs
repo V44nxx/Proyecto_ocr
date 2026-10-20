@@ -1,12 +1,12 @@
 /** @type {import('next').NextConfig} */
 
-// Política de contenido: por ahora en modo "solo reporte" (el navegador avisa en la consola lo que
-// bloquearía, sin bloquearlo). Cuando se confirme en producción que no hay avisos, pasarla a
-// Content-Security-Policy. Las fuentes vienen de Google Fonts (globals.css) y el panel de
-// Seguimiento se incrusta desde Google Apps Script.
+// Política de contenido obligatoria: el navegador bloquea lo que venga de otro origen.
+// Las fuentes vienen de Google Fonts (globals.css) y el panel de Seguimiento se incrusta desde
+// Google Apps Script. 'unsafe-eval' solo en desarrollo: el recargado en caliente de Next lo necesita.
+const desarrollo = process.env.NODE_ENV !== "production";
 const politicaContenido = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${desarrollo ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob:",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -19,7 +19,7 @@ const politicaContenido = [
 ].join("; ");
 
 const cabecerasSeguridad = [
-  { key: "Content-Security-Policy-Report-Only", value: politicaContenido },
+  { key: "Content-Security-Policy", value: politicaContenido },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

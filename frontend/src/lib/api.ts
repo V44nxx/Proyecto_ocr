@@ -78,15 +78,11 @@ function getBaseUrl(): string {
 const apiClient = axios.create({
   baseURL: getBaseUrl(),
   timeout: 300000, // 5 minutos para subidas y OCR
+  withCredentials: true, // la sesión viaja en la cookie HttpOnly que pone el backend
 });
 
-// Interceptor: agregar token JWT y gestionar Content-Type para FormData
+// Interceptor: gestionar Content-Type para FormData
 apiClient.interceptors.request.use((config) => {
-  const token = auth.getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
   // Si enviamos FormData, eliminar cualquier Content-Type manual para que Axios y el navegador
   // generen el multipart/form-data con el delimitador boundary exacto
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -106,7 +102,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     // En el login un 401 significa credenciales incorrectas: se muestra el error sin recargar la página
-    const esLogin = String(error.config?.url || "").includes("/api/auth/login");
+    const url = String(error.config?.url || "");
+    const esLogin = url.includes("/api/auth/login") || url.includes("/api/auth/logout");
     if (error.response?.status === 401 && !esLogin) {
       auth.cerrarSesion();
       if (typeof window !== "undefined") {
@@ -123,6 +120,9 @@ apiClient.interceptors.response.use(
 export const apiAuth = {
   login: (email: string, password: string) =>
     apiClient.post<TokenResponse>("/api/auth/login", { email, password }),
+
+  /** Cierra la sesión en el servidor: la cookie se borra y ese token deja de servir aunque alguien lo tenga. */
+  logout: () => apiClient.post<{ message: string }>("/api/auth/logout"),
 
   register: (
     data: { email: string; password: string; nombre?: string; rol?: string } | string,
@@ -158,7 +158,7 @@ export const apiAuth = {
   restablecerPassword: (token: string, passwordNueva: string) =>
     apiClient.post<{ message: string }>("/api/auth/restablecer-password", { token, password_nueva: passwordNueva }),
 
-  /** Devuelve un token nuevo: las demás sesiones se cierran y esta sigue abierta con él. */
+  /** Las demás sesiones se cierran; esta sigue abierta con la cookie nueva que pone el backend. */
   cambiarPassword: (passwordActual: string, passwordNueva: string) =>
     apiClient.post<TokenResponse>("/api/auth/cambiar-password", {
       password_actual: passwordActual,

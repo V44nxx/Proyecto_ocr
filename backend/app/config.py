@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.7.0"
+    APP_VERSION: str = "2.8.0"
     ENVIRONMENT: str = "development"
     # Con DEBUG, SQLAlchemy escribe cada consulta (con sus datos) en el log: nunca en producción
     DEBUG: bool = False
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 horas
+    # Cookie de sesión Secure (solo HTTPS). Sin definir: Secure en producción y no en local (http)
+    COOKIE_SECURE: Optional[bool] = None
 
     # ─────────────────────────────────────
     # Administrador inicial
@@ -122,6 +124,15 @@ class Settings(BaseSettings):
     @property
     def es_produccion(self) -> bool:
         return self.ENVIRONMENT.strip().lower() == "production"
+
+    @property
+    def cookie_segura(self) -> bool:
+        return self.es_produccion if self.COOKIE_SECURE is None else self.COOKIE_SECURE
+
+    @property
+    def nombre_cookie_sesion(self) -> str:
+        # El prefijo __Host- hace que el navegador la acepte solo por HTTPS, sin dominio y con Path=/
+        return "__Host-kondid_sesion" if self.cookie_segura else "kondid_sesion"
 
     @property
     def upload_path(self) -> Path:

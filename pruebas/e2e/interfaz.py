@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 from email import policy
 from pathlib import Path
@@ -32,6 +33,7 @@ IDS = json.loads(Path(os.environ["KONDID_IDS"]).read_text(encoding="utf-8"))
 CLAVE = IDS["clave"]
 FRONT = os.environ.get("KONDID_FRONT", "http://127.0.0.1:3000").rstrip("/")
 API = os.environ.get("KONDID_API", "http://127.0.0.1:8000").rstrip("/")
+NOMBRES_COOKIE = {"__Host-kondid_sesion", "kondid_sesion"}
 casos = []
 
 
@@ -47,9 +49,23 @@ def api_put_json(ruta, token, cuerpo):
         return r.status
 
 
+def api_get_estado(ruta, token):
+    req = urllib.request.Request(API + ruta, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def cookie_sesion(ctx):
+    return next((c for c in ctx.cookies() if c["name"] in NOMBRES_COOKIE), None)
+
+
 def login(page, correo, clave, esperar_dashboard=True):
     page.goto(FRONT + "/")
     page.evaluate("localStorage.clear()")
+    page.context.clear_cookies()
     page.goto(FRONT + "/")
     page.fill("#email", correo)
     page.fill("#password", clave)
@@ -78,7 +94,13 @@ with sync_playwright() as p:
 
     login(page, "ana@example.com", CLAVE)
     caso("CP-UI-02", "Credenciales correctas: entra al panel", "/dashboard" in page.url, page.url)
-    token_ana = page.evaluate("localStorage.getItem('ocr_access_token')")
+    galleta = cookie_sesion(ctx)
+    token_ana = galleta["value"] if galleta else None
+    caso("CP-UI-19", "La sesión viaja en una cookie HttpOnly y SameSite=Strict, fuera del alcance de los scripts",
+         bool(galleta) and galleta["httpOnly"] and galleta["sameSite"] == "Strict"
+         and page.evaluate("localStorage.getItem('ocr_access_token')") is None
+         and galleta["name"] not in page.evaluate("document.cookie"),
+         {k: galleta[k] for k in ("name", "httpOnly", "sameSite", "secure")} if galleta else "sin cookie")
 
     # ── Personas y visor ────────────────────────────────────────────
     page.goto(f"{FRONT}/personas?documento_id={IDS['ficha_ana']}")
@@ -107,10 +129,10 @@ with sync_playwright() as p:
     caso("CP-UI-04", "Visor: la página del documento se muestra (imagen en memoria, blob:)", src.startswith("blob:"), src[:30])
 
     con_token_en_url = [r.url for r in peticiones_pagina if "token=" in r.url]
-    sin_cabecera = [r.url for r in peticiones_pagina if not (r.headers.get("authorization") or "").startswith("Bearer ")]
-    caso("CP-UI-05", "Visor: la imagen se pide con la sesión en la cabecera, nunca en la dirección",
-         peticiones_pagina and not con_token_en_url and not sin_cabecera,
-         f"{len(peticiones_pagina)} peticiones; con token en URL: {len(con_token_en_url)}; sin cabecera: {len(sin_cabecera)}")
+    sin_cookie = [r.url for r in peticiones_pagina if galleta["name"] not in r.all_headers().get("cookie", "")]
+    caso("CP-UI-05", "Visor: la imagen se pide con la cookie de sesión, nunca con el token en la dirección",
+         peticiones_pagina and not con_token_en_url and not sin_cookie,
+         f"{len(peticiones_pagina)} peticiones; con token en URL: {len(con_token_en_url)}; sin cookie: {len(sin_cookie)}")
     cache = {r.headers.get("cache-control") for r in respuestas_pagina}
     caso("CP-UI-06", "Visor: el navegador no guarda la imagen de la cédula en disco", cache == {"private, no-store"}, cache)
 
@@ -121,12 +143,15 @@ with sync_playwright() as p:
 
     # ── Recorrido por las pantallas (errores JS y política de contenido) ───
     api_put_json("/api/seguimiento/config", token_ana, {"url_panel": "https://script.google.com/macros/s/abc123/exec"})
+    politicas = set()
     for ruta in ("/dashboard", "/documentos", "/personas", "/exportacion", "/comparacion", "/seguimiento"):
-        page.goto(FRONT + ruta)
+        respuesta = page.goto(FRONT + ruta)
+        politicas.add("content-security-policy" in respuesta.headers)
         page.wait_for_timeout(2500)
     page.screenshot(path=str(CAPTURAS / "03_seguimiento.png"))
     caso("CP-UI-08", "Recorrido por las 6 pantallas del usuario sin errores de JavaScript", not errores_js, errores_js[:2])
-    caso("CP-UI-09", "Ninguna pantalla viola la política de contenido (CSP en modo reporte)", not avisos_csp, avisos_csp[:2])
+    caso("CP-UI-09", "Las pantallas llevan la política de contenido obligatoria y ninguna la viola",
+         politicas == {True} and not avisos_csp, avisos_csp[:2] or "CSP en las 6 pantallas, sin avisos")
 
     # ── Exportación ─────────────────────────────────────────────────
     page.goto(FRONT + "/exportacion")
@@ -180,6 +205,7 @@ with sync_playwright() as p:
     antes = {(f.name, f.stat().st_mtime_ns) for f in CORREOS.glob("*.eml")}
     page.goto(FRONT + "/")
     page.evaluate("localStorage.clear()")
+    page.context.clear_cookies()
     page.goto(FRONT + "/")
     page.get_by_role("link", name="¿Olvidaste tu contraseña?").click()
     page.wait_for_url("**/olvide-contrasena")
@@ -206,10 +232,15 @@ with sync_playwright() as p:
          bool(mensaje) and vieja_no_entra and "/dashboard" in page.url, f"correos nuevos: {len(nuevos)}")
 
     # ── Cerrar sesión ───────────────────────────────────────────────
+    token_beto = cookie_sesion(ctx)["value"]
+    vigente_antes = api_get_estado("/api/auth/me", token_beto)
     page.locator("aside").get_by_role("button", name="Cerrar Sesión").first.click()
-    page.wait_for_timeout(1500)
-    caso("CP-UI-16", "Cerrar sesión borra la sesión del navegador",
-         page.evaluate("localStorage.getItem('ocr_access_token')") is None, page.url)
+    page.wait_for_url(FRONT + "/", timeout=10000)
+    page.wait_for_timeout(1000)
+    despues = api_get_estado("/api/auth/me", token_beto)
+    caso("CP-UI-16", "Cerrar sesión borra la cookie y el servidor deja de aceptar esa sesión",
+         vigente_antes == 200 and cookie_sesion(ctx) is None and page.evaluate("localStorage.getItem('ocr_user')") is None
+         and despues == 401, f"antes: {vigente_antes}; después: {despues}")
 
     caso("CP-UI-17", "Sin errores de JavaScript en todo el recorrido", not errores_js, errores_js[:2])
     nav.close()

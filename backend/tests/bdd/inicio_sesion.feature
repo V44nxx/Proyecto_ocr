@@ -23,6 +23,12 @@ Característica: Inicio de sesión
     Entonces el sistema pide esperar antes de intentar de nuevo
     Y la acción "login_bloqueado" queda en la auditoría
 
+  Escenario: Al cerrar sesión, la sesión deja de servir aunque alguien la haya copiado
+    Cuando inicia sesión con "beto@example.com" y "ClaveBeto-2026"
+    Y cierra la sesión
+    Entonces la sesión anterior ya no sirve
+    Y la acción "logout" queda en la auditoría
+
   Esquema del escenario: Un intento de inyección no entra
     Cuando inicia sesión con "<correo>" y "<clave>"
     Entonces no entra al sistema

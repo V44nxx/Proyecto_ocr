@@ -22,6 +22,32 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.8.0] - 2026-10-20
+
+**Resumen**
+
+- La sesión pasa a una cookie segura que ningún script puede leer.
+- Cerrar sesión la invalida en el servidor.
+- La política de contenido (CSP) del frontend pasa a ser obligatoria.
+- Al actualizar, cada usuario debe iniciar sesión una vez más.
+
+### Seguridad
+
+- **Sesión en cookie**:
+  - el navegador guarda la sesión en una cookie `HttpOnly` (ningún script la puede leer), `SameSite=Strict` y, en producción, `Secure` con el prefijo `__Host-`;
+  - el token ya no se guarda en `localStorage`; el que dejaron las versiones anteriores se borra;
+  - `COOKIE_SECURE` permite forzar el atributo `Secure`; por defecto va encendido solo con `ENVIRONMENT=production`;
+  - scripts, JMeter y ZAP pueden seguir usando la cabecera `Authorization: Bearer`.
+- **Cierre de sesión real**: `POST /api/auth/logout` borra la cookie e invalida esa sesión en el servidor, aunque alguien la haya copiado. Las sesiones de otros equipos siguen abiertas. Queda en la auditoría como «Cierre de sesión».
+- **Peticiones de otros sitios (CSRF)**: una petición que cambia datos con la cookie solo se acepta si viene del frontend configurado o del mismo sitio.
+- **CORS** permite credenciales solo para los orígenes de `CORS_ORIGINS` y `CORS_ORIGIN_REGEX`.
+- **Política de contenido obligatoria** en el frontend: el navegador bloquea scripts, estilos, imágenes, fuentes, conexiones y marcos de orígenes no autorizados.
+
+### Agregado
+
+- Una línea en el inicio de sesión explica que la cookie solo mantiene la sesión.
+- Pruebas: cookie y cierre de sesión en la suite (`tests/test_sesion_cookie.py` y un escenario BDD), en la interfaz (CP-UI-16 y CP-UI-19) y en la batería de seguridad (SEG-27 a SEG-30).
+
 ## [2.7.0] - 2026-10-20
 
 **Resumen**

@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlalchemy import func
@@ -42,12 +42,15 @@ from app.schemas.usuario import (
 from app.config import settings
 from app.services import auditoria
 from app.utils.limitador import Limitador, ip_cliente, mensaje_espera
+from app.utils.sesion import (
+    METODOS_SEGUROS, borrar_cookie_sesion, origen_confiable, poner_cookie_sesion, token_de_peticion,
+)
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
-# OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# OAuth2 scheme (solo para documentar la cabecera Authorization; el navegador usa la cookie de sesión)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # Límites de intentos (ventanas de 15 minutos)
 VENTANA_INTENTOS = 15 * 60
@@ -108,7 +111,8 @@ def verificar_password(password_plano: str, hash_guardado: str) -> bool:
 def crear_token_acceso(data: dict) -> str:
     payload = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload.update({"exp": expire, "iat": int(time.time())})
+    # jti identifica esta sesión: al cerrar sesión se revoca solo ella, no las de otros equipos
+    payload.update({"exp": expire, "iat": int(time.time()), "jti": secrets.token_urlsafe(16)})
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -134,16 +138,31 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _sesion_revocada(db: Session, payload: dict) -> bool:
+    from app.models.sesion_revocada import SesionRevocada
+    jti = payload.get("jti")
+    return bool(jti) and db.query(SesionRevocada.jti).filter(SesionRevocada.jti == str(jti)).first() is not None
+
+
 def get_usuario_actual(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    _documentacion: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> Usuario:
-    """Dependency: obtiene el usuario actual desde el JWT"""
+    """
+    Dependency: obtiene el usuario actual desde la sesión (cookie del navegador o cabecera Authorization).
+    Con la cookie, una petición que cambia datos debe venir del frontend (protección CSRF).
+    """
     credenciales_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido o expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    token, desde_cookie = token_de_peticion(request)
+    if not token:
+        raise credenciales_exception
+    if desde_cookie and request.method not in METODOS_SEGUROS and not origen_confiable(request):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origen de la petición no permitido")
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
@@ -153,7 +172,7 @@ def get_usuario_actual(
         raise credenciales_exception
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-    if not usuario or not usuario.activo or not _token_vigente(payload, usuario):
+    if not usuario or not usuario.activo or not _token_vigente(payload, usuario) or _sesion_revocada(db, payload):
         raise credenciales_exception
 
     return usuario
@@ -193,7 +212,7 @@ def _demasiados_intentos(segundos: int, motivo: str = "Demasiados intentos falli
 
 
 @router.post("/login", response_model=TokenResponse, summary="Iniciar sesión")
-def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
+def login(request: LoginRequest, http: Request, response: Response, db: Session = Depends(get_db)):
     """
     Autenticar usuario y obtener token JWT.
     El correo se compara exacto (sin comodines). Tras 5 fallos en 15 minutos con un correo, o 20 desde
@@ -230,6 +249,7 @@ def login(request: LoginRequest, http: Request, db: Session = Depends(get_db)):
     db.commit()
 
     token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0})
+    poner_cookie_sesion(response, token)
     logger.info(f"Login exitoso: {usuario.email}")
     auditoria.registrar("login_exitoso", http, usuario=usuario)
 
@@ -382,6 +402,7 @@ def restablecer_password_usuario(
 @router.post("/cambiar-password", response_model=TokenResponse, summary="Cambiar la contraseña propia")
 def cambiar_password(
     request: CambiarPasswordRequest,
+    response: Response,
     usuario: Usuario = Depends(get_usuario_actual),
     db: Session = Depends(get_db),
     http: Request = None,
@@ -407,6 +428,7 @@ def cambiar_password(
     logger.info(f"Contraseña cambiada por el propio usuario: {usuario.email}")
     auditoria.registrar("contrasena_cambiada", http, usuario=usuario)
     token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion})
+    poner_cookie_sesion(response, token)
     return TokenResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
 
 
@@ -493,6 +515,30 @@ def restablecer_password(request: RestablecerPasswordRequest, http: Request, db:
     logger.info(f"Contraseña restablecida con el enlace del correo: {usuario.email}")
     auditoria.registrar("contrasena_restablecida_correo", http, usuario=usuario)
     return {"message": "Tu contraseña se cambió. Ya puedes iniciar sesión con la nueva."}
+
+
+@router.post("/logout", summary="Cerrar sesión")
+def cerrar_sesion(http: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Revoca la sesión actual en el servidor (aunque alguien hubiera copiado el token, deja de servir) y borra la
+    cookie. Las sesiones del mismo usuario en otros equipos siguen abiertas. Responde bien aunque no haya sesión.
+    """
+    from app.models.sesion_revocada import SesionRevocada
+    borrar_cookie_sesion(response)
+    token, _ = token_de_peticion(http)
+    if not token:
+        return {"message": "Sesión cerrada"}
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.InvalidTokenError:
+        return {"message": "Sesión cerrada"}
+    jti = payload.get("jti")
+    if jti and db.get(SesionRevocada, str(jti)) is None:
+        db.add(SesionRevocada(jti=str(jti), expira=datetime.fromtimestamp(int(payload["exp"]), tz=timezone.utc)))
+        db.commit()
+    usuario = db.query(Usuario).filter(Usuario.id == payload.get("sub")).first() if payload.get("sub") else None
+    auditoria.registrar("logout", http, usuario=usuario)
+    return {"message": "Sesión cerrada"}
 
 
 @router.get("/me", response_model=UsuarioResponse, summary="Perfil actual")

@@ -1,11 +1,16 @@
 /**
- * Auth utilities: JWT storage y gestión de sesión
+ * Estado de la sesión en el navegador.
+ *
+ * El token viaja solo en una cookie HttpOnly que pone el backend: ningún script lo puede leer.
+ * Aquí solo se guarda el usuario (nombre, rol) para pintar la interfaz; si la cookie ya no sirve,
+ * el backend responde 401 y lib/api.ts cierra la sesión local.
  */
 
 import { TokenResponse, Usuario } from "@/types";
 
-const TOKEN_KEY = "ocr_access_token";
 const USER_KEY = "ocr_user";
+// Las versiones anteriores a la 2.8.0 guardaban el token aquí; se borra al entrar o salir
+const TOKEN_KEY_ANTERIOR = "ocr_access_token";
 
 export const auth = {
   guardarSesion(data: TokenResponse): void {
@@ -17,23 +22,9 @@ export const auth = {
       localStorage.removeItem("ocr_fase_actual");
       sessionStorage.clear();
 
-      localStorage.setItem(TOKEN_KEY, data.access_token);
+      localStorage.removeItem(TOKEN_KEY_ANTERIOR);
       localStorage.setItem(USER_KEY, JSON.stringify(data.usuario));
     }
-  },
-
-  /** Reemplaza solo el token (por ejemplo, al cambiar la contraseña) sin limpiar el resto de la sesión. */
-  actualizarToken(token: string): void {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TOKEN_KEY, token);
-    }
-  },
-
-  getToken(): string | null {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(TOKEN_KEY);
-    }
-    return null;
   },
 
   getUsuario(): Usuario | null {
@@ -51,12 +42,12 @@ export const auth = {
   },
 
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    return !!this.getUsuario();
   },
 
   cerrarSesion(): void {
     if (typeof window !== "undefined") {
-      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY_ANTERIOR);
       localStorage.removeItem(USER_KEY);
       localStorage.removeItem("ultimo_documento_id");
       localStorage.removeItem("nuevo_archivo_enviado");

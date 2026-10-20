@@ -222,7 +222,8 @@ npm run dev
 ### 🔐 Autenticación y Usuarios (`/api/auth`)
 | Método | Endpoint | Descripción |
 |:-------|:---------|:------------|
-| `POST` | `/api/auth/login` | Iniciar sesión y retornar token JWT |
+| `POST` | `/api/auth/login` | Iniciar sesión: pone la cookie de sesión y retorna el token JWT |
+| `POST` | `/api/auth/logout` | Cerrar sesión: borra la cookie e invalida esa sesión en el servidor |
 | `POST` | `/api/auth/login/form` | Login compatible con OAuth2 Password Flow (Swagger UI) |
 | `POST` | `/api/auth/register` | Registro de nuevo usuario |
 | `GET` | `/api/auth/me` | Obtener perfil del usuario autenticado |
@@ -355,11 +356,12 @@ proyecto_ocr/
 
 - **Cifrado de Contraseñas**: Bcrypt con 12 rondas de salting y compatibilidad passlib.
 - **Tokens de Acceso**: JWT firmado con algoritmo HMAC-SHA256 y expiración configurable (por defecto 8 horas).
+- **Sesión en cookie segura**: el navegador la guarda en una cookie `HttpOnly`, `SameSite=Strict` y `Secure` (prefijo `__Host-`), fuera del alcance de los scripts. Cerrar sesión la invalida en el servidor, y las peticiones que cambian datos solo se aceptan desde el frontend.
 - **Protección de Datos Multitenant**: Consultas aisladas por `usuario_id` en PostgreSQL para que ningún usuario acceda a documentos o registros de otro.
 - **Validación Estricta de Archivos**: Filtro de extensiones `.pdf`, `.xlsx`, `.xls` y tamaño máximo controlado por configuración (`MAX_FILE_SIZE_MB`).
 - **Respaldo Persistente**: Copia binaria de los PDFs en la base de datos para garantizar disponibilidad del visor incluso si el almacenamiento efímero se reinicia.
 - **Errores sin detalles internos**: el usuario ve un mensaje genérico con una referencia (`ERR-XXXXXXXX`) y el detalle queda solo en el log.
-- **Cabeceras de seguridad y CORS por lista**: API y frontend envían cabeceras contra incrustación, rastreo de tipos y filtración de la dirección de origen; la API solo acepta llamadas del navegador desde el frontend configurado.
+- **Cabeceras de seguridad y CORS por lista**: API y frontend envían cabeceras contra incrustación, rastreo de tipos y filtración de la dirección de origen; el frontend aplica una política de contenido (CSP) obligatoria y la API solo acepta llamadas del navegador desde el frontend configurado.
 - **Auditoría**: el administrador consulta quién inició sesión, exportó, editó o eliminó datos, y desde qué IP, sin que se guarden contraseñas ni datos de las personas.
 - **Política de contraseñas**: largo mínimo y rechazo de contraseñas comunes o armadas con palabras del sistema.
 - **Pruebas**: unitarias, de integración, BDD (Gherkin en español), de interfaz, de carga y de seguridad, con regresión automática en GitHub Actions. Ver [docs/PRUEBAS.md](docs/PRUEBAS.md).

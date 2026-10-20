@@ -64,14 +64,14 @@ KONDID_IDS=/tmp/kondid_e2e/semilla_ids.json KONDID_CORREOS=/tmp/kondid_correos \
 python pruebas/e2e/interfaz.py /tmp/kondid_resultados
 ```
 
-Usa el Chrome instalado (`channel="chrome"`). Recorre el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la auditoría y el cierre de sesión. También revisa que no haya errores de JavaScript ni avisos de la política de contenido (CSP). Deja `e2e.json` y capturas en la carpeta de resultados.
+Usa el Chrome instalado (`channel="chrome"`). Recorre el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la auditoría y el cierre de sesión. Comprueba que la sesión viaje en una cookie `HttpOnly` y `SameSite=Strict`, y que tras cerrar sesión el servidor la rechace. También revisa que no haya errores de JavaScript, que las pantallas lleven la política de contenido (CSP) y que ninguna la viole. Deja `e2e.json` y capturas en la carpeta de resultados.
 
 ## 4. Seguridad
 
 | Prueba | Herramienta | Cómo |
 |---|---|---|
 | Pruebas automáticas de seguridad | pytest | `tests/test_seguridad_*.py`, `tests/bdd/aislamiento_de_cuentas.feature` (corren con la suite) |
-| Batería de caja negra (control de acceso, errores, cabeceras, CORS, inyección, fuerza bruta, robustez) | `pruebas/seguridad/dast_api.py` | `python pruebas/seguridad/dast_api.py http://127.0.0.1:8000 /tmp/kondid_e2e/semilla_ids.json resultado.json` |
+| Batería de caja negra (control de acceso, errores, cabeceras, CORS, cookie de sesión, cierre de sesión, CSRF, inyección, fuerza bruta, robustez) | `pruebas/seguridad/dast_api.py` | `python pruebas/seguridad/dast_api.py http://127.0.0.1:8000 /tmp/kondid_e2e/semilla_ids.json resultado.json` |
 | Escaneo dinámico (pasivo y activo) | OWASP ZAP 2.17 | `python pruebas/seguridad/zap_escanear.py <etiqueta> <url_api> <url_web> openapi.json semilla_ids.json <carpeta>` (arma el plan con la sesión y los ids reales; detalles en el archivo) |
 | Dependencias con avisos conocidos | pip-audit, npm audit | `pip-audit -r backend/requirements.txt` · `npm audit --omit=dev` |
 | Análisis estático | Bandit | `bandit -r backend/app -ll` |

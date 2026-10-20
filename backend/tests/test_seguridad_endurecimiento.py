@@ -199,8 +199,8 @@ def test_cors_autoriza_al_frontend(cliente, origen):
     r = _preflight(cliente, origen)
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == origen
-    # La sesión viaja en la cabecera Authorization, no en cookies
-    assert "access-control-allow-credentials" not in r.headers
+    # La sesión viaja en una cookie: el frontend la envía con credenciales
+    assert r.headers["access-control-allow-credentials"] == "true"
 
 
 @pytest.mark.parametrize("origen", ["https://v44nxx.online.sitio-ajeno.example", "http://proyectoocr.v44nxx.online",

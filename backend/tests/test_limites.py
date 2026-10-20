@@ -238,8 +238,8 @@ def test_vista_previa_solo_acepta_las_resoluciones_del_visor(cliente, bd):
 
 def test_token_de_otra_clave_no_pasa_el_middleware():
     falso = jwt.encode({"sub": "x"}, "otra-clave", algorithm="HS256")
-    assert not limite_peticiones._token_valido(f"Bearer {falso}".encode())
-    assert limite_peticiones._token_valido(f"Bearer {_token_firmado()}".encode())
+    assert not limite_peticiones._sesion_valida({b"authorization": f"Bearer {falso}".encode()})
+    assert limite_peticiones._sesion_valida({b"authorization": f"Bearer {_token_firmado()}".encode()})
 
 
 def test_middleware_no_lee_el_cuerpo_ni_llama_a_la_ruta_sin_token():

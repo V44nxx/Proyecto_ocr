@@ -105,13 +105,12 @@ desde documentos PDF mediante OCR con PaddleOCR.
 # así sus respuestas 401/413 también llevan las cabeceras CORS.
 app.add_middleware(LimitePeticionesMiddleware)
 
-# Solo el frontend configurado. La sesión viaja en la cabecera Authorization, no en cookies,
-# así que no se habilitan credenciales.
+# Solo el frontend configurado, con credenciales: el navegador envía la cookie de sesión.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_origin_regex=settings.CORS_ORIGIN_REGEX,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],

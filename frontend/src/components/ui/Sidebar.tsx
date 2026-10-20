@@ -20,6 +20,7 @@ import {
   History,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { apiAuth } from "@/lib/api";
 import toast from "react-hot-toast";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
 import LogoKondID, { HuellaKondID } from "@/components/ui/LogoKondID";
@@ -58,7 +59,10 @@ export default function Sidebar() {
     setUsuario(auth.getUsuario());
   }, []);
 
-  const cerrarSesion = () => {
+  const cerrarSesion = async () => {
+    // Primero en el servidor, para que la sesión deje de servir aunque alguien la haya copiado.
+    // Si falla (sin red, sesión ya vencida), igual se cierra en este navegador.
+    await apiAuth.logout().catch(() => undefined);
     auth.cerrarSesion();
     toast.success("Sesión cerrada");
     router.push("/");

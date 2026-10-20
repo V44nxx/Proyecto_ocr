@@ -3,7 +3,7 @@ Límites que se aplican antes de leer el cuerpo de una petición.
 
 FastAPI lee el formulario completo antes de revisar la sesión, así que sin esto cualquiera, sin cuenta,
 podría mandar archivos enormes. Este middleware (ASGI puro, sin leer el cuerpo por adelantado):
-  - en las rutas de subida exige un token válido antes de recibir nada;
+  - en las rutas de subida exige una sesión válida (cookie o cabecera Authorization) antes de recibir nada;
   - rechaza con 413 los cuerpos que pasan el tope (por Content-Length, o contando si no lo traen).
 La sesión completa (usuario activo, versión de sesión) la sigue revisando la dependencia de cada ruta.
 """
@@ -13,6 +13,7 @@ import re
 import jwt
 
 from app.config import settings
+from app.utils.sesion import token_de_cabeceras_asgi
 
 RUTAS_SUBIDA = re.compile(r"^/api/(documentos/upload|comparacion/upload|personas/[^/]+/subir-pdf)/?$")
 LIMITE_GENERAL_BYTES = 2 * 1024 * 1024  # JSON y formularios pequeños
@@ -23,12 +24,12 @@ class _CuerpoDemasiadoGrande(Exception):
     pass
 
 
-def _token_valido(cabecera: bytes) -> bool:
-    texto = cabecera.decode("latin-1")
-    if not texto.startswith("Bearer "):
+def _sesion_valida(cabeceras: dict) -> bool:
+    token = token_de_cabeceras_asgi(cabeceras)
+    if not token:
         return False
     try:
-        payload = jwt.decode(texto[7:], settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except jwt.InvalidTokenError:
         return False
     return bool(payload.get("sub"))
@@ -61,7 +62,7 @@ class LimitePeticionesMiddleware:
         )
         cabeceras = dict(scope["headers"])
 
-        if es_subida and not _token_valido(cabeceras.get(b"authorization", b"")):
+        if es_subida and not _sesion_valida(cabeceras):
             await _responder(send, 401, "Token inválido o expirado")
             return
 

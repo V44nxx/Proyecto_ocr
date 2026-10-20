@@ -5,7 +5,8 @@ Cabeceras de seguridad y reglas de CORS de la API.
   contenido o filtrar la dirección de origen; en producción también HSTS.
 - Las respuestas de /api/ no se guardan en ninguna caché salvo que la ruta diga otra cosa: casi todas
   llevan datos personales.
-- CORS: solo los orígenes del frontend configurados (lista exacta o expresión regular completa).
+- CORS: solo los orígenes del frontend configurados (lista exacta o expresión regular completa), con
+  credenciales para que el navegador envíe la cookie de sesión.
 """
 import re
 from typing import Dict, Optional
@@ -29,7 +30,7 @@ def origen_permitido(origen: Optional[str]) -> bool:
 def cabeceras_cors(origen: Optional[str]) -> Dict[str, str]:
     """Cabeceras CORS para respuestas armadas a mano (los errores 500 no pasan por CORSMiddleware)."""
     if origen_permitido(origen):
-        return {"Access-Control-Allow-Origin": origen, "Vary": "Origin"}
+        return {"Access-Control-Allow-Origin": origen, "Access-Control-Allow-Credentials": "true", "Vary": "Origin"}
     return {}
 
 

@@ -50,3 +50,15 @@ def pide_esperar(contexto):
     assert r.status_code == 429
     assert int(r.headers["retry-after"]) > 0
     assert "Espera" in r.json()["detail"]
+
+
+@when("cierra la sesión")
+def cierra_la_sesion(api, contexto):
+    contexto["token"] = contexto["respuesta"].json()["access_token"]
+    assert api.post("/api/auth/logout").status_code == 200
+
+
+@then("la sesión anterior ya no sirve")
+def sesion_anterior_invalida(api, contexto):
+    api.cookies.clear()
+    assert api.get("/api/auth/me", headers={"Authorization": f"Bearer {contexto['token']}"}).status_code == 401

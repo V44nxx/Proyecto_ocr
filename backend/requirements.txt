@@ -38,7 +38,7 @@ pytesseract==0.3.13
 
 # Procesamiento de Imágenes
 opencv-python-headless==4.10.0.84
-Pillow==12.3.0
+Pillow==13.0.0
 numpy==1.26.4
 
 # Conversión PDF a Imagen

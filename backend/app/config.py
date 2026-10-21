@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.8.0"
+    APP_VERSION: str = "2.8.1"
     ENVIRONMENT: str = "development"
     # Con DEBUG, SQLAlchemy escribe cada consulta (con sus datos) en el log: nunca en producción
     DEBUG: bool = False

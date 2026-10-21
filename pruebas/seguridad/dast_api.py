@@ -268,13 +268,14 @@ def _():
         f"HTTP {r.status_code}; dentro de subidas: {[p.name for p in adentro]}; escrito afuera: {[str(p) for p in afuera]}")
 
 
-@caso("SEG-26", "Robustez: ids con formato inválido no producen errores 500", "A04 Diseño / A05 Errores",
+@caso("SEG-26", "Robustez: ids con formato inválido o con carácter nulo no producen errores 500", "A04 Diseño / A05 Errores",
       "4xx en todas las rutas, sin texto de la base de datos")
 def _():
-    malos = ["no-es-uuid", "..%5C..%5Cwin.ini", "www.ejemplo.com", "%3C%21--x--%3E"]
+    malos = ["no-es-uuid", "..%5C..%5Cwin.ini", "www.ejemplo.com", "%3C%21--x--%3E", "%00"]
     rutas = [f"/api/personas/{m}" for m in malos] + [f"/api/documentos/{m}" for m in malos] + [
         "/api/personas?documento_id=no-es-uuid", "/api/exportacion/xlsx?documento_id=no-es-uuid",
-        "/api/documentos/dashboard/estadisticas?documento_id=no-es-uuid", "/api/comparacion/no-es-uuid"]
+        "/api/documentos/dashboard/estadisticas?documento_id=no-es-uuid", "/api/comparacion/no-es-uuid",
+        "/api/personas?documento_id=%00", "/api/personas?buscar=ana%00", "/api/exportacion/xlsx?documento_id=%00"]
     malas = {}
     for ruta in rutas:
         r = c.get(ruta, headers=h(TOK_ANA))

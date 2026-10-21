@@ -146,6 +146,19 @@ async def datos_invalidos_handler(request: Request, exc: DataError):
     return JSONResponse(status_code=400, content={"detail": "Uno de los datos enviados no tiene el formato esperado."})
 
 
+@app.exception_handler(ValueError)
+async def caracter_nulo_handler(request: Request, exc: ValueError):
+    """
+    PostgreSQL no acepta el carácter nulo (0x00) en un texto y el controlador lo rechaza con un ValueError
+    antes de consultar: llegue en la dirección o en el cuerpo, es un dato inválido del cliente.
+    Cualquier otro ValueError sigue al manejador de errores internos.
+    """
+    if "NUL (0x00)" not in str(exc):
+        raise exc
+    logger.warning(f"Carácter nulo en un dato enviado a {request.method} {request.url.path}")
+    return JSONResponse(status_code=400, content={"detail": "Uno de los datos enviados contiene caracteres no válidos."})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """

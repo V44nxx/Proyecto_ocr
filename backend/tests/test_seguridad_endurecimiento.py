@@ -130,6 +130,47 @@ def test_ids_con_formato_invalido_no_producen_errores_500(bd, api, ruta):
     assert "psycopg2" not in r.text and "invalid input syntax" not in r.text
 
 
+@requiere_postgres
+@pytest.mark.parametrize("metodo, ruta", [
+    ("GET", "/api/personas?documento_id=%00"), ("GET", "/api/personas?buscar=ana%00"),
+    ("GET", "/api/comparacion/%00"), ("GET", "/api/documentos/%00/estado"),
+    ("GET", "/api/exportacion/xlsx?documento_id=%00"), ("DELETE", "/api/personas/vaciar/todas?documento_id=%00"),
+])
+def test_caracter_nulo_en_la_direccion_responde_400(bd, api, metodo, ruta):
+    """PostgreSQL no acepta el carácter nulo en un texto: es un dato inválido del cliente, no un error del servidor."""
+    db = bd.SessionLocal()
+    ana = crear_usuario(db, "ana@example.com")
+    r = api.request(metodo, ruta, headers=cabecera(ana))
+    db.close()
+    assert r.status_code == 400
+    assert "NUL" not in r.text and "0x00" not in r.text
+
+
+@requiere_postgres
+def test_caracter_nulo_en_el_cuerpo_responde_400_y_no_cambia_nada(bd, api):
+    db = bd.SessionLocal()
+    ana = crear_usuario(db, "ana@example.com")
+    persona = crear_persona(db, ana, crear_ficha(db, ana), "1000000402", "ANGELA", "MORA")
+    r = api.put(f"/api/personas/{persona.id}", headers=cabecera(ana), json={"nombres": "ANGELA\u0000MARIA"})
+    db.refresh(persona)
+    nombres = persona.nombres
+    db.close()
+    assert r.status_code == 400
+    assert nombres == "ANGELA"
+
+
+def test_otros_valores_invalidos_siguen_siendo_error_interno(cliente):
+    """Solo el carácter nulo se trata como dato del cliente; cualquier otro ValueError es un error del servidor."""
+    def falla():
+        raise ValueError("detalle secreto")
+
+    app.dependency_overrides[get_usuario_actual] = falla
+    r = cliente.get("/api/auth/me")
+    assert r.status_code == 500
+    assert "secreto" not in r.text
+    assert r.json()["referencia"].startswith("ERR-")
+
+
 def test_error_interno_no_autoriza_a_un_origen_ajeno(cliente):
     def falla():
         raise RuntimeError("falla")

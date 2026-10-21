@@ -6,7 +6,8 @@ el escaneo activo envía ataques reales.
 Uso: python zap_escanear.py <etiqueta> <url_api> <url_web> <openapi.json> <semilla_ids.json> <carpeta_reportes>
 Variable de entorno ZAP_JAR: ruta a zap-2.17.0.jar (por defecto, la del paquete multiplataforma en ./ZAP_2.17.0).
  - API: importa la definición OpenAPI, agrega peticiones con los ids reales de la semilla y hace escaneo activo
-   con la sesión de ana (cabecera Authorization).
+   con la sesión de ana (cabecera Authorization). /api/auth/logout queda fuera: atacarlo revocaría esa sesión
+   y el resto del escaneo correría sin ella.
  - Web: araña el frontend y deja el escaneo pasivo (cabeceras, cookies, librerías JS conocidas).
 En producción /openapi.json no se publica; se genera desde backend/ con:
     ENVIRONMENT=development python -c "import json; from app.main import app; print(json.dumps(app.openapi()))" > openapi.json
@@ -62,6 +63,7 @@ env:
   - name: kondid-api
     urls: ["{url_api}"]
     includePaths: ["{url_api}.*"]
+    excludePaths: ["{url_api}/api/auth/logout.*"]
   - name: kondid-web
     urls: ["{url_web}"]
     includePaths: ["{url_web}.*"]

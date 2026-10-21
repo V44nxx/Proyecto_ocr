@@ -1,6 +1,6 @@
 # Frontend Dockerfile - Next.js 14
 # ──────────────────────────────────────────
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 
 # Dependencias
 FROM base AS deps

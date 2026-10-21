@@ -1,0 +1,43 @@
+# Análisis de código con CodeQL (el motor de GitHub Advanced Security) en cada push, pull request y cada semana.
+# Los hallazgos quedan en la pestaña Security > Code scanning del repositorio. No despliega nada.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"   # lunes 1:17 a. m. hora de Colombia: avisos nuevos aunque no haya cambios
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analizar:
+    name: CodeQL (${{ matrix.lenguaje }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # subir los resultados a Code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        lenguaje: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          languages: ${{ matrix.lenguaje }}
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "**/node_modules/**"
+              - "**/.next/**"
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          category: /language:${{ matrix.lenguaje }}

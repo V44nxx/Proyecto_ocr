@@ -15,6 +15,7 @@ import Sidebar from "@/components/ui/Sidebar";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiSeguimiento, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
 import type { SeguimientoConfig } from "@/types";
 import toast from "react-hot-toast";
 
@@ -43,6 +44,9 @@ export default function SeguimientoPage() {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [recarga, setRecarga] = useState(0);
+  // Solo se pintan enlaces de Apps Script y Google Sheets (lib/urlsSeguimiento.ts)
+  const panelSeguro = urlPanelSeguimiento(config?.url_panel);
+  const hojaSegura = urlHojaSeguimiento(config?.url_hoja);
 
   const [urlPanel, setUrlPanel] = useState("");
   const [correo, setCorreo] = useState("");
@@ -142,7 +146,7 @@ export default function SeguimientoPage() {
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Recargar</span>
               </button>
-              <a href={config.url_panel} target="_blank" rel="noopener noreferrer" className={BOTON_SECUNDARIO}>
+              <a href={panelSeguro} target="_blank" rel="noopener noreferrer" className={BOTON_SECUNDARIO}>
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Abrir en pestaña nueva</span>
               </a>
@@ -183,9 +187,9 @@ export default function SeguimientoPage() {
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
                   <FileSpreadsheet className="w-3.5 h-3.5" /> Hoja de cálculo
                 </span>
-                {config?.url_hoja ? (
+                {hojaSegura ? (
                   <a
-                    href={config.url_hoja}
+                    href={hojaSegura}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-1.5 text-sm font-semibold text-[#0071E3] hover:underline inline-flex items-center gap-1"
@@ -320,7 +324,7 @@ export default function SeguimientoPage() {
             <div className={`${TARJETA} flex-1 min-h-[70vh] overflow-hidden`}>
               <iframe
                 key={recarga}
-                src={config.url_panel}
+                src={panelSeguro}
                 title="Seguimiento de fichas"
                 className="w-full h-full min-h-[70vh] border-0 bg-white"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-top-navigation-by-user-activation"

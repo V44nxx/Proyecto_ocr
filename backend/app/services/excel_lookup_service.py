@@ -63,17 +63,6 @@ _MAPEO_COLUMNAS = {
 }
 
 
-def _normalizar_col(col: Any) -> str:
-    s = str(col).lower().strip()
-    for k, v in {"a": "a", "e": "e", "i": "i", "o": "o", "u": "u", "u": "u", "n": "n"}.items():
-        pass
-    for orig, rep in [("a","a"),("e","e"),("i","i"),("o","o"),("u","u"),("u","u"),("n","n"),
-                      (".",""),("-"," "),("/"," "),("\\"," "),("_"," "),("°",""),("#","")]:
-        s = s.replace(orig, rep)
-    s = re.sub(r"\s+", "_", s).strip("_")
-    return s
-
-
 def _normalizar_col2(col: Any) -> str:
     """Normaliza nombre de columna: minusculas, sin tildes, sin separadores."""
     import unicodedata

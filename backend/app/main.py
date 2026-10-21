@@ -43,7 +43,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Entorno: {settings.ENVIRONMENT}")
     logger.info("=" * 60)
     from app import config as config_mod
-    if config_mod.secret_key_temporal:
+    if config_mod.secret_key_publica:
+        logger.error(
+            "SECRET_KEY es una clave de ejemplo publicada en el repositorio: con ella cualquiera podría firmar "
+            "sesiones. Se generó una temporal (las sesiones se cierran en cada reinicio); define una propia."
+        )
+    elif config_mod.secret_key_temporal:
         logger.warning(
             "SECRET_KEY no está definida: se generó una temporal y las sesiones se cerrarán en cada reinicio. "
             "Defínela en las variables de entorno."

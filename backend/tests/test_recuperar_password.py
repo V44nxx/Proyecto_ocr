@@ -100,6 +100,8 @@ def test_correo_inexistente_responde_igual_y_no_envia(cliente, bd):
     assert existe.status_code == no_existe.status_code == 200
     assert existe.json() == no_existe.json()
     assert [c["para"] for c in cliente.enviados] == ["ana@example.com"]
+    # El mismo mensaje para los dos aclara que a un correo sin cuenta no le llega nada
+    assert "Si no está registrado, no se envía nada" in no_existe.json()["message"]
 
 
 @requiere_postgres

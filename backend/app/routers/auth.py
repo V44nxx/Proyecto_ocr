@@ -41,6 +41,7 @@ from app.schemas.usuario import (
 )
 from app.config import settings
 from app.services import auditoria
+from app.utils.archivos import borrar_archivo_subido
 from app.utils.limitador import Limitador, ip_cliente, mensaje_espera
 from app.utils.sesion import (
     METODOS_SEGUROS, borrar_cookie_sesion, origen_confiable, poner_cookie_sesion, token_de_peticion,
@@ -316,7 +317,6 @@ def eliminar_usuario(
     para que sus datos no queden sin dueño ni pasen a otra cuenta.
     """
     import uuid as uuid_pkg
-    from pathlib import Path
     from app.models.comparacion import Comparacion
     from app.models.documento import Documento
     from app.models.persona import Persona
@@ -357,8 +357,7 @@ def eliminar_usuario(
         rutas.extend(str(p) for p in cache_dir.glob(f"{doc_id}_p*.*"))
     for ruta in rutas:
         try:
-            if ruta and Path(ruta).is_file():
-                Path(ruta).unlink()
+            borrar_archivo_subido(ruta)
         except Exception as e:
             logger.warning(f"No se pudo borrar el archivo {ruta} del usuario eliminado: {e}")
 
@@ -432,9 +431,10 @@ def cambiar_password(
     return TokenResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
 
 
+# El mismo para un correo con cuenta y sin ella: así no se puede averiguar quién está registrado
 MENSAJE_OLVIDE = (
-    "Si el correo está registrado, te enviamos un enlace para restablecer la contraseña. "
-    "Revisa también la carpeta de spam."
+    "Si ese correo pertenece a una cuenta de KondID, te llegará un enlace para restablecer la contraseña. "
+    "Si no está registrado, no se envía nada."
 )
 
 

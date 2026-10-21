@@ -39,15 +39,24 @@ COPY backend/ .
 
 RUN mkdir -p /app/uploads /app/exports /app/logs /app/credentials
 
+# Usuario sin privilegios para la aplicación (docker-entrypoint.sh le pasa las carpetas de datos)
+RUN groupadd --system --gid 10001 kondid \
+    && useradd --system --uid 10001 --gid kondid --home-dir /home/kondid --create-home --shell /usr/sbin/nologin kondid
+
+# Arranca como root un instante para ajustar permisos de los volúmenes y luego corre como kondid
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod 755 /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 
 # ------------------------------------------------------------------------------
-# STAGE 2: Frontend (Next.js 14 - Node 20)
+# STAGE 2: Frontend (Next.js 16 - Node 24 LTS)
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS frontend-base
+FROM node:24-alpine AS frontend-base
 
 FROM frontend-base AS frontend-deps
 RUN apk add --no-cache libc6-compat

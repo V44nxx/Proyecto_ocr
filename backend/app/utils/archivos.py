@@ -1,5 +1,6 @@
 """Validaciones de archivos subidos"""
 import re
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -37,3 +38,17 @@ def nombre_archivo_seguro(nombre: str | None, por_defecto: str = "archivo") -> s
         else:
             base = base[:LARGO_MAXIMO_NOMBRE]
     return base
+
+
+def borrar_archivo_subido(ruta: str | None) -> bool:
+    """
+    Borra un archivo guardado por la aplicación. La ruta sale de la base de datos: solo se borra si queda
+    dentro de la carpeta de subidas, así una ruta alterada no puede borrar nada fuera de ella.
+    """
+    if not ruta:
+        return False
+    archivo = Path(ruta).resolve()
+    if not archivo.is_relative_to(settings.upload_path.resolve()) or not archivo.is_file():
+        return False
+    archivo.unlink()
+    return True

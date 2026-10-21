@@ -74,7 +74,13 @@ Usa el Chrome instalado (`channel="chrome"`). Recorre el inicio de sesión, Pers
 | Batería de caja negra (control de acceso, errores, cabeceras, CORS, cookie de sesión, cierre de sesión, CSRF, inyección, fuerza bruta, robustez) | `pruebas/seguridad/dast_api.py` | `python pruebas/seguridad/dast_api.py http://127.0.0.1:8000 /tmp/kondid_e2e/semilla_ids.json resultado.json` |
 | Escaneo dinámico (pasivo y activo) | OWASP ZAP 2.17 | `python pruebas/seguridad/zap_escanear.py <etiqueta> <url_api> <url_web> openapi.json semilla_ids.json <carpeta>` (arma el plan con la sesión y los ids reales; detalles en el archivo) |
 | Dependencias con avisos conocidos | pip-audit, npm audit | `pip-audit -r backend/requirements.txt` · `npm audit --omit=dev` |
+| Dependencias (segunda opinión; detecta avisos que pip-audit no tiene, como los de PyMuPDF) | Snyk Open Source, OSV-Scanner | `snyk test --file=frontend/package-lock.json` · `snyk test --file=backend/requirements.txt --package-manager=pip --command=<python del venv>` (requiere `snyk auth` y pip en el venv) · `osv-scanner scan source --lockfile=backend/requirements.txt --lockfile=frontend/package-lock.json` |
 | Análisis estático | Bandit | `bandit -r backend/app -ll` |
+| Análisis de código (flujo de datos) | CodeQL (GitHub Advanced Security), Snyk Code, Semgrep | CodeQL corre solo en GitHub Actions (`.github/workflows/codeql.yml`, pestaña Security) · `snyk code test` (sube el código a Snyk) · `semgrep scan --metrics=off --config p/owasp-top-ten --config p/python --config p/typescript --config p/react --config p/nextjs --config p/dockerfile` |
+| Secretos en el código y en todo el historial de git | Gitleaks | `gitleaks git . --redact` |
+| Dockerfiles, configuración y dependencias en un solo paso | Trivy | `trivy fs . --scanners vuln,secret,misconfig --skip-dirs backend/.venv --skip-dirs frontend/node_modules` |
+
+Cada herramienta ve cosas distintas: en la revisión de la 2.9.0, PyMuPDF solo lo marcaron Snyk y Trivy, los registros con tokens salieron de revisar a mano los hallazgos de Gitleaks y la condición de carrera del Seguimiento, de un error 500 durante ZAP. Revisa también los falsos positivos conocidos: rutas que llegan por línea de comandos en `pruebas/`, contraseñas inventadas en `tests/` y el enlace de descarga `blob:` de `lib/api.ts`.
 
 ## 5. Carga y estrés (JMeter)
 

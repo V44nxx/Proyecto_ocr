@@ -17,8 +17,10 @@ from app.routers.documentos import (
 )
 
 
-def test_cancelar_subida_documento_especifico(tmp_path):
+def test_cancelar_subida_documento_especifico(tmp_path, monkeypatch):
     """Verifica que al cancelar un documento específico, se remueve de BD y disco."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path))  # solo se borra dentro de la carpeta de subidas
     user_id = uuid.uuid4()
     usuario = Usuario(id=user_id, email="test@example.com", rol="digitador")
 

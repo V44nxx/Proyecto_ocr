@@ -14,6 +14,7 @@ from app.database import get_db
 from app.main import app
 from app.models.seguimiento_config import SeguimientoConfig
 from app.routers.auth import get_usuario_actual
+from tests.utilidades_pg import cabecera, requiere_postgres
 
 PANEL = "https://script.google.com/macros/s/AKfycbx123/exec"
 PANEL_ORG = "https://script.google.com/a/macros/sena.edu.co/s/AKfycbx123/exec"
@@ -93,3 +94,74 @@ def test_rechaza_enlaces_o_correos_invalidos(client, usuario, db_mock, datos):
 
 def test_eliminar_sin_configuracion_responde_404(client, usuario, db_mock):
     assert client.delete("/api/seguimiento/config").status_code == 404
+
+
+# ── Peticiones simultáneas (las encontró el escaneo de OWASP ZAP) ──────────────────
+# Otra petición del mismo usuario cambia la fila justo después de que esta la leyó: no debe haber un 500.
+
+def _con_interferencia(monkeypatch, bd, accion):
+    """La primera lectura de la configuración devuelve lo que había y enseguida otra sesión aplica `accion`."""
+    from app.routers import seguimiento
+    original = seguimiento._config_de
+    estado = {"hecho": False}
+
+    def leer(db, usuario):
+        resultado = original(db, usuario)
+        if not estado["hecho"]:
+            estado["hecho"] = True
+            otra = bd.SessionLocal()
+            accion(otra, usuario)
+            otra.commit()
+            otra.close()
+        return resultado
+    monkeypatch.setattr(seguimiento, "_config_de", leer)
+
+
+def _borrar(sesion, usuario):
+    sesion.query(SeguimientoConfig).filter(SeguimientoConfig.usuario_id == usuario.id).delete()
+
+
+def _crear(sesion, usuario):
+    sesion.add(SeguimientoConfig(usuario_id=usuario.id, url_panel=PANEL))
+
+
+@pytest.fixture
+def ana_pg(bd):
+    from tests.utilidades_pg import crear_usuario
+    db = bd.SessionLocal()
+    yield crear_usuario(db, "ana@example.com")
+    db.close()
+
+
+def _filas(bd, usuario):
+    db = bd.SessionLocal()
+    filas = db.query(SeguimientoConfig).filter(SeguimientoConfig.usuario_id == usuario.id).all()
+    datos = [f.url_panel for f in filas]
+    db.close()
+    return datos
+
+
+@requiere_postgres
+def test_guardar_mientras_otra_peticion_la_borra(bd, api, ana_pg, monkeypatch):
+    db = bd.SessionLocal(); _crear(db, ana_pg); db.commit(); db.close()
+    _con_interferencia(monkeypatch, bd, _borrar)
+    r = api.put("/api/seguimiento/config", headers=cabecera(ana_pg), json={"url_panel": PANEL_ORG})
+    assert r.status_code == 200, r.text
+    assert _filas(bd, ana_pg) == [PANEL_ORG]
+
+
+@requiere_postgres
+def test_guardar_mientras_otra_peticion_la_crea(bd, api, ana_pg, monkeypatch):
+    _con_interferencia(monkeypatch, bd, _crear)
+    r = api.put("/api/seguimiento/config", headers=cabecera(ana_pg), json={"url_panel": PANEL_ORG})
+    assert r.status_code == 200, r.text
+    assert _filas(bd, ana_pg) == [PANEL_ORG]
+
+
+@requiere_postgres
+def test_eliminar_mientras_otra_peticion_la_borra(bd, api, ana_pg, monkeypatch):
+    db = bd.SessionLocal(); _crear(db, ana_pg); db.commit(); db.close()
+    _con_interferencia(monkeypatch, bd, _borrar)
+    r = api.delete("/api/seguimiento/config", headers=cabecera(ana_pg))
+    assert r.status_code == 200, r.text
+    assert _filas(bd, ana_pg) == []

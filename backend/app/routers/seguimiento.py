@@ -8,7 +8,9 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.database import get_db
 from app.models.seguimiento_config import SeguimientoConfig
@@ -84,14 +86,23 @@ def guardar_config(
     usuario: Usuario = Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    config = _config_de(db, usuario)
-    if config is None:
-        config = SeguimientoConfig(usuario_id=usuario.id)
-        db.add(config)
-    config.url_panel = request.url_panel
-    config.correo_google = request.correo_google
-    config.url_hoja = request.url_hoja
-    db.commit()
+    # Otra petición del mismo usuario puede borrar o crear la fila entre la lectura y el commit
+    # (StaleDataError / IntegrityError): se deshace y se repite una vez con lo que haya en ese momento
+    for intento in range(2):
+        config = _config_de(db, usuario)
+        if config is None:
+            config = SeguimientoConfig(usuario_id=usuario.id)
+            db.add(config)
+        config.url_panel = request.url_panel
+        config.correo_google = request.correo_google
+        config.url_hoja = request.url_hoja
+        try:
+            db.commit()
+            break
+        except (StaleDataError, IntegrityError):
+            db.rollback()
+            if intento:
+                raise
     db.refresh(config)
     logger.info(f"Seguimiento de fichas configurado por {usuario.email}")
     return config

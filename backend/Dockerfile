@@ -42,6 +42,15 @@ COPY . .
 # El JSON de Google Cloud NUNCA se copia dentro de la imagen
 RUN mkdir -p /app/uploads /app/exports /app/logs /app/credentials
 
+# Usuario sin privilegios para la aplicación (docker-entrypoint.sh le pasa las carpetas de datos)
+RUN groupadd --system --gid 10001 kondid \
+    && useradd --system --uid 10001 --gid kondid --home-dir /home/kondid --create-home --shell /usr/sbin/nologin kondid
+
+# Arranca como root un instante para ajustar permisos de los volúmenes y luego corre como kondid
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod 755 /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Puerto de exposición
 EXPOSE 8000
 

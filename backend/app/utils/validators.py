@@ -353,13 +353,13 @@ class ValidadorColombia:
             "0CT": 10, "SET": 9, "AG0": 8, "D1C": 12, "N0V": 11,
             "MARZ": 3, "FEBR": 2, "ABR1": 4, "3NE": 1,
             "ENER0": 1, "FEBRER0": 2, "MARZ0": 3, "ABR1L": 4,
-            "AGOST0": 8, "SEPTIEMBRE": 9, "0CTUBRE": 10, "NOVIEMBRE": 11,
-            "DICIEMBRE": 12,
+            "AGOST0": 8, "0CTUBRE": 10,
         }
 
         texto_u = texto.upper()
-        # Normalizar guiones/separadores espaciados (ej: '12 - OCT - 1981' -> '12-OCT-1981')
-        texto_u = re.sub(r"[\s\-]+[-/\.][\s\-]+", "-", texto_u)
+        # Normalizar guiones/separadores espaciados (ej: '12 - OCT - 1981' -> '12-OCT-1981').
+        # Cuantificadores acotados: con '+' una cadena larga de espacios tardaba un tiempo cuadrático (ReDoS)
+        texto_u = re.sub(r"[\s\-]{1,10}[-/\.][\s\-]{1,10}", "-", texto_u)
 
         match_dmy_abrev = re.search(
             r"\b(\d{1,2})[\s/\-\.]+([A-Z0-9]{3,4})\.?[\s/\-\.]+(\d{2,4})\b",
@@ -413,8 +413,6 @@ class ValidadorColombia:
                     return date(anio, mes_num, int(dia_t))
                 except ValueError:
                     pass
-                except ValueError:
-                    pass
 
         # ── Formato textual: "15 de enero de 2020" ───────────────────────
         match_texto = re.search(
@@ -437,7 +435,7 @@ class ValidadorColombia:
             except ValueError:
                 continue
 
-        logger.warning(f"No se pudo parsear fecha: '{texto}'")
+        logger.warning(f"No se pudo parsear fecha: '{texto[:80]}'" + (f" (… {len(texto)} caracteres)" if len(texto) > 80 else ""))
         return None
 
     # ──────────────────────────────────────────
@@ -617,6 +615,7 @@ class ValidadorColombia:
         es_antecedentes = "ANTECEDENTE" in tipo_norm
 
         if not es_antecedentes:
+            es_ti = es_cc = False
             edad = cls.calcular_edad(fecha_nacimiento) if fecha_nacimiento else None
             if not fecha_nacimiento:
                 motivos.append("Fecha de nacimiento no reconocida por OCR")

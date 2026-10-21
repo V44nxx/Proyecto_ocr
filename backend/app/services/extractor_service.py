@@ -1881,7 +1881,7 @@ class ExtractorService:
             linea = linea.strip()
             if not linea or re.search(r"\d", linea):
                 return None
-            limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑA-Za-záéíóúüñ\s\-]", "", linea).strip()
+            limpia = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s\-]", "", linea).strip()
             if RUIDO.search(limpia):
                 return None
             tokens = [t for t in limpia.split() if len(t) >= 2]
@@ -1987,7 +1987,7 @@ class ExtractorService:
             if not linea or re.search(r"\d", linea):
                 continue
             # Solo letras, espacios y guiones
-            limpia = re.sub(r"[^A-ZÁÉÍÓÚÜÑA-Za-záéíóúüñ\s\-]", "", linea).strip()
+            limpia = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s\-]", "", linea).strip()
             if RUIDO.search(limpia):
                 continue
             tokens = [t for t in limpia.split() if len(t) >= 2]

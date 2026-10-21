@@ -22,6 +22,48 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.9.0] - 2026-10-21
+
+**Resumen**
+
+- Escaneo de seguridad completo con Snyk (dependencias y código), CodeQL (el motor de GitHub Advanced Security), Semgrep, Trivy, OSV-Scanner, Gitleaks y OWASP ZAP, y corrección de lo encontrado.
+- Next.js 16 y React 19, PyMuPDF 1.28 y contenedor del backend sin privilegios de root.
+- El mensaje de recuperar la contraseña explica que a un correo sin cuenta no le llega nada.
+
+### Seguridad
+
+- **PyMuPDF 1.28.2** (antes 1.24.11): corrige cuatro vulnerabilidades al abrir PDF, una de ellas de ejecución de código con un archivo manipulado. Es la librería que abre los PDF que suben los usuarios. pip-audit no la detectaba; la encontraron Snyk y la base de avisos de PyMuPDF.
+- **Next.js 16.4.2 y React 19** (antes Next 14.2.35): corrige 26 avisos de Next.js, entre ellos dos críticos y tres de SSRF, y cuatro del PostCSS que trae adentro. La imagen del frontend pasa a Node 24 LTS (Node 20 ya no recibe parches).
+- **follow-redirects 1.16.1** (lo usa axios) y **certifi 2026.10.19** como mínimo.
+- **Registros**: las trazas de los errores no controlados ya no escriben el valor de las variables (podían incluir tokens de sesión). Siguen mostrando archivo y línea.
+- **Contenedor del backend sin root**: corre como el usuario `kondid`. Un script de arranque deja a su nombre las carpetas de datos (también las de volúmenes que ya existen) y, si las credenciales de Google montadas no son legibles para él, usa una copia privada.
+- **Clave de sesión de ejemplo**: si `SECRET_KEY` es una de las claves de ejemplo que se publicaron en el repositorio, el backend la trata como si faltara (usa una temporal) y lo avisa en el log. La documentación ya no trae una clave de ejemplo.
+- **Fechas**: una cadena muy larga en un campo de fecha ya no bloquea el servidor (la expresión regular tenía un tiempo cuadrático) y el log recorta el texto.
+- **Borrado de archivos**: solo se borran archivos que estén dentro de la carpeta de subidas, aunque la ruta guardada en la base estuviera alterada.
+- **Seguimiento de fichas**: el frontend también valida que el panel y la hoja sean de Apps Script y Google Sheets antes de mostrarlos (el backend ya lo hacía).
+- **GitHub Actions**: las acciones se fijan por el hash de su commit, no por una etiqueta que se puede mover.
+
+### Agregado
+
+- **CodeQL en GitHub Actions** (`.github/workflows/codeql.yml`): analiza Python, TypeScript y los workflows en cada push, en cada pull request y cada semana. Los hallazgos quedan en la pestaña Security del repositorio.
+
+### Corregido
+
+- Guardar la configuración del Seguimiento al mismo tiempo que otra petición la borraba o la creaba respondía un error interno. Ahora se repite con el estado actual.
+- El mensaje de recuperar la contraseña dice que, si el correo no está registrado, no se envía nada, y recuerda usar el correo con el que te registró el administrador. Sigue sin revelar qué correos tienen cuenta.
+
+### Cambiado
+
+- Se quitan ESLint y el script `lint` del frontend: `next lint` ya no existe en Next 16 y el proyecto no tenía configuración de ESLint.
+- El CI compila el frontend con Node 24.
+- Limpiezas que marcó CodeQL, sin cambiar el comportamiento: un rango repetido en una expresión regular, claves repetidas en el diccionario de meses, un `except` inalcanzable y una función sin uso que no quitaba las tildes. `import fitz` pasa a `import pymupdf as fitz` (el nombre viejo está obsoleto).
+
+### Riesgos aceptados
+
+- Tailwind CSS 3 trae dependencias con avisos de denegación de servicio, pero solo se usan al compilar y sobre los archivos del proyecto. Corregirlos exige migrar a Tailwind 4, que se hará aparte con revisión visual.
+- La política de contenido mantiene `'unsafe-inline'` en scripts y estilos (Next.js y las notificaciones lo necesitan).
+- Las imágenes no definen `HEALTHCHECK`: con OCR ocupando la CPU, un chequeo lento podría reiniciar el contenedor en medio de un procesamiento.
+
 ## [2.8.2] - 2026-10-20
 
 **Resumen**

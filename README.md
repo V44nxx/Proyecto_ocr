@@ -11,7 +11,7 @@ Cuenta con arquitectura **Smart Dual OCR** (Google Cloud Document AI + RapidOCR 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CLIENTE WEB (Browser)                          │
-│                   Next.js 14 + TypeScript + Tailwind                   │
+│                   Next.js 16 + TypeScript + Tailwind                   │
 │                        http://localhost:3000                           │
 │  • Dashboard de métricas       • Lotes PDF + Planilla oficial Excel   │
 │  • Visor de páginas PDF en vivo • Tabla interactiva de personas        │
@@ -159,7 +159,7 @@ copy ..\.env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend (Next.js 14)
+### Frontend (Next.js 16)
 
 ```bash
 cd frontend
@@ -314,7 +314,7 @@ proyecto_ocr/
 │   └── Dockerfile                           # Contenedor del backend
 ├── frontend/
 │   ├── src/
-│   │   ├── app/                             # Next.js 14 App Router
+│   │   ├── app/                             # Next.js 16 App Router
 │   │   │   ├── page.tsx                     # Login y autenticación
 │   │   │   ├── dashboard/                   # Métricas generales y accesos rápidos
 │   │   │   ├── documentos/                  # Carga de lotes, progreso en vivo y visor PDF
@@ -364,4 +364,6 @@ proyecto_ocr/
 - **Cabeceras de seguridad y CORS por lista**: API y frontend envían cabeceras contra incrustación, rastreo de tipos y filtración de la dirección de origen; el frontend aplica una política de contenido (CSP) obligatoria y la API solo acepta llamadas del navegador desde el frontend configurado.
 - **Auditoría**: el administrador consulta quién inició sesión, exportó, editó o eliminó datos, y desde qué IP, sin que se guarden contraseñas ni datos de las personas.
 - **Política de contraseñas**: largo mínimo y rechazo de contraseñas comunes o armadas con palabras del sistema.
+- **Contenedores sin privilegios**: el backend corre como el usuario `kondid` y el frontend como `nextjs`, no como root.
+- **Análisis continuo**: CodeQL (GitHub Advanced Security) revisa el código en cada push y cada semana; las dependencias se revisan con pip-audit, npm audit y Snyk.
 - **Pruebas**: unitarias, de integración, BDD (Gherkin en español), de interfaz, de carga y de seguridad, con regresión automática en GitHub Actions. Ver [docs/PRUEBAS.md](docs/PRUEBAS.md).

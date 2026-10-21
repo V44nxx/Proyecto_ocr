@@ -58,7 +58,7 @@ def crear_persona(db, usuario, ficha, cedula, nombres, apellidos, **extra):
 
 def pdf_de_prueba(ruta, paginas=2):
     """PDF pequeño con texto inventado, para la vista previa."""
-    import fitz
+    import pymupdf as fitz
     doc = fitz.open()
     for i in range(paginas):
         pag = doc.new_page(width=300, height=190)

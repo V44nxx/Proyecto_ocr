@@ -2,6 +2,7 @@
 Configuración global del sistema OCR
 v2: agrega soporte para Google Cloud Document AI
 """
+import hashlib
 import secrets
 from typing import Optional
 from pydantic_settings import BaseSettings
@@ -15,7 +16,7 @@ class Settings(BaseSettings):
     # Aplicación
     # ─────────────────────────────────────
     APP_NAME: str = "Sistema OCR - Documentos Colombianos"
-    APP_VERSION: str = "2.8.2"
+    APP_VERSION: str = "2.9.0"
     ENVIRONMENT: str = "development"
     # Con DEBUG, SQLAlchemy escribe cada consulta (con sus datos) en el log: nunca en producción
     DEBUG: bool = False
@@ -155,17 +156,40 @@ class Settings(BaseSettings):
         return self.MAX_SUBIDA_TOTAL_MB * 1024 * 1024
 
 
-# True si no se definió SECRET_KEY: se generó una temporal y las sesiones se cierran en cada reinicio
+# Huellas SHA-256 de las SECRET_KEY de ejemplo que se publicaron en el repositorio (.env.example inicial,
+# valor por defecto viejo y documentación). Con una de ellas cualquiera podría firmar sesiones válidas.
+HUELLAS_CLAVES_PUBLICAS = frozenset({
+    "23a4bf019ab3d632f7aaee05d3ac3f04249cbc60d340dd7e06cfa30876cd78ca",
+    "11a3607fd8969ec2d737e66f1f57ae80cd1305cfe60dfabf0f8b4f3bb76efbe0",
+    "f6c126ca64241bc54d67ad762256c207e23c286dbc8a4acfff082d91d912605b",
+})
+
+# True si se generó una SECRET_KEY temporal (las sesiones se cierran en cada reinicio);
+# secret_key_publica dice si fue porque la configurada era una clave de ejemplo publicada
 secret_key_temporal = False
+secret_key_publica = False
+
+
+def asegurar_secret_key(configuracion: Settings) -> str:
+    """Reemplaza por una temporal la SECRET_KEY vacía ("faltante") o publicada ("publica"); "" si sirve."""
+    clave = configuracion.SECRET_KEY.strip()
+    if not clave:
+        motivo = "faltante"
+    elif hashlib.sha256(clave.encode("utf-8")).hexdigest() in HUELLAS_CLAVES_PUBLICAS:
+        motivo = "publica"
+    else:
+        return ""
+    configuracion.SECRET_KEY = secrets.token_urlsafe(64)
+    return motivo
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    global secret_key_temporal
+    global secret_key_temporal, secret_key_publica
     configuracion = Settings()
-    if not configuracion.SECRET_KEY.strip():
-        configuracion.SECRET_KEY = secrets.token_urlsafe(64)
-        secret_key_temporal = True
+    motivo = asegurar_secret_key(configuracion)
+    secret_key_temporal = bool(motivo)
+    secret_key_publica = motivo == "publica"
     return configuracion
 
 

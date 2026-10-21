@@ -15,12 +15,16 @@ def setup_logger():
     # Eliminar logger por defecto
     logger.remove()
 
+    # diagnose=False en todos: las trazas de error muestran archivo y línea, pero no el valor de las
+    # variables (tokens de sesión, contraseñas o cédulas que estuvieran en memoria al fallar)
+
     # Logger en consola con colores. El nivel DEBUG incluye textos leídos por el OCR: solo con DEBUG=true.
     logger.add(
         sys.stdout,
         colorize=True,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         level="DEBUG" if settings.DEBUG else "INFO",
+        diagnose=False,
     )
 
     # Logger en archivo rotativo
@@ -35,6 +39,7 @@ def setup_logger():
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level="INFO",
         encoding="utf-8",
+        diagnose=False,
     )
 
     # Logger de errores separado
@@ -46,6 +51,7 @@ def setup_logger():
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level="ERROR",
         encoding="utf-8",
+        diagnose=False,
     )
 
     logger.info("Sistema de logging inicializado")

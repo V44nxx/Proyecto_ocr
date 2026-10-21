@@ -326,12 +326,14 @@ def test_varias_personas_sin_cedula_en_la_misma_cuenta(bd):
 
 
 @requiere_postgres
-def test_eliminar_usuario_borra_sus_datos_y_no_pasan_al_admin(bd, tmp_path):
+def test_eliminar_usuario_borra_sus_datos_y_no_pasan_al_admin(bd, tmp_path, monkeypatch):
     from app.routers.auth import eliminar_usuario
 
     db = bd.SessionLocal()
     admin = _usuario(db, "admin@example.com", rol="admin")
     x = _usuario(db, "x@example.com")
+    from app.config import settings
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path))  # solo se borra dentro de la carpeta de subidas
     pdf = tmp_path / "ficha.pdf"
     pdf.write_bytes(b"%PDF-1.4")
     f = _ficha(db, x, "3000040.pdf", 6, ruta_archivo=str(pdf))

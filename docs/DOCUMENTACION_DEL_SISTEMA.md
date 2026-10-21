@@ -55,7 +55,7 @@ El sistema se compone de tres capas principales orquestadas mediante contenedore
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CAPA DE PRESENTACIÓN                            │
-│                 Next.js 14.2 (App Router) + TypeScript 5               │
+│                 Next.js 16.4 (App Router) + TypeScript 5               │
 │             TailwindCSS 3.4 (Apple Design System: Frosted Glass)       │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ HTTP / REST / Bearer JWT
@@ -179,7 +179,7 @@ proyecto_ocr/
 │   └── Dockerfile                   # Imagen backend (Python 3.12-slim)
 ├── frontend/
 │   ├── src/
-│   │   ├── app/                     # Rutas Next.js 14 App Router
+│   │   ├── app/                     # Rutas Next.js 16 App Router
 │   │   │   ├── dashboard/           # Métricas del sistema
 │   │   │   ├── documentos/          # Carga de lotes y visor PDF
 │   │   │   ├── personas/            # Tabla de registros y acordeón
@@ -188,7 +188,7 @@ proyecto_ocr/
 │   │   ├── components/ui/           # Sidebar, botones, modales
 │   │   └── lib/api.ts               # Cliente Axios configurado con interceptores
 │   ├── package.json
-│   └── Dockerfile                   # Imagen frontend (Node.js 20-alpine)
+│   └── Dockerfile                   # Imagen frontend (Node.js 24-alpine)
 ├── database/init.sql                # Script DDL inicial
 ├── credentials/                     # Credenciales JSON de Google Cloud
 └── docker-compose.yml               # Orquestador multi-contenedor
@@ -217,7 +217,8 @@ proyecto_ocr/
 DATABASE_URL=postgresql://ocr_user:<tu_contraseña>@ocr_postgres:5432/ocr_documentos
 
 # Seguridad
-SECRET_KEY=clave_secreta_jwt_muy_segura_de_produccion_2024
+# Genera una propia: python -c "import secrets; print(secrets.token_urlsafe(64))"
+SECRET_KEY=<tu_clave_secreta>
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 # Google Cloud Document AI

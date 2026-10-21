@@ -188,6 +188,37 @@ def test_debug_apagado_por_defecto(monkeypatch):
     assert Settings(_env_file=None).DEBUG is False
 
 
+def test_una_secret_key_publicada_se_reemplaza_por_una_temporal(monkeypatch):
+    """Con una clave de ejemplo publicada cualquiera podría firmar sesiones: se trata como si faltara."""
+    import hashlib
+    from app import config
+    publica = "clave-de-ejemplo-publicada-en-la-documentacion"
+    monkeypatch.setattr(config, "HUELLAS_CLAVES_PUBLICAS",
+                        config.HUELLAS_CLAVES_PUBLICAS | {hashlib.sha256(publica.encode()).hexdigest()})
+    configuracion = Settings(_env_file=None, SECRET_KEY=publica)
+    assert config.asegurar_secret_key(configuracion) == "publica"
+    assert configuracion.SECRET_KEY != publica and len(configuracion.SECRET_KEY) >= 64
+
+
+def test_las_huellas_incluyen_las_claves_publicadas_en_el_historial():
+    from app import config
+    assert {
+        "23a4bf019ab3d632f7aaee05d3ac3f04249cbc60d340dd7e06cfa30876cd78ca",  # .env.example inicial
+        "11a3607fd8969ec2d737e66f1f57ae80cd1305cfe60dfabf0f8b4f3bb76efbe0",  # valor por defecto viejo
+        "f6c126ca64241bc54d67ad762256c207e23c286dbc8a4acfff082d91d912605b",  # ejemplo de la documentación
+    } <= config.HUELLAS_CLAVES_PUBLICAS
+
+
+def test_una_secret_key_propia_se_respeta_y_sin_clave_se_genera_una_temporal():
+    from app import config
+    propia = Settings(_env_file=None, SECRET_KEY="una-clave-propia-larga-y-aleatoria-0123456789-abcdef")
+    assert config.asegurar_secret_key(propia) == ""
+    assert propia.SECRET_KEY == "una-clave-propia-larga-y-aleatoria-0123456789-abcdef"
+    vacia = Settings(_env_file=None, SECRET_KEY="  ")
+    assert config.asegurar_secret_key(vacia) == "faltante"
+    assert len(vacia.SECRET_KEY) >= 64
+
+
 @pytest.mark.parametrize("entorno, publicada", [("production", False), ("PRODUCTION", False),
                                                  ("development", True), ("pruebas", True)])
 def test_documentacion_interactiva_solo_fuera_de_produccion(entorno, publicada):
@@ -311,6 +342,26 @@ def test_nombre_de_archivo_seguro_limita_el_largo():
     assert nombre.endswith(".pdf")
 
 
+def test_solo_se_borran_archivos_dentro_de_la_carpeta_de_subidas(tmp_path, monkeypatch):
+    """Las rutas a borrar salen de la base de datos: una ruta alterada no debe borrar nada fuera de las subidas."""
+    from app.utils import archivos
+    subidas = tmp_path / "uploads"
+    subidas.mkdir()
+    monkeypatch.setattr(archivos.settings, "UPLOAD_DIR", str(subidas))
+    propio = subidas / "ficha.pdf"
+    propio.write_bytes(b"%PDF")
+    ajeno = tmp_path / "config.env"
+    ajeno.write_text("no borrar")
+
+    assert archivos.borrar_archivo_subido(str(propio)) is True
+    assert not propio.exists()
+    assert archivos.borrar_archivo_subido(str(ajeno)) is False
+    assert archivos.borrar_archivo_subido(str(subidas / ".." / "config.env")) is False
+    assert ajeno.exists()
+    assert archivos.borrar_archivo_subido(None) is False
+    assert archivos.borrar_archivo_subido(str(subidas / "no-existe.pdf")) is False
+
+
 @pytest.fixture
 def subidas(monkeypatch, tmp_path):
     carpeta = tmp_path / "uploads"
@@ -348,6 +399,25 @@ def test_subir_pdf_de_persona_no_bloquea_el_servidor():
     assert not inspect.iscoroutinefunction(subir_pdf_persona)
 
 
+def test_una_fecha_enorme_no_bloquea_el_servidor():
+    """La fecha llega del usuario (corregir un campo, filas de un Excel): una cadena larga sin separadores
+    no debe disparar un tiempo cuadrático en las expresiones regulares (ReDoS) ni llenar el log."""
+    import time
+    from loguru import logger
+    from app.utils.validators import validador
+
+    mensajes = []
+    sink = logger.add(lambda m: mensajes.append(str(m)), level="WARNING")
+    texto = "1" + " " * 60_000 + "x"
+    inicio = time.perf_counter()
+    try:
+        assert validador.parsear_fecha(texto) is None
+        assert time.perf_counter() - inicio < 1.5
+    finally:
+        logger.remove(sink)
+    assert mensajes and all(len(m) < 500 for m in mensajes)
+
+
 # ── Política de contraseñas ─────────────────────────────────────────
 
 @pytest.mark.parametrize("clave", ["password", "12345678", "123456789", "qwertyuiop", "Contraseña1",
@@ -379,6 +449,32 @@ def test_crear_usuario_tambien_limita_los_72_bytes():
 def test_enmascarar_documento(valor, esperado):
     from app.utils.logger import enmascarar_documento
     assert enmascarar_documento(valor) == esperado
+
+
+def test_las_trazas_de_error_no_escriben_valores_de_variables(tmp_path, monkeypatch, capsys):
+    """Un error no controlado deja la traza, pero no el valor de las variables (tokens, contraseñas, cédulas)."""
+    from loguru import logger
+    from app.utils import logger as modulo_logger
+
+    monkeypatch.chdir(tmp_path)          # los archivos de log van a ./logs
+    modulo_logger.setup_logger()
+    # Se arma al ejecutar: la traza muestra las líneas de código, y así el valor no está escrito en ninguna
+    secreto = "-".join(["VALOR", "SECRETO", "DE", "PRUEBA", "123"])
+    try:
+        def procesar(token_sesion):
+            raise RuntimeError("falla de prueba")
+        procesar(secreto)
+    except RuntimeError as e:
+        logger.opt(exception=e).error("ERR-PRUEBA error interno")
+    logger.complete()
+    consola = capsys.readouterr().out
+    archivo = "".join(p.read_text(encoding="utf-8") for p in (tmp_path / "logs").glob("errors_*.log"))
+    monkeypatch.undo()
+    modulo_logger.setup_logger()         # vuelve a los archivos de log de siempre
+
+    assert "ERR-PRUEBA" in archivo and "falla de prueba" in archivo
+    assert "VALOR-SECRETO-DE-PRUEBA-123" not in archivo
+    assert "VALOR-SECRETO-DE-PRUEBA-123" not in consola
 
 
 # ── Auditoría ───────────────────────────────────────────────────────

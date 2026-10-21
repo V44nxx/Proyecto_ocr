@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from typing import List, Tuple
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 from app.utils.logger import app_logger as logger
 from app.config import settings
 

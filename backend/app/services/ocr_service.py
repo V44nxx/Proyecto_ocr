@@ -22,7 +22,7 @@ CAMBIOS v3 (Google Document AI):
 import os
 import time
 import re
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session

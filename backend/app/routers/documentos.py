@@ -25,7 +25,7 @@ from app.routers.auth import get_usuario_actual
 from app.services import auditoria
 from app.services.ocr_service import ocr_service
 from app.config import settings
-from app.utils.archivos import nombre_archivo_seguro, verificar_tamano_archivo
+from app.utils.archivos import borrar_archivo_subido, nombre_archivo_seguro, verificar_tamano_archivo
 from app.utils.errores import mensaje_error_interno, nueva_referencia
 from app.utils.logger import app_logger as logger
 
@@ -362,8 +362,7 @@ def _procesar_batch_ocr_y_comparacion(
                         Comparacion.estado == "pendiente"
                     ).first()
                     if comp_act:
-                        if comp_act.ruta_archivo and Path(comp_act.ruta_archivo).exists():
-                            Path(comp_act.ruta_archivo).unlink()
+                        borrar_archivo_subido(comp_act.ruta_archivo)
                         db.delete(comp_act)
                         db.commit()
                 except Exception as e_c:
@@ -489,9 +488,7 @@ def cancelar_subida_o_procesamiento(
         # 3. Eliminar archivo físico de disco
         if ruta:
             try:
-                p = Path(ruta)
-                if p.exists():
-                    p.unlink()
+                borrar_archivo_subido(ruta)
             except Exception as e_f:
                 logger.warning(f"No se pudo eliminar archivo físico {ruta}: {e_f}")
 
@@ -507,13 +504,10 @@ def cancelar_subida_o_procesamiento(
             Comparacion.usuario_id == usuario.id
         ).first()
         if comp:
-            if comp.ruta_archivo:
-                try:
-                    cp = Path(comp.ruta_archivo)
-                    if cp.exists():
-                        cp.unlink()
-                except Exception:
-                    pass
+            try:
+                borrar_archivo_subido(comp.ruta_archivo)
+            except Exception:
+                pass  # si el archivo no se puede borrar, igual se quita la comparación
             db.delete(comp)
             logger.info(f"[Cancelar] Comparación {payload.comparacion_id} removida.")
 
@@ -523,13 +517,10 @@ def cancelar_subida_o_procesamiento(
             Comparacion.estado == "pendiente"
         ).all()
         for comp in comps_pendientes:
-            if comp.ruta_archivo:
-                try:
-                    cp = Path(comp.ruta_archivo)
-                    if cp.exists():
-                        cp.unlink()
-                except Exception:
-                    pass
+            try:
+                borrar_archivo_subido(comp.ruta_archivo)
+            except Exception:
+                pass  # si el archivo no se puede borrar, igual se quita la comparación
             db.delete(comp)
             logger.info(f"[Cancelar] Comparación pendiente {comp.id} removida.")
 
@@ -887,8 +878,7 @@ def eliminar_documento(
 
     # 2. Eliminar archivo físico del PDF y su caché de vistas previas
     try:
-        if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
-            Path(documento.ruta_archivo).unlink()
+        borrar_archivo_subido(documento.ruta_archivo)
     except Exception as e:
         logger.warning(f"No se pudo eliminar archivo físico {documento.ruta_archivo}: {e}")
 
@@ -1041,7 +1031,7 @@ def preview_pagina_pdf(
 
     # 4. Renderizar con PyMuPDF a JPEG optimizado
     try:
-        import fitz  # PyMuPDF
+        import pymupdf as fitz  # PyMuPDF
         if ruta and ruta.exists():
             pdf_doc = fitz.open(str(ruta))
         elif documento.archivo_binario:

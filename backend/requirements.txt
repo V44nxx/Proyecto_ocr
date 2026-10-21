@@ -42,7 +42,7 @@ Pillow==13.0.0
 numpy==1.26.4
 
 # Conversión PDF a Imagen
-PyMuPDF==1.24.11
+PyMuPDF==1.28.2
 
 # Exportación Excel
 pandas==2.2.3
@@ -55,5 +55,7 @@ scipy>=1.13.0
 python-dotenv==1.2.4
 aiofiles==24.1.0
 httpx==0.27.2
+# Raíces de certificados de httpx: la 2026.10.19 corrige el aviso de las raíces emSign (GHSA-6q48-6c7w-9gw2)
+certifi>=2026.10.19
 loguru==0.7.2
 pytz==2024.2

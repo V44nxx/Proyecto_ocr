@@ -37,7 +37,8 @@ export default function OlvideContrasenaPage() {
           <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">{confirmacion}</p>
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-4 leading-relaxed">
-          El enlace sirve una sola vez y vence en 30 minutos. Si no te llega, puedes pedir otro en 2 minutos.
+          ¿No te llega? Verifica que sea el correo con el que te registró el administrador y revisa la carpeta de
+          spam. El enlace sirve una sola vez y vence en 30 minutos; puedes pedir otro en 2 minutos.
         </p>
       </TarjetaAcceso>
     );

@@ -14,6 +14,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, getTipoDocInfo } from "@/lib/formatters";
+import { dividirNombreCompleto } from "@/lib/nombres";
 import type { DashboardStats, Documento, Persona } from "@/types";
 
 function StatCard({
@@ -626,6 +627,10 @@ export default function DashboardPage() {
                         })
                         .map((p, idx) => {
                           const nombre = formatNombreCompleto(p);
+                          // Con los apellidos guardados aparte se muestran tal cual; si no, se dividen del nombre completo
+                          const partesNombre = p.apellidos?.trim()
+                            ? { nombres: p.nombres || "", apellidos: p.apellidos }
+                            : dividirNombreCompleto(nombre);
                           const edad = p.edad ?? calcularEdad(p.fecha_nacimiento);
                           const esMenor14 = edad !== null && edad < 14;
                           const tipoInfo = getTipoDocInfo(p.tipo_documento);
@@ -734,10 +739,10 @@ export default function DashboardPage() {
                                       {/* Nombre desglosado */}
                                       <div className="sm:col-span-2 lg:col-span-4 pt-2.5 border-t border-slate-100 dark:border-white/[0.06] flex items-center gap-4 flex-wrap text-xs">
                                         <span className="text-slate-500 text-[11px]">
-                                          <strong className="text-slate-700 dark:text-slate-300 font-medium">Apellidos:</strong> {p.apellidos || (p.detalles_campos as any)?.primer_apellido || "—"}
+                                          <strong className="text-slate-700 dark:text-slate-300 font-medium">Apellidos:</strong> {partesNombre.apellidos || "—"}
                                         </span>
                                         <span className="text-slate-500 text-[11px]">
-                                          <strong className="text-slate-700 dark:text-slate-300 font-medium">Nombres:</strong> {p.nombres || (p.detalles_campos as any)?.primer_nombre || "—"}
+                                          <strong className="text-slate-700 dark:text-slate-300 font-medium">Nombres:</strong> {partesNombre.nombres || "—"}
                                         </span>
                                         {(p.requiere_revision || Boolean((p.detalles_campos as any)?.discrepancia_documento_edad)) && (
                                           <span className="text-amber-600 dark:text-amber-400 text-[11px] bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium inline-flex items-center gap-1.5">

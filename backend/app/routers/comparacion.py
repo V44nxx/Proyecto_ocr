@@ -113,6 +113,7 @@ def ejecutar_comparacion(
         raise HTTPException(status_code=409, detail="La comparación ya está en proceso")
 
     comparacion.estado = "procesando"
+    comparacion.mensaje_error = None  # al reintentar, el error anterior ya no aplica
     db.commit()
 
     ruta_excel_ejec = comparacion.obtener_ruta_o_restaurar(db)

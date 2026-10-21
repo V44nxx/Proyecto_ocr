@@ -70,6 +70,7 @@ export default function ComparacionPage() {
   const { collapsed } = useSidebar();
   const [comparaciones, setComparaciones] = useState<Comparacion[]>([]);
   const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(null);
+  const [reintentando, setReintentando] = useState(false);
   const [diferencias, setDiferencias] = useState<Diferencia[]>([]);
   const [filtroDif, setFiltroDif] = useState<string>("todos");
   const [busqueda, setBusqueda] = useState<string>("");
@@ -138,6 +139,22 @@ export default function ComparacionPage() {
     } else if (comp.estado === "procesando" || comp.estado === "pendiente") {
       setDiferencias([]);
       iniciarPolling(comp);
+    }
+  };
+
+  // Vuelve a ejecutar una comparación que terminó en error y sigue su avance como una nueva
+  const reintentar = async (comp: Comparacion) => {
+    setReintentando(true);
+    try {
+      await apiComparacion.ejecutar(comp.id);
+      const enProceso: Comparacion = { ...comp, estado: "procesando", mensaje_error: null };
+      setComparacionActiva(enProceso);
+      setDiferencias([]);
+      iniciarPolling(enProceso);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "No se pudo reintentar la comparación"));
+    } finally {
+      setReintentando(false);
     }
   };
 
@@ -634,11 +651,12 @@ export default function ComparacionPage() {
                   {comparacionActiva.mensaje_error || "Ocurrió un problema durante el procesamiento de la planilla."}
                 </p>
                 <button
-                  onClick={() => verDiferencias(comparacionActiva)}
-                  className="btn-secondary text-xs py-2 px-4 flex items-center gap-2"
+                  onClick={() => reintentar(comparacionActiva)}
+                  disabled={reintentando}
+                  className="btn-secondary text-xs py-2 px-4 flex items-center gap-2 disabled:opacity-50"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Reintentar</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${reintentando ? "animate-spin" : ""}`} />
+                  <span>{reintentando ? "Reintentando..." : "Reintentar"}</span>
                 </button>
               </div>
             ) : (

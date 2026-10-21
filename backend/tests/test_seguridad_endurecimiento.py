@@ -171,6 +171,63 @@ def test_otros_valores_invalidos_siguen_siendo_error_interno(cliente):
     assert r.json()["referencia"].startswith("ERR-")
 
 
+@pytest.mark.parametrize("guardado, visible", [
+    ("No module named 'app.services.field_validator'", None),                       # registro de antes de la 2.7.0
+    ("(psycopg2.errors.UndefinedColumn) column x does not exist", None),
+    ("No se pudo completar la comparación (referencia ERR-1A2B3C4D).", "igual"),  # los genéricos se muestran
+    ("No se pudo procesar la ficha (referencia ERR-00FF00AA).", "igual"),
+    (None, "igual"),
+])
+def test_los_mensajes_de_error_guardados_no_muestran_detalles_internos(guardado, visible):
+    from app.utils.errores import mensaje_error_visible
+    resultado = mensaje_error_visible(guardado, "Mensaje genérico.")
+    assert resultado == (guardado if visible == "igual" else "Mensaje genérico.")
+
+
+def test_las_respuestas_de_fichas_y_comparaciones_filtran_el_mensaje_viejo():
+    from datetime import datetime
+    from app.schemas.comparacion import ComparacionResponse
+    from app.schemas.documento import DocumentoResponse
+    viejo = "No module named 'app.services.field_validator'"
+    comp = ComparacionResponse.model_validate(dict(
+        id=uuid.uuid4(), nombre_original="p.xls", estado="error", total_registros_bd=0, total_registros_excel=0,
+        total_coincidentes=0, total_diferentes=0, total_faltantes_bd=0, total_nuevos_bd=0,
+        fecha_carga=datetime.now(), fecha_ejecucion=None, tiempo_procesamiento_ms=None, mensaje_error=viejo))
+    doc = DocumentoResponse.model_validate(dict(
+        id=uuid.uuid4(), nombre_original="f.pdf", estado="error", total_paginas=1, confianza_ocr=None,
+        mensaje_error=viejo, tiempo_procesamiento_ms=None, fecha_carga=datetime.now(), fecha_procesamiento=None))
+    assert "No module" not in comp.mensaje_error and "No module" not in doc.mensaje_error
+    assert "ruta_archivo" not in comp.model_dump()       # la ruta interna del servidor no sale en la API
+
+
+@requiere_postgres
+def test_reintentar_una_comparacion_con_error_la_vuelve_a_ejecutar(bd, api, monkeypatch):
+    from app.routers import comparacion as router_comparacion
+    hilos = []
+
+    class HiloFalso:
+        def __init__(self, target, args, daemon):
+            hilos.append(args)
+
+        def start(self):
+            pass
+    monkeypatch.setattr(router_comparacion.threading, "Thread", HiloFalso)
+
+    db = bd.SessionLocal()
+    ana = crear_usuario(db, "ana@example.com")
+    comp = Comparacion(usuario_id=ana.id, nombre_archivo="p.xls", nombre_original="p.xls", estado="error",
+                       mensaje_error="No module named 'app.services.field_validator'")
+    db.add(comp)
+    db.commit()
+    r = api.post(f"/api/comparacion/{comp.id}/ejecutar", headers=cabecera(ana))
+    db.refresh(comp)
+    estado, mensaje = comp.estado, comp.mensaje_error
+    db.close()
+
+    assert r.status_code == 200
+    assert hilos and estado == "procesando" and mensaje is None
+
+
 def test_error_interno_no_autoriza_a_un_origen_ajeno(cliente):
     def falla():
         raise RuntimeError("falla")

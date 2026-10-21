@@ -20,13 +20,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.documento import Documento
 from app.models.usuario import Usuario
-from app.schemas.documento import DocumentoResponse, PersonaResponse
+from app.schemas.documento import ERROR_FICHA, DocumentoResponse, PersonaResponse
 from app.routers.auth import get_usuario_actual
 from app.services import auditoria
 from app.services.ocr_service import ocr_service
 from app.config import settings
 from app.utils.archivos import borrar_archivo_subido, nombre_archivo_seguro, numero_ficha_de, verificar_tamano_archivo
-from app.utils.errores import mensaje_error_interno, nueva_referencia
+from app.utils.errores import mensaje_error_interno, mensaje_error_visible, nueva_referencia
 from app.utils.logger import app_logger as logger
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
@@ -992,7 +992,7 @@ def estado_documento(
         "personas_count": personas_count,
         "confianza_ocr": float(documento.confianza_ocr) if documento.confianza_ocr else None,
         "tiempo_procesamiento_ms": documento.tiempo_procesamiento_ms,
-        "mensaje_error": documento.mensaje_error,
+        "mensaje_error": mensaje_error_visible(documento.mensaje_error, ERROR_FICHA),
         "fecha_procesamiento": documento.fecha_procesamiento,
         "metadatos": meta,
     }

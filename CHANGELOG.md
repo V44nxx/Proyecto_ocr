@@ -22,6 +22,30 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.10.0] - 2026-10-21
+
+**Resumen**
+
+- Los datos de cada persona ya no se cruzan entre fichas, las cartas y certificados bancarios ya no se confunden con una cédula y volver a subir una ficha permite reemplazarla o agregarla como otra parte.
+- En el detalle de una persona, el nombre completo se muestra dividido en apellidos y nombres, y «Reintentar» vuelve a ejecutar una comparación con error.
+
+### Agregado
+
+- **Versiones de ficha** (hecho por Emerson): subir otra vez una ficha con el mismo número en el nombre pregunta si reemplazar la versión anterior o agregar el PDF como otra parte. Quien no aparece en la versión nueva no se borra: queda para revisión. Si el OCR de la versión nueva falla, la anterior no cambia.
+- **Cartas y certificados** (hecho por Emerson): las páginas que no son documentos de identidad ni certificados de antecedentes (cartas, solicitudes, certificados bancarios) se reconocen para no confundirlas con una cédula, pero no crean personas ni aportan datos. Los certificados de antecedentes se siguen procesando igual.
+
+### Corregido
+
+- **Datos sin cruces entre fichas** (hecho por Emerson):
+  - sin planilla adjunta, el OCR ya no compara con la última planilla del usuario, que podía ser de otra ficha: solo con la que se subió junto con ese PDF;
+  - la comparación automática solo mira las personas de las fichas subidas con la planilla;
+  - una persona que pasa a otro PDF toma las páginas de ese PDF (antes el visor podía mostrar la cédula de otra persona) y se actualiza con la nueva lectura, sin perder lo corregido a mano;
+  - si la misma cédula se lee para dos titulares distintos, ya no se funden: la nueva lectura queda sin cédula y para revisión, salvo que el Excel la confirme;
+  - las personas sin cédula se reconocen por nombre al volver a subir la ficha, sin duplicados.
+- **«Reintentar» en Comparación** no hacía nada con una comparación en error: ahora la vuelve a ejecutar con la planilla guardada y muestra su avance.
+- **Mensajes de error viejos**: las fichas y comparaciones que fallaron antes de la 2.7.0 guardaron el texto técnico del error (por ejemplo «No module named…») y la pantalla lo mostraba. Ahora se muestra un mensaje genérico; los errores nuevos ya se guardaban así. La respuesta de comparaciones tampoco incluye la ruta interna del archivo en el servidor.
+- **Apellidos y nombres en el detalle de la ficha**: cuando una persona no tiene los apellidos guardados por separado (el OCR dejó todo en «Nombres»), el detalle divide el nombre completo para mostrarlos. Con cuatro palabras o más, las dos últimas son apellidos; con tres, se usa el diccionario de nombres frecuentes para saber si son dos nombres y un apellido. Las partículas (DE, DEL, LA, SAN…) van con la palabra siguiente. Solo cambia lo que se muestra: los datos y el Excel exportado quedan igual.
+
 ## [2.9.0] - 2026-10-21
 
 **Resumen**

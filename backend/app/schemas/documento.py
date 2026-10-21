@@ -5,6 +5,10 @@ from datetime import datetime, date
 from decimal import Decimal
 import uuid
 
+from app.utils.errores import mensaje_error_visible
+
+ERROR_FICHA = "No se pudo procesar la ficha. Vuelve a subirla; si se repite, avisa al administrador."
+
 
 # ──────────────────────────────────────────
 # Documento Schemas
@@ -22,6 +26,11 @@ class DocumentoResponse(BaseModel):
     visible_en_subida: Optional[bool] = True
     total_personas: Optional[int] = 0
     metadatos: Optional[dict] = None
+
+    @field_validator("mensaje_error")
+    @classmethod
+    def sin_detalles_internos(cls, v: Optional[str]) -> Optional[str]:
+        return mensaje_error_visible(v, ERROR_FICHA)
 
     class Config:
         from_attributes = True

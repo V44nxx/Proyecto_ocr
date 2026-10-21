@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -150,10 +151,12 @@ export default function Sidebar() {
             </p>
             {itemsVisibles.map((item) => {
               const isActive = pathname === item.href;
+              // Link (no router.push): Next precarga la pantalla y el clic no espera un viaje al servidor
               return (
-                <button
+                <Link
                   key={item.href}
-                  onClick={() => router.push(item.href)}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={`sidebar-item ${isActive ? "active" : ""}`}
                   title={item.label}
                 >
@@ -172,7 +175,7 @@ export default function Sidebar() {
                       Admin
                     </span>
                   )}
-                </button>
+                </Link>
               );
             })}
 
@@ -195,9 +198,10 @@ export default function Sidebar() {
             {itemsVisibles.map((item) => {
               const isActive = pathname === item.href;
               return (
-                <button
+                <Link
                   key={item.href}
-                  onClick={() => router.push(item.href)}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.95] ${
                     isActive
                       ? "bg-[#0071E3]/12 text-[#0071E3] dark:text-[#409CFF] border border-[#0071E3]/20"
@@ -213,7 +217,7 @@ export default function Sidebar() {
                       title="Módulo exclusivo para Administradores"
                     />
                   )}
-                </button>
+                </Link>
               );
             })}
 

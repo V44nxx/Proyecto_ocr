@@ -22,6 +22,16 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.10.1] - 2026-10-21
+
+**Resumen**
+
+- Cambiar de módulo en el menú es más rápido: con la latencia de producción (unos 210 ms por viaje al servidor en Brasil) pasa de 0,82 s a 0,39 s la primera vez y de 0,59 s a 0,38 s las siguientes.
+
+### Corregido
+
+- El menú lateral navegaba con botones (`router.push`), así que cada clic esperaba un viaje al servidor para traer la pantalla antes de pedir sus datos. Ahora usa enlaces de Next (`<Link>`): las pantallas del menú se precargan en segundo plano y el clic solo espera los datos.
+
 ## [2.10.0] - 2026-10-21
 
 **Resumen**

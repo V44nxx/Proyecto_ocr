@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ClipboardList,
   ExternalLink,
   FileSpreadsheet,
   Link2,
@@ -12,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiSeguimiento, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -126,37 +128,30 @@ export default function SeguimientoPage() {
           collapsed ? "ml-16 sm:ml-20" : "ml-64 sm:ml-72"
         }`}
       >
-        {/* ─── Encabezado Principal ─── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">
-              KONDID · GOOGLE APPS SCRIPT
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Seguimiento de fichas
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Panel conectado a tu Google Drive, guardado en tu cuenta de KondID.
-            </p>
-          </div>
-
-          {config && !editando && (
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-end">
-              <button onClick={() => setRecarga((n) => n + 1)} className={BOTON_SECUNDARIO} title="Recargar panel">
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Recargar</span>
-              </button>
-              <a href={panelSeguro} target="_blank" rel="noopener noreferrer" className={BOTON_SECUNDARIO}>
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Abrir en pestaña nueva</span>
-              </a>
-              <button onClick={abrirFormulario} className={BOTON_PRIMARIO}>
-                <Settings className="w-3.5 h-3.5" />
-                <span>Configurar</span>
-              </button>
-            </div>
-          )}
-        </div>
+        <EncabezadoPagina
+          icono={<ClipboardList />}
+          seccion="Google Apps Script"
+          titulo="Seguimiento de fichas"
+          descripcion="Panel conectado a tu Google Drive, guardado en tu cuenta de KondID."
+          acciones={
+            config && !editando ? (
+              <>
+                <button onClick={() => setRecarga((n) => n + 1)} className={BOTON_SECUNDARIO} title="Recargar panel">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Recargar</span>
+                </button>
+                <a href={panelSeguro} target="_blank" rel="noopener noreferrer" className={BOTON_SECUNDARIO}>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Abrir en pestaña nueva</span>
+                </a>
+                <button onClick={abrirFormulario} className={BOTON_PRIMARIO}>
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Configurar</span>
+                </button>
+              </>
+            ) : undefined
+          }
+        />
 
         {/* ─── Resumen de la conexión ─── */}
         {!cargando && (

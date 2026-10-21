@@ -12,6 +12,7 @@ import {
   ArrowDownAZ, ArrowUpZA, ArrowDown01, ArrowUp10
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import SelectorFicha, { TODAS_LAS_FICHAS } from "@/components/personas/SelectorFicha";
 import VisorDocumento from "@/components/personas/VisorDocumento";
 import { useSidebar } from "@/context/SidebarContext";
@@ -821,42 +822,34 @@ function PersonasContent() {
           collapsed ? "ml-16 sm:ml-20" : "ml-64 sm:ml-72"
         }`}
       >
-        {/* ─── Encabezado Principal ─── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase">
-                KONDID · BASE DE DATOS OCR
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Personas registradas
-            </h1>
-            <div className="mt-4">
-              <SelectorFicha documentos={documentos} valor={filtroDocumento} onCambiar={seleccionarFicha} />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-end">
-            <button
-              onClick={() => setModalVaciarAbierto(true)}
-              disabled={personas.length === 0}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              title="Vaciar todos los registros de la tabla"
-            >
-              Vaciar tabla
-            </button>
-            <button
-              onClick={exportarVistaActual}
-              disabled={exportando || personas.length === 0}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white transition-all shadow-sm shadow-[#0071E3]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
-              title="Exportar registros a archivo Excel (.xlsx)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar a Excel</span>
-            </button>
-          </div>
-        </div>
+        <EncabezadoPagina
+          icono={<Users />}
+          seccion="Base de datos OCR"
+          titulo="Personas registradas"
+          acciones={
+            <>
+              <button
+                onClick={() => setModalVaciarAbierto(true)}
+                disabled={personas.length === 0}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Vaciar todos los registros de la tabla"
+              >
+                Vaciar tabla
+              </button>
+              <button
+                onClick={exportarVistaActual}
+                disabled={exportando || personas.length === 0}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white transition-all shadow-sm shadow-[#0071E3]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+                title="Exportar registros a archivo Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar a Excel</span>
+              </button>
+            </>
+          }
+        >
+          <SelectorFicha documentos={documentos} valor={filtroDocumento} onCambiar={seleccionarFicha} />
+        </EncabezadoPagina>
 
         {/* ─── Barra de Estadísticas Proporcional + Cajas Interactivas ─── */}
         <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-white/80 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)]">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { History, RefreshCw, Search, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -143,23 +144,18 @@ export default function AuditoriaPage() {
       <Sidebar />
 
       <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0`}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 page-enter">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <History className="w-5 h-5 text-primary-400" />
-              <span className="text-primary-400 text-sm font-medium">Control de Acceso</span>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Auditoría</h1>
-            <p className="text-slate-400 mt-1 text-sm">
-              Quién hizo qué y cuándo: inicios de sesión, cambios de contraseña, exportaciones y eliminaciones.
-            </p>
-          </div>
-
-          <button onClick={cargar} disabled={cargando} className="btn-secondary text-sm py-2.5 px-4" title="Recargar">
-            <RefreshCw className={`w-4 h-4 ${cargando ? "animate-spin text-primary-400" : ""}`} />
-            <span>Actualizar</span>
-          </button>
-        </div>
+        <EncabezadoPagina
+          icono={<History />}
+          seccion="Control de acceso"
+          titulo="Auditoría"
+          descripcion="Quién hizo qué y cuándo: inicios de sesión, cambios de contraseña, exportaciones y eliminaciones."
+          acciones={
+            <button onClick={cargar} disabled={cargando} className="btn-secondary text-sm py-2.5 px-4" title="Recargar">
+              <RefreshCw className={`w-4 h-4 ${cargando ? "animate-spin text-primary-400" : ""}`} />
+              <span>Actualizar</span>
+            </button>
+          }
+        />
 
         <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />

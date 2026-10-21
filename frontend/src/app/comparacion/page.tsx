@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiComparacion, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -316,16 +317,12 @@ export default function ComparacionPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0`}>
-        <div className="mb-8 page-enter">
-          <div className="flex items-center gap-2 mb-1">
-            <GitCompare className="w-5 h-5 text-primary-400" />
-            <span className="text-primary-400 text-sm font-medium">Análisis y Auditoría</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white">Comparación de Datos</h1>
-          <p className="text-slate-400 mt-1">
-            Coteja los registros extraídos por OCR con planillas oficiales (SENA/SGC), audita discrepancias y descarga el reporte consolidado.
-          </p>
-        </div>
+        <EncabezadoPagina
+          icono={<GitCompare />}
+          seccion="Análisis y auditoría"
+          titulo="Comparación de Datos"
+          descripcion="Coteja los registros extraídos por OCR con planillas oficiales (SENA/SGC), audita discrepancias y descarga el reporte consolidado."
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Panel izquierdo */}

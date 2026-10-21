@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
 import ModalCambiarPassword from "@/components/ui/ModalCambiarPassword";
@@ -114,38 +115,32 @@ export default function UsuariosPage() {
 
       <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 min-w-0`}>
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 page-enter">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <ShieldCheck className="w-5 h-5 text-primary-400" />
-              <span className="text-primary-400 text-sm font-medium">Control de Acceso</span>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Gestión de Usuarios</h1>
-            <p className="text-slate-400 mt-1 text-sm">
-              Crea credenciales con correo y contraseña para habilitar el acceso al login general.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={cargarUsuarios}
-              disabled={cargando}
-              className="btn-secondary text-sm py-2.5 px-4"
-              title="Recargar usuarios"
-            >
-              <RefreshCw className={`w-4 h-4 ${cargando ? "animate-spin text-primary-400" : ""}`} />
-              <span>Actualizar</span>
-            </button>
-
-            <button
-              onClick={() => setModalAbierto(true)}
-              className="btn-primary text-sm py-2.5 px-5 shadow-lg shadow-primary-950/40"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>+ Nuevo Usuario</span>
-            </button>
-          </div>
-        </div>
+        <EncabezadoPagina
+          icono={<ShieldCheck />}
+          seccion="Control de acceso"
+          titulo="Gestión de Usuarios"
+          descripcion="Crea credenciales con correo y contraseña para habilitar el acceso al login general."
+          acciones={
+            <>
+              <button
+                onClick={cargarUsuarios}
+                disabled={cargando}
+                className="btn-secondary text-sm py-2.5 px-4"
+                title="Recargar usuarios"
+              >
+                <RefreshCw className={`w-4 h-4 ${cargando ? "animate-spin text-primary-400" : ""}`} />
+                <span>Actualizar</span>
+              </button>
+              <button
+                onClick={() => setModalAbierto(true)}
+                className="btn-primary text-sm py-2.5 px-5 shadow-lg shadow-primary-950/40"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Nuevo Usuario</span>
+              </button>
+            </>
+          }
+        />
 
         {/* Tarjetas de Resumen */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">

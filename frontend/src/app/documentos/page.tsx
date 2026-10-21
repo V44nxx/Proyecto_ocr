@@ -13,6 +13,7 @@ import {
   BarChart2, PlusCircle, XCircle
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -688,17 +689,12 @@ export default function DocumentosPage() {
     <div className="flex min-h-screen bg-dark-950 text-slate-100">
       <Sidebar />
       <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 max-w-7xl min-w-0`}>
-        {/* Encabezado */}
-        <div className="mb-8 page-enter">
-          <div className="flex items-center gap-2 mb-1">
-            <FileText className="w-5 h-5 text-primary-400" />
-            <span className="text-primary-400 text-sm font-medium">Procesamiento de Documentos</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Documentos PDF</h1>
-          <p className="text-slate-400 mt-1">
-            Sube la planilla Excel oficial y el PDF para extraer datos de identidad con OCR
-          </p>
-        </div>
+        <EncabezadoPagina
+          icono={<FileText />}
+          seccion="Procesamiento de documentos"
+          titulo="Documentos PDF"
+          descripcion="Sube la planilla Excel oficial y el PDF para extraer datos de identidad con OCR."
+        />
 
         {/* ─────────────────────────────────────────────────────────────
             MODAL / TARJETA DE PROGRESO DE SUBIDA Y EXTRACCIÓN OCR EN VIVO

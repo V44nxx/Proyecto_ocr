@@ -399,6 +399,62 @@ body.light select option,
   animation: slideUp 0.4s ease-out forwards;
 }
 
+/* ────────────────────────────────────────────
+   Encabezado de pantalla (components/ui/EncabezadoPagina.tsx)
+   Concepto: el borde de un documento de identidad. Filete del azul del logo y un guilloche
+   (líneas de seguridad de la cédula) que se dibuja una sola vez; nada se repite ni parpadea.
+──────────────────────────────────────────── */
+.encabezado-filete {
+  background: #0336ff;
+}
+html.dark .encabezado-filete {
+  background: #5b7cff;
+}
+.encabezado-guilloche {
+  -webkit-mask-image: linear-gradient(to left, #000 30%, transparent 95%);
+  mask-image: linear-gradient(to left, #000 30%, transparent 95%);
+}
+.encabezado-linea {
+  fill: none;
+  stroke: rgba(3, 51, 255, 0.14);
+  stroke-width: 0.9;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: encabezado-trazo 1.4s cubic-bezier(0.25, 0.6, 0.3, 1) forwards;
+}
+html.dark .encabezado-linea {
+  stroke: rgba(138, 162, 255, 0.16);
+}
+/* "backwards" y no "both": al terminar no queda un transform aplicado, que encerraría la lista desplegable
+   del selector de fichas en su propio contexto de apilamiento y la dejaría detrás del contenido siguiente */
+.encabezado-entra {
+  animation: encabezado-entrar 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+@keyframes encabezado-trazo {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes encabezado-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .encabezado-linea {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .encabezado-entra {
+    animation: none;
+  }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -590,7 +646,7 @@ html.light h4,
 html.light [class*="text-slate-100"] {
   color: #0F172A !important;
 }
-html.light .text-white:not(.btn-primary):not(.btn-danger):not(.btn-success):not([class*="bg-primary"]):not([class*="bg-blue-600"]):not([class*="bg-rose-600"]):not([class*="bg-red-600"]):not([class*="bg-emerald-600"]):not([class*="bg-green-600"]):not([class*="text-white font-bold px-3"]):not([class*="text-white font-semibold"]) {
+html.light .text-white:not(.btn-primary):not(.btn-danger):not(.btn-success):not([class*="bg-primary"]):not([class*="bg-blue-600"]):not([class*="bg-rose-600"]):not([class*="bg-red-600"]):not([class*="bg-emerald-600"]):not([class*="bg-green-600"]):not([class*="text-white font-bold px-3"]):not([class*="text-white font-semibold"]):not([class~="bg-[#0071E3]"]) {
   color: #0F172A !important;
 }
 html.light [class*="text-slate-200"],

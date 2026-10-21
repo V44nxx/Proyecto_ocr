@@ -6,10 +6,11 @@ import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
   RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
-  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2, Zap
+  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2, Zap, LayoutDashboard
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -175,39 +176,31 @@ export default function DashboardPage() {
       <Sidebar />
 
       <main className={`${collapsed ? "ml-20 max-w-[calc(100vw-5rem)]" : "ml-64 max-w-[calc(100vw-16rem)]"} transition-all duration-300 ease-out flex-1 p-6 lg:p-10 min-w-0 overflow-x-hidden`}>
-        {/* Header al estilo Apple (limpio, tipografía con optical sizing, sin estridencias) */}
-        <div className="mb-8 page-enter flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-200/60 dark:bg-white/[0.06] border border-slate-300/50 dark:border-white/[0.08] backdrop-blur-md mb-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 tracking-tight">KondID Engine • Activo</span>
-            </div>
-            <h1 className="text-3xl lg:text-4xl font-semibold text-slate-900 dark:text-white tracking-[-0.03em] leading-tight">
-              KondID
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-normal max-w-xl">
-              Plataforma de extracción, auditoría y conciliación de documentos de identidad colombianos.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              onClick={cargarDatos}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm backdrop-blur-md"
-              title="Recargar datos"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>Actualizar</span>
-            </button>
-            <button
-              onClick={() => router.push("/documentos")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm shadow-[#0071E3]/20"
-            >
-              <span>Subir Lote</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <EncabezadoPagina
+          icono={<LayoutDashboard />}
+          seccion="Panel principal"
+          titulo="KondID"
+          descripcion="Plataforma de extracción, auditoría y conciliación de documentos de identidad colombianos."
+          acciones={
+            <>
+              <button
+                onClick={cargarDatos}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm backdrop-blur-md"
+                title="Recargar datos"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Actualizar</span>
+              </button>
+              <button
+                onClick={() => router.push("/documentos")}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm shadow-[#0071E3]/20"
+              >
+                <span>Subir Lote</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          }
+        />
 
         {/* Stats Grid - Métrica limpia inspirada en Apple (sin neones ni colores fosforescentes) */}
         {cargando ? (

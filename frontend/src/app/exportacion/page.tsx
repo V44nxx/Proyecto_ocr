@@ -9,6 +9,7 @@ import {
   Search, X
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
+import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -204,19 +205,12 @@ export default function ExportacionPage() {
     <div className="flex min-h-screen bg-[#F5F5F7] dark:bg-[#0A0D14] text-slate-900 dark:text-slate-100 font-sans w-full max-w-full overflow-x-hidden transition-colors duration-200">
       <Sidebar />
       <main className={`${collapsed ? "ml-20" : "ml-64"} transition-all duration-300 ease-in-out flex-1 p-8 overflow-x-hidden min-w-0`}>
-        {/* Header */}
-        <div className="mb-8 page-enter">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-              <Download className="w-4 h-4" />
-            </span>
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider">Exportación</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Exportación a Excel</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
-            Filtra por documento PDF, selecciona personas específicas y genera reportes .xlsx profesionales
-          </p>
-        </div>
+        <EncabezadoPagina
+          icono={<Download />}
+          seccion="Exportación"
+          titulo="Exportación a Excel"
+          descripcion="Filtra por documento PDF, selecciona personas específicas y genera reportes .xlsx profesionales."
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 page-enter">

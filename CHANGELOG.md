@@ -22,6 +22,24 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.11.0] - 2026-10-21
+
+**Resumen**
+
+- El título de cada pantalla va en un banner sobrio con una animación corta al entrar.
+
+### Cambiado
+
+- **Encabezado de las pantallas** (`components/ui/EncabezadoPagina.tsx`), el mismo en Dashboard, Documentos, Personas, Exportación, Comparación, Seguimiento, Usuarios y Auditoría:
+  - un banner con un filete del azul del logo;
+  - de fondo, un guilloche tenue (las líneas de seguridad de los documentos de identidad) que se dibuja una sola vez al abrir la pantalla;
+  - el texto entra con un desplazamiento corto y cada sección lleva el ícono de su módulo en el menú;
+  - con «reducir movimiento» activado en el sistema no se anima nada.
+
+### Corregido
+
+- En modo claro, los botones azules (por ejemplo «Subir Lote») mostraban el texto oscuro sobre el azul.
+
 ## [2.10.1] - 2026-10-21
 
 **Resumen**

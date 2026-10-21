@@ -13,6 +13,8 @@ import type {
   DashboardStats,
   SeguimientoConfig,
   RegistrosAuditoria,
+  FichaExistenteInfo,
+  AccionFicha,
 } from "@/types";
 
 /**
@@ -182,6 +184,7 @@ export const apiDocumentos = {
     onUploadProgress?: (progressEvent: AxiosProgressEvent) => void,
     excelFile?: File | null,
     signal?: AbortSignal,
+    acciones?: AccionFicha[],
   ) => {
     const formData = new FormData();
     files.forEach((file) => {
@@ -190,11 +193,17 @@ export const apiDocumentos = {
     if (excelFile) {
       formData.append("excel", excelFile, excelFile.name);
     }
+    if (acciones && acciones.length > 0) {
+      formData.append("acciones", JSON.stringify(acciones));
+    }
     return apiClient.post("/api/documentos/upload", formData, {
       onUploadProgress,
       signal,
     });
   },
+
+  fichasExistentes: (nombres: string[]) =>
+    apiClient.post<FichaExistenteInfo[]>("/api/documentos/fichas-existentes", { nombres }),
 
   cancelar: (datos: {
     documento_ids?: string[];

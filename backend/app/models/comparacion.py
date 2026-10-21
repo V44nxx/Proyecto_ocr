@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, LargeBinary
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, deferred
 from app.database import Base
 
@@ -17,6 +17,9 @@ class Comparacion(Base):
     ruta_archivo = Column(String(1000), nullable=True)
     # Respaldo persistente de la planilla Excel en BD para evitar pérdida de datos tras reinicio/commit
     archivo_binario = deferred(Column(LargeBinary, nullable=True))
+    # Fichas (documentos PDF) subidas junto con esta planilla: la comparación solo mira sus personas.
+    # Vacío en las planillas subidas sueltas desde Comparación (se cotejan contra todas las fichas del usuario)
+    documento_ids = Column(JSONB, nullable=True)
 
     # Estadísticas
     total_registros_bd = Column(Integer, default=0)

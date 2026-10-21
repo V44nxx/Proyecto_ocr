@@ -11,6 +11,20 @@ export interface Usuario {
   fecha_creacion: string;
 }
 
+/** Ficha ya subida con el mismo número que un archivo que se va a subir */
+export interface FichaExistenteInfo {
+  nombre: string;
+  numero_ficha: string | null;
+  existente: { id: string; nombre_original: string; fecha_carga: string | null; total_personas: number } | null;
+}
+
+/** Qué hacer con un PDF de una ficha que ya existe */
+export interface AccionFicha {
+  archivo: string;
+  accion: "reemplazar" | "agregar";
+  documento_id: string;
+}
+
 export interface SeguimientoConfig {
   url_panel: string;
   correo_google: string | null;

@@ -17,7 +17,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
-import type { Documento, DocumentoEstadoResponse } from "@/types";
+import type { AccionFicha, Documento, DocumentoEstadoResponse, FichaExistenteInfo } from "@/types";
 
 const ESTADO_CONFIG: Record<string, { label: string; clase: string; icon: React.ReactNode }> = {
   pendiente: { label: "Pendiente", clase: "badge-neutral", icon: <Clock className="w-3 h-3" /> },
@@ -41,6 +41,13 @@ interface DocTracking {
   mensaje_error?: string | null;
 }
 
+interface ConflictoFicha {
+  archivo: string;
+  numero: string;
+  existente: NonNullable<FichaExistenteInfo["existente"]>;
+  accion: AccionFicha["accion"];
+}
+
 export default function DocumentosPage() {
   const router = useRouter();
   const { collapsed } = useSidebar();
@@ -51,6 +58,9 @@ export default function DocumentosPage() {
   const [comparacionId, setComparacionId] = useState<string | null>(null);
   const [comparacionEnProgreso, setComparacionEnProgreso] = useState(false);
   const [cargando, setCargando] = useState(true);
+  // Archivos de fichas que ya existen (mismo número): el usuario elige reemplazar o agregar como otra parte
+  const [conflictosFicha, setConflictosFicha] = useState<ConflictoFicha[] | null>(null);
+  const [verificandoFichas, setVerificandoFichas] = useState(false);
 
   // ─── Constante para persistencia de progreso en localStorage ───────────────
   const LS_DOCS_EN_PROCESO = "ocr_docs_en_proceso";
@@ -352,6 +362,37 @@ export default function DocumentosPage() {
       toast.error("Selecciona al menos un PDF");
       return;
     }
+    setVerificandoFichas(true);
+    try {
+      const { data } = await apiDocumentos.fichasExistentes(archivosSeleccionados.map((f) => f.name));
+      const conflictos: ConflictoFicha[] = data
+        .filter((d) => d.existente && d.numero_ficha)
+        .map((d) => ({ archivo: d.nombre, numero: d.numero_ficha as string, existente: d.existente!, accion: "reemplazar" }));
+      if (conflictos.length > 0) {
+        setConflictosFicha(conflictos);
+        return;
+      }
+    } catch (err) {
+      // Si no se puede consultar, se sube como siempre: las personas igual se reconocen por cédula
+      console.warn("No se pudo revisar si las fichas ya existen:", err);
+    } finally {
+      setVerificandoFichas(false);
+    }
+    await ejecutarSubida();
+  };
+
+  const confirmarConflictosFicha = () => {
+    if (!conflictosFicha) return;
+    const acciones: AccionFicha[] = conflictosFicha.map((c) => ({
+      archivo: c.archivo,
+      accion: c.accion,
+      documento_id: c.existente.id,
+    }));
+    setConflictosFicha(null);
+    ejecutarSubida(acciones);
+  };
+
+  const ejecutarSubida = async (acciones?: AccionFicha[]) => {
 
     uploadAbortControllerRef.current = new AbortController();
     setSubiendo(true);
@@ -414,7 +455,8 @@ export default function DocumentosPage() {
           }
         },
         excelSeleccionado,
-        uploadAbortControllerRef.current.signal
+        uploadAbortControllerRef.current.signal,
+        acciones
       );
 
       setProgresoSubida(100);
@@ -423,7 +465,8 @@ export default function DocumentosPage() {
 
       // Registrar el ID del nuevo archivo enviado para que la tabla de Personas lo muestre automáticamente
       if (docsResp.length > 0 && typeof window !== "undefined") {
-        localStorage.setItem("ultimo_documento_id", docsResp[0].id);
+        // Si el PDF es otra parte de una ficha existente, las personas se ven en esa ficha
+        localStorage.setItem("ultimo_documento_id", docsResp[0].ficha_id || docsResp[0].id);
         localStorage.setItem("nuevo_archivo_enviado", "true");
       }
 
@@ -1283,7 +1326,7 @@ export default function DocumentosPage() {
 
                 <button
                   onClick={subirArchivos}
-                  disabled={subiendo || archivosSeleccionados.length === 0}
+                  disabled={subiendo || verificandoFichas || archivosSeleccionados.length === 0}
                   className={`w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg transition-all transform cursor-pointer ${
                     !subiendo && archivosSeleccionados.length > 0
                       ? "btn-primary hover:shadow-primary-500/40 hover:-translate-y-0.5 shadow-primary-500/25"
@@ -1444,6 +1487,82 @@ export default function DocumentosPage() {
             </div>
           )}
         </div>
+
+        {/* ─── Modal: la ficha ya fue subida ─── */}
+        {conflictosFicha && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setConflictosFicha(null)}
+          >
+            <div
+              className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 flex items-center justify-center text-amber-500 dark:text-amber-400 mx-auto mb-4">
+                <Layers className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">
+                {conflictosFicha.length === 1 ? "Esta ficha ya fue subida" : "Estas fichas ya fueron subidas"}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2 leading-relaxed">
+                Elige qué hacer con cada archivo. En ningún caso se duplican personas.
+              </p>
+
+              <div className="mt-5 space-y-4">
+                {conflictosFicha.map((c, i) => (
+                  <div key={c.archivo} className="rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.03] p-4">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate" title={c.archivo}>{c.archivo}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Ficha {c.numero} · ya subida como «{c.existente.nombre_original}»
+                      {c.existente.fecha_carga ? ` el ${new Date(c.existente.fecha_carga).toLocaleDateString("es-CO")}` : ""}
+                      {` · ${c.existente.total_personas} ${c.existente.total_personas === 1 ? "persona" : "personas"}`}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                      {([
+                        { valor: "reemplazar", titulo: "Reemplazar (recomendado)", texto: "Es una versión corregida. Quien no aparezca en el PDF nuevo no se borra: queda para revisión." },
+                        { valor: "agregar", titulo: "Agregar como otra parte", texto: "El PDF trae personas que faltaban. Se suman a la misma ficha." },
+                      ] as const).map((op) => (
+                        <button
+                          key={op.valor}
+                          type="button"
+                          onClick={() => setConflictosFicha((prev) => prev && prev.map((x, j) => (j === i ? { ...x, accion: op.valor } : x)))}
+                          className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                            c.accion === op.valor
+                              ? "border-[#0071E3] bg-blue-50/80 dark:bg-[#0071E3]/15 ring-1 ring-[#0071E3]/40"
+                              : "border-slate-200 dark:border-white/[0.08] hover:bg-slate-100/70 dark:hover:bg-white/[0.05]"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
+                            {c.accion === op.valor && <Check className="w-3.5 h-3.5 text-[#0071E3]" />}
+                            {op.titulo}
+                          </span>
+                          <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{op.texto}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setConflictosFicha(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarConflictosFicha}
+                  className="px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-bold shadow-lg shadow-[#0071E3]/30 flex items-center gap-2 cursor-pointer"
+                >
+                  Continuar con la subida
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

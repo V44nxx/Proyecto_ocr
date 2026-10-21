@@ -248,9 +248,8 @@ def corregir_campo_desde_comparacion(
         raise HTTPException(status_code=404, detail="Comparación no encontrada")
 
     num_id = datos.numero_identificacion.strip()
-    persona = db.query(Persona).filter(
-        Persona.numero_identificacion == num_id,
-        Persona.usuario_id == usuario.id
+    persona = comparacion_service.filtrar_por_comparacion(
+        db.query(Persona).filter(Persona.numero_identificacion == num_id), comparacion
     ).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona con identificación {num_id} no encontrada en la BD")
@@ -356,9 +355,8 @@ def agregar_persona_bd_desde_comparacion(
     if not num_id:
         raise HTTPException(status_code=400, detail="El número de identificación es obligatorio")
 
-    persona = db.query(Persona).filter(
-        Persona.numero_identificacion == num_id,
-        Persona.usuario_id == usuario.id
+    persona = comparacion_service.filtrar_por_comparacion(
+        db.query(Persona).filter(Persona.numero_identificacion == num_id), comparacion
     ).first()
 
     # Extraer datos si están en el Excel de la comparación
@@ -396,6 +394,8 @@ def agregar_persona_bd_desde_comparacion(
             motor_ocr="manual",
             detalles_campos={
                 "usuario_id": str(usuario.id),
+                # Sin ficha propia: así la comparación que la creó la sigue encontrando
+                "comparacion_id": str(comparacion.id),
                 "motivos_revision": [
                     "Registro creado desde Excel (pendiente de cargar documento PDF de la cédula)"
                 ]

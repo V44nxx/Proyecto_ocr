@@ -479,16 +479,20 @@ class ExportacionService:
         12 Columnas: Número Documento | Grupo Documento | Página Frente | Página Reverso | Campo | Valor OCR | Valor Excel | Diferencia | Confianza OCR | Estado | Motor OCR | Motivo
         Los datos de cada persona salen solo de la cuenta `usuario_id` (la misma cédula puede estar en otra cuenta).
         """
+        from app.models.comparacion import Comparacion
         from app.models.diferencia import Diferencia
         from app.models.persona import Persona
+        from app.services.comparacion_service import comparacion_service
 
+        comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
         difs = db.query(Diferencia).filter(Diferencia.comparacion_id == comparacion_id).all()
         datos = []
         for d in difs:
             consulta_persona = db.query(Persona).filter(Persona.numero_identificacion == d.numero_identificacion)
             if usuario_id is not None:
                 consulta_persona = consulta_persona.filter(Persona.usuario_id == usuario_id)
-            p = consulta_persona.first()
+            # La misma cédula puede estar en otra ficha: usar la de las fichas de esta planilla
+            p = comparacion_service.filtrar_por_comparacion(consulta_persona, comparacion).first()
             grupo_id = p.grupo_documento_id if p and p.grupo_documento_id else "DOC-001"
             pag_f = p.pagina_frente if p and p.pagina_frente else (p.pagina_numero if p else 1)
             pag_r = p.pagina_reverso if p and p.pagina_reverso else "-"

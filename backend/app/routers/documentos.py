@@ -12,7 +12,7 @@ from datetime import datetime
 import threading
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks, Query, status
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ from app.routers.auth import get_usuario_actual
 from app.services import auditoria
 from app.services.ocr_service import ocr_service
 from app.config import settings
-from app.utils.archivos import borrar_archivo_subido, nombre_archivo_seguro, verificar_tamano_archivo
+from app.utils.archivos import borrar_archivo_subido, nombre_archivo_seguro, numero_ficha_de, verificar_tamano_archivo
 from app.utils.errores import mensaje_error_interno, nueva_referencia
 from app.utils.logger import app_logger as logger
 
@@ -40,6 +40,100 @@ def _validar_pdf(file: UploadFile):
             status_code=400,
             detail=f"Solo se aceptan archivos PDF (extensión .pdf). Archivo recibido: '{fname}'"
         )
+
+
+# ──────────────────────────────────────────
+# VERSIONES Y PARTES DE UNA FICHA
+# Al subir un PDF de una ficha que ya existe (mismo número en el nombre), el usuario elige:
+# - reemplazar: el PDF nuevo pasa a ser la ficha; la versión anterior se retira de la lista.
+# - agregar: el PDF es otra parte de la misma ficha; sus personas quedan en la ficha existente.
+# ──────────────────────────────────────────
+ACCIONES_FICHA = ("reemplazar", "agregar")
+
+
+def _es_ficha_principal(doc: Documento) -> bool:
+    """Ficha que se ve en la lista: no es un PDF individual, ni una parte, ni una versión reemplazada"""
+    meta = doc.metadatos if isinstance(doc.metadatos, dict) else {}
+    return not (
+        meta.get("es_pdf_individual") or meta.get("parte_de_ficha_id") or meta.get("reemplazado_por_id")
+        or (doc.nombre_archivo or "").lower().startswith("cedula_")
+    )
+
+
+def _ficha_existente(db: Session, usuario_id, numero: Optional[str]) -> Optional[Documento]:
+    """Ficha más reciente del usuario con ese número en el nombre del archivo"""
+    if not numero:
+        return None
+    candidatos = (
+        db.query(Documento)
+        .filter(
+            Documento.usuario_id == usuario_id,
+            Documento.estado != "cancelado",
+            or_(Documento.visible_en_subida == True, Documento.visible_en_subida.is_(None)),
+            Documento.nombre_original.contains(numero),
+        )
+        .order_by(Documento.fecha_carga.desc())
+        .all()
+    )
+    return next((d for d in candidatos if _es_ficha_principal(d) and numero_ficha_de(d.nombre_original) == numero), None)
+
+
+def _aplicar_accion_ficha(db: Session, item: dict) -> None:
+    """
+    Tras el OCR del PDF nuevo, deja una sola ficha en la lista:
+    - agregar: sus personas pasan a la ficha existente y el PDF queda como su documento (documento_pdf_id).
+    - reemplazar: la versión anterior se retira; quien no aparece en el PDF nuevo no se borra,
+      pasa a la ficha nueva para revisión, mostrando todavía su página del PDF anterior.
+    """
+    from app.models.persona import Persona
+
+    accion, anterior_id, nuevo_id = item.get("accion"), item.get("documento_anterior_id"), item["documento_id"]
+    if accion not in ACCIONES_FICHA or not anterior_id:
+        return
+    nuevo = db.query(Documento).filter(Documento.id == nuevo_id).first()
+    anterior = db.query(Documento).filter(Documento.id == anterior_id).first()
+    if not nuevo or not anterior or nuevo.estado != "completado":
+        # Si el OCR falló, la ficha anterior se queda como estaba
+        return
+
+    if accion == "agregar":
+        for p in db.query(Persona).filter(Persona.documento_id == nuevo.id).all():
+            p.documento_id = anterior.id
+            p.documento_pdf_id = nuevo.id
+            det = dict(p.detalles_campos or {})
+            det.update({"en_pdf": True, "documento_pdf_id": str(nuevo.id), "documento_padre_id": str(anterior.id)})
+            p.detalles_campos = det
+        logger.info(f"[Ficha] '{nuevo.nombre_original}' agregado como parte de '{anterior.nombre_original}'")
+    else:
+        motivo = (
+            f"No se encontró en la nueva versión del PDF ({nuevo.nombre_original}). Verifique si debe seguir "
+            f"en la ficha; se muestra su página de la versión anterior."
+        )
+        sin_encontrar = db.query(Persona).filter(Persona.documento_id == anterior.id).all()
+        for p in sin_encontrar:
+            p.documento_id = nuevo.id
+            if not p.documento_pdf_id:
+                p.documento_pdf_id = anterior.id
+            det = dict(p.detalles_campos or {})
+            det["no_en_nueva_version"] = True
+            det["motivos_revision"] = [motivo] + [m for m in (det.get("motivos_revision") or []) if m != motivo]
+            p.detalles_campos = det
+            p.requiere_revision = True
+            if p.estado_registro != "FALLBACK_TESSERACT":
+                p.estado_registro = "REVIEW_REQUIRED"
+        # Las partes de la versión anterior pasan a ser partes de la nueva
+        for parte in db.query(Documento).filter(Documento.usuario_id == anterior.usuario_id).all():
+            meta_p = parte.metadatos if isinstance(parte.metadatos, dict) else {}
+            if meta_p.get("parte_de_ficha_id") == str(anterior.id):
+                parte.metadatos = dict(meta_p, parte_de_ficha_id=str(nuevo.id), documento_padre_id=str(nuevo.id))
+        anterior.visible_en_subida = False
+        anterior.metadatos = dict(anterior.metadatos or {}, reemplazado_por_id=str(nuevo.id))
+        nuevo.metadatos = dict(nuevo.metadatos or {}, reemplaza_a_id=str(anterior.id))
+        logger.info(
+            f"[Ficha] '{nuevo.nombre_original}' reemplaza a '{anterior.nombre_original}': "
+            f"{len(sin_encontrar)} persona(s) no encontradas en la versión nueva quedan para revisión"
+        )
+    db.commit()
 
 
 def _registrar_personas_excel_faltantes(
@@ -344,6 +438,7 @@ def _procesar_batch_ocr_y_comparacion(
                     excel_lookup=excel_lookup,
                 )
                 logger.info(f"[OCR Batch Background] OCR completado para Doc ID: {doc_id}")
+                _aplicar_accion_ficha(db, item)
             except Exception as e_ocr:
                 logger.error(f"[OCR Batch Background] Error procesando OCR Doc ID {doc_id}: {e_ocr}")
 
@@ -531,6 +626,61 @@ def cancelar_subida_o_procesamiento(
         "eliminados": eliminados_count,
         "mensaje": f"Se canceló el proceso y se removieron {eliminados_count} documento(s) correctamente."
     }
+class FichasExistentesRequest(BaseModel):
+    nombres: List[str]
+
+
+@router.post("/fichas-existentes", summary="Fichas ya subidas con el mismo número que los archivos a subir")
+def fichas_existentes(
+    datos: FichasExistentesRequest,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_actual),
+):
+    """Para cada nombre de archivo: su número de ficha y, si ya existe una ficha con ese número, sus datos"""
+    if len(datos.nombres) > 100:
+        raise HTTPException(status_code=400, detail="Se pueden revisar como máximo 100 archivos a la vez")
+    resultado = []
+    for nombre in datos.nombres:
+        numero = numero_ficha_de(nombre)
+        doc = _ficha_existente(db, usuario.id, numero)
+        resultado.append({
+            "nombre": nombre,
+            "numero_ficha": numero,
+            "existente": {
+                "id": str(doc.id),
+                "nombre_original": doc.nombre_original,
+                "fecha_carga": doc.fecha_carga.isoformat() if doc.fecha_carga else None,
+                "total_personas": doc.total_personas,
+            } if doc else None,
+        })
+    return resultado
+
+
+def _leer_acciones_ficha(acciones: Optional[str], db: Session, usuario: Usuario) -> dict:
+    """{nombre de archivo: (acción, ficha existente)} desde el campo `acciones` (JSON) de la subida"""
+    import json
+    if not acciones:
+        return {}
+    try:
+        lista = json.loads(acciones)
+        assert isinstance(lista, list)
+    except Exception:
+        raise HTTPException(status_code=400, detail="El campo 'acciones' no es una lista JSON válida")
+    resultado = {}
+    for a in lista:
+        if not isinstance(a, dict) or a.get("accion") not in ACCIONES_FICHA:
+            raise HTTPException(status_code=400, detail="Acción de ficha no válida (use 'reemplazar' o 'agregar')")
+        try:
+            doc_id = uuid.UUID(str(a.get("documento_id")))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Ficha existente no válida")
+        doc = db.query(Documento).filter(Documento.id == doc_id, Documento.usuario_id == usuario.id).first()
+        if not doc or not _es_ficha_principal(doc):
+            raise HTTPException(status_code=404, detail="La ficha que se quiere reemplazar o completar no existe")
+        resultado[str(a.get("archivo") or "")] = (a["accion"], doc)
+    return resultado
+
+
 @router.post(
     "/upload",
     summary="Subir PDF(s) para procesamiento OCR (planilla Excel opcional)",
@@ -541,6 +691,7 @@ async def upload_pdf(
     files: Optional[List[UploadFile]] = File(default=None, description="Uno o multiples archivos PDF"),
     file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
     excel: Optional[UploadFile] = File(default=None, description="Planilla Excel oficial con nombres (.xlsx/.xls) — Opcional"),
+    acciones: Optional[str] = Form(default=None, description="Fichas que ya existen: lista JSON de {archivo, accion (reemplazar|agregar), documento_id}"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
@@ -561,6 +712,8 @@ async def upload_pdf(
 
     if not archivos_recibidos:
         raise HTTPException(status_code=400, detail="No se enviaron archivos PDF válidos")
+
+    acciones_ficha = _leer_acciones_ficha(acciones, db, usuario)
 
     # ── Validar todos los archivos antes de guardar nada ──────────────────
     contenidos_pdf: List[bytes] = []
@@ -618,6 +771,7 @@ async def upload_pdf(
         ruta_archivo = settings.upload_path / nombre_unico
         ruta_archivo.write_bytes(content)
 
+        accion, ficha_anterior = acciones_ficha.get(pdf_file.filename or "", (None, None))
         documento = Documento(
             usuario_id=usuario.id,
             nombre_archivo=nombre_unico,
@@ -627,6 +781,10 @@ async def upload_pdf(
             tamano_bytes=len(content),
             estado="procesando",
         )
+        if accion == "agregar":
+            # Una parte no se lista como ficha aparte: sus personas quedan en la ficha existente
+            documento.visible_en_subida = False
+            documento.metadatos = {"parte_de_ficha_id": str(ficha_anterior.id), "documento_padre_id": str(ficha_anterior.id)}
         db.add(documento)
         db.commit()
         db.refresh(documento)
@@ -634,6 +792,8 @@ async def upload_pdf(
         items_para_procesar.append({
             "pdf_path": str(ruta_archivo),
             "documento_id": str(documento.id),
+            "accion": accion,
+            "documento_anterior_id": str(ficha_anterior.id) if ficha_anterior else None,
         })
 
         logger.info(
@@ -642,10 +802,18 @@ async def upload_pdf(
 
         resultados.append({
             "id": str(documento.id),
+            # Ficha donde se verán las personas (la existente si el PDF es otra parte de ella)
+            "ficha_id": str(ficha_anterior.id) if accion == "agregar" else str(documento.id),
+            "accion": accion,
             "nombre_original": documento.nombre_original,
             "estado": "procesando",
             "mensaje": "Archivo recibido. Procesando páginas en segundo plano con Google Document AI.",
         })
+
+    # La planilla queda vinculada a las fichas de este lote: la comparación y el cotejo solo usan estas
+    if comparacion_id:
+        comparacion.documento_ids = [it["documento_id"] for it in items_para_procesar]
+        db.commit()
 
     # Encolar procesamiento en batch para todos los PDFs
     background_tasks.add_task(

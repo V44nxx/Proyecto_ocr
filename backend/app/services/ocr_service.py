@@ -169,6 +169,9 @@ class OCRService:
                 id_pre = self.parser._extraer_identificacion(txt_pag, txt_pag.split("\n"))
                 if clasif.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES" and not clasif.get("tiene_titular", True):
                     id_pre = None
+                # Cartas y certificados (bancarios...): solo vale el número del titular, no el de quien firma
+                if clasif.get("tipo_documento") == "DOCUMENTO_SOPORTE":
+                    id_pre = self.parser.extraer_titular_soporte(txt_pag)["identificacion"]
 
                 return {
                     "pagina_numero": p_num,
@@ -183,6 +186,7 @@ class OCRService:
                     "hoja_actual": clasif.get("hoja_actual", 1),
                     "hoja_total": clasif.get("hoja_total", 1),
                     "tiene_titular": clasif.get("tiene_titular", True),
+                    "subtipo": clasif.get("subtipo"),
                 }
 
             # Concurrencia adaptativa para llamadas I/O a Google Document AI
@@ -694,6 +698,31 @@ class OCRService:
     # ──────────────────────────────────────────
     # GUARDAR PERSONA EN BD
     # ──────────────────────────────────────────
+    @staticmethod
+    def _son_titulares_distintos(persona, nombre_nuevo: Optional[str]) -> bool:
+        """
+        True si la persona guardada y la nueva lectura son claramente personas distintas:
+        los dos nombres son completos, no son equivalentes y no comparten ninguna palabra.
+        Ante la duda (nombre incompleto, por revisar o parecido) se considera la misma persona.
+        """
+        import unicodedata
+        from app.services.comparacion_service import comparacion_service
+
+        def _palabras(nombre: Optional[str]) -> set:
+            limpio = unicodedata.normalize("NFD", str(nombre or "").upper())
+            limpio = "".join(c for c in limpio if unicodedata.category(c) != "Mn")
+            return {w for w in re.findall(r"[A-Z]+", limpio) if len(w) >= 3}
+
+        nombre_actual = (persona.nombre_completo or f"{persona.nombres or ''} {persona.apellidos or ''}").strip()
+        if not nombre_nuevo or "POR REVISAR" in nombre_actual.upper() or "POR REVISAR" in str(nombre_nuevo).upper():
+            return False
+        pal_actual, pal_nuevo = _palabras(nombre_actual), _palabras(nombre_nuevo)
+        if len(pal_actual) < 2 or len(pal_nuevo) < 2 or pal_actual & pal_nuevo:
+            return False
+        return not comparacion_service._son_nombres_equivalentes(
+            nombres_bd=nombre_actual, apellidos_bd="", nombres_excel=str(nombre_nuevo), apellidos_excel=""
+        )
+
     def _guardar_persona(
         self,
         datos: Dict[str, Any],
@@ -770,13 +799,17 @@ class OCRService:
             doc_id_val = str(doc_exists.id) if doc_exists else None
             doc_usuario_id = doc_exists.usuario_id if doc_exists else None
 
+            def _persona_con_cedula(cedula: str):
+                """Persona del mismo usuario con esa cédula (la cédula es única por usuario)"""
+                q = db.query(Persona).filter(Persona.numero_identificacion == str(cedula))
+                if doc_usuario_id:
+                    q = q.filter(Persona.usuario_id == doc_usuario_id)
+                return q.first()
+
             # Verificar si ya existe en BD para unificar (solo si tiene identificación válida; nunca unificar por cadena vacía)
             persona_existente = None
             if tiene_identificacion and num_doc:
-                query_existente = db.query(Persona).filter(Persona.numero_identificacion == str(num_doc))
-                if doc_usuario_id:
-                    query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
-                persona_existente = query_existente.first()
+                persona_existente = _persona_con_cedula(num_doc)
 
             # Si es un reverso huérfano sin nombres y no existe en BD, omitir para no crear persona fantasma
             if es_reverso_huerfano and not persona_existente:
@@ -815,12 +848,7 @@ class OCRService:
             else:
                 estado_reg = "VALID"
 
-            persona = None
-            if tiene_identificacion and num_doc:
-                query_persona = db.query(Persona).filter(Persona.numero_identificacion == str(num_doc))
-                if doc_usuario_id:
-                    query_persona = query_persona.filter(Persona.usuario_id == doc_usuario_id)
-                persona = query_persona.first()
+            persona = persona_existente
 
             nombres_final = datos.get("nombres") if not _es_nombre_invalido(datos.get("nombres")) else "POR REVISAR"
             apellidos_final = datos.get("apellidos") if not _es_nombre_invalido(datos.get("apellidos")) else "POR REVISAR"
@@ -845,11 +873,26 @@ class OCRService:
                 try:
                     from app.services.excel_lookup_service import excel_lookup_service
                     from app.models.comparacion import Comparacion
-                    comp_q = db.query(Comparacion).filter(Comparacion.ruta_archivo.isnot(None))
-                    if doc_usuario_id:
-                        comp = comp_q.filter(Comparacion.usuario_id == doc_usuario_id).order_by(Comparacion.fecha_carga.desc()).first()
-                    else:
-                        comp = None
+                    # Solo la planilla subida junto con este documento (o con la ficha de la que salió un PDF
+                    # individual). Antes se usaba la última planilla del usuario aunque fuera de otra ficha,
+                    # y eso ponía nombres y cédulas de otra planilla.
+                    comp = None
+                    meta_doc = (doc_exists.metadatos or {}) if doc_exists else {}
+                    ids_doc = [i for i in (doc_id_val, meta_doc.get("documento_padre_id") if isinstance(meta_doc, dict) else None) if i]
+                    if doc_usuario_id and ids_doc:
+                        for id_doc in ids_doc:
+                            comp = (
+                                db.query(Comparacion)
+                                .filter(
+                                    Comparacion.ruta_archivo.isnot(None),
+                                    Comparacion.usuario_id == doc_usuario_id,
+                                    Comparacion.documento_ids.contains([str(id_doc)]),
+                                )
+                                .order_by(Comparacion.fecha_carga.desc())
+                                .first()
+                            )
+                            if comp:
+                                break
                     if comp:
                         ruta_comp = comp.obtener_ruta_o_restaurar(db)
                         if ruta_comp and ruta_comp.exists():
@@ -891,10 +934,7 @@ class OCRService:
                 id_limpio = id_corregido
                 datos["identificacion"] = id_corregido
 
-                query_existente = db.query(Persona).filter(Persona.numero_identificacion == id_corregido)
-                if doc_usuario_id:
-                    query_existente = query_existente.filter(Persona.usuario_id == doc_usuario_id)
-                persona_oficial = query_existente.first()
+                persona_oficial = _persona_con_cedula(id_corregido)
 
                 if persona:
                     if persona_oficial and persona_oficial.id != persona.id:
@@ -1034,6 +1074,49 @@ class OCRService:
             elif discrepancia_nombre_excel:
                 detalles_payload["motivos_revision"] = [discrepancia_nombre_excel["motivo"]]
 
+            # Misma cédula pero con otro titular (el OCR leyó mal un número): antes se fundían dos personas
+            # en una (una desaparecía y la otra quedaba con datos mezclados). Ahora la nueva lectura se guarda
+            # aparte, sin cédula (la cédula es única por usuario) y para revisión, con el número leído en el motivo.
+            # Si la planilla confirma la nueva lectura (cédula y nombre coinciden en el Excel), el registro
+            # guardado es el equivocado: se corrige al unificar en vez de separar
+            lectura_confirmada_por_excel = (
+                encontrado_en_excel and fuente_nombre == "excel_oficial" and not discrepancia_nombre_excel
+            )
+            if (
+                persona is not None
+                and not lectura_confirmada_por_excel
+                and self._son_titulares_distintos(persona, nombre_completo_final)
+            ):
+                motivo_rep = (
+                    f"Cédula repetida: el OCR leyó el número {num_doc}, que ya pertenece a "
+                    f"'{persona.nombre_completo}'. Escriba la cédula correcta de esta persona."
+                )
+                logger.warning(f"[OCR] {motivo_rep} (nueva lectura: '{nombre_completo_final}')")
+                detalles_payload["numero_identificacion_leido_ocr"] = str(num_doc)
+                detalles_payload["cedula_repetida"] = True
+                detalles_payload["motivos_revision"] = [motivo_rep] + list(detalles_payload.get("motivos_revision") or [])
+                persona = None
+                num_doc = ""
+                requiere_revision = True
+                if estado_reg != "FALLBACK_TESSERACT":
+                    estado_reg = "REVIEW_REQUIRED"
+
+            # Sin cédula no hay con qué reconocer a la persona al volver a subir la ficha: se usa el nombre,
+            # para no crear un duplicado cada vez
+            if (
+                persona is None and not num_doc and doc_usuario_id
+                and nombre_completo_final and nombre_completo_final != "POR REVISAR"
+            ):
+                persona = (
+                    db.query(Persona)
+                    .filter(
+                        Persona.usuario_id == doc_usuario_id,
+                        Persona.numero_identificacion == "",
+                        Persona.nombre_completo == nombre_completo_final,
+                    )
+                    .first()
+                )
+
             if not persona:
                 persona = Persona(
                     documento_id=doc_id_val,
@@ -1064,6 +1147,37 @@ class OCRService:
                 # ── UNIFICACIÓN INTELIGENTE DE HOJAS / PÁGINAS ──
                 # Si la cédula ya existe (ej. repartida en 2 hojas), no duplicar y fusionar datos faltantes
                 logger.info(f"Unificando datos para persona existente ID '{num_doc}'...")
+                # La persona venía de otro PDF (la cédula es única por usuario): sus páginas eran de ese PDF.
+                # Conservarlas hacía que el visor mostrara, en este PDF, la cédula de otra persona.
+                viene_de_otro_pdf = bool(
+                    doc_id_val and persona.documento_id and str(persona.documento_id) != str(doc_id_val)
+                )
+                if viene_de_otro_pdf:
+                    # Ficha subida de nuevo: la lectura nueva reescribe a la persona (sin duplicarla).
+                    # Solo se conservan los campos corregidos a mano (campos_revisados).
+                    revisados = set(persona.campos_revisados or [])
+                    logger.info(
+                        f"Persona {num_doc or persona.nombre_completo} pasa del documento {persona.documento_id} a "
+                        f"{doc_id_val}: se reescribe con la nueva lectura (se conservan los campos corregidos: {sorted(revisados)})"
+                    )
+                    persona.pagina_frente = datos.get("pagina_frente")
+                    persona.pagina_reverso = datos.get("pagina_reverso")
+                    persona.pagina_numero = pagina_num
+                    # Las páginas ahora son de este PDF: el visor no debe abrir otro PDF que tuviera asociado
+                    persona.documento_pdf_id = None
+                    persona.grupo_documento_id = datos.get("grupo_documento_id", persona.grupo_documento_id)
+                    for campo in ("nombre_completo", "nombres", "apellidos", "fecha_nacimiento",
+                                  "fecha_expedicion", "lugar_expedicion", "sexo"):
+                        if campo not in revisados:
+                            setattr(persona, campo, None)
+                    if "tipo_documento" not in revisados:
+                        persona.tipo_documento = "UNKNOWN"
+                    persona.confianza_extraccion = 0
+                    persona.texto_ocr_crudo = None
+                    persona.detalles_campos = {
+                        k: v for k, v in (persona.detalles_campos or {}).items()
+                        if k in revisados or k == "usuario_id"
+                    }
                 if doc_id_val:
                     persona.documento_id = doc_id_val
                 if doc_usuario_id and not persona.usuario_id:
@@ -1184,6 +1298,20 @@ class OCRService:
 
                 persona.detalles_campos = detalles_existentes
                 persona.fecha_actualizacion = datetime.utcnow()
+
+            if datos.get("tipo_documento") in ("CERTIFICADO_BANCARIO", "DOCUMENTO_SOPORTE"):
+                tipo_txt = "un certificado bancario" if datos["tipo_documento"] == "CERTIFICADO_BANCARIO" else "una carta o certificado"
+                motivo_sop = (
+                    f"Documento de soporte: el nombre y el número se tomaron de {tipo_txt}, no de un documento "
+                    f"de identidad. Verifique los datos y solicite la cédula o tarjeta de identidad."
+                )
+                det_sop = dict(persona.detalles_campos or {})
+                motivos_sop = [m for m in (det_sop.get("motivos_revision") or []) if m != motivo_sop]
+                det_sop["motivos_revision"] = [motivo_sop] + motivos_sop
+                persona.detalles_campos = det_sop
+                persona.requiere_revision = True
+                if persona.estado_registro != "FALLBACK_TESSERACT":
+                    persona.estado_registro = "REVIEW_REQUIRED"
 
             db.commit()
             db.refresh(persona)

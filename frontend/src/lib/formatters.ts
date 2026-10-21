@@ -254,6 +254,23 @@ export function getTipoDocInfo(tipo?: string | null): TipoDocInfo {
       pill: "bg-indigo-100 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-200 border border-indigo-400 dark:border-indigo-500/60 font-semibold shadow-sm",
     };
   }
+  // Datos tomados de una carta o certificado (no es documento de identidad): siempre van a revisión
+  if (t === "CERTIFICADO_BANCARIO" || t === "CB") {
+    return {
+      codigo: "CB",
+      label: "Certificado bancario",
+      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-sm",
+      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-sm",
+    };
+  }
+  if (t === "DOCUMENTO_SOPORTE" || t === "DOC") {
+    return {
+      codigo: "DOC",
+      label: "Carta o certificado",
+      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-sm",
+      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-sm",
+    };
+  }
   if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) {
     return {
       codigo: "PPT",
@@ -316,12 +333,16 @@ export const OPCIONES_TIPO_DOCUMENTO: OpcionTipoDoc[] = [
   { valor: "PPT", codigo: "PPT", label: "Permiso Protección Temporal (PPT)" },
   { valor: "PASAPORTE", codigo: "PAS", label: "Pasaporte (PAS)" },
   { valor: "CERTIFICADO_ANTECEDENTES", codigo: "ANT", label: "Certificado de Antecedentes (ANT)" },
+  { valor: "CERTIFICADO_BANCARIO", codigo: "CB", label: "Certificado bancario (CB)" },
+  { valor: "DOCUMENTO_SOPORTE", codigo: "DOC", label: "Carta o certificado (DOC)" },
 ];
 
 export function normalizarTipoDoc(tipo?: string | null): string {
   const t = (tipo || "").toUpperCase().trim();
   if (!t || t === "UNKNOWN") return "CEDULA_CIUDADANIA";
   if (t.includes("ANTECEDENTE") || t === "ANT" || t === "CERTIFICADO_ANTECEDENTES") return "CERTIFICADO_ANTECEDENTES";
+  if (t === "CERTIFICADO_BANCARIO" || t === "CB") return "CERTIFICADO_BANCARIO";
+  if (t === "DOCUMENTO_SOPORTE" || t === "DOC") return "DOCUMENTO_SOPORTE";
   if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) return "PPT";
   if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") return "CONTRASEÑA";
   if (t.includes("TARJETA") || t === "TI") return "TARJETA_IDENTIDAD";

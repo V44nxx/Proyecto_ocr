@@ -328,7 +328,11 @@ function PersonasContent() {
         apiDocumentos.listar({ limit: 100 }),
         apiDocumentos.estadisticas().catch(() => null),
       ]);
-      const docs: Documento[] = Array.isArray(resDocs.data) ? resDocs.data : [];
+      // Una ficha reemplazada por una versión nueva o subida como otra parte no se lista aparte:
+      // sus personas se ven en la ficha principal
+      const docs: Documento[] = (Array.isArray(resDocs.data) ? resDocs.data : []).filter(
+        (d) => !d.metadatos?.reemplazado_por_id && !d.metadatos?.parte_de_ficha_id
+      );
       setDocumentos(docs);
 
       if (resStatsGlobal?.data?.total_personas != null) {

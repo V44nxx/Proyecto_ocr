@@ -45,6 +45,39 @@ class DocumentSideClassifier:
         r"\bREGISTRADOR\b", r"\bHUELLA\b"
     ]
 
+    # Marcas que solo trae una cédula o tarjeta de identidad (una carta o certificado puede mencionar
+    # "cédula de ciudadanía", pero no estas): si aparecen, la página nunca es un documento de soporte
+    PATRON_IDENTIDAD = re.compile(
+        r"IDENTIFICACI[OÓ]N\s*PERSONAL|\bNUIP\b|REGISTRADOR|I\s*<\s*COL|ICCOL|<{4,}|[IÍ]NDICE\s+DERECHO|"
+        r"^\s*APELLIDOS?\b[\s\S]*^\s*NOMBRES?\b|^\s*NOMBRES?\b[\s\S]*^\s*APELLIDOS?\b",
+        re.MULTILINE,
+    )
+    # Cartas, solicitudes y certificados (bancarios, laborales...): traen un nombre y una cédula,
+    # pero el nombre suele ser el destinatario o quien firma, no el titular
+    MARCAS_SOPORTE = [
+        r"\bSE[ÑN]OR(?:A|ES)?\s*:", r"\bASUNTO\s*:", r"\bCORDIAL(?:MENTE)?\s+SALUDO", r"\bATENTAMENTE\b",
+        r"\bAGRADEZCO\b", r"\bCOMEDIDAMENTE\b", r"\bME\s+PERMITO\b", r"\bA\s+QUIEN\s+(?:LE\s+)?INTERESE\b",
+        r"\bCERTIFICA(?:MOS)?\s+QUE\b", r"\bCERTIFICACI[OÓ]N\s+BANCARIA\b", r"\bREFERENCIA\s+BANCARIA\b",
+        r"\bCUENTA\s+(?:DE\s+)?(?:AHORROS?|CORRIENTE)\b", r"\bBANCO\b|\bBANCOLOMBIA\b|\bDAVIVIENDA\b|\bBBVA\b|\bNEQUI\b|\bDAVIPLATA\b",
+        r"\bSE\s+EXPIDE\b", r"\bNIT\b", r"\bANEXO\s*:",
+    ]
+
+    def _detectar_documento_soporte(self, texto_up: str) -> Dict[str, Any]:
+        """Carta, solicitud o certificado (no es un documento de identidad); {} si no lo parece"""
+        if len(texto_up) < 250 or self.PATRON_IDENTIDAD.search(texto_up):
+            return {}
+        marcas = [m for m in self.MARCAS_SOPORTE if re.search(m, texto_up)]
+        if len(marcas) < 2:
+            return {}
+        es_bancario = bool(re.search(r"BANC|CUENTA\s+(?:DE\s+)?(?:AHORROS?|CORRIENTE)|NEQUI|DAVIPLATA", texto_up))
+        return {
+            "cara": "DOCUMENTO_SOPORTE",
+            "tipo_documento": "DOCUMENTO_SOPORTE",
+            "subtipo": "CERTIFICADO_BANCARIO" if es_bancario else "CARTA_O_CERTIFICADO",
+            "confianza": 0.95,
+            "reasons": [f"Documento de soporte (no es de identidad): {len(marcas)} marcas de carta o certificado"],
+        }
+
     def clasificar_cara(self, texto: str, lines: List[Any] = None) -> Dict[str, Any]:
         """
         Clasifica la cara de la página y devuelve confianza + razones.
@@ -138,6 +171,11 @@ class DocumentSideClassifier:
                 "tiene_titular": tiene_titular,
                 "reasons": ["Certificado de Antecedentes (Procuraduría / SIRI)"]
             }
+
+        if not (es_contrasena or es_ppt or es_pasaporte or es_extranjeria):
+            soporte = self._detectar_documento_soporte(texto_up)
+            if soporte:
+                return soporte
 
         es_cedula = bool(
             re.search(

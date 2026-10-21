@@ -451,6 +451,46 @@ class ComparacionService:
             )
         ).all()
 
+    @staticmethod
+    def _ids_documentos(comparacion) -> set:
+        """Fichas vinculadas a la planilla (vacío si se subió suelta desde Comparación)"""
+        return {str(d) for d in (getattr(comparacion, "documento_ids", None) or [])}
+
+    def _personas_de_comparacion(self, db: Session, comparacion) -> list:
+        """
+        Personas contra las que se coteja la planilla: solo las de las fichas subidas con ella.
+        Si se subió suelta desde Comparación, todas las del usuario (comportamiento anterior).
+        """
+        personas = self._personas_del_usuario(db, comparacion.usuario_id if comparacion else None)
+        doc_ids = self._ids_documentos(comparacion)
+        if not doc_ids:
+            return personas
+        comp_id = str(comparacion.id)
+        return [
+            p for p in personas
+            if str(p.documento_id) in doc_ids or str(p.documento_pdf_id) in doc_ids
+            or (isinstance(p.detalles_campos, dict) and str(p.detalles_campos.get("comparacion_id")) == comp_id)
+        ]
+
+    def filtrar_por_comparacion(self, query, comparacion):
+        """Restringe una consulta de Persona al dueño de la comparación y, si las tiene, a sus fichas"""
+        from app.models.persona import Persona
+        from sqlalchemy import or_
+
+        if comparacion is None:
+            return query
+        usuario_id = getattr(comparacion, "usuario_id", None)
+        if usuario_id:
+            query = query.filter(Persona.usuario_id == usuario_id)
+        doc_ids = list(self._ids_documentos(comparacion))
+        if doc_ids:
+            query = query.filter(or_(
+                Persona.documento_id.in_(doc_ids),
+                Persona.documento_pdf_id.in_(doc_ids),
+                Persona.detalles_campos["comparacion_id"].astext == str(comparacion.id),
+            ))
+        return query
+
     def _normalizar_para_comparacion(self, val: Any, campo: str = "") -> str:
         """
         Normaliza un valor para comparación exacta sin falsos positivos por tildes,
@@ -510,9 +550,8 @@ class ComparacionService:
                 comparacion_actual.estado = "procesando"
                 db.commit()
 
-            # 1. Cargar datos de BD filtrados estrictamente por el usuario dueño de la comparación
-            uid = comparacion_actual.usuario_id if comparacion_actual else None
-            personas_bd = self._personas_del_usuario(db, uid)
+            # 1. Cargar datos de BD: personas del dueño de la comparación, solo de las fichas subidas con la planilla
+            personas_bd = self._personas_de_comparacion(db, comparacion_actual)
 
             # Excluir registros que provienen exclusivamente del Excel y no del PDF físico
             personas_bd_pdf = [
@@ -626,9 +665,7 @@ class ComparacionService:
 
                     # Auto-corregir en la base de datos
                     query_p = db.query(Persona).filter(Persona.numero_identificacion == id_bd_rec)
-                    if comparacion_actual and comparacion_actual.usuario_id:
-                        query_p = query_p.filter(Persona.usuario_id == comparacion_actual.usuario_id)
-                    p_bd = query_p.first()
+                    p_bd = self.filtrar_por_comparacion(query_p, comparacion_actual).first()
 
                     nom_ex_ofic = str(row_excel.get('nombre_completo') or f"{row_excel.get('nombres', '')} {row_excel.get('apellidos', '')}").strip()
 
@@ -666,9 +703,7 @@ class ComparacionService:
                         query_duplicado = db.query(Persona).filter(
                             Persona.numero_identificacion == id_ex_rec
                         )
-                        if comparacion_actual and comparacion_actual.usuario_id:
-                            query_duplicado = query_duplicado.filter(Persona.usuario_id == comparacion_actual.usuario_id)
-                        p_duplicado = query_duplicado.first()
+                        p_duplicado = self.filtrar_por_comparacion(query_duplicado, comparacion_actual).first()
 
                         if p_duplicado and p_duplicado.id != p_bd.id:
                             logger.info(f"[Comparacion] Fusionando registro de la planilla '{id_ex_rec}' en el registro del PDF '{id_bd_rec}'")
@@ -882,8 +917,8 @@ class ComparacionService:
         if not comparacion:
             raise ValueError("Comparación no encontrada")
 
-        # 1. Cargar personas de la BD (solo las del dueño de la comparación)
-        personas_bd = self._personas_del_usuario(db, comparacion.usuario_id)
+        # 1. Cargar personas de la BD (solo las del dueño de la comparación y de sus fichas)
+        personas_bd = self._personas_de_comparacion(db, comparacion)
         bd_map: Dict[str, Persona] = {
             str(p.numero_identificacion).strip(): p for p in personas_bd if p.numero_identificacion
         }

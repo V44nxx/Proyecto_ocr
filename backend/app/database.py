@@ -105,6 +105,7 @@ def create_tables():
                 "UPDATE documentos SET visible_en_subida = TRUE WHERE visible_en_subida IS NULL;",
                 "ALTER TABLE documentos ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
                 "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS archivo_binario BYTEA;",
+                "ALTER TABLE comparaciones ADD COLUMN IF NOT EXISTS documento_ids JSONB;",
                 "ALTER TABLE personas ADD COLUMN IF NOT EXISTS documento_pdf_id UUID REFERENCES documentos(id) ON DELETE SET NULL;",
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_cambiada_en TIMESTAMPTZ;",
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 0;",

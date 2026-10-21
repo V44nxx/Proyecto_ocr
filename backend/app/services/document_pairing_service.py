@@ -16,9 +16,6 @@ _PRIORIDAD_TIPO_DOC = {
     "TARJETA_IDENTIDAD": 9,
     "CEDULA_DIGITAL": 6,
     "CEDULA_CIUDADANIA": 5,
-    # Datos tomados de una carta o certificado: cualquier documento de identidad gana
-    "CERTIFICADO_BANCARIO": 1,
-    "DOCUMENTO_SOPORTE": 1,
     "UNKNOWN": 0,
 }
 
@@ -168,53 +165,21 @@ class DocumentPairingService:
         Agrupa páginas clasificadas en DocumentGroups mediante Emparejamiento Global Bipartito.
         Garantiza que un lote con N frentes produzca como máximo N personas físicas en la tabla.
 
-        Las cartas y certificados (bancarios, solicitudes...) no se emparejan con cédulas: antes una carta
-        con un número se tomaba como frente de una cédula y su destinatario como titular.
+        Las cartas y certificados que no son de identidad ni de antecedentes (bancarios, solicitudes...)
+        no se toman: antes una carta con un número se emparejaba como frente de una cédula y su
+        destinatario quedaba como titular.
         """
         if not paginas_clasificadas:
             return []
         paginas = sorted(paginas_clasificadas, key=lambda p: p.get("pagina_numero", 1))
         soporte = [p for p in paginas if p.get("tipo_documento") == "DOCUMENTO_SOPORTE"]
+        if soporte:
+            logger.info(
+                "[DocumentPairingService] No se toman (no son de identidad ni de antecedentes): "
+                + ", ".join(f"pág {p.get('pagina_numero')} ({p.get('subtipo') or 'documento de soporte'})" for p in soporte)
+            )
         identidad = [p for p in paginas if p.get("tipo_documento") != "DOCUMENTO_SOPORTE"]
-
-        grupos = self._agrupar_documentos_identidad(identidad) if identidad else []
-        if not soporte:
-            return grupos
-
-        grupos = self._agregar_documentos_soporte(grupos, soporte)
-        grupos.sort(key=lambda g: g.pages[0] if g.pages else 999)
-        for idx, g in enumerate(grupos):
-            g.group_id = f"DOC-{idx+1:03d}"
-        return grupos
-
-    def _agregar_documentos_soporte(self, grupos: List[DocumentGroup], soporte: List[Dict[str, Any]]) -> List[DocumentGroup]:
-        """
-        Cada carta o certificado se une a la cédula de su titular si está en el PDF (queda como página extra);
-        si no está, forma su propia persona, que se guarda para revisión. Sin número de titular se descarta.
-        """
-        from app.utils.validators import validador
-
-        por_id = {g.numero_identificacion: g for g in grupos if g.numero_identificacion}
-        for p in soporte:
-            id_titular = validador.limpiar_identificacion(p.get("numero_identificacion"))
-            if not id_titular:
-                logger.info(f"[DocumentPairingService] Pág {p.get('pagina_numero')}: carta o certificado sin número de titular, no forma persona")
-                continue
-            existente = por_id.get(id_titular)
-            if existente:
-                existente.other_pages.append(p)
-                existente.reasons.append(f"Pág {p.get('pagina_numero')}: documento de soporte del mismo titular")
-                continue
-            grp = DocumentGroup(f"SOP-{p.get('pagina_numero')}")
-            grp.front_page = p
-            grp.tipo_documento = "DOCUMENTO_SOPORTE"
-            grp.numero_identificacion = id_titular
-            grp.grouping_confidence = 0.50
-            grp.status = "REVIEW_REQUIRED"
-            grp.reasons = [f"Pág {p.get('pagina_numero')}: {p.get('subtipo') or 'documento de soporte'} (no es documento de identidad)"]
-            grupos.append(grp)
-            por_id[id_titular] = grp
-        return grupos
+        return self._agrupar_documentos_identidad(identidad) if identidad else []
 
     def _agrupar_documentos_identidad(self, paginas: List[Dict[str, Any]]) -> List[DocumentGroup]:
         from app.utils.validators import validador

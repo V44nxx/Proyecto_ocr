@@ -169,9 +169,9 @@ class OCRService:
                 id_pre = self.parser._extraer_identificacion(txt_pag, txt_pag.split("\n"))
                 if clasif.get("tipo_documento") == "CERTIFICADO_ANTECEDENTES" and not clasif.get("tiene_titular", True):
                     id_pre = None
-                # Cartas y certificados (bancarios...): solo vale el número del titular, no el de quien firma
+                # Cartas y certificados que no son de identidad ni de antecedentes: no se toma ningún dato
                 if clasif.get("tipo_documento") == "DOCUMENTO_SOPORTE":
-                    id_pre = self.parser.extraer_titular_soporte(txt_pag)["identificacion"]
+                    id_pre = None
 
                 return {
                     "pagina_numero": p_num,
@@ -1298,20 +1298,6 @@ class OCRService:
 
                 persona.detalles_campos = detalles_existentes
                 persona.fecha_actualizacion = datetime.utcnow()
-
-            if datos.get("tipo_documento") in ("CERTIFICADO_BANCARIO", "DOCUMENTO_SOPORTE"):
-                tipo_txt = "un certificado bancario" if datos["tipo_documento"] == "CERTIFICADO_BANCARIO" else "una carta o certificado"
-                motivo_sop = (
-                    f"Documento de soporte: el nombre y el número se tomaron de {tipo_txt}, no de un documento "
-                    f"de identidad. Verifique los datos y solicite la cédula o tarjeta de identidad."
-                )
-                det_sop = dict(persona.detalles_campos or {})
-                motivos_sop = [m for m in (det_sop.get("motivos_revision") or []) if m != motivo_sop]
-                det_sop["motivos_revision"] = [motivo_sop] + motivos_sop
-                persona.detalles_campos = det_sop
-                persona.requiere_revision = True
-                if persona.estado_registro != "FALLBACK_TESSERACT":
-                    persona.estado_registro = "REVIEW_REQUIRED"
 
             db.commit()
             db.refresh(persona)

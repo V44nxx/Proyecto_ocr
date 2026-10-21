@@ -1128,115 +1128,11 @@ class ExtractorService:
 
         return resultado
 
-    # ── Cartas y certificados (bancarios, laborales...) ─────────────────
-    # Traen varios nombres: destinatario ("Señor: ..."), titular y quien firma. Solo sirve el titular:
-    # el nombre que acompaña a "identificado con cédula N" o, en una carta, el que va junto a su "CC N".
-    # El nombre empieza después de la última de estas palabras ("... certifica que el señor JUAN PEREZ identificado")
-    _PALABRAS_ANTES_DEL_NOMBRE = {
-        "QUE", "CERTIFICA", "CERTIFICAMOS", "CONSTAR", "SENOR", "SENORA", "SR", "SRA", "CIUDADANO", "CIUDADANA",
-        "TITULAR", "NOMBRE", "CLIENTE", "ASOCIADO", "ASOCIADA", "APRENDIZ", "ESTUDIANTE", "INFORMA", "INFORMAMOS",
-    }
-    # Partículas que no pueden abrir un nombre (sí van dentro: "MARIA DE LOS ANGELES")
-    _PARTICULAS = {"EL", "LA", "LOS", "LAS", "DE", "DEL", "A", "AL", "Y"}
-    _LINEAS_NO_NOMBRE = re.compile(
-        r"ATENTAMENTE|CORDIAL|SALUDO|FIRMA|DIRECTOR|GERENTE|COORDINADOR|SUBDIRECTOR|JEFE|ASESOR|SECRETARI|"
-        r"VOCER|REPRESENTANTE|CORREO|TEL[EÉ]FONO|DIRECCI[OÓ]N|CARGO|BANCO|NIT|OFICINA|SENA\b|REGIONAL|CENTRO"
-    )
-    _NUMERO_DOC = r"(\d[\d\.\s]{4,14}\d)"
-
-    def _limpiar_nombre_titular(self, nombre: str) -> str:
-        import unicodedata
-        sin_tildes = "".join(c for c in unicodedata.normalize("NFD", nombre.upper()) if unicodedata.category(c) != "Mn")
-        palabras = re.findall(r"[A-ZÑ]+", sin_tildes)
-        cortes = [i for i, w in enumerate(palabras) if w in self._PALABRAS_ANTES_DEL_NOMBRE]
-        if cortes:
-            palabras = palabras[cortes[-1] + 1:]
-        while palabras and palabras[0] in self._PARTICULAS:
-            palabras.pop(0)
-        return " ".join(palabras) if 2 <= len(palabras) <= 6 else ""
-
-    def extraer_titular_soporte(self, texto: str) -> Dict[str, Optional[str]]:
-        """Titular (nombre y número) de una carta o certificado; valores None si no se encuentra"""
-        texto = texto or ""
-        texto_up = texto.upper()
-        plano = re.sub(r"\s+", " ", texto_up)
-
-        # 1. Certificados: "... NOMBRE identificado(a) con cédula de ciudadanía número N"
-        m = re.search(
-            r"((?:[A-ZÁÉÍÓÚÑ]+\s+){1,8}?[A-ZÁÉÍÓÚÑ]+)\s*,?\s+IDENTIFICAD[OA](?:\s*\(A\))?\s+CON\s+.{0,60}?" + self._NUMERO_DOC,
-            plano,
-        )
-        if m:
-            nombre = self._limpiar_nombre_titular(m.group(1))
-            numero = re.sub(r"\D", "", m.group(2))
-            if nombre and 6 <= len(numero) <= 11:
-                return {"identificacion": numero, "nombre_completo": nombre, "origen": "identificado_con"}
-
-        # 2. Cartas: línea con "CC N" (o cédula / TI / NUIP) y el nombre en la misma línea o justo encima
-        lineas = [l.strip() for l in texto_up.splitlines() if l.strip()]
-        patron_cc = re.compile(
-            r"(?:\bC\.?\s*C\.?|C[EÉ]DULA(?:\s+DE\s+CIUDADAN[IÍ]A)?|\bT\.?\s*I\.?|\bNUIP)\s*(?:N[OÚU°º]\.?|N[UÚ]MERO)?\s*[:\.\-–—#]*\s*"
-            + self._NUMERO_DOC
-        )
-        for i, linea in enumerate(lineas):
-            mc = patron_cc.search(linea)
-            if not mc:
-                continue
-            numero = re.sub(r"\D", "", mc.group(1))
-            if not 6 <= len(numero) <= 11:
-                continue
-            candidatos = [linea[:mc.start()]] + [lineas[j] for j in range(i - 1, max(-1, i - 3), -1)]
-            for cand in candidatos:
-                if not cand.strip() or re.search(r"\d", cand) or self._LINEAS_NO_NOMBRE.search(cand):
-                    continue
-                nombre = self._limpiar_nombre_titular(cand)
-                if nombre:
-                    return {"identificacion": numero, "nombre_completo": nombre, "origen": "junto_a_cc"}
-        return {"identificacion": None, "nombre_completo": None, "origen": None}
-
-    def _extraer_documento_soporte(self, group: Any) -> Dict[str, Any]:
-        """Persona tomada de una carta o certificado: solo titular y número, siempre para revisión"""
-        paginas = [p for p in [getattr(group, "front_page", None), getattr(group, "back_page", None)]
-                   + list(getattr(group, "other_pages", [])) if p]
-        subtipo = next((p.get("subtipo") for p in paginas if p.get("subtipo")), None)
-        tipo = "CERTIFICADO_BANCARIO" if subtipo == "CERTIFICADO_BANCARIO" else "DOCUMENTO_SOPORTE"
-        titular = {"identificacion": None, "nombre_completo": None, "origen": None}
-        for p in paginas:
-            titular = self.extraer_titular_soporte(p.get("texto", ""))
-            if titular["identificacion"]:
-                break
-        nombre = titular["nombre_completo"]
-        fuente = {"source": "documento_soporte", "status": "REVIEW_REQUIRED", "confidence": 0.7}
-        detalles = {
-            "documento_soporte": {"tipo": tipo, "paginas": getattr(group, "pages", []), "origen_titular": titular["origen"]},
-            "grouping": group.to_dict() if hasattr(group, "to_dict") else {},
-        }
-        if titular["identificacion"]:
-            detalles["numero_identificacion"] = dict(fuente, valor=titular["identificacion"])
-        if nombre:
-            detalles["nombre_completo"] = dict(fuente, valor=nombre)
-            detalles["nombres"] = dict(fuente, valor=nombre)
-        return {
-            "identificacion": titular["identificacion"],
-            "nombres": nombre,
-            "apellidos": None,
-            "nombre_completo": nombre,
-            "tipo_documento": tipo,
-            "confianza_extraccion": 70.0 if titular["identificacion"] else 30.0,
-            "grupo_documento_id": getattr(group, "group_id", "DOC-001"),
-            "pagina_frente": getattr(group, "pagina_frente", None),
-            "pagina_reverso": None,
-            "detalles_campos": detalles,
-        }
-
     def extraer_grupo(self, group: Any, ocr_engine: str = "google_document_ai") -> Dict[str, Any]:
         """
         Extrae y combina la información complementaria de un grupo de documento físico (Frente + Reverso o Certificado multipágina).
         Aplica validación cruzada entre caras y la regla Cero Invención.
         """
-        if getattr(group, "tipo_documento", "") == "DOCUMENTO_SOPORTE":
-            return self._extraer_documento_soporte(group)
-
         # Manejo especializado de Certificados de Antecedentes (pueden ser de 1, 2, 3 o más páginas)
         if (
             getattr(group, "tipo_documento", "") == "CERTIFICADO_ANTECEDENTES"

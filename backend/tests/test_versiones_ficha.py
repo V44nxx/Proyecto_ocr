@@ -15,7 +15,9 @@ from app.models.persona import Persona
 from tests.test_documentos_soporte import CARTA, CEDULA_AMARILLA, CEDULA_DIGITAL, CERTIFICADO_OTRA_PERSONA
 from tests.utilidades_pg import cabecera, crear_usuario, pdf_de_prueba, requiere_postgres
 
-ADRIANA, ANYI, MAYRA, PEDRO = "1006459309", "1117501209", "1077847851", "79555111"
+ADRIANA, ANYI, CAROLINA = "1006459309", "1117501209", "1098765432"
+CEDULA_CAROLINA = (CEDULA_AMARILLA.replace("1.006.459.309", "1.098.765.432")
+                   .replace("ZAPATA CUELLAR", "RAMIREZ LOPEZ").replace("ADRIANA ALEJANDRA", "CAROLINA ANDREA"))
 
 
 @pytest.fixture
@@ -81,21 +83,20 @@ def test_reemplazar_deja_una_ficha_sin_duplicar_ni_borrar_personas(bd, api, tmp_
     ana = cabecera(crear_usuario(db, "ana@example.com"))
     db.close()
     vieja = _subir(api, ana, tmp_path, ocr_simulado, "3492408.pdf",
-                   [CARTA, CEDULA_AMARILLA, CEDULA_DIGITAL, CERTIFICADO_OTRA_PERSONA])
-    # Versión corregida: sin la carta ni el certificado
+                   [CARTA, CEDULA_AMARILLA, CEDULA_DIGITAL, CEDULA_CAROLINA, CERTIFICADO_OTRA_PERSONA])
+    # Versión corregida: Carolina ya no está
     nueva = _subir(api, ana, tmp_path, ocr_simulado, "3492408 corregida.pdf", [CEDULA_AMARILLA, CEDULA_DIGITAL],
                    acciones=[{"archivo": "3492408 corregida.pdf", "accion": "reemplazar", "documento_id": vieja["id"]}])
 
     personas, total = _personas(bd)
     id_vieja, id_nueva = uuid.UUID(vieja["id"]), uuid.UUID(nueva["id"])
 
-    assert total == 4
+    assert total == 3                                                   # ni la carta ni el certificado
     assert all(p[0] == id_nueva for p in personas.values())             # todas en la ficha nueva
     assert personas[ADRIANA][1] is None and personas[ANYI][1] is None   # se ven en el PDF nuevo
-    for no_encontrada in (MAYRA, PEDRO):                                 # no se borran: a revisión
-        documento_id, documento_pdf_id, revision, motivos = personas[no_encontrada]
-        assert documento_pdf_id == id_vieja and revision is True
-        assert "No se encontró en la nueva versión" in motivos[0]
+    documento_id, documento_pdf_id, revision, motivos = personas[CAROLINA]   # no se borra: a revisión
+    assert documento_pdf_id == id_vieja and revision is True
+    assert "No se encontró en la nueva versión" in motivos[0]
     assert _fichas_en_lista(api, ana) == [nueva["id"]]
 
 
@@ -105,17 +106,18 @@ def test_agregar_como_otra_parte_suma_las_personas_a_la_ficha_existente(bd, api,
     ana = cabecera(crear_usuario(db, "ana@example.com"))
     db.close()
     parte1 = _subir(api, ana, tmp_path, ocr_simulado, "3492408 parte 1.pdf", [CEDULA_AMARILLA, CEDULA_DIGITAL])
-    parte2 = _subir(api, ana, tmp_path, ocr_simulado, "3492408 parte 2.pdf", [CARTA, CERTIFICADO_OTRA_PERSONA, CEDULA_DIGITAL],
+    parte2 = _subir(api, ana, tmp_path, ocr_simulado, "3492408 parte 2.pdf",
+                    [CARTA, CERTIFICADO_OTRA_PERSONA, CEDULA_DIGITAL, CEDULA_CAROLINA],
                     acciones=[{"archivo": "3492408 parte 2.pdf", "accion": "agregar", "documento_id": parte1["id"]}])
 
     personas, total = _personas(bd)
     id_ficha, id_parte2 = uuid.UUID(parte1["id"]), uuid.UUID(parte2["id"])
 
     assert parte2["ficha_id"] == parte1["id"]
-    assert total == 4                                                   # Anyi venía en las dos partes
+    assert total == 3                                                   # Anyi venía en las dos partes
     assert all(p[0] == id_ficha for p in personas.values())             # una sola ficha
     assert personas[ADRIANA][1] is None                                 # solo estaba en la parte 1
-    assert personas[MAYRA][1] == id_parte2 and personas[PEDRO][1] == id_parte2
+    assert personas[CAROLINA][1] == id_parte2
     assert personas[ANYI][1] == id_parte2                               # su lectura más reciente
     assert _fichas_en_lista(api, ana) == [parte1["id"]]
 

@@ -1,8 +1,8 @@
 """
-Cartas y certificados (bancarios, solicitudes) dentro de una ficha:
-no son documentos de identidad, pero sí traen al titular. Se toma solo su nombre y su número
-(no el destinatario "Señor: ..." ni quien firma) y la persona queda para revisión.
-Antes, una carta se tomaba como frente de una cédula: el destinatario quedaba como nombre.
+Cartas y certificados que no son de identidad ni de antecedentes (bancarios, solicitudes...) dentro de una ficha:
+se reconocen para no confundirlos con una cédula, pero no se toma ningún dato de ellos.
+Antes, una carta de solicitud se tomaba como frente de una cédula: el destinatario ("Señor: ...")
+quedaba como nombre y el número de quien firma como cédula.
 """
 from app.services.document_pairing_service import document_pairing_service
 from app.services.document_side_classifier import document_side_classifier
@@ -98,34 +98,16 @@ def _pagina(num, tipo, cara, cedula=None, texto="", subtipo=None):
             "subtipo": subtipo}
 
 
-def test_de_la_carta_se_toma_a_quien_firma_con_su_cedula_y_no_al_destinatario():
-    from app.services.extractor_service import extractor_service
-    t = extractor_service.extraer_titular_soporte(CARTA)
-    assert t["identificacion"] == "1077847851"
-    assert t["nombre_completo"] == "MAYRA YERITZA TOQUICA CASALLAS"
+def test_los_antecedentes_se_siguen_tomando():
+    texto = ("PROCURADURIA GENERAL DE LA NACION\nCERTIFICADO ORDINARIO No. 123456789\n"
+             "La Procuraduría General de la Nación certifica que el(la) señor(a) ANYI YULIANA BALANTA URIBE "
+             "identificado(a) con Cédula de ciudadanía número 1117501209 NO REGISTRA SANCIONES NI INHABILIDADES VIGENTES")
+    assert document_side_classifier.clasificar_cara(texto)["tipo_documento"] == "CERTIFICADO_ANTECEDENTES"
 
 
-def test_del_certificado_bancario_se_toma_al_titular_y_no_al_funcionario():
-    from app.services.extractor_service import extractor_service
-    t = extractor_service.extraer_titular_soporte(CERTIFICADO_BANCARIO)
-    assert t["identificacion"] == "1117501209"
-    assert t["nombre_completo"] == "ANYI YULIANA BALANTA URIBE"
-
-
-def test_titular_con_particulas_y_sin_cedula():
-    from app.services.extractor_service import extractor_service
-    t = extractor_service.extraer_titular_soporte(
-        "El Banco Agrario certifica que MARIA DE LOS ANGELES RUIZ, identificada con cédula de ciudadanía "
-        "No. 1.117.000.111, es titular de una cuenta de ahorros")
-    assert (t["identificacion"], t["nombre_completo"]) == ("1117000111", "MARIA DE LOS ANGELES RUIZ")
-    sin_cc = extractor_service.extraer_titular_soporte(
-        "Señor:\nLUIS ANGEL LOZADA\nAsunto: solicitud\nAtentamente,\nla coordinación")
-    assert sin_cc["identificacion"] is None
-
-
-def test_la_carta_del_titular_queda_como_pagina_extra_de_su_cedula():
+def test_la_carta_no_se_usa_como_frente_ni_se_agrega_a_la_cedula():
     paginas = [
-        _pagina(1, "DOCUMENTO_SOPORTE", "DOCUMENTO_SOPORTE", "1077847851", CARTA, "CARTA_O_CERTIFICADO"),
+        _pagina(1, "DOCUMENTO_SOPORTE", "DOCUMENTO_SOPORTE", None, CARTA, "CARTA_O_CERTIFICADO"),
         _pagina(2, "CEDULA_CIUDADANIA", "CEDULA_FRONT", "1077847851"),
         _pagina(3, "CEDULA_CIUDADANIA", "CEDULA_BACK"),
     ]
@@ -133,42 +115,30 @@ def test_la_carta_del_titular_queda_como_pagina_extra_de_su_cedula():
 
     assert len(grupos) == 1
     assert grupos[0].pagina_frente == 2
-    assert grupos[0].tipo_documento == "CEDULA_CIUDADANIA"
-    assert sorted(grupos[0].pages) == [1, 2, 3]
+    assert sorted(grupos[0].pages) == [2, 3]
 
 
-def test_certificado_sin_cedula_en_el_pdf_forma_su_propia_persona():
-    from app.services.extractor_service import extractor_service
+def test_un_certificado_bancario_no_forma_persona():
     paginas = [
         _pagina(1, "CEDULA_CIUDADANIA", "CEDULA_AMBOS_LADOS", "1006459309"),
-        _pagina(2, "DOCUMENTO_SOPORTE", "DOCUMENTO_SOPORTE", "1117501209", CERTIFICADO_BANCARIO, "CERTIFICADO_BANCARIO"),
+        _pagina(2, "DOCUMENTO_SOPORTE", "DOCUMENTO_SOPORTE", None, CERTIFICADO_BANCARIO, "CERTIFICADO_BANCARIO"),
     ]
     grupos = document_pairing_service.agrupar_paginas(paginas)
-    soporte = [g for g in grupos if g.tipo_documento == "DOCUMENTO_SOPORTE"]
 
-    assert len(grupos) == 2 and len(soporte) == 1
-    datos = extractor_service.extraer_grupo(soporte[0])
-    assert datos["identificacion"] == "1117501209"
-    assert datos["nombre_completo"] == "ANYI YULIANA BALANTA URIBE"
-    assert datos["tipo_documento"] == "CERTIFICADO_BANCARIO"
-    assert datos["pagina_frente"] == 2
-
-
-def test_carta_sin_numero_de_titular_no_forma_persona():
-    assert document_pairing_service.agrupar_paginas([_pagina(1, "DOCUMENTO_SOPORTE", "DOCUMENTO_SOPORTE")]) == []
+    assert [g.numero_identificacion for g in grupos] == ["1006459309"]
+    assert document_pairing_service.agrupar_paginas([paginas[1]]) == []
 
 
 # ── Flujo completo: la misma ficha subida dos veces ─────────────────
 
 from tests.utilidades_pg import crear_ficha, crear_usuario, pdf_de_prueba, requiere_postgres  # noqa: E402
 
-CERTIFICADO_OTRA_PERSONA = CERTIFICADO_BANCARIO.replace("ANYI YULIANA BALANTA URIBE", "PEDRO PABLO ARIAS GOMEZ") \
-                                               .replace("1117501209", "79555111")
+CERTIFICADO_OTRA_PERSONA = CERTIFICADO_BANCARIO.replace("ANYI YULIANA BALANTA URIBE", "PEDRO PABLO ARIAS GOMEZ")                                                .replace("1117501209", "79555111")
 PAGINAS_FICHA = {1: CARTA, 2: CEDULA_AMARILLA, 3: CEDULA_DIGITAL, 4: CERTIFICADO_OTRA_PERSONA}
 
 
 @requiere_postgres
-def test_ficha_con_carta_y_certificado_subida_dos_veces(bd, tmp_path, monkeypatch):
+def test_ficha_con_carta_y_certificado_solo_toma_los_documentos_de_identidad(bd, tmp_path, monkeypatch):
     from app.models.persona import Persona
     from app.services.ocr_service import ocr_service
 
@@ -190,16 +160,9 @@ def test_ficha_con_carta_y_certificado_subida_dos_veces(bd, tmp_path, monkeypatc
     db.close()
 
     (_, primera), (id_segunda, segunda) = resultados
-    esperadas = {"1077847851", "1006459309", "1117501209", "79555111"}
-    assert set(primera) == esperadas
-    assert set(segunda) == esperadas                                   # sin duplicados al volver a subir
+    assert set(primera) == {"1006459309", "1117501209"}                # ni la carta ni el certificado
+    assert set(segunda) == {"1006459309", "1117501209"}                # sin duplicados al volver a subir
     assert all(p.documento_id == id_segunda for p in segunda.values())
-
-    mayra, pedro = segunda["1077847851"], segunda["79555111"]
-    assert "MAYRA" in mayra.nombre_completo and "LUIS" not in mayra.nombre_completo
-    assert (mayra.tipo_documento, mayra.requiere_revision, mayra.pagina_frente) == ("DOCUMENTO_SOPORTE", True, 1)
-    assert "PEDRO PABLO ARIAS GOMEZ" == pedro.nombre_completo
-    assert (pedro.tipo_documento, pedro.requiere_revision, pedro.pagina_frente) == ("CERTIFICADO_BANCARIO", True, 4)
     assert segunda["1006459309"].pagina_frente == 2
     assert segunda["1117501209"].pagina_frente == 3
-    assert segunda["1006459309"].tipo_documento == "CEDULA_CIUDADANIA"
+    assert not any("LUIS" in (p.nombre_completo or "") or "MAYRA" in (p.nombre_completo or "") for p in segunda.values())

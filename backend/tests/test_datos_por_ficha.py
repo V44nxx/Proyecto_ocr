@@ -291,23 +291,3 @@ def test_volver_a_subir_no_duplica_a_las_personas_sin_cedula(bd):
     db.close()
 
     assert personas == [("", id_nueva)]
-
-
-# ── Persona tomada de un certificado ────────────────────────────────
-
-@requiere_postgres
-def test_titular_de_certificado_bancario_queda_para_revision(bd):
-    db = bd.SessionLocal()
-    ana = crear_usuario(db, "ana@example.com")
-    ficha = crear_ficha(db, ana, "3492408.pdf")
-
-    _guardar_datos(db, ficha, identificacion="1117501209", nombres="ANYI YULIANA BALANTA URIBE", apellidos=None,
-                   nombre_completo="ANYI YULIANA BALANTA URIBE", tipo_documento="CERTIFICADO_BANCARIO", pagina_frente=2,
-                   confianza_extraccion=70.0)
-    p = db.query(Persona).one()
-    datos = (p.numero_identificacion, p.nombre_completo, p.tipo_documento, p.requiere_revision, p.estado_registro,
-             p.detalles_campos["motivos_revision"][0])
-    db.close()
-
-    assert datos[:5] == ("1117501209", "ANYI YULIANA BALANTA URIBE", "CERTIFICADO_BANCARIO", True, "REVIEW_REQUIRED")
-    assert "certificado bancario" in datos[5]

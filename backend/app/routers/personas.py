@@ -459,20 +459,11 @@ def listar_personas(
     query = db.query(Persona).options(joinedload(Persona.documento))
     query = _filtrar_persona_por_usuario(query, usuario)
 
-    # Desvincular cualquier registro 'EXCEL-SIN-PDF' erróneamente asociado a documento_id para evitar mostrar documentos ajenos
-    try:
-        db.query(Persona).filter(
-            (Persona.grupo_documento_id == "EXCEL-SIN-PDF") | (Persona.motor_ocr == "excel")
-        ).filter(Persona.documento_id.isnot(None)).update({"documento_id": None}, synchronize_session=False)
-        db.commit()
-    except Exception:
-        db.rollback()
-
+    # Quien está en el Excel pero no en el PDF (motor "excel") se lista en su ficha como "Falta en PDF";
+    # el visor no le muestra el PDF de la ficha porque en_pdf es False
     if documento_id and isinstance(documento_id, str):
         query = query.filter(
-            ((Persona.documento_id == documento_id) | (Persona.documento_pdf_id == documento_id)) &
-            (Persona.motor_ocr != "excel") &
-            (Persona.grupo_documento_id != "EXCEL-SIN-PDF")
+            (Persona.documento_id == documento_id) | (Persona.documento_pdf_id == documento_id)
         )
 
     if requiere_revision is True:

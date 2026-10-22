@@ -487,6 +487,7 @@ function PersonasContent() {
   };
 
   const precargarPaginaPersona = (p: Persona) => {
+    if (personaFaltaEnPdf(p) && !p.documento_pdf_id) return;
     const docId = p.documento_pdf_id || p.documento_id;
     if (!docId) return;
     const pagsList = (p.detalles_campos as any)?.paginas;

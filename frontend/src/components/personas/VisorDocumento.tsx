@@ -49,7 +49,9 @@ interface VisorDocumentoProps {
 export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSubirPdf, incrustado = false }: VisorDocumentoProps) {
   useBloquearScroll(!incrustado);
 
-  const docId = persona.documento_pdf_id || persona.documento_id;
+  // Quien está en el Excel pero no en el PDF no tiene página en el PDF de la ficha
+  const sinPdf = persona.en_pdf === false && !persona.documento_pdf_id;
+  const docId = sinPdf ? null : persona.documento_pdf_id || persona.documento_id;
   const [pagina, setPagina] = useState(paginaInicial);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);

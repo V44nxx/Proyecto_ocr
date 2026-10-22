@@ -112,6 +112,9 @@ def _aplicar_accion_ficha(db: Session, item: dict) -> None:
         sin_encontrar = db.query(Persona).filter(Persona.documento_id == anterior.id).all()
         for p in sin_encontrar:
             p.documento_id = nuevo.id
+            if p.motor_ocr == "excel":
+                # Venía solo del Excel (Falta en PDF): no tiene página en ningún PDF
+                continue
             if not p.documento_pdf_id:
                 p.documento_pdf_id = anterior.id
             det = dict(p.detalles_campos or {})
@@ -156,7 +159,12 @@ def _registrar_personas_excel_faltantes(
     if not items or not excel_path or not Path(excel_path).exists():
         return
 
-    doc_ids = [item["documento_id"] for item in items]
+    # Ficha donde quedan las personas de cada PDF (la existente si el PDF se agregó como otra parte)
+    doc_ids = list(dict.fromkeys(
+        item.get("documento_anterior_id") if item.get("accion") == "agregar" and item.get("documento_anterior_id")
+        else item["documento_id"]
+        for item in items
+    ))
     doc_principal = db.query(Documento).filter(Documento.id == doc_ids[0]).first()
     if not doc_principal:
         return
@@ -281,6 +289,13 @@ def _registrar_personas_excel_faltantes(
         if usuario_id:
             query_p = query_p.filter(Persona.usuario_id == usuario_id)
         persona_db = query_p.first()
+
+        if persona_db and str(persona_db.documento_id) not in {str(d) for d in doc_ids}:
+            # Una sola persona por cédula: si ya está en otra ficha con sus datos, no se mueve de allí
+            logger.info(
+                f"[PersonasFaltantesExcel] {id_excel} ({nom_excel}) ya está en otra ficha; no se mueve"
+            )
+            continue
 
         if persona_db:
             persona_db.documento_id = doc_principal_id
@@ -465,8 +480,13 @@ def _procesar_batch_ocr_y_comparacion(
             return
 
         # ── Personas de Excel no encontradas en PDF ──
-        # NOTA: No se inyectan como personas ficticias del PDF para evitar duplicados y asignación errónea de documentos.
-        # El módulo de Comparación (/comparacion) se encarga de listar y reportar quiénes faltaron en el PDF.
+        # Quedan en la ficha como "Falta en PDF" (sin páginas ni PDF asociado), para revisión
+        if excel_path:
+            try:
+                _registrar_personas_excel_faltantes(items=items, excel_path=excel_path, db=db)
+            except Exception as e_falt:
+                db.rollback()
+                logger.error(f"[OCR Batch Background] Error registrando personas de Excel sin PDF: {e_falt}")
 
         # ── Ejecutar comparación automática si se adjuntó planilla Excel ─
         if comparacion_id and excel_path:

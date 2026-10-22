@@ -95,6 +95,27 @@ def _limpiar_texto(val: Any) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def unificar_columnas_repetidas(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Si varias columnas se mapean al mismo campo (ej. 'Identificación' y 'DOCUMENTO' con OK/NO),
+    se queda con la que más datos útiles tiene; para la identificación, la que más números válidos trae.
+    Sin esto, df["numero_identificacion"] devuelve un DataFrame y la hoja entera falla.
+    """
+    if not df.columns.duplicated().any():
+        return df
+
+    def puntaje(serie: pd.Series, campo: str) -> int:
+        if campo == "numero_identificacion":
+            return int(serie.apply(_limpiar_id).str.len().ge(5).sum())
+        return int(serie.fillna("").astype(str).str.strip().ne("").sum())
+
+    conservar = []
+    for campo in dict.fromkeys(df.columns):
+        posiciones = [i for i, c in enumerate(df.columns) if c == campo]
+        conservar.append(max(posiciones, key=lambda i: puntaje(df.iloc[:, i], campo)) if len(posiciones) > 1 else posiciones[0])
+    return df.iloc[:, sorted(conservar)]
+
+
 def _procesar_hoja(df_raw: pd.DataFrame, filepath: str, sheet_name: str) -> Optional[pd.DataFrame]:
     if df_raw is None or df_raw.empty:
         return None
@@ -113,13 +134,13 @@ def _procesar_hoja(df_raw: pd.DataFrame, filepath: str, sheet_name: str) -> Opti
 
     df.columns = [_normalizar_col2(c) for c in df.columns]
     renombres = {c: _MAPEO_COLUMNAS[c] for c in df.columns if c in _MAPEO_COLUMNAS}
-    df = df.rename(columns=renombres)
+    df = unificar_columnas_repetidas(df.rename(columns=renombres))
 
     if "numero_identificacion" not in df.columns:
         return None
 
     if "primer_nombre" in df.columns:
-        p = df["primer_nombre"].fillna("").astype(str).str.strip()
+        p =df["primer_nombre"].fillna("").astype(str).str.strip()
         s_col = df["segundo_nombre"].fillna("").astype(str).str.strip() if "segundo_nombre" in df.columns else pd.Series([""] * len(df))
         combined = (p + " " + s_col).str.strip()
         if "nombres" not in df.columns or df["nombres"].isna().all():

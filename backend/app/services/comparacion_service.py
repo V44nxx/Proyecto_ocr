@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.utils.logger import app_logger as logger
 from app.utils.validators import validador
+from app.services.excel_lookup_service import unificar_columnas_repetidas
 
 
 class ComparacionService:
@@ -359,7 +360,7 @@ class ComparacionService:
             for col in df.columns
             if col in self.MAPEO_COLUMNAS_EXCEL
         }
-        df = df.rename(columns=renombres)
+        df = unificar_columnas_repetidas(df.rename(columns=renombres))
 
         if "numero_identificacion" not in df.columns:
             return None

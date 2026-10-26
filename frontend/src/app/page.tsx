@@ -24,7 +24,8 @@ import { apiAuth } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useTheme } from "@/context/ThemeContext";
 import LogoKondID from "@/components/ui/LogoKondID";
-import type { TokenResponse } from "@/types";
+import VerificacionDosPasos from "@/components/ui/VerificacionDosPasos";
+import type { LoginResponse, Usuario } from "@/types";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,6 +36,15 @@ export default function LoginPage() {
   const [mostrarPass, setMostrarPass] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [ocultarDatosID, setOcultarDatosID] = useState(false);
+  // Administradores: después de la contraseña, el código de la app (o vincularla la primera vez)
+  const [segundoPaso, setSegundoPaso] = useState<{ desafio: string; configurar: boolean } | null>(null);
+
+  const entrar = (data: LoginResponse) => {
+    const usuario = data.usuario as Usuario;
+    auth.guardarSesion({ usuario });
+    toast.success(`Bienvenido, ${usuario.nombre}`);
+    window.location.href = "/dashboard";
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +56,12 @@ export default function LoginPage() {
     setCargando(true);
     try {
       const { data } = await apiAuth.login(email, password);
-      auth.guardarSesion(data as TokenResponse);
-      toast.success(`Bienvenido, ${(data as TokenResponse).usuario.nombre}`);
-      window.location.href = "/dashboard";
+      if (data.requiere_2fa && data.desafio) {
+        setPassword("");
+        setSegundoPaso({ desafio: data.desafio, configurar: data.configurar_2fa });
+        return;
+      }
+      entrar(data);
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { detail?: string }; status?: number };
@@ -67,7 +80,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="h-screen max-h-screen min-h-screen login-bg text-slate-900 dark:text-slate-100 flex flex-col justify-between overflow-y-auto lg:overflow-hidden selection:bg-[#0071E3]/20 selection:text-white">
+    <div className={`h-screen max-h-screen min-h-screen login-bg text-slate-900 dark:text-slate-100 flex flex-col justify-between overflow-y-auto ${segundoPaso ? "" : "lg:overflow-hidden"} selection:bg-[#0071E3]/20 selection:text-white`}>
       {/* ── BARRA SUPERIOR (Chrome translúcido compacto estilo Apple) ── */}
       <header className="w-full shrink-0 border-b border-black/[0.04] dark:border-white/[0.06] backdrop-blur-md bg-white/40 dark:bg-[#070A0F]/50 sticky top-0 z-30 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
@@ -260,6 +273,15 @@ export default function LoginPage() {
           {/* ── COLUMNA DERECHA: Módulo de Acceso y Autenticación (Apple Card Compacta) ── */}
           <div className="lg:col-span-5 w-full max-w-md mx-auto lg:max-w-none">
             <div className="apple-card rounded-2xl sm:rounded-3xl p-5 sm:p-7 relative">
+              {segundoPaso ? (
+                <VerificacionDosPasos
+                  desafio={segundoPaso.desafio}
+                  configurar={segundoPaso.configurar}
+                  onListo={entrar}
+                  onVolver={() => setSegundoPaso(null)}
+                />
+              ) : (
+              <>
               {/* Cabecera del Formulario */}
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-3">
@@ -394,6 +416,8 @@ export default function LoginPage() {
                   Al ingresar se guarda una cookie solo para mantener tu sesión. No usamos cookies de seguimiento.
                 </p>
               </form>
+              </>
+              )}
 
               {/* Pie de Seguridad y Cumplimiento Normativo */}
               <div className="mt-5 pt-3 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500">

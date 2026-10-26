@@ -9,6 +9,8 @@ export interface Usuario {
   rol: "admin" | "usuario";
   activo: boolean;
   fecha_creacion: string;
+  /** Verificación en dos pasos vinculada (obligatoria para los administradores) */
+  doble_factor_activo?: boolean;
 }
 
 /** Ficha ya subida con el mismo número que un archivo que se va a subir */
@@ -49,6 +51,28 @@ export interface TokenResponse {
   access_token: string;
   token_type: string;
   usuario: Usuario;
+}
+
+/**
+ * Respuesta del inicio de sesión: la sesión, o (administradores) el paso siguiente con su desafío.
+ * `codigos_respaldo` llega solo al activar la verificación; `codigos_respaldo_restantes`, al entrar con uno.
+ */
+export interface LoginResponse {
+  access_token?: string | null;
+  token_type: string;
+  usuario?: Usuario | null;
+  requiere_2fa: boolean;
+  configurar_2fa: boolean;
+  desafio?: string | null;
+  codigos_respaldo?: string[] | null;
+  codigos_respaldo_restantes?: number | null;
+}
+
+/** Datos para vincular la app de autenticación: QR (imagen data:) y la clave para escribirla a mano */
+export interface ConfigurarDobleFactor {
+  secreto: string;
+  uri: string;
+  qr: string;
 }
 
 export interface Documento {

@@ -222,7 +222,11 @@ npm run dev
 ### 🔐 Autenticación y Usuarios (`/api/auth`)
 | Método | Endpoint | Descripción |
 |:-------|:---------|:------------|
-| `POST` | `/api/auth/login` | Iniciar sesión: pone la cookie de sesión y retorna el token JWT |
+| `POST` | `/api/auth/login` | Iniciar sesión: pone la cookie de sesión y retorna el token JWT. A un administrador le devuelve el desafío del segundo paso |
+| `POST` | `/api/auth/login/2fa` | Segundo paso de un administrador: código de la app o uno de respaldo |
+| `POST` | `/api/auth/login/2fa/configurar` | Primer ingreso de un administrador: QR y clave para vincular la app de autenticación |
+| `POST` | `/api/auth/login/2fa/activar` | Confirma la app con su primer código y entrega los códigos de respaldo |
+| `POST` | `/api/auth/users/{user_id}/doble-factor/restablecer` | Desvincula la app de otro usuario y cierra sus sesiones (Requiere rol Admin) |
 | `POST` | `/api/auth/logout` | Cerrar sesión: borra la cookie e invalida esa sesión en el servidor |
 | `POST` | `/api/auth/login/form` | Login compatible con OAuth2 Password Flow (Swagger UI) |
 | `POST` | `/api/auth/register` | Registro de nuevo usuario |
@@ -356,6 +360,7 @@ proyecto_ocr/
 - **Cifrado de Contraseñas**: Bcrypt con 12 rondas de salting y compatibilidad passlib.
 - **Tokens de Acceso**: JWT firmado con algoritmo HMAC-SHA256 y expiración configurable (por defecto 8 horas).
 - **Sesión en cookie segura**: el navegador la guarda en una cookie `HttpOnly`, `SameSite=Strict` y `Secure` (prefijo `__Host-`), fuera del alcance de los scripts. Cerrar sesión la invalida en el servidor, y las peticiones que cambian datos solo se aceptan desde el frontend.
+- **Verificación en dos pasos para administradores**: después de la contraseña, un código de 6 dígitos de una app de autenticación (TOTP). La primera vez se vincula la app con un QR y se entregan 10 códigos de respaldo de un solo uso. El secreto se guarda cifrado con una clave derivada de `SECRET_KEY`. Si un administrador pierde el celular y los códigos, otro administrador le restablece la verificación desde Usuarios, o en el servidor se ejecuta `python -m app.restablecer_doble_factor <correo>`.
 - **Protección de Datos Multitenant**: Consultas aisladas por `usuario_id` en PostgreSQL para que ningún usuario acceda a documentos o registros de otro.
 - **Validación Estricta de Archivos**: Filtro de extensiones `.pdf`, `.xlsx`, `.xls` y tamaño máximo controlado por configuración (`MAX_FILE_SIZE_MB`).
 - **Respaldo Persistente**: Copia binaria de los PDFs en la base de datos para garantizar disponibilidad del visor incluso si el almacenamiento efímero se reinicia.

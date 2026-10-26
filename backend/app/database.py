@@ -119,6 +119,10 @@ def create_tables():
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(64);",
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMPTZ;",
                 "CREATE INDEX IF NOT EXISTS ix_usuarios_reset_token_hash ON usuarios (reset_token_hash);",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS totp_secreto VARCHAR(255);",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS totp_activo BOOLEAN NOT NULL DEFAULT FALSE;",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS totp_ultimo_paso INTEGER;",
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS totp_codigos_respaldo JSONB;",
                 "ALTER TABLE documentos DROP CONSTRAINT IF EXISTS documentos_estado_check;",
                 "ALTER TABLE documentos ADD CONSTRAINT documentos_estado_check CHECK (estado IN ('pendiente', 'procesando', 'completado', 'error', 'revision', 'cancelado'));"
             ]

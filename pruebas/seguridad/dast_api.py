@@ -7,8 +7,11 @@ El backend debe correr con ENVIRONMENT=production (SEG-04) y recién iniciado (l
 Cada caso imprime PASA/FALLA con lo obtenido; el JSON queda como evidencia para el informe.
 """
 import base64
+import hashlib
+import hmac
 import json
 import os
+import struct
 import sys
 import time
 
@@ -50,6 +53,33 @@ def token(email):
     return login(email)[0]
 
 
+def codigo_totp(secreto, momento=None):
+    """Código de 6 dígitos (RFC 6238) de la clave base32 de la app de autenticación."""
+    clave = base64.b32decode(secreto + "=" * (-len(secreto) % 8))
+    resumen = hmac.new(clave, struct.pack(">Q", int((time.time() if momento is None else momento) // 30)),
+                       hashlib.sha1).digest()
+    corte = resumen[-1] & 0x0F
+    return f"{(struct.unpack('>I', resumen[corte:corte + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
+
+
+def desafio_admin():
+    r = c.post("/api/auth/login", json={"email": "admin@example.com", "password": CLAVE})
+    r.raise_for_status()
+    c.cookies.clear()
+    return r
+
+
+def activar_admin():
+    """El administrador de la semilla vincula su app (primer ingreso). Devuelve (token, secreto, respuesta del login)."""
+    primer_login = desafio_admin()
+    desafio = primer_login.json()["desafio"]
+    secreto = c.post("/api/auth/login/2fa/configurar", json={"desafio": desafio}).json()["secreto"]
+    r = c.post("/api/auth/login/2fa/activar", json={"desafio": desafio, "codigo": codigo_totp(secreto)})
+    r.raise_for_status()
+    c.cookies.clear()
+    return r.json()["access_token"], secreto, primer_login
+
+
 def cookie_de(set_cookie):
     """'nombre=valor' para mandarla a mano (una cookie Secure no viaja sola por http local)."""
     return set_cookie.split(";", 1)[0]
@@ -61,7 +91,7 @@ def h(tok):
 
 TOK_ANA = token("ana@example.com")
 TOK_BETO = token("beto@example.com")
-TOK_ADMIN = token("admin@example.com")
+TOK_ADMIN, SECRETO_ADMIN, LOGIN_ADMIN_SIN_APP = activar_admin()
 
 
 @caso("SEG-01", "Un usuario no descarga el reporte de diferencias de otra cuenta", "A01 Control de acceso",
@@ -327,6 +357,55 @@ def _():
     r = c.put("/api/seguimiento/config", json={"url_panel": "https://script.google.com/macros/s/oficial/exec"},
               headers={"Cookie": cookie_de(galleta), "Origin": "https://proyectoocr.v44nxx.online"})
     return r.status_code == 200, f"HTTP {r.status_code}"
+
+
+@caso("SEG-31", "Un administrador no recibe sesión solo con la contraseña", "A07 Autenticación",
+      "200 con requiere_2fa, sin token ni cookie de sesión")
+def _():
+    resultados_login = []
+    for r in (LOGIN_ADMIN_SIN_APP, desafio_admin()):   # antes y después de vincular la app
+        datos = r.json()
+        resultados_login.append((r.status_code, datos.get("requiere_2fa"), bool(datos.get("access_token")),
+                                 "kondid_sesion" in r.headers.get("set-cookie", "")))
+    return resultados_login == [(200, True, False, False)] * 2, resultados_login
+
+
+@caso("SEG-32", "El desafío del segundo paso no sirve como sesión", "A07 Autenticación", "401")
+def _():
+    desafio = desafio_admin().json()["desafio"]
+    r = c.get("/api/auth/me", headers=h(desafio))
+    return r.status_code == 401, f"HTTP {r.status_code}"
+
+
+@caso("SEG-34", "Con la verificación activa, la contraseña sola no vincula otra app", "A07 Autenticación", "409")
+def _():
+    desafio = desafio_admin().json()["desafio"]
+    r = c.post("/api/auth/login/2fa/configurar", json={"desafio": desafio})
+    return r.status_code == 409 and "secreto" not in r.text, f"HTTP {r.status_code}"
+
+
+@caso("SEG-35", "Un código de la app no sirve dos veces", "A07 Autenticación", "200 y luego 400")
+def _():
+    codigo = codigo_totp(SECRETO_ADMIN, time.time() + 30)   # el actual ya se usó al activar
+    primero = c.post("/api/auth/login/2fa", json={"desafio": desafio_admin().json()["desafio"], "codigo": codigo})
+    c.cookies.clear()
+    repetido = c.post("/api/auth/login/2fa", json={"desafio": desafio_admin().json()["desafio"], "codigo": codigo})
+    return primero.status_code == 200 and repetido.status_code == 400, f"{primero.status_code}, {repetido.status_code}"
+
+
+# Debe ir al final: llena el límite de códigos del administrador
+@caso("SEG-33", "Fuerza bruta del código: el sexto intento queda bloqueado", "A07 Autenticación",
+      "400 hasta completar 5 fallos y luego 429 con Retry-After")
+def _():
+    desafio = desafio_admin().json()["desafio"]
+    codigos = [c.post("/api/auth/login/2fa", json={"desafio": desafio, "codigo": f"{i:06d}"}) for i in range(6)]
+    estados = [r.status_code for r in codigos]
+    espera = codigos[-1].headers.get("retry-after")
+    # El código repetido de SEG-35 ya cuenta como uno equivocado: el bloqueo llega a más tardar en el sexto
+    primer_bloqueo = estados.index(429) if 429 in estados else len(estados)
+    ok = (primer_bloqueo <= 5 and set(estados[:primer_bloqueo]) <= {400}
+          and set(estados[primer_bloqueo:]) == {429} and espera)
+    return ok, f"{estados}, Retry-After: {espera}"
 
 
 # Debe ir al final: llena el límite de intentos de beto

@@ -35,12 +35,13 @@ except ImportError:
 from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.usuario import (
-    LoginRequest, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData,
+    LoginRequest, LoginResponse, TokenResponse, UsuarioCreate, UsuarioResponse, TokenData,
     OlvidePasswordRequest, RestablecerPasswordRequest, CambiarPasswordRequest, RestablecerPasswordAdminRequest,
-    RegistrosAuditoriaResponse,
+    RegistrosAuditoriaResponse, DesafioRequest, CodigoDobleFactorRequest, ConfigurarDobleFactorResponse,
 )
 from app.config import settings
 from app.services import auditoria
+from app.utils import doble_factor
 from app.utils.archivos import borrar_archivo_subido
 from app.utils.limitador import Limitador, ip_cliente, mensaje_espera
 from app.utils.sesion import (
@@ -60,6 +61,7 @@ limite_login_ip = Limitador(20, VENTANA_INTENTOS)           # fallos por IP, con
 limite_cambio_password = Limitador(5, VENTANA_INTENTOS)     # contraseña actual equivocada, por usuario
 limite_recuperacion_ip = Limitador(5, VENTANA_INTENTOS)     # pedidos de enlace de recuperación por IP
 limite_restablecer_ip = Limitador(10, VENTANA_INTENTOS)     # enlaces inválidos por IP
+limite_doble_factor = Limitador(5, VENTANA_INTENTOS)        # códigos de verificación equivocados, por usuario
 
 
 # ──────────────────────────────────────────
@@ -175,6 +177,11 @@ def get_usuario_actual(
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario or not usuario.activo or not _token_vigente(payload, usuario) or _sesion_revocada(db, payload):
         raise credenciales_exception
+    # Un administrador sin el segundo paso no tiene sesión (incluye las abiertas antes de la versión 2.12.0)
+    sesion_mfa = bool(payload.get("mfa"))
+    if doble_factor.requiere_doble_factor(usuario) and not sesion_mfa:
+        raise credenciales_exception
+    request.state.sesion_mfa = sesion_mfa
 
     return usuario
 
@@ -212,12 +219,28 @@ def _demasiados_intentos(segundos: int, motivo: str = "Demasiados intentos falli
     )
 
 
-@router.post("/login", response_model=TokenResponse, summary="Iniciar sesión")
+def _iniciar_sesion(usuario: Usuario, response: Response, http: Request, db: Session, mfa: bool,
+                    **detalle) -> LoginResponse:
+    """Abre la sesión (cookie y token) y la anota en la auditoría."""
+    usuario.ultimo_login = datetime.utcnow()
+    db.commit()
+    db.refresh(usuario)
+    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0,
+                                "mfa": mfa})
+    poner_cookie_sesion(response, token)
+    logger.info(f"Login exitoso: {usuario.email}")
+    auditoria.registrar("login_exitoso", http, usuario=usuario, **detalle)
+    return LoginResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
+
+
+@router.post("/login", response_model=LoginResponse, summary="Iniciar sesión")
 def login(request: LoginRequest, http: Request, response: Response, db: Session = Depends(get_db)):
     """
     Autenticar usuario y obtener token JWT.
     El correo se compara exacto (sin comodines). Tras 5 fallos en 15 minutos con un correo, o 20 desde
     una IP, responde 429 hasta que pase la ventana, exista o no la cuenta.
+    Un administrador no recibe la sesión aquí: recibe un desafío para el segundo paso (`/login/2fa`), o para
+    vincular su app de autenticación si todavía no lo ha hecho (`/login/2fa/configurar` y `/login/2fa/activar`).
     """
     email_limpio = request.email.strip().lower()
     ip = ip_cliente(http)
@@ -245,19 +268,119 @@ def login(request: LoginRequest, http: Request, response: Response, db: Session 
         )
     limite_login_correo.reiniciar(email_limpio)
 
-    # Actualizar último login
-    usuario.ultimo_login = datetime.utcnow()
+    if doble_factor.requiere_doble_factor(usuario):
+        configurar = not usuario.totp_activo
+        return LoginResponse(requiere_2fa=True, configurar_2fa=configurar,
+                             desafio=doble_factor.crear_desafio(usuario, configurar))
+    return _iniciar_sesion(usuario, response, http, db, mfa=False)
+
+
+MENSAJE_DESAFIO_VENCIDO = "La verificación venció. Inicia sesión de nuevo."
+MENSAJE_CODIGO_INCORRECTO = "El código no es correcto o ya se usó. Escribe el que muestra ahora tu app."
+
+
+def _usuario_del_desafio(desafio: str, db: Session) -> Usuario:
+    """El usuario que pasó la contraseña, bloqueado hasta el commit: dos peticiones con el mismo código no pasan."""
+    datos = doble_factor.leer_desafio(desafio)
+    if not datos:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=MENSAJE_DESAFIO_VENCIDO)
+    usuario = (db.query(Usuario).filter(Usuario.id == uuid.UUID(datos["sub"]), Usuario.activo == True)
+               .with_for_update().first())
+    if not usuario or int(datos.get("ver", -1)) != int(usuario.version_sesion or 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=MENSAJE_DESAFIO_VENCIDO)
+    return usuario
+
+
+def _comprobar_espera_doble_factor(usuario: Usuario) -> None:
+    espera = limite_doble_factor.espera(str(usuario.id))
+    if espera:
+        raise _demasiados_intentos(espera, "Demasiados códigos equivocados")
+
+
+def _codigo_rechazado(usuario: Usuario, http: Request, db: Session) -> HTTPException:
+    db.rollback()
+    limite_doble_factor.registrar(str(usuario.id))
+    limite_login_ip.registrar(ip_cliente(http))
+    logger.warning(f"Código de verificación equivocado para {usuario.email}")
+    auditoria.registrar("2fa_fallido", http, usuario=usuario)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=MENSAJE_CODIGO_INCORRECTO)
+
+
+@router.post("/login/2fa", response_model=LoginResponse, summary="Segundo paso del inicio de sesión")
+def login_doble_factor(request: CodigoDobleFactorRequest, http: Request, response: Response,
+                       db: Session = Depends(get_db)):
+    """Código de 6 dígitos de la app de autenticación, o uno de los códigos de respaldo (cada uno sirve una vez)."""
+    usuario = _usuario_del_desafio(request.desafio, db)
+    if not usuario.totp_activo:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=MENSAJE_DESAFIO_VENCIDO)
+    _comprobar_espera_doble_factor(usuario)
+
+    secreto = doble_factor.descifrar_secreto(usuario.totp_secreto)
+    paso = doble_factor.paso_valido(secreto, request.codigo, usuario.totp_ultimo_paso) if secreto else None
+    if paso is not None:
+        usuario.totp_ultimo_paso = paso
+        limite_doble_factor.reiniciar(str(usuario.id))
+        return _iniciar_sesion(usuario, response, http, db, mfa=True, metodo="app")
+
+    restantes = doble_factor.usar_codigo_respaldo(usuario.totp_codigos_respaldo, request.codigo)
+    if restantes is None:
+        raise _codigo_rechazado(usuario, http, db)
+    usuario.totp_codigos_respaldo = restantes
+    limite_doble_factor.reiniciar(str(usuario.id))
+    resultado = _iniciar_sesion(usuario, response, http, db, mfa=True, metodo="codigo_respaldo",
+                                codigos_restantes=len(restantes))
+    resultado.codigos_respaldo_restantes = len(restantes)
+    return resultado
+
+
+@router.post("/login/2fa/configurar", response_model=ConfigurarDobleFactorResponse,
+             summary="Generar el QR para vincular la app de autenticación")
+def configurar_doble_factor(request: DesafioRequest, db: Session = Depends(get_db)):
+    """
+    Solo antes de activarla: con la verificación ya activa, la contraseña sola no permite cambiar la app vinculada
+    (eso lo hace otro administrador con «Restablecer verificación»). Cada llamada genera un secreto nuevo.
+    """
+    usuario = _usuario_del_desafio(request.desafio, db)
+    if usuario.totp_activo:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="La verificación en dos pasos ya está activa en esta cuenta.")
+    secreto = doble_factor.generar_secreto()
+    usuario.totp_secreto = doble_factor.cifrar_secreto(secreto)
+    usuario.totp_ultimo_paso = None
     db.commit()
+    uri = doble_factor.uri_aprovisionamiento(secreto, usuario.email)
+    return ConfigurarDobleFactorResponse(secreto=secreto, uri=uri, qr=doble_factor.qr_svg(uri))
 
-    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0})
-    poner_cookie_sesion(response, token)
-    logger.info(f"Login exitoso: {usuario.email}")
-    auditoria.registrar("login_exitoso", http, usuario=usuario)
 
-    return TokenResponse(
-        access_token=token,
-        usuario=UsuarioResponse.model_validate(usuario)
-    )
+@router.post("/login/2fa/activar", response_model=LoginResponse, summary="Activar la verificación en dos pasos")
+def activar_doble_factor(request: CodigoDobleFactorRequest, http: Request, response: Response,
+                         db: Session = Depends(get_db)):
+    """
+    Confirma con el primer código de la app. Devuelve los códigos de respaldo (se muestran una sola vez),
+    cierra las demás sesiones de la cuenta y abre esta.
+    """
+    usuario = _usuario_del_desafio(request.desafio, db)
+    if usuario.totp_activo:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="La verificación en dos pasos ya está activa en esta cuenta.")
+    _comprobar_espera_doble_factor(usuario)
+    secreto = doble_factor.descifrar_secreto(usuario.totp_secreto)
+    if not secreto:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primero genera el código QR.")
+    paso = doble_factor.paso_valido(secreto, request.codigo, None)
+    if paso is None:
+        raise _codigo_rechazado(usuario, http, db)
+
+    planos, hashes = doble_factor.generar_codigos_respaldo()
+    usuario.totp_activo = True
+    usuario.totp_ultimo_paso = paso
+    usuario.totp_codigos_respaldo = hashes
+    usuario.version_sesion = (usuario.version_sesion or 0) + 1
+    limite_doble_factor.reiniciar(str(usuario.id))
+    resultado = _iniciar_sesion(usuario, response, http, db, mfa=True, metodo="activacion")
+    auditoria.registrar("2fa_activado", http, usuario=usuario)
+    resultado.codigos_respaldo = planos
+    return resultado
 
 
 @router.post("/register", response_model=UsuarioResponse, status_code=201, summary="Registrar usuario")
@@ -398,6 +521,42 @@ def restablecer_password_usuario(
     return {"message": f"Contraseña de {u.email} restablecida. Sus sesiones abiertas se cerraron."}
 
 
+@router.post("/users/{user_id}/doble-factor/restablecer",
+             summary="Restablecer la verificación en dos pasos de otro usuario (solo admin)")
+def restablecer_doble_factor_usuario(
+    user_id: str,
+    usuario_actual: Usuario = Depends(get_admin_actual),
+    db: Session = Depends(get_db),
+    http: Request = None,
+):
+    """
+    Para quien perdió el celular y los códigos de respaldo: desvincula su app y cierra sus sesiones.
+    Al volver a entrar con su contraseña, vincula la app de nuevo.
+    """
+    if str(usuario_actual.id) == user_id:
+        raise HTTPException(status_code=400, detail="Otro administrador debe restablecer tu verificación.")
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    u = db.query(Usuario).filter(Usuario.id == uid).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    desvincular_doble_factor(u)
+    db.commit()
+    logger.info(f"Verificación en dos pasos de {u.email} restablecida por el administrador {usuario_actual.email}")
+    auditoria.registrar("2fa_restablecido_admin", http, usuario=usuario_actual, usuario_afectado=u.email)
+    return {"message": f"Verificación de {u.email} restablecida. Sus sesiones abiertas se cerraron."}
+
+
+def desvincular_doble_factor(usuario: Usuario) -> None:
+    usuario.totp_activo = False
+    usuario.totp_secreto = None
+    usuario.totp_ultimo_paso = None
+    usuario.totp_codigos_respaldo = None
+    usuario.version_sesion = (usuario.version_sesion or 0) + 1
+
+
 @router.post("/cambiar-password", response_model=TokenResponse, summary="Cambiar la contraseña propia")
 def cambiar_password(
     request: CambiarPasswordRequest,
@@ -426,7 +585,8 @@ def cambiar_password(
     db.refresh(usuario)
     logger.info(f"Contraseña cambiada por el propio usuario: {usuario.email}")
     auditoria.registrar("contrasena_cambiada", http, usuario=usuario)
-    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion})
+    token = crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion,
+                                "mfa": bool(getattr(http.state, "sesion_mfa", False))})
     poner_cookie_sesion(response, token)
     return TokenResponse(access_token=token, usuario=UsuarioResponse.model_validate(usuario))
 

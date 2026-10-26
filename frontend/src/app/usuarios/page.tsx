@@ -15,6 +15,7 @@ import {
   Shield,
   UserCheck,
   AlertTriangle,
+  Smartphone,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
@@ -36,6 +37,8 @@ export default function UsuariosPage() {
   const [usuarioAEliminar, setUsuarioAEliminar] = useState<Usuario | null>(null);
   const [usuarioARestablecer, setUsuarioARestablecer] = useState<Usuario | null>(null);
   const [eliminando, setEliminando] = useState(false);
+  const [usuarioSinVerificacion, setUsuarioSinVerificacion] = useState<Usuario | null>(null);
+  const [restableciendo, setRestableciendo] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(null);
 
   useEffect(() => {
@@ -93,6 +96,23 @@ export default function UsuariosPage() {
       toast.error(msg);
     } finally {
       setEliminando(false);
+    }
+  };
+
+  const confirmarRestablecerVerificacion = async () => {
+    if (!usuarioSinVerificacion) return;
+    setRestableciendo(true);
+    try {
+      const { data } = await apiAuth.restablecerDobleFactorUsuario(usuarioSinVerificacion.id);
+      toast.success(data.message);
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === usuarioSinVerificacion.id ? { ...u, doble_factor_activo: false } : u))
+      );
+      setUsuarioSinVerificacion(null);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "No se pudo restablecer la verificación"));
+    } finally {
+      setRestableciendo(false);
     }
   };
 
@@ -239,6 +259,7 @@ export default function UsuariosPage() {
                     <th>Correo Electrónico</th>
                     <th>Rol</th>
                     <th>Estado</th>
+                    <th>Verificación en dos pasos</th>
                     <th>Fecha de Registro</th>
                     <th className="text-right">Acciones</th>
                   </tr>
@@ -309,6 +330,26 @@ export default function UsuariosPage() {
                           </span>
                         </td>
 
+                        {/* Verificación en dos pasos: obligatoria para los administradores */}
+                        <td className="px-4 py-3">
+                          {u.doble_factor_activo ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Activa
+                            </span>
+                          ) : esAdmin ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium"
+                              title="Vincula su app de autenticación la próxima vez que inicie sesión"
+                            >
+                              <Smartphone className="w-3.5 h-3.5" />
+                              Pendiente
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">No requerida</span>
+                          )}
+                        </td>
+
                         {/* Fecha */}
                         <td className="px-4 py-3.5 text-xs text-slate-400">
                           <div className="flex items-center gap-1.5">
@@ -337,6 +378,16 @@ export default function UsuariosPage() {
                               >
                                 <KeyRound className="w-4 h-4" />
                               </button>
+                              {u.doble_factor_activo && (
+                                <button
+                                  onClick={() => setUsuarioSinVerificacion(u)}
+                                  className="p-1.5 text-slate-500 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                  title="Restablecer verificación en dos pasos"
+                                  aria-label={`Restablecer verificación en dos pasos de ${u.email}`}
+                                >
+                                  <Smartphone className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => setUsuarioAEliminar(u)}
                                 className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
@@ -371,6 +422,42 @@ export default function UsuariosPage() {
         usuarioObjetivo={usuarioARestablecer}
         onClose={() => setUsuarioARestablecer(null)}
       />
+
+      {/* Modal Restablecer verificación en dos pasos */}
+      {usuarioSinVerificacion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-dark-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white text-center mb-2">¿Restablecer la verificación?</h3>
+            <p className="text-sm text-slate-400 text-center mb-6">
+              Se desvincula la app de autenticación de{" "}
+              <strong className="text-white">{usuarioSinVerificacion.email}</strong> y se cierran sus sesiones. Al
+              volver a entrar con su contraseña, vinculará la app de nuevo. Úsalo solo si perdió el celular y sus
+              códigos de respaldo.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUsuarioSinVerificacion(null)}
+                disabled={restableciendo}
+                className="btn-secondary text-sm py-2 px-4"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarRestablecerVerificacion}
+                disabled={restableciendo}
+                className="btn-primary text-sm py-2 px-4"
+              >
+                {restableciendo ? "Restableciendo..." : "Sí, restablecer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Confirmación de Eliminación */}
       {usuarioAEliminar && (

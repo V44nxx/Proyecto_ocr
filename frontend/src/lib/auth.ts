@@ -13,7 +13,7 @@ const USER_KEY = "ocr_user";
 const TOKEN_KEY_ANTERIOR = "ocr_access_token";
 
 export const auth = {
-  guardarSesion(data: TokenResponse): void {
+  guardarSesion(data: Pick<TokenResponse, "usuario">): void {
     if (typeof window !== "undefined") {
       // Limpiar cualquier residuo de sesión previa de otro usuario
       localStorage.removeItem("ultimo_documento_id");

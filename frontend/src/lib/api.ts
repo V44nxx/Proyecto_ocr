@@ -3,6 +3,8 @@ import { auth } from "./auth";
 import type {
   Usuario,
   TokenResponse,
+  LoginResponse,
+  ConfigurarDobleFactor,
   Documento,
   DocumentoEstadoResponse,
   Persona,
@@ -121,7 +123,19 @@ apiClient.interceptors.response.use(
 // ──────────────────────────────────────────
 export const apiAuth = {
   login: (email: string, password: string) =>
-    apiClient.post<TokenResponse>("/api/auth/login", { email, password }),
+    apiClient.post<LoginResponse>("/api/auth/login", { email, password }),
+
+  /** Segundo paso de un administrador: código de la app o uno de respaldo. */
+  loginDobleFactor: (desafio: string, codigo: string) =>
+    apiClient.post<LoginResponse>("/api/auth/login/2fa", { desafio, codigo }),
+
+  /** Primer ingreso de un administrador: genera el QR para vincular la app de autenticación. */
+  configurarDobleFactor: (desafio: string) =>
+    apiClient.post<ConfigurarDobleFactor>("/api/auth/login/2fa/configurar", { desafio }),
+
+  /** Confirma con el primer código; la respuesta trae los códigos de respaldo (se muestran una sola vez). */
+  activarDobleFactor: (desafio: string, codigo: string) =>
+    apiClient.post<LoginResponse>("/api/auth/login/2fa/activar", { desafio, codigo }),
 
   /** Cierra la sesión en el servidor: la cookie se borra y ese token deja de servir aunque alguien lo tenga. */
   logout: () => apiClient.post<{ message: string }>("/api/auth/logout"),
@@ -169,6 +183,10 @@ export const apiAuth = {
 
   restablecerPasswordUsuario: (userId: string, passwordNueva: string) =>
     apiClient.post<{ message: string }>(`/api/auth/users/${userId}/password`, { password_nueva: passwordNueva }),
+
+  /** Desvincula la app de autenticación de otro usuario y cierra sus sesiones (solo administrador). */
+  restablecerDobleFactorUsuario: (userId: string) =>
+    apiClient.post<{ message: string }>(`/api/auth/users/${userId}/doble-factor/restablecer`),
 
   /** Registro de auditoría (solo administrador), lo más reciente primero. */
   auditoria: (params: { limite?: number; desde?: number; accion?: string; email?: string } = {}) =>

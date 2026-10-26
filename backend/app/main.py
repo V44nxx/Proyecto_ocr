@@ -47,12 +47,13 @@ async def lifespan(app: FastAPI):
     if config_mod.secret_key_publica:
         logger.error(
             "SECRET_KEY es una clave de ejemplo publicada en el repositorio: con ella cualquiera podría firmar "
-            "sesiones. Se generó una temporal (las sesiones se cierran en cada reinicio); define una propia."
+            "sesiones. Se generó una temporal (las sesiones se cierran en cada reinicio y la verificación en dos "
+            "pasos de los administradores deja de servir); define una propia."
         )
     elif config_mod.secret_key_temporal:
         logger.warning(
-            "SECRET_KEY no está definida: se generó una temporal y las sesiones se cerrarán en cada reinicio. "
-            "Defínela en las variables de entorno."
+            "SECRET_KEY no está definida: se generó una temporal, las sesiones se cerrarán en cada reinicio y la "
+            "verificación en dos pasos de los administradores dejará de servir. Defínela en las variables de entorno."
         )
     elif len(settings.SECRET_KEY.encode("utf-8")) < 32:
         logger.warning("SECRET_KEY tiene menos de 32 bytes: usa una más larga (por ejemplo, la de secrets.token_urlsafe(64)).")

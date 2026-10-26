@@ -27,8 +27,10 @@ def crear_usuario(db, email, rol="usuario", clave=None):
 
 
 def token_de(usuario):
+    """Sesión completa: para un administrador, como si ya hubiera pasado la verificación en dos pasos."""
     from app.routers.auth import crear_token_acceso
-    return crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0})
+    return crear_token_acceso({"sub": str(usuario.id), "email": usuario.email, "ver": usuario.version_sesion or 0,
+                               "mfa": True})
 
 
 def cabecera(usuario):

@@ -22,6 +22,32 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.12.0] - 2026-10-25
+
+**Resumen**
+
+- Las cuentas de administrador entran con la contraseña y un código de 6 dígitos de una app de autenticación.
+- Al desplegar se cierran las sesiones de administrador abiertas: en el siguiente ingreso cada administrador vincula su app con un QR (una sola vez) y guarda sus códigos de respaldo.
+
+### Seguridad
+
+- **Verificación en dos pasos (TOTP) obligatoria para los administradores** (`app/utils/doble_factor.py`):
+  - con la contraseña correcta, el administrador no recibe la sesión sino un desafío que vence a los 10 minutos, firmado con otra clave y otra audiencia, que nunca sirve como sesión;
+  - primer ingreso: QR (o clave para escribir a mano) para Google Authenticator, Microsoft Authenticator o Authy; al confirmar con el primer código se entregan 10 códigos de respaldo y se cierran las demás sesiones de la cuenta;
+  - cada código de la app sirve una sola vez, y cada código de respaldo también;
+  - 5 códigos equivocados bloquean la verificación de esa cuenta durante 15 minutos, y cada fallo queda en la auditoría;
+  - con la verificación activa, la contraseña sola no permite vincular otra app;
+  - una sesión de administrador sin el segundo paso no sirve, incluidas las abiertas antes de esta versión;
+  - el secreto de la app se guarda cifrado con una clave derivada de `SECRET_KEY`, y los códigos de respaldo solo como hash.
+- **Restablecer la verificación**: desde Usuarios, un administrador desvincula la app de otro (por ejemplo, si perdió el celular) y cierra sus sesiones. Si no queda ningún administrador que pueda entrar, en el servidor: `python -m app.restablecer_doble_factor <correo>`. Cambiar `SECRET_KEY` también obliga a restablecerla.
+- Dependencias nuevas: `pyotp` 2.10.0 (códigos TOTP), `segno` 1.6.6 (QR) y `cryptography` 50.0.2, que ya venía instalada, ahora fijada.
+
+### Agregado
+
+- Pantallas del segundo paso en el inicio de sesión: vincular la app, guardar los códigos de respaldo (copiar o descargar) y escribir el código.
+- Usuarios muestra el estado de la verificación de cada cuenta (activa, pendiente o no requerida) y el botón para restablecerla.
+- Auditoría: verificación activada, código equivocado y verificación restablecida.
+
 ## [2.11.1] - 2026-10-25
 
 **Resumen**

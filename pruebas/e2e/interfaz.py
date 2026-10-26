@@ -11,10 +11,14 @@ Variables de entorno:
 Requiere el backend recién iniciado sobre la base recién sembrada y con SMTP_HOST apuntando al SMTP de captura.
 Cada caso queda en <salida>/e2e.json con su resultado; las capturas en <salida>/capturas.
 """
+import base64
 import email
+import hashlib
+import hmac
 import json
 import os
 import re
+import struct
 import sys
 import time
 import urllib.error
@@ -72,6 +76,15 @@ def login(page, correo, clave, esperar_dashboard=True):
     page.click("button[type=submit]")
     if esperar_dashboard:
         page.wait_for_url("**/dashboard", timeout=15000)
+
+
+def codigo_totp(secreto, momento=None):
+    """Código de 6 dígitos (RFC 6238) de la clave que muestra la pantalla de configuración."""
+    clave = base64.b32decode(secreto + "=" * (-len(secreto) % 8))
+    resumen = hmac.new(clave, struct.pack(">Q", int((time.time() if momento is None else momento) // 30)),
+                       hashlib.sha1).digest()
+    corte = resumen[-1] & 0x0F
+    return f"{(struct.unpack('>I', resumen[corte:corte + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
 
 
 with sync_playwright() as p:
@@ -187,14 +200,55 @@ with sync_playwright() as p:
     page.wait_for_url("**/dashboard", timeout=10000)
     caso("CP-UI-12", "Un usuario normal no ve la Auditoría ni puede entrar", menu.count() == 0 and "/dashboard" in page.url, page.url)
 
-    login(page, "admin@example.com", CLAVE)
+    # ── Verificación en dos pasos del administrador ─────────────────
+    login(page, "admin@example.com", CLAVE, esperar_dashboard=False)
+    expect(page.get_by_text("Protege tu cuenta de administrador")).to_be_visible(timeout=10000)
+    clave_app = page.locator("[data-clave-2fa]")
+    expect(page.get_by_alt_text("Código QR para vincular la app de autenticación")).to_be_visible(timeout=10000)
+    expect(clave_app).not_to_have_attribute("data-clave-2fa", "", timeout=10000)
+    secreto = clave_app.get_attribute("data-clave-2fa")
+    page.screenshot(path=str(CAPTURAS / "06_2fa_vincular_app.png"))
+    caso("CP-UI-20", "Administrador: con la contraseña sola no entra; ve el QR para vincular su app",
+         "/dashboard" not in page.url and cookie_sesion(ctx) is None and len(secreto) >= 16,
+         f"clave de {len(secreto)} caracteres; cookie: {cookie_sesion(ctx) is not None}")
+
+    page.fill("#codigo-verificacion", codigo_totp(secreto))   # con los 6 dígitos se envía solo
+    expect(page.get_by_text("Guarda tus códigos de respaldo")).to_be_visible(timeout=10000)
+    codigos = page.locator("ol li").count()
+    entrar = page.get_by_role("button", name="Entrar al panel")
+    bloqueado = entrar.is_disabled()
+    page.screenshot(path=str(CAPTURAS / "07_2fa_codigos_respaldo.png"))
+    page.get_by_label(re.compile("Los guardé en un lugar seguro")).check()
+    entrar.click()
+    page.wait_for_url("**/dashboard", timeout=15000)
+    caso("CP-UI-21", "Activar: el código de la app abre la sesión y muestra 10 códigos de respaldo",
+         codigos == 10 and bloqueado and cookie_sesion(ctx) is not None,
+         f"códigos: {codigos}; botón bloqueado hasta confirmar: {bloqueado}")
+
+    login(page, "admin@example.com", CLAVE, esperar_dashboard=False)
+    expect(page.get_by_text("Verificación en dos pasos", exact=True)).to_be_visible(timeout=10000)
+    page.fill("#codigo-verificacion", "000000")
+    error_codigo = page.get_by_text("El código no es correcto")
+    expect(error_codigo).to_be_visible(timeout=10000)
+    page.screenshot(path=str(CAPTURAS / "08_2fa_codigo_equivocado.png"))
+    page.fill("#codigo-verificacion", codigo_totp(secreto, time.time() + 30))   # el actual ya se usó al activar
+    page.wait_for_url("**/dashboard", timeout=15000)
+    caso("CP-UI-22", "Siguiente ingreso: un código equivocado no entra y el de la app sí", True, "error mostrado y luego panel")
+
+    page.goto(FRONT + "/usuarios")
+    fila_admin = page.locator("tbody tr", has_text="admin@example.com")
+    expect(fila_admin).to_contain_text("Activa", timeout=10000)
+    caso("CP-UI-23", "Usuarios: muestra la verificación en dos pasos del administrador como activa",
+         "Activa" in fila_admin.inner_text(), fila_admin.inner_text().replace(chr(10), " | ")[:90])
+
     page.locator("aside").get_by_text("Auditoría").click()
     page.wait_for_url("**/auditoria", timeout=10000)
     expect(page.locator("tbody tr").first).to_be_visible(timeout=10000)
     acciones = page.locator("tbody tr td:nth-child(3)").all_inner_texts()
     page.screenshot(path=str(CAPTURAS / "05_auditoria.png"))
-    caso("CP-UI-13", "El administrador ve la Auditoría con los intentos fallidos y exportaciones",
-         {"Inicio de sesión fallido", "Inicio de sesión", "Exportación de personas"} <= set(acciones), sorted(set(acciones)))
+    caso("CP-UI-13", "El administrador ve la Auditoría con los intentos fallidos, exportaciones y la verificación",
+         {"Inicio de sesión fallido", "Inicio de sesión", "Exportación de personas", "Verificación en dos pasos activada",
+          "Código de verificación equivocado"} <= set(acciones), sorted(set(acciones)))
     page.select_option("#filtro-accion", "login_fallido")
     page.wait_for_timeout(1500)
     filtradas = set(page.locator("tbody tr td:nth-child(3)").all_inner_texts())

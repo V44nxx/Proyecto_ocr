@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.models.usuario import Usuario
 from app.routers.auth import crear_hash_password
-from tests.utilidades_pg import requiere_postgres
+from tests.utilidades_pg import cabecera, requiere_postgres
 
 
 @pytest.fixture
@@ -175,7 +175,10 @@ def test_cambiar_password_propia(cliente, bd):
 def test_admin_restablece_la_de_otro_usuario(cliente, bd):
     _crear(bd, "admin@example.com", "ClaveAdmin2026", rol="admin")
     uid = _crear(bd, "ana@example.com", "ClaveVieja2026")
-    admin = {"Authorization": f"Bearer {_login(cliente, 'admin@example.com', 'ClaveAdmin2026')}"}
+    # Sesión completa de administrador (con el segundo paso): lo que se prueba aquí es el restablecimiento
+    db = bd.SessionLocal()
+    admin = cabecera(db.query(Usuario).filter(Usuario.email == "admin@example.com").one())
+    db.close()
     sesion_ana = _login(cliente, "ana@example.com", "ClaveVieja2026")
 
     r = cliente.post(f"/api/auth/users/{uid}/password", headers={"Authorization": f"Bearer {sesion_ana}"},

@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, Enum, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -25,10 +25,19 @@ class Usuario(Base):
     # Recuperación por correo: solo se guarda el hash del token, que sirve una vez y vence
     reset_token_hash = Column(String(64), nullable=True, index=True)
     reset_token_expira = Column(DateTime(timezone=True), nullable=True)
+    # Verificación en dos pasos (app/utils/doble_factor.py): secreto cifrado, último paso usado y hashes de respaldo
+    totp_secreto = Column(String(255), nullable=True)
+    totp_activo = Column(Boolean, nullable=False, default=False, server_default="false")
+    totp_ultimo_paso = Column(Integer, nullable=True)
+    totp_codigos_respaldo = Column(JSONB, nullable=True)
 
     # Relaciones
     documentos = relationship("Documento", back_populates="usuario", lazy="dynamic")
     comparaciones = relationship("Comparacion", back_populates="usuario", lazy="dynamic")
+
+    @property
+    def doble_factor_activo(self) -> bool:
+        return bool(self.totp_activo)
 
     def __repr__(self):
         return f"<Usuario {self.email} [{self.rol}]>"

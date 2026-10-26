@@ -225,6 +225,13 @@ export default function ModalCrearUsuario({
                 </p>
               </button>
             </div>
+            {rol === "admin" && (
+              <p role="status" className="mt-2.5 text-[11px] leading-snug text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                Un administrador ve la auditoría y puede crear, borrar y restablecer cuentas. La primera vez que entre
+                tendrá que vincular una app de autenticación (verificación en dos pasos). Dale este rol solo a quien
+                lo necesite.
+              </p>
+            )}
           </div>
 
           {/* Footer botones */}

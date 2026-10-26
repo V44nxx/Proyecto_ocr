@@ -14,6 +14,7 @@ import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiComparacion, getErrorMessage } from "@/lib/api";
+import { avisarDescargaDatosPersonales } from "@/lib/avisos";
 import { auth } from "@/lib/auth";
 import type { Comparacion, Diferencia } from "@/types";
 
@@ -291,7 +292,7 @@ export default function ComparacionPage() {
     setDescargando(true);
     try {
       await apiComparacion.descargarReporte(comparacionActiva.id, comparacionActiva.nombre_original);
-      toast.success("Reporte descargado");
+      avisarDescargaDatosPersonales("Reporte descargado");
     } catch { toast.error("Error descargando reporte"); }
     finally { setDescargando(false); }
   };

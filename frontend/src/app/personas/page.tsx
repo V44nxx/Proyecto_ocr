@@ -19,6 +19,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
+import { avisarDescargaDatosPersonales } from "@/lib/avisos";
 import { auth } from "@/lib/auth";
 import { precargarPaginaPdf } from "@/lib/paginasPdf";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc, validarCambioTipoDocumento } from "@/lib/formatters";
@@ -708,7 +709,7 @@ function PersonasContent() {
         documentoId: docId,
         personaIds: personasFiltradas.map((p) => p.id),
       });
-      toast.success(`${personasFiltradas.length} persona(s) exportada(s) a Excel`, { id: "export-excel" });
+      avisarDescargaDatosPersonales(`${personasFiltradas.length} persona(s) exportada(s) a Excel`, "export-excel");
     } catch {
       toast.error("Error al exportar a Excel", { id: "export-excel" });
     } finally {
@@ -725,7 +726,7 @@ function PersonasContent() {
         documentoId: docId,
         personaIds: Array.from(seleccionados),
       });
-      toast.success(`${seleccionados.size} persona(s) exportada(s) a Excel`, { id: "export-seleccion" });
+      avisarDescargaDatosPersonales(`${seleccionados.size} persona(s) exportada(s) a Excel`, "export-seleccion");
     } catch {
       toast.error("Error al exportar personas a Excel", { id: "export-seleccion" });
     } finally {

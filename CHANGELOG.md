@@ -22,6 +22,57 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.13.0] - 2026-10-26
+
+**Resumen**
+
+- Avisos en todas las pantallas cuando algo puede salir mal:
+  - sin internet;
+  - conexión lenta;
+  - servidor sin responder o actualizándose;
+  - versión nueva instalándose;
+  - sesión por vencer o ya cerrada.
+- Avisos en lo delicado: los Excel con datos personales, cerrar la pestaña con una subida en curso, Bloq Mayús al escribir la contraseña, la hora del celular en la verificación en dos pasos y darle a alguien el rol de administrador.
+
+### Agregado
+
+- **Avisos generales** (`components/ui/AvisosSistema.tsx` y `lib/estadoConexion.ts`), arriba al centro y en todas las pantallas, incluido el inicio de sesión:
+  - **Sin conexión a internet**: aviso fijo mientras dure. Cuando vuelve la conexión, otro aviso lo confirma.
+  - **El servidor no responde**: el servidor contesta 502, 503 o 504, o una petición falla con el internet funcionando. Se revisa solo cada 15 segundos, tiene botón «Reintentar» y avisa cuando el servidor vuelve.
+  - **Conexión lenta**: si la mediana de las últimas peticiones pasa de 4 segundos, o si el navegador (Chrome o Edge) informa una red 2G. Se quita solo cuando la conexión mejora.
+  - **Versión nueva**: la pestaña compara su versión con la del servidor al abrir, cada 5 minutos y al volver a la pestaña. Si no coinciden, avisa que hay una actualización y ofrece «Recargar».
+  - **Sesión por vencer**: 5 minutos antes avisa que se guarde lo que se está editando. Solo se guarda la hora de vencimiento, nunca el token.
+- **Inicio de sesión**:
+  - Si la sesión se cerró (venció, se cambió la contraseña o se cerró desde otro equipo), lo explica al volver a la pantalla de inicio.
+  - Avisa si el navegador bloquea las cookies.
+  - Avisa si Bloq Mayús está activado, aquí y en todos los campos de contraseña.
+- **Verificación en dos pasos**: después de un código rechazado, recuerda revisar que la hora del celular esté en automático. Fue la causa más común en las pruebas.
+- **Datos personales en los Excel**: la pantalla de Exportación lo advierte junto al botón, y cada descarga lo recuerda: la de Exportación, Personas (todas o la selección), el reporte de Comparación y la ficha del Dashboard.
+- **Subida de fichas**:
+  - Sin internet, no intenta subir y lo dice.
+  - Con la conexión lenta y más de 10 MB, avisa que va a tardar.
+  - Mientras los archivos suben, el navegador advierte antes de cerrar o recargar la pestaña.
+- **Crear un administrador**: el formulario explica qué puede hacer ese rol y que tendrá que vincular la verificación en dos pasos.
+
+### Corregido
+
+- Al exportar una ficha desde el Dashboard no aparecía nada, ni cuando salía bien ni cuando fallaba (solo quedaba en la consola).
+- Con la sesión cerrada, varias peticiones simultáneas recibían 401 y cada una volvía a cerrar la sesión local.
+- El mensaje de error de red le hablaba al usuario de «Dokploy». Ahora distingue sin internet de servidor sin responder.
+- Una respuesta del proxy (página HTML o texto plano) ya no se muestra como mensaje de error.
+
+### Pruebas
+
+- e2e de 23 a 30 casos:
+  - aviso de datos personales al exportar (CP-UI-24);
+  - sin internet (CP-UI-25);
+  - servidor sin responder (CP-UI-26);
+  - conexión lenta, con 4,5 s de latencia simulada (CP-UI-27);
+  - versión nueva en el servidor (CP-UI-28);
+  - sesión cerrada desde otro lado (CP-UI-29);
+  - Bloq Mayús (CP-UI-30).
+- CP-UI-22 también revisa la ayuda sobre la hora del celular.
+
 ## [2.12.2] - 2026-10-26
 
 **Resumen**

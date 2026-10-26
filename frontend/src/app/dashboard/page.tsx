@@ -12,7 +12,8 @@ import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
-import { apiDocumentos, apiPersonas, apiExportacion } from "@/lib/api";
+import { apiDocumentos, apiPersonas, apiExportacion, getErrorMessage } from "@/lib/api";
+import { avisarDescargaDatosPersonales } from "@/lib/avisos";
 import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, getTipoDocInfo } from "@/lib/formatters";
 import { dividirNombreCompleto } from "@/lib/nombres";
@@ -110,8 +111,9 @@ export default function DashboardPage() {
         documentoId: docSeleccionadoModal.id,
         nombreArchivo: `personas_${nombreLimpio}.xlsx`,
       });
+      avisarDescargaDatosPersonales("Ficha exportada a Excel", "export-ficha");
     } catch (err) {
-      console.error("Error al exportar ficha:", err);
+      toast.error(getErrorMessage(err, "No se pudo exportar la ficha"), { id: "export-ficha" });
     } finally {
       setExportandoModal(false);
     }

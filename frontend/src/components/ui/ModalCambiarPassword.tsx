@@ -5,6 +5,7 @@ import { KeyRound, X } from "lucide-react";
 import toast from "react-hot-toast";
 import CampoPassword from "@/components/ui/CampoPassword";
 import { apiAuth, getErrorMessage } from "@/lib/api";
+import { auth } from "@/lib/auth";
 import { validarPasswordNueva } from "@/lib/password";
 import type { Usuario } from "@/types";
 
@@ -54,7 +55,8 @@ export default function ModalCambiarPassword({ isOpen, onClose, usuarioObjetivo 
         const { data } = await apiAuth.restablecerPasswordUsuario(usuarioObjetivo.id, nueva);
         toast.success(data.message);
       } else {
-        await apiAuth.cambiarPassword(actual, nueva); // el backend deja esta sesión con una cookie nueva
+        const { data } = await apiAuth.cambiarPassword(actual, nueva); // el backend deja esta sesión con una cookie nueva
+        auth.anotarVencimiento(data.access_token);
         toast.success("Contraseña cambiada. Se cerraron tus otras sesiones.");
       }
       setGuardando(false);

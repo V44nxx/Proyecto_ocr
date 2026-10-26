@@ -179,6 +179,71 @@ with sync_playwright() as p:
     quedan = list(EXPORTS.glob("*.xlsx")) if EXPORTS and EXPORTS.exists() else []
     caso("CP-UI-10", "Exportación: descarga el Excel y el servidor no se queda con la copia",
          ruta_local.read_bytes()[:2] == b"PK" and not quedan, f"{archivo.suggested_filename}; en el servidor: {len(quedan)}")
+    aviso_descarga = page.get_by_text("Tiene datos personales")
+    expect(aviso_descarga).to_be_visible(timeout=10000)
+    callout = page.get_by_text("Datos personales:", exact=True)
+    caso("CP-UI-24", "Exportación: avisa que el Excel trae datos personales, antes y después de descargarlo",
+         callout.is_visible() and aviso_descarga.is_visible(), aviso_descarga.inner_text()[:80])
+
+    # ── Avisos de conexión ──────────────────────────────────────────
+    page.goto(FRONT + "/dashboard")
+    expect(page.get_by_role("button", name=re.compile("Actualizar")).first).to_be_visible(timeout=15000)
+    ctx.set_offline(True)
+    aviso_internet = page.locator("[data-aviso=internet]")
+    expect(aviso_internet).to_be_visible(timeout=10000)
+    page.screenshot(path=str(CAPTURAS / "09_aviso_sin_internet.png"))
+    texto_internet = aviso_internet.inner_text()
+    ctx.set_offline(False)
+    expect(aviso_internet).to_be_hidden(timeout=10000)
+    expect(page.get_by_text("Volvió la conexión a internet")).to_be_visible(timeout=10000)
+    caso("CP-UI-25", "Sin internet: aviso fijo mientras dura, y aviso de que volvió",
+         "Sin conexión a internet" in texto_internet, texto_internet.replace(chr(10), " | ")[:90])
+
+    page.route("**/api/**", lambda ruta: ruta.abort())
+    page.route("**/health", lambda ruta: ruta.abort())
+    page.get_by_role("button", name=re.compile("Actualizar")).first.click()
+    aviso_servidor = page.locator("[data-aviso=servidor]")
+    expect(aviso_servidor).to_be_visible(timeout=15000)
+    page.screenshot(path=str(CAPTURAS / "10_aviso_servidor.png"))
+    page.unroute_all()
+    expect(aviso_servidor).to_be_hidden(timeout=25000)   # se revisa solo cada 15 segundos
+    caso("CP-UI-26", "Servidor sin responder: aviso con reintento automático, y se quita cuando vuelve", True,
+         "aviso visible y luego oculto")
+
+    cdp = ctx.new_cdp_session(page)
+    cdp.send("Network.enable")
+    cdp.send("Network.emulateNetworkConditions",
+             {"offline": False, "latency": 4500, "downloadThroughput": -1, "uploadThroughput": -1})
+    aviso_lenta = page.locator("[data-aviso=lenta]")
+    for _ in range(4):
+        if aviso_lenta.is_visible():
+            break
+        page.get_by_role("button", name=re.compile("Actualizar")).first.click()
+        page.wait_for_timeout(9000)
+    expect(aviso_lenta).to_be_visible(timeout=30000)
+    page.screenshot(path=str(CAPTURAS / "11_aviso_conexion_lenta.png"))
+    cdp.send("Network.emulateNetworkConditions",
+             {"offline": False, "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1})
+    for _ in range(4):                 # con respuestas rápidas otra vez, el aviso se quita solo
+        if aviso_lenta.is_hidden():
+            break
+        page.get_by_role("button", name=re.compile("Actualizar")).first.click()
+        page.wait_for_timeout(2000)
+    expect(aviso_lenta).to_be_hidden(timeout=15000)
+    caso("CP-UI-27", "Conexión lenta: avisa que puede tardar, y se quita cuando la conexión mejora", True,
+         "visible con 4,5 s de latencia y oculto al normalizarse")
+
+    page.route("**/health", lambda ruta: ruta.fulfill(status=200, content_type="application/json",
+                                                       body='{"status":"ok","version":"99.0.0"}'))
+    page.reload()
+    aviso_version = page.locator("[data-aviso=version]")
+    expect(aviso_version).to_be_visible(timeout=15000)
+    page.screenshot(path=str(CAPTURAS / "12_aviso_version_nueva.png"))
+    texto_version = aviso_version.inner_text()
+    page.unroute_all()
+    caso("CP-UI-28", "Versión nueva en el servidor: avisa y ofrece recargar",
+         "99.0.0" in texto_version and aviso_version.get_by_role("button", name="Recargar").is_visible(),
+         texto_version.replace(chr(10), " | ")[:90])
 
     # ── Política de contraseñas en la interfaz ──────────────────────
     page.goto(FRONT + "/dashboard")
@@ -199,6 +264,24 @@ with sync_playwright() as p:
     page.goto(FRONT + "/auditoria")
     page.wait_for_url("**/dashboard", timeout=10000)
     caso("CP-UI-12", "Un usuario normal no ve la Auditoría ni puede entrar", menu.count() == 0 and "/dashboard" in page.url, page.url)
+
+    # ── Sesión cerrada desde otro lado y Bloq Mayús ─────────────────
+    token_actual = cookie_sesion(ctx)["value"]
+    urllib.request.urlopen(urllib.request.Request(API + "/api/auth/logout", method="POST",
+                                                  headers={"Authorization": f"Bearer {token_actual}"}))
+    page.goto(FRONT + "/personas")
+    page.wait_for_url(FRONT + "/", timeout=15000)
+    aviso_sesion = page.get_by_text("Tu sesión se cerró.")
+    expect(aviso_sesion).to_be_visible(timeout=10000)
+    page.screenshot(path=str(CAPTURAS / "13_aviso_sesion_cerrada.png"))
+    caso("CP-UI-29", "Sesión cerrada desde otro lado: lleva al inicio y explica por qué", True, page.url)
+
+    page.locator("#password").dispatch_event("keydown", {"key": "A", "modifierCapsLock": True})
+    aviso_mayus = page.get_by_text("Bloq Mayús está activado")
+    expect(aviso_mayus).to_be_visible(timeout=5000)
+    page.locator("#password").dispatch_event("keyup", {"key": "A", "modifierCapsLock": False})
+    expect(aviso_mayus).to_be_hidden(timeout=5000)
+    caso("CP-UI-30", "Inicio de sesión: avisa cuando Bloq Mayús está activado", True, "aparece y se quita")
 
     # ── Verificación en dos pasos del administrador ─────────────────
     login(page, "admin@example.com", CLAVE, esperar_dashboard=False)
@@ -230,6 +313,8 @@ with sync_playwright() as p:
     page.fill("#codigo-verificacion", "000000")
     error_codigo = page.get_by_text("El código no es correcto")
     expect(error_codigo).to_be_visible(timeout=10000)
+    ayuda_hora = page.get_by_text("hora de tu celular", exact=False)
+    expect(ayuda_hora).to_be_visible(timeout=5000)
     page.screenshot(path=str(CAPTURAS / "08_2fa_codigo_equivocado.png"))
     page.fill("#codigo-verificacion", codigo_totp(secreto, time.time() + 30))   # el actual ya se usó al activar
     page.wait_for_url("**/dashboard", timeout=15000)

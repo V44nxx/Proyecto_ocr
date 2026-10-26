@@ -15,10 +15,14 @@ import {
 import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
-import { apiDocumentos, getErrorMessage } from "@/lib/api";
+import { apiDocumentos, getErrorMessage, MENSAJE_SIN_INTERNET } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { conexion } from "@/lib/estadoConexion";
 import { useRouter } from "next/navigation";
 import type { AccionFicha, Documento, DocumentoEstadoResponse, FichaExistenteInfo } from "@/types";
+
+// Con la conexión lenta, desde este tamaño total se avisa que la subida va a tardar
+const MEGAS_SUBIDA_PESADA = 10;
 
 const ESTADO_CONFIG: Record<string, { label: string; clase: string; icon: React.ReactNode }> = {
   pendiente: { label: "Pendiente", clase: "badge-neutral", icon: <Clock className="w-3 h-3" /> },
@@ -54,6 +58,16 @@ export default function DocumentosPage() {
   const { collapsed } = useSidebar();
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [subiendo, setSubiendo] = useState(false);
+  // Mientras los archivos viajan al servidor, cerrar o recargar la pestaña cancela la subida: el navegador lo advierte
+  useEffect(() => {
+    if (!subiendo) return;
+    const advertir = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", advertir);
+    return () => window.removeEventListener("beforeunload", advertir);
+  }, [subiendo]);
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([]);
   const [excelSeleccionado, setExcelSeleccionado] = useState<File | null>(null);
   const [comparacionId, setComparacionId] = useState<string | null>(null);
@@ -362,6 +376,18 @@ export default function DocumentosPage() {
     if (archivosSeleccionados.length === 0) {
       toast.error("Selecciona al menos un PDF");
       return;
+    }
+    if (conexion.obtener().sinInternet || !navigator.onLine) {
+      toast.error(MENSAJE_SIN_INTERNET, { id: "subida-conexion" });
+      return;
+    }
+    // Con la conexión lenta, una subida pesada tarda: se avisa antes, sin impedirla
+    const megas = archivosSeleccionados.reduce((total, f) => total + f.size, 0) / (1024 * 1024);
+    if (conexion.obtener().lenta && megas >= MEGAS_SUBIDA_PESADA) {
+      toast(
+        `Tu conexión está lenta y los archivos pesan ${megas.toFixed(0)} MB: la subida puede tardar varios minutos. No cierres esta pestaña hasta que termine.`,
+        { id: "subida-conexion", duration: 9000 }
+      );
     }
     setVerificandoFichas(true);
     try {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -20,7 +20,7 @@ import {
   CheckCircle2,
   ScanLine,
 } from "lucide-react";
-import { apiAuth } from "@/lib/api";
+import { apiAuth, CLAVE_AVISO_LOGIN, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { useTheme } from "@/context/ThemeContext";
 import LogoKondID from "@/components/ui/LogoKondID";
@@ -38,10 +38,28 @@ export default function LoginPage() {
   const [ocultarDatosID, setOcultarDatosID] = useState(false);
   // Administradores: después de la contraseña, el código de la app (o vincularla la primera vez)
   const [segundoPaso, setSegundoPaso] = useState<{ desafio: string; configurar: boolean } | null>(null);
+  // Avisos de esta pantalla: la sesión anterior se cerró, el navegador bloquea las cookies, Bloq Mayús activado
+  const [sesionCerrada, setSesionCerrada] = useState(false);
+  const [cookiesBloqueadas, setCookiesBloqueadas] = useState(false);
+  const [mayusculas, setMayusculas] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(CLAVE_AVISO_LOGIN)) {
+        sessionStorage.removeItem(CLAVE_AVISO_LOGIN);
+        setSesionCerrada(true);
+      }
+    } catch {}
+    setCookiesBloqueadas(!navigator.cookieEnabled);
+  }, []);
+
+  const revisarMayusculas = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (typeof e.getModifierState === "function") setMayusculas(e.getModifierState("CapsLock"));
+  };
 
   const entrar = (data: LoginResponse) => {
     const usuario = data.usuario as Usuario;
-    auth.guardarSesion({ usuario });
+    auth.guardarSesion({ usuario, access_token: data.access_token });
     toast.success(`Bienvenido, ${usuario.nombre}`);
     window.location.href = "/dashboard";
   };
@@ -68,8 +86,8 @@ export default function LoginPage() {
         message?: string;
       };
       // Un solo aviso que se reemplaza en cada intento: así el último (por ejemplo, el de esperar) queda a la vista
-      if (!error.response) {
-        toast.error(`Error de conexión con la API (${error.message || "Servidor no responde"})`, { id: "login-error" });
+      if (!error.response || (error.response.status ?? 0) >= 502) {
+        toast.error(getErrorMessage(err), { id: "login-error" });
       } else {
         const mensaje = error.response?.data?.detail || "Credenciales incorrectas";
         toast.error(typeof mensaje === "string" ? mensaje : "Error de autenticación", { id: "login-error" });
@@ -301,6 +319,23 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              {(sesionCerrada || cookiesBloqueadas) && (
+                <div role="status" className="mb-4 space-y-1.5 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2.5 text-[11px] leading-snug text-amber-900 dark:text-amber-200">
+                  {sesionCerrada && (
+                    <p>
+                      <strong>Tu sesión se cerró.</strong> Venció, cambiaste la contraseña o se cerró desde otro equipo.
+                      Vuelve a iniciar sesión.
+                    </p>
+                  )}
+                  {cookiesBloqueadas && (
+                    <p>
+                      <strong>Tu navegador está bloqueando las cookies.</strong> KondID las necesita para mantener tu
+                      sesión: permítelas para este sitio.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Formulario */}
               <form onSubmit={handleLogin} className="space-y-3.5">
                 {/* Campo Correo */}
@@ -335,9 +370,15 @@ export default function LoginPage() {
                     >
                       Contraseña
                     </label>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                      Sensible a mayúsculas
-                    </span>
+                    {mayusculas ? (
+                      <span role="status" className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                        Bloq Mayús está activado
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                        Sensible a mayúsculas
+                      </span>
+                    )}
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
@@ -346,6 +387,9 @@ export default function LoginPage() {
                       type={mostrarPass ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={revisarMayusculas}
+                      onKeyUp={revisarMayusculas}
+                      onBlur={() => setMayusculas(false)}
                       placeholder="••••••••••••"
                       className="w-full bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/90 dark:border-white/[0.08] rounded-xl pl-9 pr-10 py-2 text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 transition-all font-mono"
                       autoComplete="current-password"

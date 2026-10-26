@@ -1,5 +1,6 @@
-import axios, { type AxiosProgressEvent } from "axios";
+import axios, { type AxiosProgressEvent, type InternalAxiosRequestConfig } from "axios";
 import { auth } from "./auth";
+import { conexion } from "./estadoConexion";
 import type {
   Usuario,
   TokenResponse,
@@ -29,9 +30,14 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
 
   const anyErr = err as any;
   const data = anyErr?.response?.data;
+  const estado: number | undefined = anyErr?.response?.status;
+
+  // El proxy responde con una página HTML (no con JSON) cuando el servidor no está o el archivo es enorme
+  if (estado === 502 || estado === 503 || estado === 504) return MENSAJE_SERVIDOR_ACTUALIZANDO;
+  if (estado === 413 && typeof data !== "object") return "El archivo es demasiado grande para subirlo.";
 
   if (data) {
-    if (typeof data === "string") return data;
+    if (typeof data === "string") return data.trimStart().startsWith("<") ? defaultMsg : data;
     if (typeof data.detail === "string") return data.detail;
     if (Array.isArray(data.detail)) {
       const messages = data.detail.map((d: any) => {
@@ -52,16 +58,26 @@ export function getErrorMessage(err: unknown, defaultMsg: string = "Ocurrió un 
 
   if (anyErr.message && typeof anyErr.message === "string") {
     if (anyErr.message.toLowerCase().includes("network error")) {
-      return "Error de red: No se pudo conectar con el servidor (el servicio de backend podría estar reiniciándose o actualizándose en Dokploy). Por favor reintenta en unos segundos.";
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return MENSAJE_SIN_INTERNET;
+      return MENSAJE_SERVIDOR_SIN_RESPUESTA;
     }
     if (anyErr.message.toLowerCase().includes("timeout")) {
-      return "Tiempo de espera agotado al transferir el archivo. Por favor reintenta la subida.";
+      return "La operación tardó demasiado y se canceló. Si tu conexión está lenta, prueba con menos archivos a la vez o desde una red más estable.";
     }
     return anyErr.message;
   }
 
   return defaultMsg;
 }
+
+export const MENSAJE_SIN_INTERNET = "Sin conexión a internet. Revisa tu Wi-Fi o tus datos móviles y vuelve a intentarlo.";
+export const MENSAJE_SERVIDOR_SIN_RESPUESTA =
+  "No se pudo conectar con el servidor de KondID. Si tu internet funciona, puede estar actualizándose: intenta de nuevo en unos minutos.";
+export const MENSAJE_SERVIDOR_ACTUALIZANDO =
+  "El servidor de KondID se está reiniciando o actualizando. Intenta de nuevo en unos minutos.";
+
+/** Aviso que muestra la pantalla de inicio de sesión al llegar (lo deja quien cierra la sesión) */
+export const CLAVE_AVISO_LOGIN = "kondid_aviso_login";
 
 function getBaseUrl(): string {
   // En el navegador:
@@ -98,19 +114,53 @@ apiClient.interceptors.request.use((config) => {
     config.headers["Content-Type"] = "application/json";
   }
 
+  (config as ConfigMedida).inicioMs = Date.now();
   return config;
 });
 
-// Interceptor: manejar errores de autenticación (401)
+type ConfigMedida = InternalAxiosRequestConfig & { inicioMs?: number };
+
+// La página se recarga al ir al inicio, así que esto vuelve a false sola
+let saliendoPorSesionCerrada = false;
+
+/** Cuánto tardó la petición, y si sirve para medir la conexión: las subidas y descargas tardan por su tamaño */
+function medicion(config?: ConfigMedida): [number, boolean] {
+  const ms = config?.inicioMs ? Date.now() - config.inicioMs : 0;
+  const pesada = (typeof FormData !== "undefined" && config?.data instanceof FormData) || config?.responseType === "blob";
+  return [ms, !!config?.inicioMs && !pesada];
+}
+
+// Interceptor: estado de la conexión y errores de autenticación (401)
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    conexion.respuesta(...medicion(response.config));
+    return response;
+  },
   (error) => {
-    // En el login un 401 significa credenciales incorrectas: se muestra el error sin recargar la página
+    const estado = error.response?.status;
+    if (axios.isCancel(error)) {
+      // Cancelada por la propia pantalla: no dice nada de la conexión
+    } else if (estado === 502 || estado === 503 || estado === 504) {
+      conexion.servidorNoDisponible();
+    } else if (error.response) {
+      conexion.respuesta(...medicion(error.config));
+    } else if (error.code !== "ECONNABORTED") {
+      conexion.sinRespuesta();
+    }
+
+    // En el login un 401 significa credenciales incorrectas: se muestra el error sin recargar la página.
+    // Una pantalla hace varias peticiones a la vez: solo la primera respuesta 401 cierra la sesión y deja el aviso
+    // (las siguientes volverían a limpiar sessionStorage y lo borrarían)
     const url = String(error.config?.url || "");
     const esLogin = url.includes("/api/auth/login") || url.includes("/api/auth/logout");
-    if (error.response?.status === 401 && !esLogin) {
+    if (estado === 401 && !esLogin && !saliendoPorSesionCerrada) {
+      saliendoPorSesionCerrada = true;
+      const habiaSesion = auth.isAuthenticated();
       auth.cerrarSesion();
       if (typeof window !== "undefined") {
+        if (habiaSesion) {
+          try { sessionStorage.setItem(CLAVE_AVISO_LOGIN, "sesion_cerrada"); } catch {}
+        }
         window.location.href = "/";
       }
     }
@@ -440,6 +490,14 @@ export const apiSeguimiento = {
     apiClient.put<SeguimientoConfig>("/api/seguimiento/config", data),
 
   eliminarConfig: () => apiClient.delete<{ message: string }>("/api/seguimiento/config"),
+};
+
+// ──────────────────────────────────────────
+// SISTEMA
+// ──────────────────────────────────────────
+export const apiSistema = {
+  /** Estado y versión del servidor (no necesita sesión). */
+  salud: () => apiClient.get<{ status: string; version: string }>("/health", { timeout: 15000 }),
 };
 
 export default apiClient;

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 /** @type {import('next').NextConfig} */
 
 // Política de contenido obligatoria: el navegador bloquea lo que venga de otro origen.
@@ -28,9 +30,13 @@ const cabecerasSeguridad = [
   { key: "Strict-Transport-Security", value: "max-age=31536000" },
 ];
 
+// La versión del frontend viaja en el código: si no coincide con la del servidor, se avisa que hay una actualización
+const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_APP_VERSION: version },
   // Las imágenes son <img> normales: el optimizador de Next no se usa y así no queda expuesto
   images: { unoptimized: true },
   async headers() {
@@ -46,6 +52,8 @@ const nextConfig = {
         source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
       },
+      // Estado y versión del servidor (en producción se consulta directo en api.v44nxx.online)
+      { source: "/health", destination: `${backendUrl}/health` },
     ];
   },
 };

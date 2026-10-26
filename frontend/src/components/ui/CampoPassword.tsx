@@ -14,7 +14,7 @@ interface CampoPasswordProps {
   autoFocus?: boolean;
 }
 
-/** Campo de contraseña con botón para mostrarla u ocultarla. */
+/** Campo de contraseña con botón para mostrarla u ocultarla y aviso de Bloq Mayús activado. */
 export default function CampoPassword({
   id,
   etiqueta,
@@ -26,6 +26,10 @@ export default function CampoPassword({
   autoFocus,
 }: CampoPasswordProps) {
   const [visible, setVisible] = useState(false);
+  const [mayusculas, setMayusculas] = useState(false);
+  const revisarMayusculas = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (typeof e.getModifierState === "function") setMayusculas(e.getModifierState("CapsLock"));
+  };
   return (
     <div>
       <label className="input-label" htmlFor={id}>
@@ -38,6 +42,9 @@ export default function CampoPassword({
           type={visible ? "text" : "password"}
           value={valor}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={revisarMayusculas}
+          onKeyUp={revisarMayusculas}
+          onBlur={() => setMayusculas(false)}
           autoComplete={autoComplete}
           placeholder={placeholder}
           disabled={disabled}
@@ -55,6 +62,11 @@ export default function CampoPassword({
           {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
       </div>
+      {mayusculas && (
+        <p role="status" className="mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+          Bloq Mayús está activado
+        </p>
+      )}
     </div>
   );
 }

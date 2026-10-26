@@ -38,6 +38,8 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
   const [cargando, setCargando] = useState(false);
   const [sesion, setSesion] = useState<LoginResponse | null>(null);
   const [guardados, setGuardados] = useState(false);
+  // Tras un código rechazado se explica la causa más común: la hora del celular corrida
+  const [codigoRechazado, setCodigoRechazado] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
 
   const manejarError = (err: unknown) => {
@@ -47,6 +49,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
       onVolver(true);
       return;
     }
+    if (estado === 400) setCodigoRechazado(true);
     toast.error(getErrorMessage(err, "No se pudo verificar el código"), { id: "login-error" });
     setCodigo("");
     campo.current?.focus();
@@ -170,6 +173,13 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
     />
   );
 
+  const ayudaCodigo = codigoRechazado && !usarRespaldo && (
+    <p role="status" className="mt-2 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+      ¿No funciona? Revisa que la hora de tu celular esté en automático (Ajustes › Fecha y hora) y escribe el código
+      que se ve en este momento en la app, antes de que cambie.
+    </p>
+  );
+
   if (etapa === "respaldo") {
     const codigos = sesion?.codigos_respaldo ?? [];
     return (
@@ -275,6 +285,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
             <div className="flex-1 min-w-0">
               <p className="leading-relaxed mb-1.5">Escribe el código de 6 dígitos que muestra la app.</p>
               {campoCodigo}
+              {ayudaCodigo}
             </div>
           </li>
         </ol>
@@ -300,6 +311,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
           : "Escribe el código de 6 dígitos que muestra tu app de autenticación."
       )}
       {campoCodigo}
+      {ayudaCodigo}
       <button type="submit" disabled={cargando} className={`${claseBoton} mt-3`}>
         <span>{cargando ? "Verificando…" : "Verificar"}</span>
         {!cargando && <ArrowRight className="w-4 h-4 stroke-[2]" />}

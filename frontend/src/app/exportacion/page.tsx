@@ -6,8 +6,9 @@ import toast from "react-hot-toast";
 import {
   Download, FileSpreadsheet, Users, Filter,
   CheckCircle, AlertTriangle, RefreshCw, FileText, CheckSquare, Square,
-  Search, X
+  Search, X, ShieldAlert
 } from "lucide-react";
+import { AVISO_DATOS_PERSONALES, avisarDescargaDatosPersonales } from "@/lib/avisos";
 import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
@@ -164,7 +165,7 @@ export default function ExportacionPage() {
         personaIds: todosFueronSeleccionados && !docId ? undefined : Array.from(seleccionados),
       });
 
-      toast.success("Archivo Excel descargado correctamente");
+      avisarDescargaDatosPersonales("Archivo Excel descargado");
     } catch {
       toast.error("Error generando exportación");
     } finally {
@@ -412,6 +413,12 @@ export default function ExportacionPage() {
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
             <span className="text-[11px] leading-tight">
               <strong>Alerta de menores (&lt; 14 años):</strong> Cualquier persona menor de 14 años será automáticamente resaltada con fila y celda de edad en el reporte oficial descargado.
+            </span>
+          </div>
+          <div className="mt-2.5 p-3 rounded-xl bg-[#0071E3]/[0.06] border border-[#0071E3]/20 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2.5">
+            <ShieldAlert className="w-4 h-4 text-[#0071E3] dark:text-[#4C9BFF] shrink-0" />
+            <span className="text-[11px] leading-tight">
+              <strong>Datos personales:</strong> {AVISO_DATOS_PERSONALES}
             </span>
           </div>
         </div>

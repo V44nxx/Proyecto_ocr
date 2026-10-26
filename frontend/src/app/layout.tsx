@@ -4,6 +4,7 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { SidebarProvider } from "@/context/SidebarContext";
 import BannerProcesoActivo from "@/components/ui/BannerProcesoActivo";
+import AvisosSistema from "@/components/ui/AvisosSistema";
 
 export const metadata: Metadata = {
   title: "KondID | Sistema OCR Documentos Colombianos",
@@ -44,6 +45,7 @@ export default function RootLayout({
           <SidebarProvider>
             {children}
             <BannerProcesoActivo />
+            <AvisosSistema />
             <Toaster
               position="top-right"
               toastOptions={{

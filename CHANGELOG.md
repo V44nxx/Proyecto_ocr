@@ -22,6 +22,33 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.12.2] - 2026-10-26
+
+**Resumen**
+
+- Si cambia la `SECRET_KEY`, el log del servidor lo dice claro en vez de solo «código incorrecto».
+- En Comparación, los contadores de diferencias y faltantes se actualizan al corregir un campo o agregar a una persona.
+- La cobertura de pruebas del backend pasa del 77% al 80%, y el CI falla si baja de ahí.
+
+### Corregido
+
+- **Contadores de Comparación**: al corregir un campo desde la comparación, el número de diferencias seguía contando la que se acababa de corregir; al agregar a la base a una persona que faltaba, «faltantes en la base» no bajaba. La sesión de la base no guarda sola los cambios antes de contar; ahora se guardan primero.
+
+### Seguridad
+
+- **Verificación en dos pasos y `SECRET_KEY`**: cuando el servidor no puede leer el secreto guardado de la app de un administrador (porque cambió `SECRET_KEY` o el servidor usa una temporal), lo escribe como error en el log con el correo de la cuenta y cómo restablecerla. Al arrancar, revisa todas las cuentas con la verificación activa y avisa de una vez. El 2026-10-26 este caso se tuvo que diagnosticar a mano en producción.
+
+### Cambiado
+
+- Pruebas nuevas de las rutas de Personas, Comparación, Documentos, Exportación y del envío de correos:
+  - personas: listar, buscar, corregir, aprobar, borrar, vaciar y subir el PDF de una persona;
+  - comparación: subir la planilla, ejecutar, ver diferencias, el reporte, corregir campos y agregar personas;
+  - fichas: estado, retirar y eliminar;
+  - exportación a Excel.
+  En cada una se comprueba también que no se toquen datos de otra cuenta.
+- La cobertura del backend queda en 80,4% (personas.py del 53% al 76%, comparacion.py del 53% al 92%). El CI exige un mínimo de 80% (`pytest-cov` 7.1.0).
+- Se borró `spatial_debug_service.py`, que solo usaba la ruta `/debug_espacial` quitada en la 2.11.1.
+
 ## [2.12.1] - 2026-10-26
 
 **Resumen**

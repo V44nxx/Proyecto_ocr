@@ -22,6 +22,8 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
+.coverage
+htmlcov/
 
 # Backend runtime files
 backend/uploads/*

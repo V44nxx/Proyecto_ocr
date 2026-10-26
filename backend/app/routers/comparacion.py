@@ -304,7 +304,9 @@ def corregir_campo_desde_comparacion(
             Diferencia.numero_identificacion == num_id
         ).update({"numero_identificacion": valor_a_guardar})
 
-    # Recalcular métricas de la comparación
+    # Recalcular métricas de la comparación. La sesión no hace autoflush: sin esto, el conteo vería
+    # la diferencia recién corregida como si siguiera pendiente
+    db.flush()
     comparacion = db.query(Comparacion).filter(Comparacion.id == comparacion_id).first()
     if comparacion:
         ids_con_dif = db.query(Diferencia.numero_identificacion).filter(
@@ -423,7 +425,8 @@ def agregar_persona_bd_desde_comparacion(
         diferencia.valor_bd = persona.nombre_completo or num_id
         diferencia.tipo_diferencia = "igual"
 
-    # Actualizar métricas de la comparación
+    # Actualizar métricas de la comparación (flush: la sesión no lo hace sola antes de contar)
+    db.flush()
     total_faltantes = db.query(Diferencia).filter(
         Diferencia.comparacion_id == comparacion_id,
         Diferencia.tipo_diferencia == "faltante_bd"

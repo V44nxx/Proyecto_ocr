@@ -63,6 +63,28 @@ def descifrar_secreto(cifrado: Optional[str]) -> Optional[str]:
         return None
 
 
+AVISO_SECRETO_ILEGIBLE = (
+    "no se puede leer el secreto guardado de su app de autenticación: casi seguro cambió SECRET_KEY "
+    "(o el servidor está usando una temporal). Ningún código de la app le va a servir. Restablécela desde "
+    "Usuarios o con `python -m app.restablecer_doble_factor <correo>`, y deja SECRET_KEY fija."
+)
+
+
+def secreto_ilegible(usuario) -> bool:
+    return bool(usuario.totp_activo and usuario.totp_secreto) and descifrar_secreto(usuario.totp_secreto) is None
+
+
+def avisar_secretos_ilegibles(db) -> List[str]:
+    """Al arrancar: correos de las cuentas con la verificación activa cuyo secreto ya no se puede descifrar."""
+    from app.models.usuario import Usuario
+    from app.utils.logger import app_logger as logger
+    afectados = sorted(u.email for u in db.query(Usuario).filter(Usuario.totp_activo == True).all()
+                       if secreto_ilegible(u))
+    if afectados:
+        logger.error(f"Verificación en dos pasos de {', '.join(afectados)}: {AVISO_SECRETO_ILEGIBLE}")
+    return afectados
+
+
 def uri_aprovisionamiento(secreto: str, email: str) -> str:
     return pyotp.TOTP(secreto).provisioning_uri(name=email, issuer_name=EMISOR)
 

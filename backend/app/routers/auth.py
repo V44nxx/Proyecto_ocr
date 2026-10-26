@@ -316,6 +316,9 @@ def login_doble_factor(request: CodigoDobleFactorRequest, http: Request, respons
     _comprobar_espera_doble_factor(usuario)
 
     secreto = doble_factor.descifrar_secreto(usuario.totp_secreto)
+    if not secreto:
+        # Los códigos de respaldo siguen sirviendo (no dependen de SECRET_KEY); los de la app ya no
+        logger.error(f"Verificación en dos pasos de {usuario.email}: {doble_factor.AVISO_SECRETO_ILEGIBLE}")
     paso = doble_factor.paso_valido(secreto, request.codigo, usuario.totp_ultimo_paso) if secreto else None
     if paso is not None:
         usuario.totp_ultimo_paso = paso

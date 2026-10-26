@@ -47,8 +47,9 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - name: Instalar dependencias
         run: pip install -r requirements-dev.txt
-      - name: Pruebas
-        run: python -m pytest -q
+      - name: Pruebas y cobertura
+        # Falla si la cobertura del backend baja del 80%
+        run: python -m pytest -q --cov=app --cov-report=term --cov-fail-under=80
 
   frontend:
     name: Frontend (tipos y compilación)

@@ -67,6 +67,17 @@ async def lifespan(app: FastAPI):
         # Los intentos fallidos se cuentan en la base: un reinicio no borra un bloqueo
         from app.utils.limitador import usar_base_de_datos
         usar_base_de_datos(True)
+        # Si cambió SECRET_KEY, la verificación en dos pasos de los administradores deja de servir: avisarlo ya
+        try:
+            from app.database import SessionLocal
+            from app.utils.doble_factor import avisar_secretos_ilegibles
+            db = SessionLocal()
+            try:
+                avisar_secretos_ilegibles(db)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"No se pudo revisar la verificación en dos pasos al arrancar: {type(e).__name__}")
 
     # Crear directorios necesarios
     settings.upload_path

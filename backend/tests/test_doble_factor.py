@@ -290,6 +290,67 @@ def test_un_administrador_restablece_la_verificacion_de_otro(bd, api, auditoria_
     assert {u["email"]: u["doble_factor_activo"] for u in lista}[ADMIN] is False
 
 
+def _capturar_logs():
+    from loguru import logger
+    mensajes = []
+    return mensajes, logger.add(mensajes.append, format="{level} {message}")
+
+
+def _danar_secreto(bd):
+    """Lo que deja un cambio de SECRET_KEY: el secreto guardado ya no se puede descifrar."""
+    from app.models.usuario import Usuario
+    db = bd.SessionLocal()
+    u = db.query(Usuario).filter(Usuario.email == ADMIN).one()
+    u.totp_secreto = "gAAAAABcifrado-con-otra-clave"
+    db.commit()
+    db.close()
+
+
+@requiere_postgres
+def test_si_el_secreto_no_se_puede_leer_el_log_dice_por_que(bd, api):
+    """Antes solo respondía «código incorrecto» y había que adivinar que había cambiado SECRET_KEY."""
+    from loguru import logger
+    db = bd.SessionLocal()
+    crear_usuario(db, ADMIN, rol="admin", clave=CLAVE_PRUEBA)
+    db.close()
+    secreto, _ = _activar(api)
+    _danar_secreto(bd)
+    mensajes, sink = _capturar_logs()
+    try:
+        r = api.post("/api/auth/login/2fa", json={"desafio": _login(api).json()["desafio"],
+                                                  "codigo": _codigo_siguiente(secreto)})
+    finally:
+        logger.remove(sink)
+    texto = "".join(mensajes)
+    assert r.status_code == 400
+    assert "ERROR" in texto and "SECRET_KEY" in texto and "restablecer_doble_factor" in texto
+    assert ADMIN in texto and secreto not in texto
+
+
+@requiere_postgres
+def test_al_arrancar_avisa_si_hay_secretos_que_no_se_pueden_leer(bd, api):
+    from loguru import logger
+    from app.utils.doble_factor import avisar_secretos_ilegibles
+    db = bd.SessionLocal()
+    crear_usuario(db, ADMIN, rol="admin", clave=CLAVE_PRUEBA)
+    crear_usuario(db, "jefe@example.com", rol="admin")
+    db.close()
+    _activar(api)
+
+    mensajes, sink = _capturar_logs()
+    try:
+        db = bd.SessionLocal()
+        sanos = avisar_secretos_ilegibles(db)
+        _danar_secreto(bd)
+        danados = avisar_secretos_ilegibles(db)
+        db.close()
+    finally:
+        logger.remove(sink)
+    texto = "".join(mensajes)
+    assert sanos == [] and danados == [ADMIN]
+    assert "ERROR" in texto and "SECRET_KEY" in texto and ADMIN in texto
+
+
 @requiere_postgres
 def test_restablecer_desde_la_consola_del_servidor(bd, api):
     from app.restablecer_doble_factor import restablecer

@@ -5,3 +5,5 @@
 pytest==9.1.1
 # Escenarios BDD en Gherkin (tests/bdd/*.feature)
 pytest-bdd==9.0.0
+# Cobertura: el CI falla si baja del 80%
+pytest-cov==7.1.0

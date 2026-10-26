@@ -54,14 +54,14 @@ router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 # OAuth2 scheme (solo para documentar la cabecera Authorization; el navegador usa la cookie de sesión)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
-# Límites de intentos (ventanas de 15 minutos)
+# Límites de intentos (ventanas de 15 minutos), contados en la base: sobreviven a los reinicios
 VENTANA_INTENTOS = 15 * 60
-limite_login_correo = Limitador(5, VENTANA_INTENTOS)        # fallos por correo
-limite_login_ip = Limitador(20, VENTANA_INTENTOS)           # fallos por IP, con cualquier correo
-limite_cambio_password = Limitador(5, VENTANA_INTENTOS)     # contraseña actual equivocada, por usuario
-limite_recuperacion_ip = Limitador(5, VENTANA_INTENTOS)     # pedidos de enlace de recuperación por IP
-limite_restablecer_ip = Limitador(10, VENTANA_INTENTOS)     # enlaces inválidos por IP
-limite_doble_factor = Limitador(5, VENTANA_INTENTOS)        # códigos de verificación equivocados, por usuario
+limite_login_correo = Limitador("login_correo", 5, VENTANA_INTENTOS)        # fallos por correo
+limite_login_ip = Limitador("login_ip", 20, VENTANA_INTENTOS)               # fallos por IP, con cualquier correo
+limite_cambio_password = Limitador("cambio_password", 5, VENTANA_INTENTOS)  # contraseña actual equivocada, por usuario
+limite_recuperacion_ip = Limitador("recuperacion_ip", 5, VENTANA_INTENTOS)  # pedidos de enlace de recuperación por IP
+limite_restablecer_ip = Limitador("restablecer_ip", 10, VENTANA_INTENTOS)   # enlaces inválidos por IP
+limite_doble_factor = Limitador("doble_factor", 5, VENTANA_INTENTOS)        # códigos de verificación equivocados, por usuario
 
 
 # ──────────────────────────────────────────

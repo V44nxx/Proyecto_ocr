@@ -7,5 +7,7 @@ from app.models.diferencia import Diferencia
 from app.models.seguimiento_config import SeguimientoConfig
 from app.models.auditoria import RegistroAuditoria
 from app.models.sesion_revocada import SesionRevocada
+from app.models.intento_limitado import IntentoLimitado
 
-__all__ = ["Usuario", "Documento", "Persona", "Comparacion", "Diferencia", "SeguimientoConfig", "RegistroAuditoria", "SesionRevocada"]
+__all__ = ["Usuario", "Documento", "Persona", "Comparacion", "Diferencia", "SeguimientoConfig", "RegistroAuditoria", "SesionRevocada",
+           "IntentoLimitado"]

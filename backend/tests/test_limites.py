@@ -23,7 +23,7 @@ from tests.utilidades_pg import requiere_postgres
 def test_limitador_bloquea_al_llegar_al_maximo_y_se_libera_con_la_ventana(monkeypatch):
     reloj = [1000.0]
     monkeypatch.setattr(limitador_mod.time, "monotonic", lambda: reloj[0])
-    lim = Limitador(3, 60)
+    lim = Limitador("prueba_memoria", 3, 60)
     for _ in range(3):
         assert lim.espera("a") == 0
         lim.registrar("a")
@@ -35,6 +35,91 @@ def test_limitador_bloquea_al_llegar_al_maximo_y_se_libera_con_la_ventana(monkey
     assert lim.espera("a") == 0
     lim.reiniciar("a")
     assert lim.espera("a") == 0
+
+
+@requiere_postgres
+def test_en_la_base_bloquea_al_llegar_al_maximo_y_se_libera_con_la_ventana(bd, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    reloj = [datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)]
+    monkeypatch.setattr(limitador_mod, "_ahora", lambda: reloj[0])
+    lim = Limitador("prueba_base", 3, 60)
+    for _ in range(3):
+        assert lim.espera("a") == 0
+        lim.registrar("a")
+    assert lim.espera("a") == 60
+    assert lim.espera("b") == 0
+    reloj[0] += timedelta(seconds=30)
+    assert lim.espera("a") == 30
+    reloj[0] += timedelta(seconds=31)
+    assert lim.espera("a") == 0
+    for _ in range(3):
+        lim.registrar("a")
+    lim.reiniciar("a")
+    assert lim.espera("a") == 0
+
+
+@requiere_postgres
+def test_el_bloqueo_sobrevive_a_un_reinicio_y_lo_comparten_varios_procesos(bd):
+    """Otra instancia con el mismo nombre (otro proceso, o el servidor después de reiniciar) ve la misma cuenta."""
+    primero = Limitador("prueba_compartido", 2, 900)
+    primero.registrar("ana@example.com")
+    primero.registrar("ana@example.com")
+    otro_proceso = Limitador("prueba_compartido", 2, 900)
+    assert 890 < otro_proceso.espera("ana@example.com") <= 900
+
+
+@requiere_postgres
+def test_en_la_base_no_queda_el_correo_ni_la_ip(bd):
+    from sqlalchemy import text
+    lim = Limitador("prueba_privacidad", 5, 900)
+    lim.registrar("ana@example.com")
+    lim.registrar("203.0.113.10")
+    with bd.engine.connect() as conn:
+        filas = [tuple(f) for f in conn.execute(text("SELECT limitador, clave FROM intentos_limitados"))]
+    assert len(filas) == 2
+    assert not any("ana@" in c or "203.0.113" in c for _, c in filas)
+
+
+@requiere_postgres
+def test_los_intentos_viejos_se_borran(bd, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text
+    reloj = [datetime.now(timezone.utc) - timedelta(days=2)]
+    monkeypatch.setattr(limitador_mod, "_ahora", lambda: reloj[0])
+    lim = Limitador("prueba_limpieza", 5, 900)
+    lim.registrar("viejo")
+    reloj[0] = datetime.now(timezone.utc)
+    lim.registrar("nuevo")
+    limitador_mod.purgar_vencidos()
+    with bd.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM intentos_limitados")).scalar() == 1
+
+
+@requiere_postgres
+def test_el_login_bloqueado_sigue_bloqueado_despues_de_reiniciar(cliente, bd):
+    """Antes, reiniciar el backend (cada despliegue) vaciaba la cuenta de intentos."""
+    _crear(bd, "ana@example.com", "ClaveAna2026")
+    estados = [_login(cliente, "ana@example.com", f"mala-{i}").status_code for i in range(5)]
+    limitador_mod.vaciar_memoria()      # lo que antes perdía un reinicio
+    despues = _login(cliente, "ana@example.com", "ClaveAna2026")
+    assert estados == [401] * 5
+    assert despues.status_code == 429 and despues.headers.get("Retry-After")
+
+
+def test_si_la_base_falla_el_limitador_no_bloquea_ni_rompe_el_login(monkeypatch):
+    import app.database as database
+
+    def sin_base():
+        raise RuntimeError("base caída")
+    monkeypatch.setattr(database, "SessionLocal", sin_base)
+    limitador_mod.usar_base_de_datos(True)
+    try:
+        lim = Limitador("prueba_sin_base", 1, 60)
+        lim.registrar("a")
+        assert lim.espera("a") == 0
+        lim.reiniciar("a")
+    finally:
+        limitador_mod.usar_base_de_datos(False)
 
 
 def test_mensaje_de_espera_en_minutos():

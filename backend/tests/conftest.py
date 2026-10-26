@@ -1,14 +1,16 @@
 import pytest
 
-from app.utils.limitador import vaciar_todos
+from app.utils.limitador import usar_base_de_datos, vaciar_todos
 from tests.utilidades_pg import TEST_DATABASE_URL
 
 
 @pytest.fixture(autouse=True)
 def _limites_vacios():
-    """Los límites de intentos viven en memoria: cada prueba empieza sin intentos previos."""
+    """Cada prueba empieza sin intentos previos. Sin PostgreSQL, los límites se llevan en memoria."""
+    usar_base_de_datos(False)
     vaciar_todos()
     yield
+    usar_base_de_datos(False)
     vaciar_todos()
 
 
@@ -46,7 +48,9 @@ def bd(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "EXPORT_DIR", str(tmp_path / "exports"))
     monkeypatch.setattr(settings, "ADMIN_EMAIL", None)
     database.create_tables()
+    usar_base_de_datos(True)             # como en producción: los intentos se cuentan en la base
     yield database
+    usar_base_de_datos(False)
     engine.dispose()
 
 

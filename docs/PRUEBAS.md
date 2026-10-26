@@ -54,7 +54,7 @@ Las pruebas de interfaz, carga y seguridad necesitan la aplicación corriendo co
 
 5. El frontend compilado contra ese backend: `INTERNAL_BACKEND_URL=http://127.0.0.1:8000 npm run build && npx next start -p 3000`.
 
-Los límites de intentos viven en memoria: antes de cada tanda de pruebas, reinicia el backend y vuelve a sembrar la base.
+Los límites de intentos se cuentan en la base (tabla `intentos_limitados`): antes de cada tanda de pruebas, vuelve a sembrar la base para empezar sin bloqueos.
 
 ## 3. Interfaz de punta a punta (Playwright)
 

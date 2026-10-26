@@ -3,7 +3,8 @@
 Solo contra un servidor de pruebas, nunca contra producción: crea usuarios, sube archivos y fuerza bloqueos.
 Uso: python dast_api.py <url_base> <semilla_ids.json> <salida.json>
 Opcional: CARPETA_SUBIDAS=<UPLOAD_DIR del backend> para revisar en disco dónde quedó el archivo de SEG-24.
-El backend debe correr con ENVIRONMENT=production (SEG-04) y recién iniciado (los límites viven en memoria).
+El backend debe correr con ENVIRONMENT=production (SEG-04) sobre la base recién sembrada (los límites de intentos
+se cuentan en ella).
 Cada caso imprime PASA/FALLA con lo obtenido; el JSON queda como evidencia para el informe.
 """
 import base64

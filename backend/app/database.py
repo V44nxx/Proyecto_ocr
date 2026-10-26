@@ -81,7 +81,8 @@ def _hash_password(password: str) -> str:
 
 def create_tables():
     """Crear todas las tablas del modelo e inicializar usuario admin si no existe"""
-    from app.models import usuario, documento, persona, comparacion, diferencia, seguimiento_config, auditoria, sesion_revocada
+    from app.models import (usuario, documento, persona, comparacion, diferencia, seguimiento_config, auditoria,
+                            sesion_revocada, intento_limitado)
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas de base de datos creadas/verificadas")
 
@@ -146,6 +147,9 @@ def create_tables():
             ).rowcount
             # Las sesiones revocadas solo hace falta recordarlas hasta que el token habría vencido
             conn.execute(text("DELETE FROM sesiones_revocadas WHERE expira < now()"))
+        # Los intentos fallidos solo cuentan dentro de su ventana (minutos)
+        from app.utils.limitador import purgar_vencidos
+        purgar_vencidos()
         if borrados:
             logger.info(f"Auditoría: {borrados} registro(s) de más de {settings.AUDITORIA_RETENCION_DIAS} días eliminados")
     except Exception as ret_err:

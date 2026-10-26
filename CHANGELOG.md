@@ -22,6 +22,21 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.12.1] - 2026-10-26
+
+**Resumen**
+
+- Los bloqueos por intentos fallidos ya no se borran al reiniciar el servidor (cada despliegue los reiniciaba).
+
+### Seguridad
+
+- **Límites de intentos guardados en la base** (tabla `intentos_limitados`, `app/utils/limitador.py`). Aplica a los inicios de sesión fallidos por correo y por IP, los códigos de verificación equivocados, la contraseña actual equivocada y los pedidos y enlaces de recuperación:
+  - un bloqueo sigue vigente después de un reinicio o un despliegue;
+  - si el backend corre con varios procesos, todos comparten la misma cuenta;
+  - del correo, la IP o el usuario solo se guarda un hash SHA-256;
+  - los intentos de más de un día se borran al arrancar;
+  - si la base falla en plena petición, el límite no bloquea a nadie y queda un aviso en el log. Sin base tampoco hay inicio de sesión.
+
 ## [2.12.0] - 2026-10-25
 
 **Resumen**

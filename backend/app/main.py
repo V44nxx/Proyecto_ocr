@@ -64,6 +64,9 @@ async def lifespan(app: FastAPI):
     else:
         # Crear tablas y garantizar usuario admin inicial si no existe
         create_tables()
+        # Los intentos fallidos se cuentan en la base: un reinicio no borra un bloqueo
+        from app.utils.limitador import usar_base_de_datos
+        usar_base_de_datos(True)
 
     # Crear directorios necesarios
     settings.upload_path

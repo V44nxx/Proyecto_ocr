@@ -551,7 +551,7 @@ class OCRService:
         res_docai = None
 
         # ── Paso 1: Google Document AI como Motor Primario de Alta Precisión y Velocidad ──
-        if google_document_ai_service.disponible:
+        if google_document_ai_service.disponible and google_document_ai_service.en_linea():
             try:
                 success, img_encoded = cv2.imencode(".jpg", img_np, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
                 if not success:
@@ -574,6 +574,9 @@ class OCRService:
                     logger.info(f"[DocAI] Página {pagina_num}: Texto escaso ({len(texto_docai.strip())} chars), evaluando fallback RapidOCR...")
             except Exception as e:
                 logger.error(f"[DocAI] Página {pagina_num}: Error en Document AI ({type(e).__name__}: {e}), activando fallback...")
+                if google_document_ai_service.es_error_de_conexion(e):
+                    # Las páginas siguientes no esperan otra vez: van directo a RapidOCR
+                    google_document_ai_service.marcar_sin_conexion(type(e).__name__)
                 res_docai = None
 
         # ── Paso 2: RapidOCR (Fallback Local Automático y Seguro) ──

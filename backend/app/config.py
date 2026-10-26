@@ -99,11 +99,16 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_BASE64: Optional[str] = None
     # Switch para habilitar/deshabilitar Google Document AI
     GOOGLE_DOCUMENT_AI_ENABLED: bool = True
+    # Segundos máximos por página en Document AI; si se pasa, la página se lee con RapidOCR
+    GOOGLE_DOCUMENT_AI_TIMEOUT: float = 60.0
 
     # ─────────────────────────────────────
     # RapidOCR (ONNX Runtime Local)
     # ─────────────────────────────────────
     RAPID_OCR_ENABLED: bool = True
+    # Lado mayor (px) al que se reduce cada página antes de RapidOCR. Medido en una ficha real de 26 páginas:
+    # 1400 → 7,4 s/página; 1250 → 6,5 s/página con los mismos aciertos; 1100 → 6,1 s/página pero pierde letras
+    RAPID_OCR_LADO_MAXIMO: int = 1250
 
     # ─────────────────────────────────────
     # CORS

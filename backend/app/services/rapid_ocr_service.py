@@ -64,11 +64,12 @@ class RapidOCRService:
 
             height, width = img_np.shape[:2]
 
-            # 1. Optimización de resolución: si supera 1400px en el lado mayor, escalar proporcionalmente
-            # Esto reduce la inferencia de la red neural en CPU de ~4.5s a ~1.5s sin perder caracteres
+            # 1. Optimización de resolución: si supera el lado máximo, escalar proporcionalmente
+            # (menos píxeles para la detección; ver RAPID_OCR_LADO_MAXIMO en config.py)
+            lado_maximo = int(getattr(settings, "RAPID_OCR_LADO_MAXIMO", 1250))
             max_side = max(height, width)
-            if max_side > 1400:
-                scale = 1400.0 / float(max_side)
+            if max_side > lado_maximo:
+                scale = float(lado_maximo) / float(max_side)
                 new_w, new_h = max(1, int(round(width * scale))), max(1, int(round(height * scale)))
                 img_proc = cv2.resize(img_np, (new_w, new_h), interpolation=cv2.INTER_AREA)
                 eval_h, eval_w = new_h, new_w

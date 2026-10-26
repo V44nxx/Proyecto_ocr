@@ -108,10 +108,18 @@ class GoogleDocumentAIService:
     automáticamente — nunca se manipulan en este código.
     """
 
+    # Sin internet (ej. el proyecto corriendo en un portátil sin red) no se intenta Document AI
+    # en cada página: se revisa la conexión una vez y el resultado vale unos segundos
+    SEGUNDOS_ESTADO_CONEXION = 60
+    SEGUNDOS_PRUEBA_CONEXION = 3
+
     def __init__(self):
         self._client = None
         self._processor_name = None
+        self._endpoint = None
         self._disponible = False
+        self._sin_conexion_hasta = 0.0
+        self._con_conexion_hasta = 0.0
         self._inicializar()
 
     def _inicializar(self) -> None:
@@ -230,6 +238,7 @@ class GoogleDocumentAIService:
             )
 
             endpoint = f"{settings.GOOGLE_DOCUMENT_AI_LOCATION}-documentai.googleapis.com"
+            self._endpoint = endpoint
             self._client = documentai.DocumentProcessorServiceClient(
                 client_options={"api_endpoint": endpoint}
             )
@@ -253,6 +262,48 @@ class GoogleDocumentAIService:
     def disponible(self) -> bool:
         """Indica si el servicio está correctamente configurado y listo para usarse."""
         return self._disponible
+
+    def en_linea(self) -> bool:
+        """
+        True si se puede llegar a Document AI. Sin conexión, el OCR pasa directo a RapidOCR
+        en vez de esperar a que la llamada falle en cada página.
+        """
+        if not self._disponible:
+            return False
+        ahora = time.time()
+        if ahora < self._sin_conexion_hasta:
+            return False
+        if ahora < self._con_conexion_hasta:
+            return True
+        import socket
+        try:
+            socket.create_connection((self._endpoint, 443), timeout=self.SEGUNDOS_PRUEBA_CONEXION).close()
+        except OSError as e:
+            self.marcar_sin_conexion(f"{type(e).__name__}")
+            return False
+        self._con_conexion_hasta = ahora + self.SEGUNDOS_ESTADO_CONEXION
+        return True
+
+    def marcar_sin_conexion(self, motivo: str = "") -> None:
+        """Durante un rato no se intenta Document AI: las páginas se leen con RapidOCR"""
+        if time.time() >= self._sin_conexion_hasta:
+            logger.warning(
+                f"[DocAI] Sin conexión con Document AI ({motivo}): las páginas se leen con RapidOCR "
+                f"(se vuelve a intentar en {self.SEGUNDOS_ESTADO_CONEXION} s)"
+            )
+        self._sin_conexion_hasta = time.time() + self.SEGUNDOS_ESTADO_CONEXION
+        self._con_conexion_hasta = 0.0
+
+    @staticmethod
+    def es_error_de_conexion(error: Exception) -> bool:
+        """Errores de red o de tiempo (no de datos): indican que Document AI no responde"""
+        try:
+            from google.api_core import exceptions as gexc
+            if isinstance(error, (gexc.ServiceUnavailable, gexc.DeadlineExceeded, gexc.RetryError)):
+                return True
+        except ImportError:
+            pass
+        return isinstance(error, (OSError, TimeoutError))
 
     # Tabla exhaustiva de homóglifos (griegos y cirílicos a latinos)
     HOMOGLYPH_MAP = str.maketrans({
@@ -357,7 +408,7 @@ class GoogleDocumentAIService:
             raw_document=documento_raw,
         )
 
-        result = self._client.process_document(request=request)
+        result = self._client.process_document(request=request, timeout=settings.GOOGLE_DOCUMENT_AI_TIMEOUT)
         doc = result.document
         full_text_raw = doc.text if doc.text else ""
         full_text = self.normalizar_texto_docai(full_text_raw)

@@ -78,6 +78,19 @@ class DocumentSideClassifier:
             "reasons": [f"Documento de soporte (no es de identidad): {len(marcas)} marcas de carta o certificado"],
         }
 
+    # Datos del reverso de la cédula amarilla que se reconocen aunque el OCR (sobre todo RapidOCR)
+    # deforme las etiquetas: "ESTARUTIA", "NACNIENIO", "FEQAYLUEAADE EXPEDICION"
+    SENALES_REVERSO = {
+        "estatura": r"(?m)^\s*[12][.,]\d{2}\s*$",
+        "grupo_sanguineo": r"(?m)^\s*(?:A|B|AB|O|0)\s*[+-]\s*$",
+        "sexo": r"(?m)^\s*[MF]\s*$",
+        "fecha": r"\b\d{1,2}\s*-\s*(?:ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)\s*-\s*\d{2}",
+        "expedicion": r"EXPEDICI|EXPEDIC|ESTATURA|ESTAT|NACIMIEN|INDICE\s*DERECHO",
+    }
+
+    def _senales_reverso_ilegible(self, texto_up: str) -> List[str]:
+        return [nombre for nombre, pat in self.SENALES_REVERSO.items() if re.search(pat, texto_up)]
+
     def clasificar_cara(self, texto: str, lines: List[Any] = None) -> Dict[str, Any]:
         """
         Clasifica la cara de la página y devuelve confianza + razones.
@@ -282,6 +295,16 @@ class DocumentSideClassifier:
                 }
 
         max_score = max(score_front_c, score_back_c)
+
+        if max_score < 2 and not tiene_frente_fuerte:
+            senales = self._senales_reverso_ilegible(texto_up)
+            if len(senales) >= 3:
+                return {
+                    "cara": "CEDULA_BACK",
+                    "tipo_documento": "CEDULA_CIUDADANIA",
+                    "confianza": 0.60,
+                    "reasons": reasons + [f"Reverso reconocido por sus datos aunque la lectura es imperfecta: {', '.join(senales)}"],
+                }
 
         if max_score < 2:
             return {

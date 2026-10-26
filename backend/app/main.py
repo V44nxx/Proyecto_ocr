@@ -13,11 +13,12 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlalchemy.exc import DataError
+import logging
 import time
 
 from app.config import Settings, settings
 from app.database import check_db_connection, create_tables
-from app.utils.logger import app_logger as logger
+from app.utils.logger import FiltroRutasEnmascaradas, app_logger as logger, enmascarar_ruta
 from app.routers import auth, documentos, personas, exportacion, comparacion, seguimiento
 from app.routers.auth import get_admin_actual
 from app.utils.errores import mensaje_error_interno, nueva_referencia
@@ -128,6 +129,10 @@ app.add_middleware(CabecerasSeguridadMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+# El registro de acceso de uvicorn también escribe la dirección (con la cédula en /buscar/cedula/...)
+logging.getLogger("uvicorn.access").addFilter(FiltroRutasEnmascaradas())
+
+
 # Middleware de logging de requests
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -137,7 +142,7 @@ async def log_requests(request, call_next):
 
     if not request.url.path.startswith("/docs") and not request.url.path.startswith("/openapi"):
         logger.info(
-            f"{request.method} {request.url.path} "
+            f"{request.method} {enmascarar_ruta(request.url.path)} "
             f"-> {response.status_code} "
             f"({duracion * 1000:.1f}ms)"
         )
@@ -147,7 +152,7 @@ async def log_requests(request, call_next):
 @app.exception_handler(DataError)
 async def datos_invalidos_handler(request: Request, exc: DataError):
     """Un id u otro dato con formato inválido que llega hasta la base: es un error del cliente, no del servidor."""
-    logger.warning(f"Dato con formato inválido en {request.method} {request.url.path}: {type(exc.orig).__name__}")
+    logger.warning(f"Dato con formato inválido en {request.method} {enmascarar_ruta(request.url.path)}: {type(exc.orig).__name__}")
     return JSONResponse(status_code=400, content={"detail": "Uno de los datos enviados no tiene el formato esperado."})
 
 
@@ -160,7 +165,7 @@ async def caracter_nulo_handler(request: Request, exc: ValueError):
     """
     if "NUL (0x00)" not in str(exc):
         raise exc
-    logger.warning(f"Carácter nulo en un dato enviado a {request.method} {request.url.path}")
+    logger.warning(f"Carácter nulo en un dato enviado a {request.method} {enmascarar_ruta(request.url.path)}")
     return JSONResponse(status_code=400, content={"detail": "Uno de los datos enviados contiene caracteres no válidos."})
 
 
@@ -171,7 +176,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     Esta respuesta no pasa por los middlewares, así que lleva a mano las cabeceras de CORS y de seguridad.
     """
     referencia = nueva_referencia()
-    logger.opt(exception=exc).error(f"{referencia} Excepción no controlada en {request.method} {request.url.path}")
+    logger.opt(exception=exc).error(f"{referencia} Excepción no controlada en {request.method} {enmascarar_ruta(request.url.path)}")
     return JSONResponse(
         status_code=500,
         content={"detail": mensaje_error_interno(referencia), "referencia": referencia},

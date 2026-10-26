@@ -44,7 +44,7 @@ def _ejecutar_comparacion_background(comparacion_id: str, excel_path: str):
 
 
 @router.post("/upload", response_model=ComparacionResponse, status_code=202, summary="Subir Excel para comparar")
-async def upload_excel_comparacion(
+def upload_excel_comparacion(
     file: UploadFile = File(..., description="Archivo Excel (.xlsx o .xls)"),
     ejecutar: bool = True,
     db: Session = Depends(get_db),
@@ -62,7 +62,7 @@ async def upload_excel_comparacion(
             detail=f"Solo se aceptan archivos .xlsx o .xls. Recibido: {extension}"
         )
 
-    content = await file.read()
+    content = file.file.read()
     verificar_tamano_archivo(content, file.filename)
 
     # Guardar archivo
@@ -186,6 +186,8 @@ def obtener_diferencias(
     if tipo:
         query = query.filter(Diferencia.tipo_diferencia == tipo)
 
+    # Orden fijo: sin él, las páginas pueden repetir o saltar diferencias
+    query = query.order_by(Diferencia.numero_identificacion, Diferencia.id)
     diferencias = query.offset(skip).limit(limit).all()
     return [DiferenciaResponse.model_validate(d) for d in diferencias]
 

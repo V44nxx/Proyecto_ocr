@@ -1,6 +1,8 @@
 """
 Sistema de logging configurado con Loguru
 """
+import logging
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -64,6 +66,29 @@ def enmascarar_documento(numero: Optional[str]) -> str:
     if len(texto) <= 4:
         return "*" * len(texto)
     return "*" * (len(texto) - 4) + texto[-4:]
+
+
+def enmascarar_nombre(nombre: Optional[str]) -> str:
+    """Nombre de una persona para los logs: solo las iniciales (A. M. M. R.)."""
+    return " ".join(f"{palabra[0].upper()}." for palabra in str(nombre or "").split())
+
+
+# Un tramo de la dirección hecho solo de dígitos es una cédula (/buscar/cedula/1000000401); los ids son UUID
+_CEDULA_EN_RUTA = re.compile(r"(?<=/)\d{6,}(?=[/?#]|$)")
+
+
+def enmascarar_ruta(ruta: Optional[str]) -> str:
+    """Dirección de una petición para los logs, con las cédulas enmascaradas."""
+    return _CEDULA_EN_RUTA.sub(lambda m: enmascarar_documento(m.group()), str(ruta or ""))
+
+
+class FiltroRutasEnmascaradas(logging.Filter):
+    """Enmascara la cédula de la dirección en el registro de acceso de uvicorn (cliente, método, ruta, ...)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and len(record.args) >= 3:
+            record.args = record.args[:2] + (enmascarar_ruta(record.args[2]),) + record.args[3:]
+        return True
 
 
 # Logger global del sistema

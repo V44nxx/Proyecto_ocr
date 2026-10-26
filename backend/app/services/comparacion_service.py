@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Set
 from sqlalchemy.orm import Session
 
-from app.utils.logger import app_logger as logger
+from app.utils.logger import app_logger as logger, enmascarar_documento, enmascarar_nombre
 from app.utils.validators import validador
 from app.services.excel_lookup_service import unificar_columnas_repetidas
 
@@ -622,7 +622,7 @@ class ComparacionService:
                         ids_faltantes.remove(id_faltante)
                         ids_nuevos.remove(mejor_id_nuevo)
                         parejas_reconciliadas.append((mejor_id_nuevo, id_faltante))
-                        logger.info(f"[Comparacion] Reconciliación exitosa por nombre: '{nom_ex}' (BD ID: {mejor_id_nuevo} <-> Excel ID: {id_faltante})")
+                        logger.info(f"[Comparacion] Reconciliación exitosa por nombre: '{enmascarar_nombre(nom_ex)}' (BD ID: {enmascarar_documento(mejor_id_nuevo)} <-> Excel ID: {enmascarar_documento(id_faltante)})")
 
                 resultado["total_faltantes_bd"] = len(ids_faltantes)
                 resultado["total_nuevos_bd"] = len(ids_nuevos)
@@ -672,8 +672,8 @@ class ComparacionService:
 
                     if p_bd:
                         logger.info(
-                            f"[Comparacion] Auto-corrigiendo Persona en BD: '{id_bd_rec}' -> '{id_ex_rec}' "
-                            f"(Titular: '{nom_ex_ofic or p_bd.nombre_completo}')"
+                            f"[Comparacion] Auto-corrigiendo Persona en BD: '{enmascarar_documento(id_bd_rec)}' -> '{enmascarar_documento(id_ex_rec)}' "
+                            f"(Titular: '{enmascarar_nombre(nom_ex_ofic or p_bd.nombre_completo)}')"
                         )
                         detalles = dict(p_bd.detalles_campos or {})
                         detalles["numero_identificacion_original_ocr"] = id_bd_rec
@@ -707,7 +707,7 @@ class ComparacionService:
                         p_duplicado = self.filtrar_por_comparacion(query_duplicado, comparacion_actual).first()
 
                         if p_duplicado and p_duplicado.id != p_bd.id:
-                            logger.info(f"[Comparacion] Fusionando registro de la planilla '{id_ex_rec}' en el registro del PDF '{id_bd_rec}'")
+                            logger.info(f"[Comparacion] Fusionando registro de la planilla '{enmascarar_documento(id_ex_rec)}' en el registro del PDF '{enmascarar_documento(id_bd_rec)}'")
                             for campo_dup in ("fecha_nacimiento", "fecha_expedicion", "lugar_expedicion", "sexo"):
                                 if not getattr(p_bd, campo_dup) and getattr(p_duplicado, campo_dup):
                                     setattr(p_bd, campo_dup, getattr(p_duplicado, campo_dup))

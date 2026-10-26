@@ -6,9 +6,12 @@ internos, configuración segura por defecto, cabeceras de seguridad, CORS por li
 cabecera, nombres de archivo saneados, política de contraseñas y registro de auditoría.
 Las pruebas marcadas con `requiere_postgres` necesitan TEST_DATABASE_URL.
 """
+import ast
 import inspect
 import io
+import re
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -226,6 +229,26 @@ def test_reintentar_una_comparacion_con_error_la_vuelve_a_ejecutar(bd, api, monk
 
     assert r.status_code == 200
     assert hilos and estado == "procesando" and mensaje is None
+
+
+@requiere_postgres
+def test_las_diferencias_se_paginan_en_un_orden_fijo(bd, api):
+    # Sin orden, la base puede devolver las filas en cualquier orden y una página repetir o saltar diferencias
+    db = bd.SessionLocal()
+    ana = crear_usuario(db, "ana@example.com")
+    comp = _comparacion_con_diferencia(db, ana, cedula="1000000405")
+    for cedula, campo in [("1000000403", "nombres"), ("1000000405", "apellidos"), ("1000000401", "nombres")]:
+        db.add(Diferencia(comparacion_id=comp.id, numero_identificacion=cedula, campo=campo,
+                          valor_bd="A", valor_excel="B", tipo_diferencia="diferente"))
+    db.commit()
+    url = f"/api/comparacion/{comp.id}/diferencias"
+    primera = api.get(url, params={"skip": 0, "limit": 2}, headers=cabecera(ana)).json()
+    segunda = api.get(url, params={"skip": 2, "limit": 2}, headers=cabecera(ana)).json()
+    db.close()
+
+    cedulas = [d["numero_identificacion"] for d in primera + segunda]
+    assert cedulas == ["1000000401", "1000000403", "1000000405", "1000000405"]
+    assert len({d["id"] for d in primera + segunda}) == 4
 
 
 def test_error_interno_no_autoriza_a_un_origen_ajeno(cliente):
@@ -456,6 +479,20 @@ def test_subir_pdf_de_persona_no_bloquea_el_servidor():
     assert not inspect.iscoroutinefunction(subir_pdf_persona)
 
 
+def test_no_quedan_rutas_de_depuracion_expuestas():
+    rutas = list(app.openapi()["paths"])
+    assert "/api/documentos/upload" in rutas
+    assert not [r for r in rutas if "debug" in r.lower()]
+
+
+def test_las_subidas_de_fichas_y_planillas_no_bloquean_el_servidor():
+    # Guardan en disco y en la base con llamadas síncronas: como `async def` frenaban a todos los usuarios
+    from app.routers.comparacion import upload_excel_comparacion
+    from app.routers.documentos import upload_pdf
+    assert not inspect.iscoroutinefunction(upload_pdf)
+    assert not inspect.iscoroutinefunction(upload_excel_comparacion)
+
+
 def test_una_fecha_enorme_no_bloquea_el_servidor():
     """La fecha llega del usuario (corregir un campo, filas de un Excel): una cadena larga sin separadores
     no debe disparar un tiempo cuadrático en las expresiones regulares (ReDoS) ni llenar el log."""
@@ -506,6 +543,114 @@ def test_crear_usuario_tambien_limita_los_72_bytes():
 def test_enmascarar_documento(valor, esperado):
     from app.utils.logger import enmascarar_documento
     assert enmascarar_documento(valor) == esperado
+
+
+@pytest.mark.parametrize("valor, esperado", [
+    ("ANGELA MARIA MORA RUIZ", "A. M. M. R."), ("  ana   mora ", "A. M."), ("", ""), (None, ""),
+])
+def test_enmascarar_nombre(valor, esperado):
+    from app.utils.logger import enmascarar_nombre
+    assert enmascarar_nombre(valor) == esperado
+
+
+# Variables que llevan cédulas o nombres de las personas de las fichas
+_VARIABLE_CON_DATOS = re.compile(r"(cedula|identificacion|^num_doc$|^numero|^id_|nom_|nombre|apellido)", re.I)
+# Nombres de archivo, índices y conteos no identifican a nadie
+_VARIABLE_SIN_DATOS = re.compile(r"(nombre_original|nombre_archivo|doc_nombre|^idx_|^id_doc|pagina|total)", re.I)
+# Excepciones puntuales: (archivo, expresión)
+_PERMITIDOS = {("app/routers/documentos.py", "numero")}  # número de página del visor
+
+
+def _datos_personales_en_logs():
+    raiz = Path(__file__).resolve().parents[1]
+    hallazgos = []
+    for archivo in sorted((raiz / "app").rglob("*.py")):
+        relativo = archivo.relative_to(raiz).as_posix()
+        for nodo in ast.walk(ast.parse(archivo.read_text(encoding="utf-8"))):
+            if not (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute)
+                    and nodo.func.attr in ("debug", "info", "warning", "error", "exception", "critical")
+                    and nodo.args and isinstance(nodo.args[0], ast.JoinedStr)):
+                continue
+            for parte in nodo.args[0].values:
+                if not isinstance(parte, ast.FormattedValue):
+                    continue
+                expresion = ast.unparse(parte.value)
+                if (relativo, expresion) in _PERMITIDOS:
+                    continue
+                # Lo que va dentro de enmascarar_*() o len(), o en el `if` de una comprensión, no se escribe
+                seguros = set()
+                for n in ast.walk(parte.value):
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and (
+                            n.func.id.startswith("enmascarar_") or n.func.id == "len"):
+                        seguros.update(id(x) for x in ast.walk(n))
+                    elif isinstance(n, ast.comprehension):
+                        seguros.update(id(x) for cond in n.ifs for x in ast.walk(cond))
+                visibles = [n for n in ast.walk(parte.value) if id(n) not in seguros]
+                nombres = [n.id for n in visibles if isinstance(n, ast.Name)]
+                nombres += [n.attr for n in visibles if isinstance(n, ast.Attribute)]
+                if any(_VARIABLE_CON_DATOS.search(n) and not _VARIABLE_SIN_DATOS.search(n) for n in nombres):
+                    hallazgos.append(f"{relativo}:{nodo.lineno} {{{expresion}}}")
+    return hallazgos
+
+
+def test_los_logs_no_escriben_cedulas_ni_nombres_completos():
+    """Los logs se guardan 14 días en el servidor: cédulas y nombres van enmascarados (fichas con menores)."""
+    assert _datos_personales_en_logs() == []
+
+
+@pytest.mark.parametrize("ruta, esperada", [
+    ("/api/personas/buscar/cedula/1000000401", "/api/personas/buscar/cedula/******0401"),
+    ("/api/personas/buscar/cedula/1000000401?x=1", "/api/personas/buscar/cedula/******0401?x=1"),
+    ("/api/documentos/12345678-1234-1234-1234-123456789012/pagina/2",
+     "/api/documentos/12345678-1234-1234-1234-123456789012/pagina/2"),
+])
+def test_enmascarar_ruta(ruta, esperada):
+    from app.utils.logger import enmascarar_ruta
+    assert enmascarar_ruta(ruta) == esperada
+
+
+def test_el_registro_de_peticiones_no_escribe_la_cedula_de_la_direccion(cliente):
+    from loguru import logger
+    mensajes = []
+    sink = logger.add(mensajes.append, format="{message}")
+    try:
+        cliente.get("/api/personas/buscar/cedula/1000000401")
+    finally:
+        logger.remove(sink)
+    texto = "".join(mensajes)
+    assert "/api/personas/buscar/cedula/******0401" in texto
+    assert "1000000401" not in texto
+
+
+def test_el_registro_de_acceso_de_uvicorn_no_escribe_la_cedula():
+    import logging
+    import app.main  # noqa: F401  (instala el filtro)
+    acceso = logging.getLogger("uvicorn.access")
+    registros = []
+
+    class Captura(logging.Handler):
+        def emit(self, record):
+            registros.append(record.getMessage())
+    captura, nivel = Captura(), acceso.level
+    acceso.addHandler(captura)
+    acceso.setLevel(logging.INFO)
+    try:
+        acceso.info('%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "GET", "/api/personas/buscar/cedula/1000000401", "1.1", 404)
+    finally:
+        acceso.removeHandler(captura)
+        acceso.setLevel(nivel)
+    assert registros == ['127.0.0.1:5000 - "GET /api/personas/buscar/cedula/******0401 HTTP/1.1" 404']
+
+
+def test_un_404_no_se_registra_como_error_de_la_base(caplog):
+    # El detalle de un 404 puede llevar la cédula buscada, y no es una falla de la sesión
+    from fastapi import HTTPException
+    from app.database import get_db
+    sesion = get_db()
+    next(sesion)
+    with pytest.raises(HTTPException):
+        sesion.throw(HTTPException(status_code=404, detail="No se encontró persona con cédula 1000000401"))
+    assert "1000000401" not in caplog.text
 
 
 def test_las_trazas_de_error_no_escriben_valores_de_variables(tmp_path, monkeypatch, capsys):

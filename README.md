@@ -243,7 +243,6 @@ npm run dev
 | `DELETE` | `/api/documentos/{id}` | Eliminar documento y sus registros asociados |
 | `GET` | `/api/documentos/dashboard/estadisticas` | Métricas agregadas para el Dashboard |
 | `GET` | `/api/documentos/{id}/pagina/{numero}` | Página del PDF como imagen JPEG (sesión en la cabecera `Authorization`; no se guarda en caché) |
-| `GET` | `/api/documentos/{id}/debug_espacial` | Reporte de depuración de cajas delimitadoras espaciales |
 
 ### 👥 Personas (`/api/personas`)
 | Método | Endpoint | Descripción |

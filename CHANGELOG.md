@@ -22,6 +22,30 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.11.1] - 2026-10-25
+
+**Resumen**
+
+- Los logs del servidor ya no guardan cédulas ni nombres completos de las personas de las fichas.
+- Subir fichas o planillas ya no frena la plataforma a los demás usuarios.
+- Las planillas con dos columnas de identificación se leen bien, y quien está en la planilla pero no en el PDF vuelve a aparecer en su ficha (hecho por Emerson).
+
+### Seguridad
+
+- **Datos personales en los logs**. Los logs se guardan 14 días (30 los de errores) y las fichas incluyen menores de edad, así que:
+  - las cédulas quedan con los últimos 4 dígitos (`******0401`) y los nombres con las iniciales (`A. M. M.`), con `enmascarar_documento` y el nuevo `enmascarar_nombre` (`app/utils/logger.py`), en el OCR, la extracción, el emparejamiento de páginas, la comparación con la planilla y las personas que faltan en el PDF;
+  - la dirección de la búsqueda por cédula se enmascara también en el registro de peticiones, en el de acceso de uvicorn y en los errores (`enmascarar_ruta`, `FiltroRutasEnmascaradas`);
+  - un 404 ya no se anota como «Error en sesión de DB» con su detalle, y los errores de la base solo dejan el tipo, no los valores de la fila;
+  - una prueba revisa todo el código del backend y falla si un log escribe una cédula o un nombre sin enmascarar.
+- Se quitó la ruta de depuración `GET /api/documentos/{id}/debug_espacial`: no la usaba el frontend y devolvía un reporte vacío.
+
+### Corregido
+
+- **Subidas que bloqueaban el servidor**: `POST /api/documentos/upload` y `POST /api/comparacion/upload` guardaban en disco y en la base con llamadas síncronas dentro de una ruta asíncrona; mientras duraba una subida, las peticiones de los demás usuarios esperaban. Ahora corren en un hilo aparte, como la subida de PDF de una persona.
+- **Diferencias de una comparación**: `GET /api/comparacion/{id}/diferencias` paginaba sin un orden fijo, y al pasar de página podía repetir o saltarse diferencias. Ahora van por cédula.
+- **Planillas con columnas «Identificacion» y «DOCUMENTO»** (hecho por Emerson): las dos se tomaban como identificación, la hoja fallaba y la planilla quedaba vacía (todos «Falta en Excel»). Ahora se usa la columna con más números válidos.
+- **Personas que están en la planilla y no en el PDF** (hecho por Emerson): vuelven a registrarse en la ficha del lote (la existente si el PDF se agregó como otra parte), sin mover a quien ya está en otra ficha. El listado de personas ya no modifica datos al consultarse, y el visor no les muestra el PDF de la ficha.
+
 ## [2.11.0] - 2026-10-21
 
 **Resumen**

@@ -1,10 +1,12 @@
 """
 Configuración de base de datos con SQLAlchemy
 """
+from fastapi import HTTPException
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from app.config import settings
+from app.utils.logger import enmascarar_documento, enmascarar_nombre
 import logging
 import re
 from typing import Any, Dict
@@ -54,9 +56,14 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except HTTPException:
+        # Respuestas como un 404 no son fallas de la sesión, y su detalle puede llevar la cédula buscada
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error en sesión de DB: {e}")
+        # Solo el tipo: el mensaje de un error de la base puede traer los valores de la fila
+        logger.error(f"Error en sesión de DB: {type(e).__name__}")
         raise
     finally:
         db.close()
@@ -348,7 +355,7 @@ def reparar_nombres_recortados(db) -> Dict[str, int]:
         entrada = lookup_de(p.usuario_id).get(cedula) if (p.usuario_id and cedula) else None
         recuperado = nombre_recuperado(p.nombre_completo, entrada.get("nombre_completo")) if entrada else None
         if recuperado:
-            logger.info(f"Nombre recuperado desde la planilla Excel para {p.numero_identificacion}: {p.nombre_completo} -> {recuperado}")
+            logger.info(f"Nombre recuperado desde la planilla Excel para {enmascarar_documento(p.numero_identificacion)}: {enmascarar_nombre(p.nombre_completo)} -> {enmascarar_nombre(recuperado)}")
             p.nombre_completo = recuperado
             p.nombres = recuperado
             p.apellidos = None

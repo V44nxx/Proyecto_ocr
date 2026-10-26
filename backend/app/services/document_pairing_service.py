@@ -4,7 +4,7 @@ Reconstruye el documento físico (Frente + Reverso) a partir de múltiples evide
 coincidencia de ID (MRZ vs NUIP), tipo documental, secuencia FRONT-BACK y proximidad.
 """
 from typing import List, Dict, Any, Optional
-from app.utils.logger import app_logger as logger
+from app.utils.logger import app_logger as logger, enmascarar_documento
 
 # Orden de prioridad para resolver conflictos entre las dos caras del documento.
 # Un tipo más específico (ej: TARJETA_IDENTIDAD) siempre gana frente a UNKNOWN.
@@ -434,7 +434,7 @@ class DocumentPairingService:
                             break
                 if not fusionado:
                     # En un lote multipágina, un reverso huérfano sin frente NO se promueve a ciudadano extra
-                    logger.info(f"[DocumentPairingService] Reverso huérfano pág {b_p.get('pagina_numero')} (ID: {id_b or 'sin_id'}) descartado para evitar persona fantasma")
+                    logger.info(f"[DocumentPairingService] Reverso huérfano pág {b_p.get('pagina_numero')} (ID: {enmascarar_documento(id_b) or 'sin_id'}) descartado para evitar persona fantasma")
 
         # ── Paso 6: Deduplicación Final de Grupos por ID idéntico ──
         grupos_unicos_map: Dict[str, DocumentGroup] = {}
@@ -471,7 +471,7 @@ class DocumentPairingService:
         logger.info(
             f"[DocumentPairingService] {total_pags} página(s) -> "
             f"{len(grupos_finales)} grupo(s) de persona(s) física(s) únicas. "
-            f"IDs: {[g.numero_identificacion for g in grupos_finales if g.numero_identificacion]}"
+            f"IDs: {[enmascarar_documento(g.numero_identificacion) for g in grupos_finales if g.numero_identificacion]}"
         )
         return grupos_finales
 

@@ -27,7 +27,7 @@ from app.services.ocr_service import ocr_service
 from app.config import settings
 from app.utils.archivos import borrar_archivo_subido, nombre_archivo_seguro, numero_ficha_de, verificar_tamano_archivo
 from app.utils.errores import mensaje_error_interno, mensaje_error_visible, nueva_referencia
-from app.utils.logger import app_logger as logger
+from app.utils.logger import app_logger as logger, enmascarar_documento, enmascarar_nombre
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
 
@@ -293,7 +293,7 @@ def _registrar_personas_excel_faltantes(
         if persona_db and str(persona_db.documento_id) not in {str(d) for d in doc_ids}:
             # Una sola persona por cédula: si ya está en otra ficha con sus datos, no se mueve de allí
             logger.info(
-                f"[PersonasFaltantesExcel] {id_excel} ({nom_excel}) ya está en otra ficha; no se mueve"
+                f"[PersonasFaltantesExcel] {enmascarar_documento(id_excel)} ({enmascarar_nombre(nom_excel)}) ya está en otra ficha; no se mueve"
             )
             continue
 
@@ -320,7 +320,7 @@ def _registrar_personas_excel_faltantes(
             persona_db.detalles_campos = detalles_payload
             persona_db.texto_ocr_crudo = "[Registro cargado desde planilla Excel - No encontrado en PDF]"
             logger.info(
-                f"[PersonasFaltantesExcel] Actualizada persona existente {id_excel} ({nom_excel}) como faltante en PDF"
+                f"[PersonasFaltantesExcel] Actualizada persona existente {enmascarar_documento(id_excel)} ({enmascarar_nombre(nom_excel)}) como faltante en PDF"
             )
         else:
             import uuid as uuid_pkg
@@ -353,7 +353,7 @@ def _registrar_personas_excel_faltantes(
             )
             db.add(nueva_p)
             logger.info(
-                f"[PersonasFaltantesExcel] Creada nueva persona {id_excel} ({nom_excel}) con datos de Excel y alerta 'No se encontró en el PDF'"
+                f"[PersonasFaltantesExcel] Creada nueva persona {enmascarar_documento(id_excel)} ({enmascarar_nombre(nom_excel)}) con datos de Excel y alerta 'No se encontró en el PDF'"
             )
 
         personas_agregadas += 1
@@ -706,7 +706,7 @@ def _leer_acciones_ficha(acciones: Optional[str], db: Session, usuario: Usuario)
     summary="Subir PDF(s) para procesamiento OCR (planilla Excel opcional)",
     status_code=202
 )
-async def upload_pdf(
+def upload_pdf(
     background_tasks: BackgroundTasks,
     files: Optional[List[UploadFile]] = File(default=None, description="Uno o multiples archivos PDF"),
     file: Optional[UploadFile] = File(default=None, description="Archivo PDF individual"),
@@ -739,7 +739,7 @@ async def upload_pdf(
     contenidos_pdf: List[bytes] = []
     for pdf_file in archivos_recibidos:
         _validar_pdf(pdf_file)
-        contenido_pdf = await pdf_file.read()
+        contenido_pdf = pdf_file.file.read()
         verificar_tamano_archivo(contenido_pdf, pdf_file.filename)
         contenidos_pdf.append(contenido_pdf)
 
@@ -751,7 +751,7 @@ async def upload_pdf(
                 status_code=400,
                 detail=f"El archivo Excel debe tener extensión .xlsx o .xls. Recibido: {ext}"
             )
-        excel_content = await excel.read()
+        excel_content = excel.file.read()
         verificar_tamano_archivo(excel_content, excel.filename)
 
     # ── Procesar Excel adjunto (si existe) ────────────────────────────────
@@ -1139,26 +1139,6 @@ def estadisticas_dashboard(
         "personas_en_revision": revision,
         "total_comparaciones": total_comparaciones,
     }
-
-
-@router.get("/{documento_id}/debug_espacial", summary="Trazabilidad y cajas delimitadoras espaciales")
-def debug_espacial_documento(
-    documento_id: str,
-    pagina: int = 1,
-    db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_actual),
-):
-    """Devuelve las cajas delimitadoras (LABEL, CANDIDATE, ACCEPTED, REJECTED) para depuración visual"""
-    documento = db.query(Documento).filter(
-        Documento.id == documento_id,
-        Documento.usuario_id == usuario.id
-    ).first()
-    if not documento:
-        raise HTTPException(status_code=404, detail="Documento no encontrado")
-
-    from app.services.spatial_debug_service import spatial_debug_service
-    # Para depuración visual, retornar reporte espacial de la página solicitada
-    return spatial_debug_service.generar_reporte_debug(lines=[], page_num=pagina)
 
 
 # Resoluciones de la vista previa: 130 y 200 las usa el visor, 150 es la de por defecto

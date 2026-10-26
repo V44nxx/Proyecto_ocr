@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from app.utils.logger import logger
+from app.utils.logger import enmascarar_documento, enmascarar_nombre, logger
 from app.utils.image_processor import image_processor
 from app.services.extractor_service import extractor_service
 from app.services.google_document_ai_service import google_document_ai_service
@@ -927,7 +927,7 @@ class OCRService:
             if id_corregido and str(id_corregido) != str(num_doc) and verif["fuente_identificacion"] == "corregido_desde_excel":
                 logger.info(
                     f"[ExcelLookup] Auto-corrigiendo identificación por validación exhaustiva: "
-                    f"OCR='{num_doc}' -> Corregido a '{id_corregido}' desde planilla oficial Excel"
+                    f"OCR='{enmascarar_documento(num_doc)}' -> Corregido a '{enmascarar_documento(id_corregido)}' desde planilla oficial Excel"
                 )
                 id_anterior = num_doc
                 num_doc = id_corregido
@@ -938,7 +938,7 @@ class OCRService:
 
                 if persona:
                     if persona_oficial and persona_oficial.id != persona.id:
-                        logger.info(f"[ExcelLookup] Fusionando registro erróneo '{id_anterior}' con registro existente '{id_corregido}'")
+                        logger.info(f"[ExcelLookup] Fusionando registro erróneo '{enmascarar_documento(id_anterior)}' con registro existente '{enmascarar_documento(id_corregido)}'")
                         db.delete(persona)
                         persona = persona_oficial
                     else:
@@ -1091,7 +1091,10 @@ class OCRService:
                     f"Cédula repetida: el OCR leyó el número {num_doc}, que ya pertenece a "
                     f"'{persona.nombre_completo}'. Escriba la cédula correcta de esta persona."
                 )
-                logger.warning(f"[OCR] {motivo_rep} (nueva lectura: '{nombre_completo_final}')")
+                logger.warning(
+                    f"[OCR] Cédula repetida {enmascarar_documento(num_doc)} "
+                    f"(nueva lectura: '{enmascarar_nombre(nombre_completo_final)}')"
+                )
                 detalles_payload["numero_identificacion_leido_ocr"] = str(num_doc)
                 detalles_payload["cedula_repetida"] = True
                 detalles_payload["motivos_revision"] = [motivo_rep] + list(detalles_payload.get("motivos_revision") or [])
@@ -1142,11 +1145,11 @@ class OCRService:
                     texto_ocr_crudo=(texto_ocr or "")[:5000],
                 )
                 db.add(persona)
-                logger.info(f"Registrada nueva persona: {num_doc} ({persona.nombre_completo}) [Estado: {estado_reg}] (Revisión: {requiere_revision})")
+                logger.info(f"Registrada nueva persona: {enmascarar_documento(num_doc)} ({enmascarar_nombre(persona.nombre_completo)}) [Estado: {estado_reg}] (Revisión: {requiere_revision})")
             else:
                 # ── UNIFICACIÓN INTELIGENTE DE HOJAS / PÁGINAS ──
                 # Si la cédula ya existe (ej. repartida en 2 hojas), no duplicar y fusionar datos faltantes
-                logger.info(f"Unificando datos para persona existente ID '{num_doc}'...")
+                logger.info(f"Unificando datos para persona existente ID '{enmascarar_documento(num_doc)}'...")
                 # La persona venía de otro PDF (la cédula es única por usuario): sus páginas eran de ese PDF.
                 # Conservarlas hacía que el visor mostrara, en este PDF, la cédula de otra persona.
                 viene_de_otro_pdf = bool(
@@ -1157,7 +1160,7 @@ class OCRService:
                     # Solo se conservan los campos corregidos a mano (campos_revisados).
                     revisados = set(persona.campos_revisados or [])
                     logger.info(
-                        f"Persona {num_doc or persona.nombre_completo} pasa del documento {persona.documento_id} a "
+                        f"Persona {enmascarar_documento(num_doc) or enmascarar_nombre(persona.nombre_completo)} pasa del documento {persona.documento_id} a "
                         f"{doc_id_val}: se reescribe con la nueva lectura (se conservan los campos corregidos: {sorted(revisados)})"
                     )
                     persona.pagina_frente = datos.get("pagina_frente")

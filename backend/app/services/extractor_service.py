@@ -17,7 +17,7 @@ CAMBIOS v2 (optimización precisión):
 import re
 from typing import Optional, Dict, Any, List, Tuple
 from app.utils.validators import validador
-from app.utils.logger import app_logger as logger
+from app.utils.logger import app_logger as logger, enmascarar_documento, enmascarar_nombre
 from app.services.document_pairing_service import _resolver_tipo_documento
 from app.services.spatial_field_extractor import spatial_field_extractor
 from app.services.colombia_geo_service import colombia_geo
@@ -1278,7 +1278,7 @@ class ExtractorService:
             id_comb = self._extraer_identificacion(texto_combinado, lineas_combinadas)
             if id_comb:
                 res["identificacion"] = id_comb
-                logger.info(f"[ExtractorService] Identificación '{id_comb}' rescatada mediante combinación de caras")
+                logger.info(f"[ExtractorService] Identificación '{enmascarar_documento(id_comb)}' rescatada mediante combinación de caras")
 
         # Descartar nombres o apellidos si son puramente geográficos (ej: CAQUETA SOLANO)
         if res.get("nombres") and colombia_geo.es_geografico(res["nombres"]):
@@ -1616,7 +1616,7 @@ class ExtractorService:
                             continue
                         valido, numero_limpio = validador.validar_cedula(numero)
                         if valido:
-                            logger.debug(f"Cédula por keyword: {numero_limpio}")
+                            logger.debug(f"Cédula por keyword: {enmascarar_documento(numero_limpio)}")
                             return numero_limpio
 
         # Estrategia 2: Número con puntos o comas (formato colombiano: 1.117.811.948 o 1. 125. 182. 543)
@@ -1627,7 +1627,7 @@ class ExtractorService:
                 continue
             valido, numero_limpio = validador.validar_cedula(numero)
             if valido:
-                logger.debug(f"Cédula con puntos: {numero_limpio}")
+                logger.debug(f"Cédula con puntos: {enmascarar_documento(numero_limpio)}")
                 return numero_limpio
 
         # Estrategia 3: Línea que sea solo números (descartando teléfonos celulares y membretes)
@@ -1640,7 +1640,7 @@ class ExtractorService:
                     continue
                 valido, numero = validador.validar_cedula(linea_limpia)
                 if valido:
-                    logger.debug(f"Cédula por línea numérica: {numero}")
+                    logger.debug(f"Cédula por línea numérica: {enmascarar_documento(numero)}")
                     return numero
 
         # Estrategia 4: Corrección OCR en candidatos largos (6-10 dígitos)
@@ -1652,10 +1652,10 @@ class ExtractorService:
                     continue
                 valido, numero = validador.validar_cedula(candidato_corregido)
                 if valido:
-                    logger.debug(f"Cédula con corrección OCR: {numero}")
+                    logger.debug(f"Cédula con corrección OCR: {enmascarar_documento(numero)}")
                     return numero
                 if valido:
-                    logger.debug(f"Cédula con corrección OCR: {numero}")
+                    logger.debug(f"Cédula con corrección OCR: {enmascarar_documento(numero)}")
                     return numero
 
         logger.warning("No se encontró número de identificación")
@@ -1944,7 +1944,7 @@ class ExtractorService:
                 apellidos = candidatos[0]
 
         logger.info(
-            f"[CédulaAmarilla] Apellidos='{apellidos}' | Nombres='{nombres}' "
+            f"[CédulaAmarilla] Apellidos='{enmascarar_nombre(apellidos)}' | Nombres='{enmascarar_nombre(nombres)}' "
             f"(línea número idx={idx_numero})"
         )
         return nombres, apellidos

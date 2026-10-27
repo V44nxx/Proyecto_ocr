@@ -33,9 +33,17 @@ const BOTON_PRIMARIO =
   "px-4 py-2 rounded-xl text-xs font-semibold bg-[#0071E3] hover:bg-[#0077ED] text-white transition-all shadow-sm shadow-[#0071E3]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2";
 
 const PASOS = [
-  { titulo: "Crea la hoja", texto: "En Google Drive crea la hoja «BD Seguimiento de Fichas» y abre Extensiones → Apps Script." },
-  { titulo: "Publica el panel", texto: "Implementar → Nueva implementación → Aplicación web. En «Quién tiene acceso» elige «Cualquier persona» para verlo aquí dentro." },
-  { titulo: "Copia el enlace", texto: "En Gestionar implementaciones copia la URL de la aplicación web (termina en /exec) y pégala en el formulario." },
+  {
+    titulo: "Pega el script",
+    texto:
+      "En la hoja «FORMACIONES COMPLEMENTARIAS GRUPOS» abre Extensiones → Apps Script y pega Codigo.gs e Index.html (carpeta apps-script/seguimiento-fichas del proyecto).",
+  },
+  { titulo: "Configúralo", texto: "Ejecuta la función «configurar» una vez: crea la clave del enlace y la actualización automática." },
+  {
+    titulo: "Publica el panel",
+    texto:
+      "Implementar → Nueva implementación → Aplicación web, ejecutar como «Yo» y acceso «Cualquier persona». Copia la URL (termina en /exec), agrégale ?k= y la clave, y pégala aquí.",
+  },
 ];
 
 export default function SeguimientoPage() {
@@ -189,7 +197,7 @@ export default function SeguimientoPage() {
                     rel="noopener noreferrer"
                     className="mt-1.5 text-sm font-semibold text-[#0071E3] hover:underline inline-flex items-center gap-1"
                   >
-                    BD Seguimiento de Fichas <ExternalLink className="w-3 h-3" />
+                    Formaciones complementarias <ExternalLink className="w-3 h-3" />
                   </a>
                 ) : (
                   <div className="mt-1.5 text-sm font-semibold text-slate-900 dark:text-white">Sin enlace</div>
@@ -229,7 +237,7 @@ export default function SeguimientoPage() {
                       required
                       value={urlPanel}
                       onChange={(e) => setUrlPanel(e.target.value)}
-                      placeholder="https://script.google.com/macros/s/.../exec"
+                      placeholder="https://script.google.com/macros/s/.../exec?k=..."
                       className={`${CAMPO} pl-10`}
                     />
                   </div>

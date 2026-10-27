@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --fondo: #f5f6f8; --tarjeta: #ffffff; --borde: #e2e8f0; --texto: #0f172a; --suave: #64748b; --tenue: #94a3b8;
+    --acento: #0071e3; --acento-suave: rgba(0, 113, 227, .1); --ok: #059669; --alerta: #d97706; --error: #dc2626;
+    --campo: #f8fafc; --sombra: 0 2px 12px rgba(0, 0, 0, .04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #0b0e14; --tarjeta: #121620; --borde: rgba(255, 255, 255, .08); --texto: #f1f5f9; --suave: #94a3b8;
+      --tenue: #64748b; --acento-suave: rgba(0, 113, 227, .18); --campo: rgba(255, 255, 255, .04);
+      --sombra: 0 4px 24px rgba(0, 0, 0, .25);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .contenedor { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .barra h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .sincro { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); margin-left: auto; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .punto.cargando { background: var(--alerta); animation: latir 1s infinite; }
+  .punto.error { background: var(--error); }
+  @keyframes latir { 50% { opacity: .35; } }
+  .boton { border: 1px solid var(--borde); background: var(--tarjeta); border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .boton:hover { border-color: var(--acento); }
+  .boton.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .boton:disabled { opacity: .45; cursor: not-allowed; }
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 12px 14px; box-shadow: var(--sombra); }
+  .kpi span { font-size: 11px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi b { display: block; font-size: 22px; margin-top: 2px; }
+  .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .filtros input, .filtros select { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 7px 10px; font-size: 13px; }
+  .filtros input { flex: 1 1 240px; min-width: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--borde); background: var(--tarjeta); border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .chip small { color: var(--tenue); font-weight: 600; margin-left: 4px; }
+  .chip.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .chip.activo small { color: rgba(255, 255, 255, .75); }
+  .lista { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; overflow-x: auto; box-shadow: var(--sombra); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); padding: 10px 12px; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--acento-suave); }
+  tr.cambiado { animation: resaltar 2.5s; }
+  @keyframes resaltar { from { background: rgba(5, 150, 105, .18); } }
+  .titulo { font-weight: 600; }
+  .sub { font-size: 12px; color: var(--suave); }
+  .recorte { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .etiqueta { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 7px; background: var(--campo); border: 1px solid var(--borde); white-space: nowrap; }
+  .etiqueta.hoja { color: var(--acento); background: var(--acento-suave); border-color: transparent; }
+  .etiqueta.vacia { color: var(--tenue); }
+  .vacio { padding: 40px; text-align: center; color: var(--suave); }
+  .aviso { font-size: 12px; color: var(--alerta); margin-bottom: 10px; }
+  .velo { position: fixed; inset: 0; background: rgba(15, 23, 42, .35); display: none; }
+  .velo.abierto { display: block; }
+  .cajon { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--tarjeta); border-left: 1px solid var(--borde); transform: translateX(100%); transition: transform .2s; display: flex; flex-direction: column; }
+  .cajon.abierto { transform: none; }
+  .cajon header { padding: 16px; border-bottom: 1px solid var(--borde); display: flex; gap: 10px; align-items: flex-start; }
+  .cajon header h2 { font-size: 15px; margin: 4px 0 0; }
+  .cajon .cuerpo { padding: 16px; overflow: auto; flex: 1; }
+  .cajon footer { padding: 12px 16px; border-top: 1px solid var(--borde); display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .cerrar { margin-left: auto; border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--suave); }
+  .detalles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-bottom: 18px; }
+  .detalles div span { display: block; font-size: 11px; color: var(--suave); font-weight: 600; }
+  .seccion { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); margin: 0 0 10px; }
+  .formulario { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .formulario label { font-size: 11px; font-weight: 600; color: var(--suave); display: block; margin-bottom: 4px; }
+  .formulario .ancho { grid-column: 1 / -1; }
+  .formulario input, .formulario textarea { width: 100%; background: var(--campo); border: 1px solid var(--borde); border-radius: 10px; padding: 8px 10px; }
+  .formulario textarea { min-height: 90px; resize: vertical; }
+  .formulario input:focus, .formulario textarea:focus { outline: 2px solid var(--acento-suave); border-color: var(--acento); }
+  .formulario .modificado { border-color: var(--alerta); }
+  .conflicto { font-size: 12px; color: var(--error); margin-top: 4px; }
+  .mensaje { margin-right: auto; font-size: 12px; color: var(--suave); }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.visible { opacity: 1; }
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .col-ocultable { display: none; }
+    td, th { padding: 9px 8px; }
+    .detalles, .formulario { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="contenedor">
+  <div class="barra">
+    <h1>Formaciones complementarias</h1>
+    <div class="sincro"><span class="punto cargando" id="punto"></span><span id="estado">Cargando…</span></div>
+    <button class="boton" id="recargar" title="Leer la hoja de nuevo">Recargar</button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><span>Registros</span><b id="k-total">–</b></div>
+    <div class="kpi"><span>Con ficha</span><b id="k-ficha">–</b></div>
+    <div class="kpi"><span>Sin ficha</span><b id="k-sinficha">–</b></div>
+    <div class="kpi"><span>Matriculados</span><b id="k-matriculados">–</b></div>
+  </div>
+
+  <div class="filtros">
+    <div class="chips" id="chips"></div>
+    <input id="buscar" type="search" placeholder="Buscar programa, instructor, ficha, empresa o municipio">
+    <select id="f-mes"><option value="">Todos los meses</option></select>
+    <select id="f-estado"><option value="">Todos los estados</option></select>
+  </div>
+  <div id="avisos"></div>
+
+  <div class="lista">
+    <table>
+      <thead>
+        <tr>
+          <th>Programa</th>
+          <th>Ficha</th>
+          <th class="col-ocultable">Fechas</th>
+          <th class="col-ocultable">Empresa / municipio</th>
+          <th>Estado</th>
+          <th class="col-ocultable">Inscritos / matric.</th>
+        </tr>
+      </thead>
+      <tbody id="filas"></tbody>
+    </table>
+    <div class="vacio" id="vacio" hidden>No hay registros con esos filtros.</div>
+  </div>
+</div>
+
+<div class="velo" id="velo"></div>
+<aside class="cajon" id="cajon" aria-hidden="true">
+  <header>
+    <div>
+      <span class="etiqueta hoja" id="c-hoja"></span>
+      <h2 id="c-titulo"></h2>
+      <div class="sub" id="c-sub"></div>
+    </div>
+    <button class="cerrar" id="cerrar" aria-label="Cerrar">×</button>
+  </header>
+  <div class="cuerpo">
+    <p class="seccion">Datos de la programación</p>
+    <div class="detalles" id="c-detalles"></div>
+    <p class="seccion">Seguimiento</p>
+    <form class="formulario" id="c-form" autocomplete="off"></form>
+  </div>
+  <footer>
+    <span class="mensaje" id="c-mensaje"></span>
+    <button class="boton" id="descartar" type="button">Descartar</button>
+    <button class="boton primario" id="guardar" type="button" disabled>Guardar</button>
+  </footer>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script>
+  var CLAVE = <?= clave ?>;
+  var CADA_MS = 15000; // cada cuánto se pregunta si la hoja cambió
+  var DETALLES = ['requerimiento', 'codigo', 'oferta', 'instructor', 'empresa', 'municipio', 'radicado', 'area', 'inicio', 'fin', 'horas', 'cupo', 'horario'];
+  var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  var datos = null;
+  var version = null;
+  var filtro = { hoja: '', texto: '', mes: '', estado: '' };
+  var abierto = null; // registro del cajón
+  var cargando = false;
+  var resaltar = {};
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function llamar(funcion) {
+    var argumentos = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolver, rechazar) {
+      var r = google.script.run.withSuccessHandler(resolver).withFailureHandler(rechazar);
+      r[funcion].apply(r, [CLAVE].concat(argumentos));
+    });
+  }
+
+  function crear(etiqueta, clase, texto) {
+    var el = document.createElement(etiqueta);
+    if (clase) el.className = clase;
+    if (texto != null) el.textContent = texto;
+    return el;
+  }
+
+  function avisar(texto) {
+    var t = $('toast');
+    t.textContent = texto;
+    t.classList.add('visible');
+    clearTimeout(avisar.t);
+    avisar.t = setTimeout(function () { t.classList.remove('visible'); }, 2600);
+  }
+
+  function ponerEstado(clase, texto) {
+    $('punto').className = 'punto ' + clase;
+    $('estado').textContent = texto;
+  }
+
+  function hora() {
+    return new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fechaCorta(iso) {
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return p ? Number(p[3]) + ' ' + MESES[Number(p[2]) - 1].slice(0, 3).toLowerCase() : (iso || '');
+  }
+
+  // Una solicitud nueva puede no tener programa todavía: se muestra lo que pidió la empresa
+  function titulo(r) {
+    return r.campos.programa || (r.campos.requerimiento ? 'Solicitud: ' + r.campos.requerimiento : 'Sin programa');
+  }
+
+  function mesDe(r) {
+    var p = /^\d{4}-(\d{2})/.exec(r.campos.inicio || '');
+    if (p) return MESES[Number(p[1]) - 1];
+    var m = (r.campos.mes || '').trim();
+    return m ? m.charAt(0).toUpperCase() + m.slice(1).toLowerCase() : '';
+  }
+
+  // ─── Carga y sincronización ───
+
+  function cargar(silencioso) {
+    if (cargando) return Promise.resolve();
+    cargando = true;
+    if (!silencioso) ponerEstado('cargando', 'Cargando…');
+    return llamar('obtenerDatos').then(function (d) {
+      if (datos) marcarCambios(datos.registros, d.registros);
+      datos = d;
+      version = d.version;
+      prepararFiltros();
+      pintar();
+      refrescarCajon();
+      ponerEstado('', 'Al día · ' + hora());
+    }).catch(function (e) {
+      ponerEstado('error', 'Error: ' + (e && e.message || e));
+    }).then(function () { cargando = false; });
+  }
+
+  function vigilar() {
+    if (document.hidden || cargando) return;
+    llamar('obtenerVersion').then(function (v) {
+      if (v !== version) cargar(true);
+      else ponerEstado('', 'Al día · ' + hora());
+    }).catch(function () { ponerEstado('error', 'Sin conexión con la hoja'); });
+  }
+
+  function marcarCambios(antes, despues) {
+    var previo = {};
+    antes.forEach(function (r) { previo[r.id] = JSON.stringify(r.campos); });
+    despues.forEach(function (r) {
+      if (previo[r.id] !== undefined && previo[r.id] !== JSON.stringify(r.campos)) resaltar[r.id] = true;
+    });
+  }
+
+  // ─── Filtros y lista ───
+
+  function prepararFiltros() {
+    var chips = $('chips');
+    chips.textContent = '';
+    var todas = [{ nombre: '', total: datos.registros.length, texto: 'Todas' }].concat(datos.hojas.map(function (h) {
+      return { nombre: h.nombre, total: h.total, texto: h.nombre };
+    }));
+    todas.forEach(function (h) {
+      var b = crear('button', 'chip' + (filtro.hoja === h.nombre ? ' activo' : ''), h.texto);
+      b.appendChild(crear('small', '', String(h.total)));
+      b.onclick = function () { filtro.hoja = h.nombre; prepararFiltros(); pintar(); };
+      chips.appendChild(b);
+    });
+
+    llenarSelect($('f-mes'), unicos(datos.registros.map(mesDe)).sort(function (a, b) {
+      return MESES.indexOf(a) - MESES.indexOf(b);
+    }), filtro.mes, 'Todos los meses');
+    var estados = unicos(datos.registros.map(function (r) { return (r.campos.estadoFicha || '').toUpperCase(); }));
+    llenarSelect($('f-estado'), ['(sin estado)'].concat(estados.sort()), filtro.estado, 'Todos los estados');
+
+    var avisos = $('avisos');
+    avisos.textContent = '';
+    datos.hojas.forEach(function (h) {
+      if (h.aviso) avisos.appendChild(crear('div', 'aviso', h.nombre + ': ' + h.aviso));
+    });
+  }
+
+  function unicos(lista) {
+    var vistos = {};
+    return lista.filter(function (x) { return x && !vistos[x] && (vistos[x] = true); });
+  }
+
+  function llenarSelect(select, valores, actual, primero) {
+    select.textContent = '';
+    select.appendChild(new Option(primero, ''));
+    valores.forEach(function (v) { select.appendChild(new Option(v, v, false, v === actual)); });
+  }
+
+  function filtrados() {
+    var texto = filtro.texto.trim().toLowerCase();
+    return datos.registros.filter(function (r) {
+      var c = r.campos;
+      if (filtro.hoja && r.hoja !== filtro.hoja) return false;
+      if (filtro.mes && mesDe(r) !== filtro.mes) return false;
+      if (filtro.estado) {
+        var estado = (c.estadoFicha || '').toUpperCase();
+        if (filtro.estado === '(sin estado)' ? estado : estado !== filtro.estado) return false;
+      }
+      if (texto) {
+        var todo = [c.programa, c.requerimiento, c.instructor, c.ficha, c.oferta, c.empresa, c.municipio, c.radicado].join(' ').toLowerCase();
+        if (todo.indexOf(texto) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function pintar() {
+    var lista = filtrados();
+    var tbody = $('filas');
+    tbody.textContent = '';
+    lista.forEach(function (r) {
+      var c = r.campos;
+      var tr = crear('tr', resaltar[r.id] ? 'cambiado' : '');
+      tr.onclick = function () { abrir(r.id); };
+
+      var td = crear('td');
+      td.appendChild(crear('span', 'etiqueta hoja', r.hoja));
+      td.appendChild(document.createTextNode(' '));
+      td.appendChild(crear('span', 'titulo', titulo(r)));
+      td.appendChild(crear('div', 'sub', c.instructor || 'Sin instructor'));
+      tr.appendChild(td);
+
+      td = crear('td');
+      td.appendChild(crear('span', 'etiqueta' + (c.ficha ? '' : ' vacia'), c.ficha || 'Sin ficha'));
+      if (c.oferta) td.appendChild(crear('div', 'sub', 'Oferta ' + c.oferta));
+      tr.appendChild(td);
+
+      tr.appendChild(crear('td', 'col-ocultable sub', [fechaCorta(c.inicio), fechaCorta(c.fin)].filter(Boolean).join(' → ')));
+
+      td = crear('td', 'col-ocultable');
+      td.appendChild(crear('div', 'recorte', c.empresa || ''));
+      td.appendChild(crear('div', 'sub recorte', c.municipio || ''));
+      tr.appendChild(td);
+
+      td = crear('td');
+      if ('estadoFicha' in c) td.appendChild(crear('span', 'etiqueta' + (c.estadoFicha ? '' : ' vacia'), c.estadoFicha || 'Sin estado'));
+      if (c.estadoAprendices) td.appendChild(crear('div', 'sub', c.estadoAprendices));
+      if (!('estadoFicha' in c) && c.observaciones) td.appendChild(crear('div', 'sub', c.observaciones.slice(0, 60)));
+      tr.appendChild(td);
+
+      tr.appendChild(crear('td', 'col-ocultable sub',
+        ('inscritos' in c || 'matriculados' in c) ? (c.inscritos || '–') + ' / ' + (c.matriculados || '–') : ''));
+      tbody.appendChild(tr);
+    });
+    resaltar = {};
+    $('vacio').hidden = lista.length > 0;
+
+    $('k-total').textContent = lista.length;
+    $('k-ficha').textContent = lista.filter(function (r) { return r.campos.ficha; }).length;
+    $('k-sinficha').textContent = lista.filter(function (r) { return !r.campos.ficha; }).length;
+    $('k-matriculados').textContent = lista.reduce(function (s, r) { return s + (Number(r.campos.matriculados) || 0); }, 0);
+  }
+
+  // ─── Cajón de edición ───
+
+  function buscar(id) {
+    return datos.registros.filter(function (r) { return r.id === id; })[0] || null;
+  }
+
+  function editablesDe(r) {
+    var hoja = datos.hojas.filter(function (h) { return h.nombre === r.hoja; })[0];
+    return hoja ? hoja.editables : [];
+  }
+
+  function abrir(id) {
+    abierto = buscar(id);
+    if (!abierto) return;
+    pintarCajon(true);
+    $('cajon').classList.add('abierto');
+    $('velo').classList.add('abierto');
+    $('cajon').setAttribute('aria-hidden', 'false');
+  }
+
+  function cerrar() {
+    if (hayCambios() && !confirm('Hay cambios sin guardar. ¿Descartarlos?')) return;
+    abierto = null;
+    $('cajon').classList.remove('abierto');
+    $('velo').classList.remove('abierto');
+    $('cajon').setAttribute('aria-hidden', 'true');
+  }
+
+  function pintarCajon(completo) {
+    var r = abierto;
+    var c = r.campos;
+    $('c-hoja').textContent = r.hoja + ' · fila ' + r.fila;
+    $('c-titulo').textContent = titulo(r);
+    $('c-sub').textContent = c.ficha ? 'Ficha ' + c.ficha : 'Sin ficha';
+
+    var detalles = $('c-detalles');
+    detalles.textContent = '';
+    DETALLES.forEach(function (k) {
+      if (!(k in c)) return;
+      var d = crear('div');
+      d.appendChild(crear('span', '', datos.campos[k].titulo));
+      d.appendChild(document.createTextNode(datos.campos[k].tipo === 'fecha' ? fechaCorta(c[k]) || '–' : c[k] || '–'));
+      detalles.appendChild(d);
+    });
+
+    if (!completo) return;
+    var form = $('c-form');
+    form.textContent = '';
+    var editables = editablesDe(r);
+    if (!editables.length) form.appendChild(crear('p', 'sub', 'Esta pestaña no tiene columnas de seguimiento.'));
+    editables.forEach(function (k) {
+      var def = datos.campos[k];
+      var caja = crear('div', def.largo ? 'ancho' : '');
+      var etiqueta = crear('label', '', def.titulo);
+      etiqueta.htmlFor = 'e-' + k;
+      var campo = def.largo ? crear('textarea') : crear('input');
+      campo.id = 'e-' + k;
+      campo.name = k;
+      if (!def.largo) campo.type = def.tipo === 'fecha' ? 'date' : def.tipo === 'numero' ? 'number' : 'text';
+      if (def.tipo === 'numero') campo.min = '0';
+      var valor = c[k] || '';
+      // Una fecha escrita a mano en la hoja (no ISO) no cabe en un campo de fecha: se muestra como texto
+      if (def.tipo === 'fecha' && valor && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) campo.type = 'text';
+      campo.value = valor;
+      campo.dataset.original = valor;
+      if (datos.opciones[k] && datos.opciones[k].length) {
+        var lista = crear('datalist');
+        lista.id = 'o-' + k;
+        datos.opciones[k].forEach(function (o) { lista.appendChild(new Option(o)); });
+        caja.appendChild(lista);
+        campo.setAttribute('list', lista.id);
+      }
+      campo.oninput = actualizarBotones;
+      caja.appendChild(etiqueta);
+      caja.appendChild(campo);
+      form.appendChild(caja);
+    });
+    $('c-mensaje').textContent = '';
+    actualizarBotones();
+  }
+
+  function camposForm() {
+    return Array.prototype.slice.call($('c-form').querySelectorAll('input, textarea'));
+  }
+
+  function hayCambios() {
+    return abierto && camposForm().some(function (el) { return el.value.trim() !== el.dataset.original.trim(); });
+  }
+
+  function actualizarBotones() {
+    camposForm().forEach(function (el) {
+      el.classList.toggle('modificado', el.value.trim() !== el.dataset.original.trim());
+    });
+    $('guardar').disabled = !hayCambios();
+  }
+
+  // Al llegar datos nuevos: si no se ha tocado el formulario se muestra lo último de la hoja
+  function refrescarCajon() {
+    if (!abierto) return;
+    var nuevo = buscar(abierto.id);
+    if (!nuevo || nuevo.huella !== abierto.huella) {
+      $('c-mensaje').textContent = 'Este registro cambió de lugar en la hoja. Ciérralo y ábrelo de nuevo.';
+      $('guardar').disabled = true;
+      return;
+    }
+    var tocado = hayCambios();
+    abierto = nuevo;
+    pintarCajon(!tocado);
+  }
+
+  function guardar() {
+    var cambios = {};
+    camposForm().forEach(function (el) {
+      if (el.value.trim() !== el.dataset.original.trim()) cambios[el.name] = { anterior: el.dataset.original, nuevo: el.value };
+    });
+    $('guardar').disabled = true;
+    $('c-mensaje').textContent = 'Guardando…';
+    llamar('guardar', abierto.id, abierto.huella, cambios).then(function (res) {
+      if (!res.ok) {
+        $('c-mensaje').textContent = 'Alguien cambió estos datos mientras editabas. Revisa y vuelve a guardar.';
+        res.conflictos.forEach(function (cf) {
+          var el = $('e-' + cf.campo);
+          if (!el) return;
+          el.dataset.original = cf.actual || '';
+          var nota = crear('div', 'conflicto', 'En la hoja ahora dice: ' + (cf.actual || '(vacío)'));
+          el.parentNode.appendChild(nota);
+        });
+        actualizarBotones();
+        return;
+      }
+      var i = datos.registros.map(function (r) { return r.id; }).indexOf(res.registro.id);
+      if (i >= 0) datos.registros[i] = res.registro;
+      version = res.version;
+      abierto = res.registro;
+      resaltar[res.registro.id] = true;
+      pintar();
+      pintarCajon(true);
+      avisar('Guardado en la hoja');
+    }).catch(function (e) {
+      $('c-mensaje').textContent = (e && e.message) || 'No se pudo guardar';
+      actualizarBotones();
+    });
+  }
+
+  // ─── Eventos ───
+
+  $('recargar').onclick = function () { cargar(false); };
+  $('buscar').oninput = function (e) { filtro.texto = e.target.value; pintar(); };
+  $('f-mes').onchange = function (e) { filtro.mes = e.target.value; pintar(); };
+  $('f-estado').onchange = function (e) { filtro.estado = e.target.value; pintar(); };
+  $('cerrar').onclick = cerrar;
+  $('velo').onclick = cerrar;
+  $('guardar').onclick = guardar;
+  $('descartar').onclick = function () { if (abierto) pintarCajon(true); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && abierto) cerrar(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) vigilar(); });
+
+  cargar(false);
+  setInterval(vigilar, CADA_MS);
+</script>
+</body>
+</html>

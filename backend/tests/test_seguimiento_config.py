@@ -18,6 +18,8 @@ from tests.utilidades_pg import cabecera, requiere_postgres
 
 PANEL = "https://script.google.com/macros/s/AKfycbx123/exec"
 PANEL_ORG = "https://script.google.com/a/macros/sena.edu.co/s/AKfycbx123/exec"
+# El panel de apps-script/seguimiento-fichas exige su clave en el enlace
+PANEL_CON_CLAVE = "https://script.google.com/macros/s/AKfycbx123/exec?k=0123456789abcdef"
 HOJA = "https://docs.google.com/spreadsheets/d/1AbC/edit"
 
 
@@ -52,7 +54,7 @@ def test_sin_configuracion_devuelve_null(client, usuario, db_mock):
     assert r.json() is None
 
 
-@pytest.mark.parametrize("panel", [PANEL, PANEL_ORG])
+@pytest.mark.parametrize("panel", [PANEL, PANEL_ORG, PANEL_CON_CLAVE])
 def test_guardar_crea_configuracion_del_usuario(client, usuario, db_mock, panel):
     r = client.put("/api/seguimiento/config", json={
         "url_panel": f"  {panel} ", "correo_google": "yo@gmail.com", "url_hoja": HOJA,

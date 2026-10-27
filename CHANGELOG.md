@@ -22,6 +22,21 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+### Agregado
+
+- **Panel de Seguimiento de fichas para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS»** (`apps-script/seguimiento-fichas/`). El Apps Script del panel ahora vive en el proyecto, con instrucciones de instalación en su `LEEME.md`.
+  - Lee las pestañas REGULADA, PV, CAMPESENA y TECNOACADEMIA. Busca las columnas por su título, así que se pueden mover columnas sin tocar el script. REGULADA usa 3 filas combinadas por registro.
+  - Se pueden filtrar los registros por pestaña, mes y estado de la ficha, y buscar por programa, instructor, ficha, empresa o municipio.
+  - Desde el panel se editan las columnas de seguimiento (estado de la ficha y de los aprendices, inscritos, matriculados, certificación, observaciones...). Lo guardado queda directo en la hoja.
+  - Lo que se escribe a mano en la hoja aparece en el panel en menos de 15 segundos. Si dos personas editan el mismo dato a la vez, el segundo cambio no pisa al primero.
+  - Cada cambio hecho desde el panel queda en la pestaña oculta BITACORA_PANEL.
+  - El enlace lleva una clave (`?k=...`): sin ella el panel no muestra ni edita nada.
+  - Pruebas con la estructura real del libro (datos personales reemplazados) en el job de CI «Panel de Seguimiento (Apps Script)».
+
+### Cambiado
+
+- **Seguimiento de fichas**: los pasos de «Cómo obtener el enlace» explican cómo instalar el panel nuevo, y el enlace de la hoja se llama «Formaciones complementarias».
+
 ## [2.13.0] - 2026-10-26
 
 **Resumen**

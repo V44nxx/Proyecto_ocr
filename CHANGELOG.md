@@ -22,6 +22,12 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.15.0] - 2026-10-27
+
+**Resumen**
+
+- El apartado Seguimiento de fichas tiene un panel nuevo para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS» (pestañas REGULADA, PV, CAMPESENA y TECNOACADEMIA). El panel permite ver y filtrar los registros y editar el seguimiento directo en la hoja. Se actualiza solo.
+
 ### Agregado
 
 - **Panel de Seguimiento de fichas para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS»** (`apps-script/seguimiento-fichas/`). El Apps Script del panel ahora vive en el proyecto, con instrucciones de instalación en su `LEEME.md`.
@@ -36,6 +42,30 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 ### Cambiado
 
 - **Seguimiento de fichas**: los pasos de «Cómo obtener el enlace» explican cómo instalar el panel nuevo, y el enlace de la hoja se llama «Formaciones complementarias».
+
+## [2.14.0] - 2026-10-26
+
+**Resumen**
+
+- Sin internet, el OCR usa RapidOCR de inmediato en lugar de esperar a Document AI.
+- RapidOCR es más rápido y reconoce mejor el reverso de la cédula amarilla.
+
+### Cambiado
+
+- **Document AI sin conexión** ([`9abba09`](https://github.com/V44nxx/Proyecto_ocr/commit/9abba09065157f1acd600f1fd2de64c782812eb1)):
+  - Antes de usar Document AI se revisa la conexión (3 s; el resultado se recuerda 60 s).
+  - Sin conexión, o después de un error de red en una página, las páginas van directo a RapidOCR. Al minuto se vuelve a intentar Document AI.
+  - Cada llamada a Document AI tiene tiempo máximo (`GOOGLE_DOCUMENT_AI_TIMEOUT`, 60 s). Antes no tenía límite.
+- **RapidOCR más rápido**: reduce cada página a 1250 px (`RAPID_OCR_LADO_MAXIMO`). Pasa de 7,4 s a 6,5 s por página con los mismos aciertos en una ficha real.
+
+### Corregido
+
+- El reverso de la cédula amarilla se reconoce por sus datos (estatura, grupo sanguíneo, sexo, fechas, expedición) aunque el OCR deforme las etiquetas. Antes, un número del código de barras salía como otra persona.
+
+### Pruebas
+
+- `test_docai_sin_conexion.py` y `test_reverso_lectura_imperfecta.py`.
+- Ficha real de 26 páginas solo con RapidOCR: 15 de 15 personas exactas.
 
 ## [2.13.0] - 2026-10-26
 
@@ -1076,7 +1106,22 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Initial commit: Proyecto OCR full stack (FastAPI + Next.js + Docker) ([`772447e`](https://github.com/V44nxx/Proyecto_ocr/commit/772447e30d779a5844191bc053e115467c66fae2))
 
-[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.2...main
+[Sin publicar]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.15.0...main
+[2.15.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.14.0...v2.15.0
+[2.14.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.13.0...v2.14.0
+[2.13.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.12.2...v2.13.0
+[2.12.2]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.12.1...v2.12.2
+[2.12.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.12.0...v2.12.1
+[2.12.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.11.1...v2.12.0
+[2.11.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.11.0...v2.11.1
+[2.11.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.10.1...v2.11.0
+[2.10.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.10.0...v2.10.1
+[2.10.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.9.0...v2.10.0
+[2.9.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.8.2...v2.9.0
+[2.8.2]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.8.1...v2.8.2
+[2.8.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.8.0...v2.8.1
+[2.8.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.2...v2.7.0
 [2.6.2]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/V44nxx/Proyecto_ocr/compare/v2.5.0...v2.6.0

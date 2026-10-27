@@ -27,15 +27,18 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 **Resumen**
 
 - El apartado Seguimiento de fichas tiene un panel nuevo para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS» (pestañas REGULADA, PV, CAMPESENA y TECNOACADEMIA). El panel permite ver y filtrar los registros y editar el seguimiento directo en la hoja. Se actualiza solo.
+- El panel conserva las etapas y alertas del panel anterior: por iniciar, por finalizar, sin ficha, cruce de instructor...
 
 ### Agregado
 
 - **Panel de Seguimiento de fichas para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS»** (`apps-script/seguimiento-fichas/`). El Apps Script del panel ahora vive en el proyecto, con instrucciones de instalación en su `LEEME.md`.
   - Lee las pestañas REGULADA, PV, CAMPESENA y TECNOACADEMIA. Busca las columnas por su título, así que se pueden mover columnas sin tocar el script. REGULADA usa 3 filas combinadas por registro.
-  - Se pueden filtrar los registros por pestaña, mes y estado de la ficha, y buscar por programa, instructor, ficha, empresa o municipio.
+  - Se pueden filtrar los registros por pestaña, mes, etapa, alerta y estado de la ficha, y buscar por programa, instructor, ficha, empresa o municipio.
   - Desde el panel se editan las columnas de seguimiento (estado de la ficha y de los aprendices, inscritos, matriculados, certificación, observaciones...). Lo guardado queda directo en la hoja.
   - Lo que se escribe a mano en la hoja aparece en el panel en menos de 15 segundos. Si dos personas editan el mismo dato a la vez, el segundo cambio no pisa al primero.
   - Cada cambio hecho desde el panel queda en la pestaña oculta BITACORA_PANEL.
+  - Cada registro muestra su etapa según las fechas: inicia hoy, por iniciar (7 días), programada, en ejecución, por finalizar (3 días), finalizada, fechas inválidas o fecha faltante. La lista se ordena con lo más urgente arriba.
+  - Muestra alertas de ficha sin crear, sin instructor, cruce de instructor (dos formaciones del mismo instructor con fechas que se solapan) y la misma ficha con datos distintos entre pestañas. Esta lógica estaba en el `Motor.gs` del panel anterior, que ya no hace falta.
   - El enlace lleva una clave (`?k=...`): sin ella el panel no muestra ni edita nada.
   - Pruebas con la estructura real del libro (datos personales reemplazados) en el job de CI «Panel de Seguimiento (Apps Script)».
 

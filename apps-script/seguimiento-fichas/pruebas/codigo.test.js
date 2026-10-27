@@ -202,3 +202,72 @@ test('editar a mano la hoja cambia la versión que consulta el panel', () => {
   ctx.onEdit({});
   assert.notEqual(ctx.obtenerVersion(CLAVE), antes);
 });
+
+// ─── Etapas y alertas (lógica que antes estaba en Motor.gs) ───
+
+function registro(campos, extra = {}) {
+  return { hoja: 'REGULADA', fila: 3, campos: { ficha: '3641424', instructor: 'ANA PEREZ GOMEZ', ...campos }, ...extra };
+}
+
+test('etapa según la fecha de hoy', () => {
+  const { ctx } = entorno();
+  const hoy = '2026-10-15';
+  const casos = [
+    [{ inicio: '2026-10-15', fin: '2026-10-20' }, 'INICIA_HOY', 'Inicia hoy'],
+    [{ inicio: '2026-10-16', fin: '2026-10-20' }, 'POR_INICIAR', 'Inicia mañana'],
+    [{ inicio: '2026-10-22', fin: '2026-10-30' }, 'POR_INICIAR', 'Inicia en 7 días'],
+    [{ inicio: '2026-10-23', fin: '2026-10-30' }, 'PROGRAMADA', 'Inicia en 8 días'],
+    [{ inicio: '2026-10-01', fin: '2026-10-30' }, 'EN_EJECUCION', 'Faltan 15 días'],
+    [{ inicio: '2026-10-01', fin: '2026-10-18' }, 'POR_FINALIZAR', 'Finaliza en 3 días'],
+    [{ inicio: '2026-10-01', fin: '2026-10-15' }, 'POR_FINALIZAR', 'Finaliza hoy'],
+    [{ inicio: '2026-10-01', fin: '2026-10-14' }, 'FINALIZADA', 'Finalizó ayer'],
+    [{ inicio: '2026-10-20', fin: '2026-10-10' }, 'FECHAS_INVALIDAS', 'La fecha fin es anterior al inicio'],
+    [{ inicio: '', fin: '2026-10-10' }, 'SIN_FECHAS', 'falta inicio'],
+    [{ inicio: '0206-10-08', fin: 'OCTUBRE' }, 'SIN_FECHAS', 'inicio ilegible («0206-10-08») · fin ilegible («OCTUBRE»)'],
+    // Fechas escritas como texto en la hoja
+    [{ inicio: '1/10/2026', fin: '10/19/2026' }, 'EN_EJECUCION', 'Faltan 4 días'],
+  ];
+  for (const [fechas, etapa, detalle] of casos) {
+    const [r] = ctx.calcularEtapas_([registro(fechas)], hoy);
+    assert.equal(r.etapa, etapa, JSON.stringify(fechas));
+    assert.equal(r.detalleEtapa, detalle, JSON.stringify(fechas));
+  }
+});
+
+test('alertas: sin ficha, sin instructor, cruce de instructor e inconsistencia entre pestañas', () => {
+  const { ctx } = entorno();
+  const lista = ctx.calcularEtapas_([
+    registro({ ficha: '', instructor: '', programa: 'A', inicio: '2026-10-01', fin: '2026-10-30' }),
+    // Mismo instructor, fechas que se solapan: cruce en ambos
+    registro({ ficha: '111111', programa: 'B', inicio: '2026-10-10', fin: '2026-10-20' }),
+    registro({ ficha: '222222', programa: 'C', inicio: '2026-10-18', fin: '2026-10-25', instructor: 'Ana  Pérez Gómez' }),
+    // Mismo instructor pero ya finalizada: no cuenta como cruce
+    registro({ ficha: '333333', programa: 'D', inicio: '2026-09-01', fin: '2026-09-30' }),
+    // La misma ficha en otra pestaña con otra fecha de fin y otro instructor
+    registro({ ficha: '444444', programa: 'E', instructor: 'LUIS ROJAS', inicio: '2026-11-01', fin: '2026-11-10' }),
+    registro({ ficha: '444444', programa: 'E', instructor: 'MARIA TORO', inicio: '2026-11-01', fin: '2026-11-12' }, { hoja: 'PV', fila: 9 }),
+  ], '2026-10-15');
+  assert.deepEqual([...lista[0].alertas], ['SIN_FICHA', 'SIN_INSTRUCTOR']);
+  assert.deepEqual([...lista[1].alertas], ['CRUCE_INSTRUCTOR']);
+  assert.deepEqual([...lista[2].alertas], ['CRUCE_INSTRUCTOR']);
+  assert.match(lista[1].cruces[0], /^C · 222222 \(2026-10-18 a 2026-10-25, REGULADA\)$/);
+  assert.deepEqual([...lista[3].alertas], []);
+  assert.deepEqual([...lista[4].alertas], ['INCONSISTENCIA']);
+  assert.deepEqual([...lista[4].inconsistencias], ['Fin 2026-11-12 en PV (fila 9)', 'Instructor «MARIA TORO» en PV (fila 9)']);
+  // La misma ficha en dos pestañas no se cuenta como cruce consigo misma
+  assert.ok(!lista[5].alertas.includes('CRUCE_INSTRUCTOR'));
+});
+
+test('obtenerDatos entrega etapa y alertas de cada registro del libro', () => {
+  const { ctx } = entorno();
+  const datos = ctx.obtenerDatos(CLAVE);
+  assert.ok(datos.etapas.EN_EJECUCION && datos.alertas.CRUCE_INSTRUCTOR);
+  for (const r of datos.registros) {
+    assert.ok(datos.etapas[r.etapa], r.id);
+    assert.ok(r.alertas.every((a) => datos.alertas[a]), r.id);
+  }
+  // Las solicitudes sin programa ni fechas quedan con fecha faltante y sin ficha
+  const solicitud = datos.registros.find((r) => r.id === 'REGULADA!6');
+  assert.equal(solicitud.etapa, 'SIN_FECHAS');
+  assert.ok(solicitud.alertas.includes('SIN_FICHA'));
+});

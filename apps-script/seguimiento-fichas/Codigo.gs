@@ -9,6 +9,8 @@
  *   programa todavía). En REGULADA cada registro ocupa 3 filas combinadas; el valor de una celda combinada vive
  *   en su primera fila, que es donde se lee y se escribe.
  * - Desde el panel solo se editan las columnas de seguimiento (estado, inscritos, matriculados, observaciones...).
+ * - Cada registro trae su etapa según las fechas (por iniciar, en ejecución, por finalizar...) y sus alertas
+ *   (sin ficha, sin instructor, cruce de instructor, datos distintos entre pestañas). Viene del antiguo Motor.gs.
  * - Cada cambio en la hoja (desde el panel o a mano) sube un número de versión; el panel lo consulta cada pocos
  *   segundos y se recarga solo cuando cambió, así lo que se escribe en la hoja aparece enseguida en KondID.
  * - La aplicación web se publica para «Cualquier persona»: por eso cada llamada exige la clave que va en el
@@ -120,7 +122,11 @@ function obtenerDatos(clave) {
     }
   });
 
-  return { hojas: hojas, registros: registros, campos: campos, opciones: opciones, version: versionActual_() };
+  calcularEtapas_(registros, fechaIso_(new Date()));
+  return {
+    hojas: hojas, registros: registros, campos: campos, opciones: opciones, etapas: ETAPAS, alertas: ALERTAS,
+    version: versionActual_(),
+  };
 }
 
 /** Número que cambia cada vez que alguien edita la hoja; el panel lo consulta para saber si debe recargar. */
@@ -306,6 +312,169 @@ function valorParaHoja_(valor, tipo) {
     return n;
   }
   return texto;
+}
+
+// ─── Etapas y alertas (antes en Motor.gs) ────────────────────────────────
+
+var DIAS_POR_INICIAR = 7;
+var DIAS_POR_FINALIZAR = 3;
+
+// orden: cómo se ordena la lista (lo más urgente arriba)
+var ETAPAS = {
+  INICIA_HOY: { etiqueta: 'Inicia hoy', color: '#1D4ED8', fondo: '#DBEAFE', orden: 1 },
+  POR_INICIAR: { etiqueta: 'Por iniciar', color: '#B45309', fondo: '#FEF3C7', orden: 2 },
+  POR_FINALIZAR: { etiqueta: 'Por finalizar', color: '#C2410C', fondo: '#FFEDD5', orden: 3 },
+  EN_EJECUCION: { etiqueta: 'En ejecución', color: '#15803D', fondo: '#DCFCE7', orden: 4 },
+  PROGRAMADA: { etiqueta: 'Programada', color: '#475569', fondo: '#F1F5F9', orden: 5 },
+  FINALIZADA: { etiqueta: 'Finalizada', color: '#374151', fondo: '#E5E7EB', orden: 6 },
+  FECHAS_INVALIDAS: { etiqueta: 'Fechas inválidas', color: '#B91C1C', fondo: '#FEE2E2', orden: 7 },
+  SIN_FECHAS: { etiqueta: 'Fecha faltante o ilegible', color: '#B91C1C', fondo: '#FEE2E2', orden: 8 },
+};
+
+var ALERTAS = {
+  SIN_FICHA: { etiqueta: 'Ficha sin crear / sin código', color: '#9F1239', fondo: '#FFE4E6' },
+  SIN_INSTRUCTOR: { etiqueta: 'Sin instructor', color: '#9F1239', fondo: '#FFE4E6' },
+  CRUCE_INSTRUCTOR: { etiqueta: 'Cruce de instructor', color: '#A16207', fondo: '#FEF9C3' },
+  INCONSISTENCIA: { etiqueta: 'Datos distintos entre pestañas', color: '#7E22CE', fondo: '#F3E8FF' },
+};
+
+/** Agrega a cada registro su etapa (según la fecha de hoy, 'AAAA-MM-DD') y sus alertas. */
+function calcularEtapas_(registros, hoy) {
+  registros.forEach(function (r) {
+    var c = r.campos;
+    var inicio = aIso_(c.inicio);
+    var fin = aIso_(c.fin);
+    var etapa;
+    var dias = null;
+    if (!inicio || !fin) etapa = 'SIN_FECHAS';
+    else if (fin < inicio) etapa = 'FECHAS_INVALIDAS';
+    else if (hoy < inicio) { dias = diasEntre_(hoy, inicio); etapa = dias <= DIAS_POR_INICIAR ? 'POR_INICIAR' : 'PROGRAMADA'; }
+    else if (hoy === inicio) { dias = 0; etapa = 'INICIA_HOY'; }
+    else if (hoy <= fin) { dias = diasEntre_(hoy, fin); etapa = dias <= DIAS_POR_FINALIZAR ? 'POR_FINALIZAR' : 'EN_EJECUCION'; }
+    else { dias = diasEntre_(fin, hoy); etapa = 'FINALIZADA'; }
+    r.etapa = etapa;
+    r.detalleEtapa = detalleEtapa_(etapa, dias, c, inicio, fin);
+    r.inicioIso = inicio;
+    r.finIso = fin;
+    r.alertas = [];
+    if (!c.ficha) r.alertas.push('SIN_FICHA');
+    if (!c.instructor) r.alertas.push('SIN_INSTRUCTOR');
+  });
+  marcarInconsistencias_(registros);
+  marcarCruces_(registros);
+  return registros;
+}
+
+/** Fecha ISO de lo que muestra el panel: ya viene ISO si la celda es fecha; si no, se intenta leer el texto. */
+function aIso_(texto) {
+  var s = String(texto || '').trim();
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return +m[1] >= 2000 && +m[1] <= 2100 ? m[1] + '-' + dos_(+m[2]) + '-' + dos_(+m[3]) : '';
+  m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})$/.exec(s); // 01/10/2026 (día/mes/año)
+  if (!m) return '';
+  var anio = +m[3] < 100 ? +m[3] + 2000 : +m[3];
+  if (anio < 2000 || anio > 2100) return ''; // p. ej. 8/10/0206
+  var dia = +m[1];
+  var mes = +m[2];
+  if (mes > 12 && dia <= 12) { var t = dia; dia = mes; mes = t; } // 10/19/2026 (mes/día/año)
+  return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31 ? anio + '-' + dos_(mes) + '-' + dos_(dia) : '';
+}
+
+function dos_(n) {
+  return (n < 10 ? '0' : '') + n;
+}
+
+function diasEntre_(a, b) {
+  var utc = function (x) { return Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10)); };
+  return Math.round((utc(b) - utc(a)) / 86400000);
+}
+
+function detalleEtapa_(etapa, d, c, inicio, fin) {
+  switch (etapa) {
+    case 'SIN_FECHAS':
+      var partes = [];
+      if (!inicio) partes.push(c.inicio ? 'inicio ilegible («' + c.inicio + '»)' : 'falta inicio');
+      if (!fin) partes.push(c.fin ? 'fin ilegible («' + c.fin + '»)' : 'falta fin');
+      return partes.join(' · ');
+    case 'FECHAS_INVALIDAS': return 'La fecha fin es anterior al inicio';
+    case 'POR_INICIAR': return d === 1 ? 'Inicia mañana' : 'Inicia en ' + d + ' días';
+    case 'PROGRAMADA': return 'Inicia en ' + d + ' días';
+    case 'INICIA_HOY': return 'Inicia hoy';
+    case 'POR_FINALIZAR': return d === 0 ? 'Finaliza hoy' : d === 1 ? 'Finaliza mañana' : 'Finaliza en ' + d + ' días';
+    case 'EN_EJECUCION': return 'Faltan ' + d + ' días';
+    case 'FINALIZADA': return d === 1 ? 'Finalizó ayer' : 'Finalizó hace ' + d + ' días';
+  }
+  return '';
+}
+
+/** La misma ficha en dos pestañas con fechas o instructor distintos. */
+function marcarInconsistencias_(registros) {
+  var porFicha = {};
+  registros.forEach(function (r) {
+    if (r.campos.ficha) (porFicha[r.campos.ficha] = porFicha[r.campos.ficha] || []).push(r);
+  });
+  Object.keys(porFicha).forEach(function (ficha) {
+    var grupo = porFicha[ficha];
+    grupo.forEach(function (r) {
+      var notas = [];
+      grupo.forEach(function (otro) {
+        if (otro === r) return;
+        var donde = ' en ' + otro.hoja + ' (fila ' + otro.fila + ')';
+        if (r.inicioIso && otro.inicioIso && r.inicioIso !== otro.inicioIso) notas.push('Inicio ' + otro.inicioIso + donde);
+        if (r.finIso && otro.finIso && r.finIso !== otro.finIso) notas.push('Fin ' + otro.finIso + donde);
+        if (r.campos.instructor && otro.campos.instructor && !mismoInstructor_(r.campos.instructor, otro.campos.instructor)) {
+          notas.push('Instructor «' + otro.campos.instructor + '»' + donde);
+        }
+      });
+      if (notas.length) {
+        r.alertas.push('INCONSISTENCIA');
+        r.inconsistencias = notas;
+      }
+    });
+  });
+}
+
+function mismoInstructor_(a, b) {
+  var palabras = function (x) { return normalizar(x).split(' ').filter(function (t) { return t.length > 2; }); };
+  var ta = palabras(a);
+  var tb = palabras(b);
+  if (!ta.length || !tb.length) return true;
+  var comunes = ta.filter(function (t) { return tb.indexOf(t) >= 0; }).length;
+  return comunes >= Math.min(2, ta.length, tb.length);
+}
+
+/** Un instructor con dos formaciones activas o próximas cuyas fechas se solapan. */
+function marcarCruces_(registros) {
+  var porInstructor = {};
+  registros.forEach(function (r) {
+    if (!r.campos.instructor || !r.inicioIso || !r.finIso) return;
+    if (r.etapa === 'FINALIZADA' || r.etapa === 'FECHAS_INVALIDAS') return;
+    var k = normalizar(r.campos.instructor);
+    (porInstructor[k] = porInstructor[k] || []).push(r);
+  });
+  Object.keys(porInstructor).forEach(function (k) {
+    var lista = porInstructor[k];
+    for (var i = 0; i < lista.length; i++) {
+      for (var j = i + 1; j < lista.length; j++) {
+        var a = lista[i];
+        var b = lista[j];
+        // La misma ficha repetida en dos pestañas no es un cruce
+        if (a.campos.ficha && a.campos.ficha === b.campos.ficha) continue;
+        if (a.inicioIso <= b.finIso && b.inicioIso <= a.finIso) {
+          anotarCruce_(a, b);
+          anotarCruce_(b, a);
+        }
+      }
+    }
+  });
+}
+
+function anotarCruce_(r, otro) {
+  if (r.alertas.indexOf('CRUCE_INSTRUCTOR') < 0) r.alertas.push('CRUCE_INSTRUCTOR');
+  (r.cruces = r.cruces || []).push(
+    (otro.campos.programa || otro.campos.requerimiento) + ' · ' + (otro.campos.ficha || 'sin ficha') +
+    ' (' + otro.inicioIso + ' a ' + otro.finIso + ', ' + otro.hoja + ')'
+  );
 }
 
 // ─── Versión, clave y bitácora ───────────────────────────────────────────

@@ -31,10 +31,16 @@
   .boton:hover { border-color: var(--acento); }
   .boton.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
   .boton:disabled { opacity: .45; cursor: not-allowed; }
-  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
   .kpi { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 12px 14px; box-shadow: var(--sombra); }
   .kpi span { font-size: 11px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .kpi b { display: block; font-size: 22px; margin-top: 2px; }
+  button.kpi { text-align: left; cursor: pointer; }
+  button.kpi:hover, button.kpi.activo { border-color: var(--acento); }
+  .chips-alerta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .alerta { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+  .nota { font-size: 12px; margin: 4px 0 0; padding-left: 16px; }
+  .bloque-alertas { margin-bottom: 18px; }
   .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .filtros input, .filtros select { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 7px 10px; font-size: 13px; }
   .filtros input { flex: 1 1 240px; min-width: 0; }
@@ -84,6 +90,7 @@
   .toast.visible { opacity: 1; }
   @media (max-width: 720px) {
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpis .kpi:first-child { grid-column: 1 / -1; }
     .col-ocultable { display: none; }
     td, th { padding: 9px 8px; }
     .detalles, .formulario { grid-template-columns: 1fr; }
@@ -99,17 +106,20 @@
   </div>
 
   <div class="kpis">
-    <div class="kpi"><span>Registros</span><b id="k-total">–</b></div>
-    <div class="kpi"><span>Con ficha</span><b id="k-ficha">–</b></div>
-    <div class="kpi"><span>Sin ficha</span><b id="k-sinficha">–</b></div>
-    <div class="kpi"><span>Matriculados</span><b id="k-matriculados">–</b></div>
+    <button class="kpi" data-etapa="" data-alerta=""><span>Registros</span><b id="k-total">–</b></button>
+    <button class="kpi" data-etapa="POR_INICIAR"><span>Por iniciar (7 días)</span><b id="k-POR_INICIAR">–</b></button>
+    <button class="kpi" data-etapa="EN_EJECUCION"><span>En ejecución</span><b id="k-EN_EJECUCION">–</b></button>
+    <button class="kpi" data-etapa="POR_FINALIZAR"><span>Por finalizar (3 días)</span><b id="k-POR_FINALIZAR">–</b></button>
+    <button class="kpi" data-alerta="*"><span>Con alertas</span><b id="k-alertas">–</b></button>
   </div>
 
   <div class="filtros">
     <div class="chips" id="chips"></div>
     <input id="buscar" type="search" placeholder="Buscar programa, instructor, ficha, empresa o municipio">
     <select id="f-mes"><option value="">Todos los meses</option></select>
-    <select id="f-estado"><option value="">Todos los estados</option></select>
+    <select id="f-etapa"><option value="">Todas las etapas</option></select>
+    <select id="f-alerta"><option value="">Todas las alertas</option></select>
+    <select id="f-estado"><option value="">Todos los estados de ficha</option></select>
   </div>
   <div id="avisos"></div>
 
@@ -142,6 +152,7 @@
     <button class="cerrar" id="cerrar" aria-label="Cerrar">×</button>
   </header>
   <div class="cuerpo">
+    <div class="bloque-alertas" id="c-alertas"></div>
     <p class="seccion">Datos de la programación</p>
     <div class="detalles" id="c-detalles"></div>
     <p class="seccion">Seguimiento</p>
@@ -163,7 +174,7 @@
 
   var datos = null;
   var version = null;
-  var filtro = { hoja: '', texto: '', mes: '', estado: '' };
+  var filtro = { hoja: '', texto: '', mes: '', estado: '', etapa: '', alerta: '' };
   var abierto = null; // registro del cajón
   var cargando = false;
   var resaltar = {};
@@ -273,7 +284,9 @@
       return MESES.indexOf(a) - MESES.indexOf(b);
     }), filtro.mes, 'Todos los meses');
     var estados = unicos(datos.registros.map(function (r) { return (r.campos.estadoFicha || '').toUpperCase(); }));
-    llenarSelect($('f-estado'), ['(sin estado)'].concat(estados.sort()), filtro.estado, 'Todos los estados');
+    llenarSelect($('f-estado'), ['(sin estado)'].concat(estados.sort()), filtro.estado, 'Todos los estados de ficha');
+    llenarOpciones($('f-etapa'), datos.etapas, filtro.etapa, 'Todas las etapas');
+    llenarOpciones($('f-alerta'), datos.alertas, filtro.alerta === '*' ? '' : filtro.alerta, 'Todas las alertas');
 
     var avisos = $('avisos');
     avisos.textContent = '';
@@ -293,26 +306,70 @@
     valores.forEach(function (v) { select.appendChild(new Option(v, v, false, v === actual)); });
   }
 
-  function filtrados() {
-    var texto = filtro.texto.trim().toLowerCase();
-    return datos.registros.filter(function (r) {
-      var c = r.campos;
-      if (filtro.hoja && r.hoja !== filtro.hoja) return false;
-      if (filtro.mes && mesDe(r) !== filtro.mes) return false;
-      if (filtro.estado) {
-        var estado = (c.estadoFicha || '').toUpperCase();
-        if (filtro.estado === '(sin estado)' ? estado : estado !== filtro.estado) return false;
-      }
-      if (texto) {
-        var todo = [c.programa, c.requerimiento, c.instructor, c.ficha, c.oferta, c.empresa, c.municipio, c.radicado].join(' ').toLowerCase();
-        if (todo.indexOf(texto) < 0) return false;
-      }
-      return true;
+  function llenarOpciones(select, definiciones, actual, primero) {
+    select.textContent = '';
+    select.appendChild(new Option(primero, ''));
+    Object.keys(definiciones).forEach(function (k) {
+      select.appendChild(new Option(definiciones[k].etiqueta, k, false, k === actual));
     });
   }
 
+  // Lo más urgente primero (inicia hoy, por iniciar, por finalizar...) y dentro de cada etapa por fecha de inicio
+  function ordenar(lista) {
+    return lista.slice().sort(function (a, b) {
+      return (datos.etapas[a.etapa].orden - datos.etapas[b.etapa].orden) ||
+        (a.inicioIso || '9').localeCompare(b.inicioIso || '9') || a.hoja.localeCompare(b.hoja) || a.fila - b.fila;
+    });
+  }
+
+  function chipEtapa(r) {
+    var e = datos.etapas[r.etapa];
+    var chip = crear('span', 'etiqueta', e.etiqueta);
+    chip.style.color = e.color;
+    chip.style.background = e.fondo;
+    chip.style.borderColor = 'transparent';
+    return chip;
+  }
+
+  function chipsAlerta(r) {
+    var caja = crear('div', 'chips-alerta');
+    r.alertas.forEach(function (k) {
+      var a = datos.alertas[k];
+      var chip = crear('span', 'alerta', a.etiqueta);
+      chip.style.color = a.color;
+      chip.style.background = a.fondo;
+      caja.appendChild(chip);
+    });
+    return caja;
+  }
+
+  function filtrados() {
+    return datos.registros.filter(function (r) { return cumple(r, false); });
+  }
+
+  // sinEtapa: ignora los filtros de etapa y alerta (para los contadores de arriba)
+  function cumple(r, sinEtapa) {
+    var c = r.campos;
+    var texto = filtro.texto.trim().toLowerCase();
+    if (filtro.hoja && r.hoja !== filtro.hoja) return false;
+    if (filtro.mes && mesDe(r) !== filtro.mes) return false;
+    if (!sinEtapa) {
+      if (filtro.etapa && r.etapa !== filtro.etapa) return false;
+      if (filtro.alerta === '*' ? !r.alertas.length : filtro.alerta && r.alertas.indexOf(filtro.alerta) < 0) return false;
+    }
+    if (filtro.estado) {
+      var estado = (c.estadoFicha || '').toUpperCase();
+      if (filtro.estado === '(sin estado)' ? estado : estado !== filtro.estado) return false;
+    }
+    if (texto) {
+      var todo = [c.programa, c.requerimiento, c.instructor, c.ficha, c.oferta, c.empresa, c.municipio, c.radicado].join(' ').toLowerCase();
+      if (todo.indexOf(texto) < 0) return false;
+    }
+    return true;
+  }
+
   function pintar() {
-    var lista = filtrados();
+    var lista = ordenar(filtrados());
     var tbody = $('filas');
     tbody.textContent = '';
     lista.forEach(function (r) {
@@ -325,6 +382,7 @@
       td.appendChild(document.createTextNode(' '));
       td.appendChild(crear('span', 'titulo', titulo(r)));
       td.appendChild(crear('div', 'sub', c.instructor || 'Sin instructor'));
+      if (r.alertas.length) td.appendChild(chipsAlerta(r));
       tr.appendChild(td);
 
       td = crear('td');
@@ -340,9 +398,10 @@
       tr.appendChild(td);
 
       td = crear('td');
-      if ('estadoFicha' in c) td.appendChild(crear('span', 'etiqueta' + (c.estadoFicha ? '' : ' vacia'), c.estadoFicha || 'Sin estado'));
-      if (c.estadoAprendices) td.appendChild(crear('div', 'sub', c.estadoAprendices));
-      if (!('estadoFicha' in c) && c.observaciones) td.appendChild(crear('div', 'sub', c.observaciones.slice(0, 60)));
+      td.appendChild(chipEtapa(r));
+      if (r.detalleEtapa !== datos.etapas[r.etapa].etiqueta) td.appendChild(crear('div', 'sub', r.detalleEtapa));
+      if (c.estadoFicha) td.appendChild(crear('div', 'sub', 'Ficha: ' + c.estadoFicha));
+      if (c.estadoAprendices) td.appendChild(crear('div', 'sub', 'Aprendices: ' + c.estadoAprendices));
       tr.appendChild(td);
 
       tr.appendChild(crear('td', 'col-ocultable sub',
@@ -352,10 +411,17 @@
     resaltar = {};
     $('vacio').hidden = lista.length > 0;
 
-    $('k-total').textContent = lista.length;
-    $('k-ficha').textContent = lista.filter(function (r) { return r.campos.ficha; }).length;
-    $('k-sinficha').textContent = lista.filter(function (r) { return !r.campos.ficha; }).length;
-    $('k-matriculados').textContent = lista.reduce(function (s, r) { return s + (Number(r.campos.matriculados) || 0); }, 0);
+    // Los contadores no dependen del filtro de etapa o alerta, para poder saltar de uno a otro
+    var base = datos.registros.filter(function (r) { return cumple(r, true); });
+    $('k-total').textContent = base.length;
+    ['POR_INICIAR', 'EN_EJECUCION', 'POR_FINALIZAR'].forEach(function (e) {
+      $('k-' + e).textContent = base.filter(function (r) { return r.etapa === e; }).length;
+    });
+    $('k-alertas').textContent = base.filter(function (r) { return r.alertas.length; }).length;
+    Array.prototype.forEach.call(document.querySelectorAll('button.kpi'), function (b) {
+      var activo = b.dataset.etapa ? b.dataset.etapa === filtro.etapa : b.dataset.alerta === '*' ? filtro.alerta === '*' : !filtro.etapa && !filtro.alerta;
+      b.classList.toggle('activo', activo);
+    });
   }
 
   // ─── Cajón de edición ───
@@ -392,6 +458,21 @@
     $('c-hoja').textContent = r.hoja + ' · fila ' + r.fila;
     $('c-titulo').textContent = titulo(r);
     $('c-sub').textContent = c.ficha ? 'Ficha ' + c.ficha : 'Sin ficha';
+
+    var alertas = $('c-alertas');
+    alertas.textContent = '';
+    var linea = crear('div');
+    linea.appendChild(chipEtapa(r));
+    if (r.detalleEtapa !== datos.etapas[r.etapa].etiqueta) linea.appendChild(document.createTextNode(' ' + r.detalleEtapa));
+    alertas.appendChild(linea);
+    if (r.alertas.length) alertas.appendChild(chipsAlerta(r));
+    [['Se cruza con', r.cruces], ['Distinto en otra pestaña', r.inconsistencias]].forEach(function (par) {
+      if (!par[1] || !par[1].length) return;
+      alertas.appendChild(crear('p', 'sub', par[0] + ':'));
+      var ul = crear('ul', 'nota');
+      par[1].forEach(function (t) { ul.appendChild(crear('li', '', t)); });
+      alertas.appendChild(ul);
+    });
 
     var detalles = $('c-detalles');
     detalles.textContent = '';
@@ -489,6 +570,10 @@
         return;
       }
       var i = datos.registros.map(function (r) { return r.id; }).indexOf(res.registro.id);
+      // Lo editable no cambia fechas, ficha ni instructor: la etapa y las alertas siguen igual
+      ['etapa', 'detalleEtapa', 'inicioIso', 'finIso', 'alertas', 'cruces', 'inconsistencias'].forEach(function (k) {
+        if (abierto[k] !== undefined) res.registro[k] = abierto[k];
+      });
       if (i >= 0) datos.registros[i] = res.registro;
       version = res.version;
       abierto = res.registro;
@@ -508,6 +593,17 @@
   $('buscar').oninput = function (e) { filtro.texto = e.target.value; pintar(); };
   $('f-mes').onchange = function (e) { filtro.mes = e.target.value; pintar(); };
   $('f-estado').onchange = function (e) { filtro.estado = e.target.value; pintar(); };
+  $('f-etapa').onchange = function (e) { filtro.etapa = e.target.value; pintar(); };
+  $('f-alerta').onchange = function (e) { filtro.alerta = e.target.value; pintar(); };
+  Array.prototype.forEach.call(document.querySelectorAll('button.kpi'), function (b) {
+    b.onclick = function () {
+      filtro.etapa = b.dataset.etapa || '';
+      filtro.alerta = b.dataset.alerta || '';
+      $('f-etapa').value = filtro.etapa;
+      $('f-alerta').value = filtro.alerta === '*' ? '' : filtro.alerta;
+      pintar();
+    };
+  });
   $('cerrar').onclick = cerrar;
   $('velo').onclick = cerrar;
   $('guardar').onclick = guardar;

@@ -17,6 +17,32 @@ Las pestañas **REGULADA**, **PV**, **CAMPESENA** y **TECNOACADEMIA**. La copia 
 - Un registro es una fila con programa, requerimiento, ficha o instructor. Así también salen las solicitudes nuevas que aún no tienen programa.
 - En REGULADA cada registro ocupa 3 filas combinadas: se lee y se escribe en la primera.
 
+## Etapas y alertas
+
+Cada registro muestra su **etapa** según la fecha de hoy y sus fechas de inicio y fin:
+
+| Etapa | Cuándo |
+|---|---|
+| Inicia hoy | La fecha de inicio es hoy |
+| Por iniciar | Empieza en 7 días o menos |
+| Programada | Empieza en más de 7 días |
+| En ejecución | Ya empezó y faltan más de 3 días para terminar |
+| Por finalizar | Termina en 3 días o menos |
+| Finalizada | La fecha de fin ya pasó |
+| Fechas inválidas | La fecha de fin es anterior a la de inicio |
+| Fecha faltante o ilegible | Falta una fecha o está mal escrita (por ejemplo «8/10/0206») |
+
+También muestra estas **alertas**:
+
+- **Ficha sin crear / sin código**: el registro no tiene número de ficha.
+- **Sin instructor**: el registro no tiene instructor asignado.
+- **Cruce de instructor**: el mismo instructor tiene dos formaciones, no finalizadas, cuyas fechas se solapan. El detalle dice con cuál se cruza.
+- **Datos distintos entre pestañas**: la misma ficha aparece en dos pestañas con otras fechas u otro instructor.
+
+La lista se ordena con lo más urgente arriba. Los recuadros de arriba (Por iniciar, En ejecución, Por finalizar, Con alertas) filtran la lista al hacer clic.
+
+Esta lógica antes estaba en `Motor.gs`. Ahora está dentro de `Codigo.gs`, así que **no hay que pegar `Motor.gs`**. Si se pega, sus funciones chocan con las de `Codigo.gs` y el panel deja de funcionar.
+
 ## Qué se edita desde el panel
 
 Solo las columnas de seguimiento que existan en cada pestaña:

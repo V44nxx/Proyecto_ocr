@@ -305,10 +305,12 @@ test('abrir el panel y ver el enlace desde el menú', () => {
   assert.deepEqual(avisos.pop(), ['dialogo', 'Seguimiento de fichas', 'PANEL:' + CLAVE]);
 
   ctx.mostrarEnlace();
-  assert.match(avisos.pop()[1], /todavía no está publicado[\s\S]*\?k=clave-de-prueba/);
-  publicar('https://script.google.com/macros/s/ABC/exec');
+  const texto = avisos.pop()[1];
+  assert.match(texto, /Gestionar implementaciones[\s\S]*\n\?k=clave-de-prueba\n/);
+  // Nunca arma la URL por su cuenta: getUrl() puede ser de otra implementación
+  publicar('https://script.google.com/macros/s/OTRA/exec');
   ctx.mostrarEnlace();
-  assert.match(avisos.pop()[1], /https:\/\/script\.google\.com\/macros\/s\/ABC\/exec\?k=clave-de-prueba$/);
+  assert.doesNotMatch(avisos.pop()[1], /OTRA/);
 
   const sinClave = entorno({ clave: null });
   sinClave.ctx.abrirPanel();

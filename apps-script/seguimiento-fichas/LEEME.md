@@ -82,13 +82,13 @@ Los datos de la programación (empresa, instructor, fechas...) se muestran pero 
 8. Para KondID hay que publicarlo. En Apps Script: **Implementar → Nueva implementación → Aplicación web**:
    - Ejecutar como: **Yo**
    - Quién tiene acceso: **Cualquier persona**
-9. En la hoja, **Seguimiento de fichas → Ver enlace para KondID** muestra el enlace completo con la clave. Si dice que no está publicado, usa la URL de la implementación (termina en `/exec`) seguida del `?k=...` que muestra.
+9. Copia la URL de **Implementar → Gestionar implementaciones** (termina en `/exec`) y pégale al final el `?k=...` que muestra **Seguimiento de fichas → Ver enlace para KondID** en la hoja. Usa siempre la URL de «Gestionar implementaciones»: es la única que seguro corresponde a la implementación activa.
 10. En KondID, en **Seguimiento de fichas → Configurar**, pega ese enlace.
 
 | Opción del menú | Qué hace |
 |---|---|
 | Abrir panel | Abre el panel en una ventana encima de la hoja |
-| Ver enlace para KondID | Muestra el enlace con la clave para pegar en KondID |
+| Ver enlace para KondID | Muestra la clave (`?k=...`) y cómo armar el enlace para KondID |
 | Configurar (primera vez) | Crea la clave y la actualización automática |
 | Cambiar la clave del enlace | Crea una clave nueva (pide confirmación); el enlace viejo deja de funcionar |
 

@@ -560,14 +560,14 @@ function mostrarEnlace() {
   ui.alert('Enlace para KondID', textoEnlace_(clave), ui.ButtonSet.OK);
 }
 
+// No se usa ScriptApp.getService().getUrl(): puede devolver la URL de otra implementación (una de prueba o
+// una vieja), y ese enlace en KondID da «No se pudo abrir el archivo». La URL buena es la de Gestionar implementaciones.
 function textoEnlace_(clave) {
-  var url = ScriptApp.getService().getUrl();
-  if (!url || !/\/exec$/.test(url)) {
-    return 'El panel todavía no está publicado. En Extensiones → Apps Script: Implementar → Nueva implementación → ' +
-      'Aplicación web (ejecutar como «Yo», acceso «Cualquier persona»). Luego pega en KondID la URL que termina en ' +
-      '/exec seguida de:\n\n?k=' + clave;
-  }
-  return 'Copia este enlace y pégalo en KondID → Seguimiento de fichas → Configurar:\n\n' + url + '?k=' + clave;
+  return '1. En Extensiones → Apps Script: Implementar → Gestionar implementaciones. Copia la URL de la ' +
+    'aplicación web (termina en /exec). Si no hay ninguna: Implementar → Nueva implementación → Aplicación web, ' +
+    'ejecutar como «Yo», acceso «Cualquier persona».\n\n' +
+    '2. Pégale al final, sin espacios:\n\n?k=' + clave + '\n\n' +
+    '3. Pega el enlace completo (…/exec?k=…) en KondID → Seguimiento de fichas → Configurar.';
 }
 
 /** Crea la clave del enlace (si no existe) y los disparadores. Se hace una vez antes de publicar. */

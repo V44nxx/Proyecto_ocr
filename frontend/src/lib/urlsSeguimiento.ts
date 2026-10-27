@@ -20,3 +20,14 @@ export const urlPanelSeguimiento = (valor?: string | null) =>
   urlPermitida(valor, "script.google.com", ["/macros/s/", "/a/macros/"]);
 
 export const urlHojaSeguimiento = (valor?: string | null) => urlPermitida(valor, "docs.google.com", ["/spreadsheets/"]);
+
+/**
+ * Agrega al enlace del panel el nombre de quien tiene la sesión abierta en KondID (&u=...). El panel lo anota en su
+ * historial de «Cambios» como autor de lo que se guarde desde KondID.
+ */
+export function conUsuario(url: string | undefined, nombre?: string | null): string | undefined {
+  if (!url || !nombre) return url;
+  const conNombre = new URL(url);
+  conNombre.searchParams.set("u", nombre);
+  return conNombre.href;
+}

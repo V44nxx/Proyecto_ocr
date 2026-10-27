@@ -17,6 +17,28 @@ Las pestañas **REGULADA**, **PV**, **CAMPESENA** y **TECNOACADEMIA**. La copia 
 - Un registro es una fila con programa, requerimiento, ficha o instructor. Así también salen las solicitudes nuevas que aún no tienen programa.
 - En REGULADA cada registro ocupa 3 filas combinadas: se lee y se escribe en la primera.
 
+## Vistas del panel
+
+- **Calendario** (la que abre primero): cada día muestra las formaciones que **inician** ese día, con el color de su pestaña, y cuántas siguen **en curso** y cuántas **terminan**. Al hacer clic en un día, a la derecha salen las tres listas; al hacer clic en una formación, se abre su detalle. Con ‹ › se cambia de mes y «Hoy» vuelve al día actual.
+- **Lista**: todas las formaciones ordenadas por urgencia, con sus alertas.
+- **Cambios**: el historial de lo que se modificó, del más nuevo al más viejo: quién, cuándo, desde dónde (Hoja, KondID o Panel en la hoja), qué campo, el valor anterior tachado y el nuevo. Se puede buscar y filtrar por persona o por origen.
+
+Los filtros de arriba (pestaña, buscador, etapa, alerta, estado de ficha) aplican al calendario y a la lista.
+
+## Quién hizo cada cambio
+
+Todo cambio queda en la pestaña oculta **BITACORA_PANEL** (Fecha, Pestaña, Fila, Ficha, Programa, Campo, Antes, Después, Quién, Origen):
+
+| Desde dónde | Qué se anota como «Quién» |
+|---|---|
+| **KondID** | El nombre del usuario con sesión en KondID (KondID lo agrega al enlace del panel) |
+| **Panel en la hoja** (menú → Abrir panel) | El correo de quien lo usa |
+| **Hoja** (escrito a mano en la celda) | El correo de quien edita |
+
+Google solo entrega el correo de quien edita si es la persona dueña de la hoja o si es de la misma organización (Google Workspace, por ejemplo todos @sena.edu.co). Con cuentas @gmail.com de otras personas aparece **«Editor de la hoja»**. En ese caso el historial de la propia hoja (clic derecho en la celda → *Mostrar historial de ediciones*) sí dice quién fue.
+
+En lo escrito a mano se anota el título de la columna, el valor anterior (solo si se editó una celda; en un pegado de varias celdas solo el nuevo) y el valor nuevo. Un pegado grande se anota hasta 30 celdas. Las ediciones de los títulos y de otras pestañas no se anotan.
+
 ## Etapas y alertas
 
 Cada registro muestra su **etapa** según la fecha de hoy y sus fechas de inicio y fin:
@@ -38,6 +60,7 @@ También muestra estas **alertas**:
 - **Sin instructor**: el registro no tiene instructor asignado.
 - **Cruce de instructor**: el mismo instructor tiene dos formaciones, no finalizadas, cuyas fechas se solapan. El detalle dice con cuál se cruza.
 - **Datos distintos entre pestañas**: la misma ficha aparece en dos pestañas con otras fechas u otro instructor.
+- **Modificada recientemente**: el registro cambió en los últimos 3 días. El detalle dice qué cambió y quién.
 
 La lista se ordena con lo más urgente arriba. Los recuadros de arriba (Por iniciar, En ejecución, Por finalizar, Con alertas) filtran la lista al hacer clic.
 
@@ -68,7 +91,7 @@ Los datos de la programación (empresa, instructor, fechas...) se muestran pero 
 - El panel pregunta por ese número cada 15 segundos (solo mientras la pestaña está visible) y vuelve a leer la hoja cuando cambió. Las filas que cambiaron se resaltan.
 - Si dos personas editan el mismo campo a la vez, el segundo cambio **no pisa** al primero: el panel muestra lo que dice ahora la hoja y pide confirmar.
 - Si se insertan o borran filas mientras alguien tiene un registro abierto, el panel no escribe en la fila equivocada: pide volver a abrirlo.
-- Cada cambio hecho desde el panel queda en la pestaña oculta **BITACORA_PANEL** (fecha, pestaña, fila, ficha, campo, antes y después).
+- Cada cambio, desde el panel, desde KondID o a mano, queda en la pestaña oculta **BITACORA_PANEL** con quién lo hizo (ver «Quién hizo cada cambio»).
 
 ## Instalación
 

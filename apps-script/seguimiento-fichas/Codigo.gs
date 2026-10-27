@@ -11,6 +11,8 @@
  * - Desde el panel solo se editan las columnas de seguimiento (estado, inscritos, matriculados, observaciones...).
  * - Cada registro trae su etapa según las fechas (por iniciar, en ejecución, por finalizar...) y sus alertas
  *   (sin ficha, sin instructor, cruce de instructor, datos distintos entre pestañas). Viene del antiguo Motor.gs.
+ * - Cada cambio (desde el panel, desde KondID o a mano en la hoja) queda en la pestaña oculta BITACORA_PANEL con
+ *   quién lo hizo; el panel lo muestra en «Cambios» y marca el registro como «Modificada recientemente».
  * - Cada cambio en la hoja (desde el panel o a mano) sube un número de versión; el panel lo consulta cada pocos
  *   segundos y se recarga solo cuando cambió, así lo que se escribe en la hoja aparece enseguida en KondID.
  * - La aplicación web se publica para «Cualquier persona»: por eso cada llamada exige la clave que va en el
@@ -78,6 +80,9 @@ function doGet(e) {
   }
   var plantilla = HtmlService.createTemplateFromFile('Index');
   plantilla.clave = clave;
+  // KondID agrega &u=<nombre del usuario> para que la bitácora diga quién editó desde KondID
+  plantilla.usuario = String(e.parameter.u || '').slice(0, 80);
+  plantilla.origen = 'KondID';
   return plantilla.evaluate()
     .setTitle('Seguimiento de fichas')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -122,10 +127,13 @@ function obtenerDatos(clave) {
     }
   });
 
-  calcularEtapas_(registros, fechaIso_(new Date()));
+  var ahora = new Date();
+  var cambios = leerBitacora_();
+  calcularEtapas_(registros, fechaIso_(ahora));
+  marcarCambiosRecientes_(registros, cambios, ahora);
   return {
     hojas: hojas, registros: registros, campos: campos, opciones: opciones, etapas: ETAPAS, alertas: ALERTAS,
-    version: versionActual_(),
+    cambios: cambios, hoy: fechaIso_(ahora), version: versionActual_(),
   };
 }
 
@@ -139,8 +147,9 @@ function obtenerVersion(clave) {
  * Guarda los campos de seguimiento de un registro.
  * cambios = { campo: { anterior: 'lo que el panel mostraba', nuevo: 'valor nuevo' } }
  * Si otra persona cambió el mismo campo mientras tanto, no se pisa: se devuelve el conflicto y el registro actual.
+ * autor = { nombre, origen }: quién guarda (el nombre lo manda KondID; en el panel de la hoja se usa el correo).
  */
-function guardar(clave, id, huella, cambios) {
+function guardar(clave, id, huella, cambios, autor) {
   verificarClave_(clave);
   var partes = String(id).split('!');
   var nombre = partes[0];
@@ -179,7 +188,7 @@ function guardar(clave, id, huella, cambios) {
       hoja.getRange(fila, c.columna + 1).setValue(c.valor);
     });
     if (escribir.length) {
-      anotarBitacora_(nombre, fila, actual, escribir, cambios);
+      anotarBitacora_(nombre, fila, actual, escribir, cambios, autor);
       SpreadsheetApp.flush();
       subirVersion_();
     }
@@ -336,6 +345,7 @@ var ALERTAS = {
   SIN_INSTRUCTOR: { etiqueta: 'Sin instructor', color: '#9F1239', fondo: '#FFE4E6' },
   CRUCE_INSTRUCTOR: { etiqueta: 'Cruce de instructor', color: '#A16207', fondo: '#FEF9C3' },
   INCONSISTENCIA: { etiqueta: 'Datos distintos entre pestañas', color: '#7E22CE', fondo: '#F3E8FF' },
+  CAMBIO_RECIENTE: { etiqueta: 'Modificada recientemente', color: '#6D28D9', fondo: '#EDE9FE' },
 };
 
 /** Agrega a cada registro su etapa (según la fecha de hoy, 'AAAA-MM-DD') y sus alertas. */
@@ -477,6 +487,168 @@ function anotarCruce_(r, otro) {
   );
 }
 
+// ─── Historial de cambios (pestaña oculta BITACORA_PANEL) ────────────────
+
+var TITULOS_BITACORA = ['Fecha', 'Pestaña', 'Fila', 'Ficha', 'Programa', 'Campo', 'Antes', 'Después', 'Quién', 'Origen'];
+var CAMBIOS_A_MOSTRAR = 300;
+var DIAS_CAMBIO_RECIENTE = 3;
+var CELDAS_MAXIMAS_POR_EDICION = 30;
+
+function escribirBitacora_(filas) {
+  if (!filas.length) return;
+  var libro = SpreadsheetApp.getActiveSpreadsheet();
+  var bitacora = libro.getSheetByName(HOJA_BITACORA);
+  if (!bitacora) {
+    bitacora = libro.insertSheet(HOJA_BITACORA);
+    bitacora.hideSheet();
+  }
+  // También completa los títulos de una bitácora creada por una versión anterior (sin Quién ni Origen)
+  if (bitacora.getRange(1, TITULOS_BITACORA.length).getDisplayValues()[0][0] !== 'Origen') {
+    bitacora.getRange(1, 1, 1, TITULOS_BITACORA.length).setValues([TITULOS_BITACORA]);
+  }
+  bitacora.getRange(bitacora.getLastRow() + 1, 1, filas.length, TITULOS_BITACORA.length).setValues(filas);
+}
+
+/** Últimos cambios de la bitácora, del más nuevo al más viejo. */
+function leerBitacora_() {
+  var bitacora = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_BITACORA);
+  if (!bitacora || bitacora.getLastRow() < 2) return [];
+  var desde = Math.max(2, bitacora.getLastRow() - CAMBIOS_A_MOSTRAR + 1);
+  var filas = bitacora.getRange(desde, 1, bitacora.getLastRow() - desde + 1, TITULOS_BITACORA.length).getValues();
+  return filas.reverse().filter(function (f) { return f[1]; }).map(function (f) {
+    return {
+      fecha: Object.prototype.toString.call(f[0]) === '[object Date]' ? fechaHoraIso_(f[0]) : limpiar_(f[0]),
+      hoja: limpiar_(f[1]), fila: Number(f[2]) || 0, id: limpiar_(f[1]) + '!' + f[2],
+      ficha: limpiar_(f[3]), programa: limpiar_(f[4]), campo: limpiar_(f[5]),
+      antes: textoCelda_(f[6]), despues: textoCelda_(f[7]),
+      quien: limpiar_(f[8]) || 'Sin identificar', origen: limpiar_(f[9]) || 'Panel',
+    };
+  });
+}
+
+/** Alerta «Modificada recientemente» con lo que cambió en los últimos días. */
+function marcarCambiosRecientes_(registros, cambios, ahora) {
+  var limite = fechaHoraIso_(new Date(ahora.getTime() - DIAS_CAMBIO_RECIENTE * 86400000));
+  var porClave = {};
+  cambios.forEach(function (c) {
+    if (c.fecha < limite) return;
+    var clave = c.ficha ? 'F' + c.ficha : 'R' + c.id;
+    (porClave[clave] = porClave[clave] || []).push(c);
+  });
+  registros.forEach(function (r) {
+    var lista = (r.campos.ficha && porClave['F' + r.campos.ficha]) || porClave['R' + r.id];
+    if (!lista) return;
+    r.alertas.push('CAMBIO_RECIENTE');
+    r.cambiosRecientes = lista.slice(0, 10).map(function (c) {
+      return c.campo + ': «' + (c.antes || 'vacío') + '» → «' + (c.despues || 'vacío') + '» · ' + c.quien + ' · ' + c.fecha.replace('T', ' ');
+    });
+  });
+}
+
+/** Anota en la bitácora lo que alguien escribió a mano en una de las pestañas del panel. */
+function registrarEdicion_(e) {
+  if (!e || !e.range) return;
+  var hoja = e.range.getSheet();
+  var nombre = hoja.getName();
+  if (HOJAS.indexOf(nombre) < 0 || hoja.isSheetHidden()) return;
+  var ultimaColumna = hoja.getLastColumn();
+  var encabezado = hoja.getRange(1, 1, Math.min(FILAS_ENCABEZADO, hoja.getLastRow()), ultimaColumna).getDisplayValues();
+  var mapeo = mapearColumnas_(encabezado);
+  if (!mapeo.mapa.programa || e.range.getRow() <= mapeo.primeraFilaDatos) return; // título o encabezado
+  var columnasFecha = {};
+  Object.keys(mapeo.mapa).forEach(function (k) {
+    if (CAMPOS[k].tipo === 'fecha') columnasFecha[mapeo.mapa[k].columna + 1] = true;
+  });
+
+  var unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+  var textos = e.range.getDisplayValues();
+  var registros = {};
+  var filas = [];
+  for (var f = 0; f < textos.length; f++) {
+    var filaHoja = e.range.getRow() + f;
+    var registro = registros[filaHoja] || (registros[filaHoja] = registroQueContiene_(hoja, filaHoja, mapeo, ultimaColumna));
+    for (var c = 0; c < textos[f].length && filas.length < CELDAS_MAXIMAS_POR_EDICION; c++) {
+      var columna = e.range.getColumn() + c;
+      var antes = unaCelda ? e.oldValue : '';
+      if (antes != null && columnasFecha[columna] && /^\d+(\.\d+)?$/.test(String(antes))) antes = fechaDeSerie_(Number(antes));
+      filas.push([
+        new Date(), nombre, registro ? registro.fila : filaHoja,
+        registro ? registro.campos.ficha || '' : '',
+        registro ? registro.campos.programa || registro.campos.requerimiento || '' : '',
+        tituloColumna_(encabezado, columna - 1, mapeo.primeraFilaDatos),
+        antes == null ? '' : String(antes), textos[f][c],
+        correoDe_(e) || 'Editor de la hoja', 'Hoja',
+      ]);
+    }
+  }
+  escribirBitacora_(filas);
+}
+
+/** El registro al que pertenece una fila (en REGULADA cada registro ocupa 3 filas combinadas). */
+function registroQueContiene_(hoja, fila, mapeo, ultimaColumna) {
+  for (var f = fila; f > mapeo.primeraFilaDatos && f > fila - 5; f--) {
+    var r = leerFila_(hoja, f, mapeo.mapa, ultimaColumna);
+    if (r) return r;
+  }
+  return null;
+}
+
+/** El título más bajo de la columna en el encabezado (los encabezados ocupan hasta 3 filas). */
+function tituloColumna_(encabezado, columna, primeraFilaDatos) {
+  for (var f = Math.min(primeraFilaDatos, encabezado.length) - 1; f >= 0; f--) {
+    var t = limpiar_(encabezado[f][columna]);
+    if (/^\d+$/.test(t)) return 'Día ' + t; // columnas de horas por día (1, 2, 3...)
+    if (t) return t;
+  }
+  return 'Columna ' + letraColumna_(columna + 1);
+}
+
+function letraColumna_(n) {
+  var letras = '';
+  while (n > 0) {
+    var resto = (n - 1) % 26;
+    letras = String.fromCharCode(65 + resto) + letras;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letras;
+}
+
+// e.oldValue de una celda con fecha llega como número de serie (días desde 1899-12-30)
+function fechaDeSerie_(serie) {
+  var d = new Date(Date.UTC(1899, 11, 30) + Math.round(serie * 86400000));
+  return dos_(d.getUTCDate()) + '/' + dos_(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+}
+
+function textoCelda_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return dos_(v.getDate()) + '/' + dos_(v.getMonth() + 1) + '/' + v.getFullYear();
+  return v == null ? '' : String(v).trim();
+}
+
+function fechaHoraIso_(d) {
+  return fechaIso_(d) + 'T' + dos_(d.getHours()) + ':' + dos_(d.getMinutes());
+}
+
+/**
+ * Correo de quien hace el cambio. Google solo lo entrega si la persona es la dueña de la hoja o es de la misma
+ * organización (Google Workspace); con cuentas @gmail.com de otras personas llega vacío.
+ */
+function correoDe_(e) {
+  try {
+    var correo = e && e.user && e.user.getEmail && e.user.getEmail();
+    return correo || correoActivo_();
+  } catch (error) {
+    return '';
+  }
+}
+
+function correoActivo_() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch (error) {
+    return '';
+  }
+}
+
 // ─── Versión, clave y bitácora ───────────────────────────────────────────
 
 function versionActual_() {
@@ -487,9 +659,14 @@ function subirVersion_() {
   PropertiesService.getDocumentProperties().setProperty('version', String(Date.now()));
 }
 
-/** Se ejecuta solo cada vez que alguien edita una celda a mano. */
-function onEdit() {
+/** Se ejecuta solo cada vez que alguien edita una celda a mano: avisa al panel y anota el cambio. */
+function onEdit(e) {
   subirVersion_();
+  try {
+    registrarEdicion_(e);
+  } catch (error) {
+    console.warn('No se pudo anotar la edición: ' + error);
+  }
 }
 
 /** Disparador instalable (ver instalarDisparadores): cubre filas insertadas o borradas, pegados grandes, etc. */
@@ -506,20 +683,16 @@ function verificarClave_(clave) {
   if (!guardada || clave !== guardada) throw new Error('Acceso denegado');
 }
 
-function anotarBitacora_(nombreHoja, fila, registro, escritos, cambios) {
-  var libro = SpreadsheetApp.getActiveSpreadsheet();
-  var bitacora = libro.getSheetByName(HOJA_BITACORA);
-  if (!bitacora) {
-    bitacora = libro.insertSheet(HOJA_BITACORA);
-    bitacora.appendRow(['Fecha', 'Pestaña', 'Fila', 'Ficha', 'Programa', 'Campo', 'Antes', 'Después']);
-    bitacora.hideSheet();
-  }
-  escritos.forEach(function (e) {
-    bitacora.appendRow([
+function anotarBitacora_(nombreHoja, fila, registro, escritos, cambios, autor) {
+  autor = autor || {};
+  var quien = correoActivo_() || limpiar_(autor.nombre) || 'Sin identificar';
+  escribirBitacora_(escritos.map(function (e) {
+    return [
       new Date(), nombreHoja, fila, registro.campos.ficha || '', registro.campos.programa || registro.campos.requerimiento,
-      CAMPOS[e.campo].titulo, cambios[e.campo].anterior || '', cambios[e.campo].nuevo || '',
-    ]);
-  });
+      CAMPOS[e.campo].titulo, cambios[e.campo].anterior || '', cambios[e.campo].nuevo || '', quien,
+      limpiar_(autor.origen) || 'Panel',
+    ];
+  }));
 }
 
 // ─── Menú en la hoja y puesta en marcha ──────────────────────────────────
@@ -546,6 +719,8 @@ function abrirPanel() {
   }
   var plantilla = HtmlService.createTemplateFromFile('Index');
   plantilla.clave = clave;
+  plantilla.usuario = '';
+  plantilla.origen = 'Panel en la hoja';
   ui.showModelessDialog(plantilla.evaluate().setWidth(1200).setHeight(760), 'Seguimiento de fichas');
 }
 

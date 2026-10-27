@@ -46,9 +46,15 @@ class Hoja {
     const hoja = this;
     const matriz = (i) => Array.from({ length: nf }, (_, a) => Array.from({ length: nc }, (_, b) => hoja.valor(f + a, c + b)[i]));
     return {
+      getSheet: () => hoja,
+      getRow: () => f,
+      getColumn: () => c,
+      getNumRows: () => nf,
+      getNumColumns: () => nc,
       getValues: () => matriz(0),
       getDisplayValues: () => matriz(1),
       setValue: (v) => hoja.poner(f, c, v),
+      setValues: (m) => m.forEach((fila, a) => fila.forEach((v, b) => hoja.poner(f + a, c + b, v))),
     };
   }
 }
@@ -65,6 +71,7 @@ function entorno({ clave = CLAVE } = {}) {
   });
   const salida = (html) => ({ html, setXFrameOptionsMode() { return this; }, setTitle() { return this; }, addMetaTag() { return this; }, setWidth() { return this; }, setHeight() { return this; } });
   let urlPublicada = null;
+  const sesion = { correo: '' };
   const avisos = [];
   const menus = [];
   const ui = {
@@ -92,6 +99,8 @@ function entorno({ clave = CLAVE } = {}) {
       createTemplateFromFile: () => ({ evaluate() { return salida('PANEL:' + this.clave); } }),
     },
     Utilities: { getUuid: () => '1234-5678' },
+    Session: { getActiveUser: () => ({ getEmail: () => sesion.correo }) },
+    console: { warn() {} },
     Logger: { log() {} },
     ScriptApp: {
       getProjectTriggers: () => [],
@@ -101,7 +110,7 @@ function entorno({ clave = CLAVE } = {}) {
   };
   vm.createContext(ctx);
   vm.runInContext(CODIGO, ctx);
-  return { ctx, ss, hojas, propsDoc, propsScript, ui, avisos, menus, publicar: (u) => { urlPublicada = u; } };
+  return { ctx, ss, hojas, propsDoc, propsScript, ui, avisos, menus, sesion, publicar: (u) => { urlPublicada = u; } };
 }
 
 test('lee las 4 pestañas visibles y no la copia oculta', () => {
@@ -328,4 +337,80 @@ test('configurar crea la clave una sola vez y cambiarClave pide confirmación', 
   ui.respuesta = 'NO';
   ctx.cambiarClave();
   assert.equal(propsScript.get('CLAVE'), clave);
+});
+
+// ─── Historial de cambios: quién, qué y desde dónde ───
+
+const bitacora = (ss) => {
+  const h = ss.getSheetByName('BITACORA_PANEL');
+  return h ? h.getRange(1, 1, h.getLastRow(), 10).getDisplayValues() : [];
+};
+
+test('lo guardado desde KondID queda con el nombre del usuario; desde la hoja, con su correo', () => {
+  const { ctx, ss, sesion } = entorno();
+  const r = ctx.obtenerDatos(CLAVE).registros.find((x) => x.hoja === 'PV');
+  ctx.guardar(CLAVE, r.id, r.huella, { observaciones: { anterior: '', nuevo: 'Llamar a la empresa' } },
+    { nombre: 'Emerson Murcia', origen: 'KondID' });
+  let filas = bitacora(ss);
+  assert.deepEqual(filas[0], ['Fecha', 'Pestaña', 'Fila', 'Ficha', 'Programa', 'Campo', 'Antes', 'Después', 'Quién', 'Origen']);
+  assert.deepEqual(filas[1].slice(1), ['PV', String(r.fila), r.campos.ficha, r.campos.programa, 'Observaciones', '',
+    'Llamar a la empresa', 'Emerson Murcia', 'KondID']);
+
+  sesion.correo = 'coordinacion@example.com';
+  ctx.guardar(CLAVE, r.id, r.huella, { observaciones: { anterior: 'Llamar a la empresa', nuevo: 'Listo' } },
+    { nombre: '', origen: 'Panel en la hoja' });
+  filas = bitacora(ss);
+  assert.deepEqual(filas[2].slice(8), ['coordinacion@example.com', 'Panel en la hoja']);
+});
+
+test('lo que se escribe a mano en la hoja queda en la bitácora con el título de la columna', () => {
+  const { ctx, ss } = entorno();
+  const hoja = ss.getSheetByName('REGULADA');
+  const programa = hoja.valor(3, 19)[1].replace(/\s+/g, ' ').trim();
+  // Instructor (V) de la primera fila del registro
+  hoja.poner(3, 22, 'NUEVO INSTRUCTOR');
+  ctx.onEdit({ range: hoja.getRange(3, 22), oldValue: 'ANTERIOR', value: 'NUEVO INSTRUCTOR' });
+  // Horas de un día en la segunda fila del registro combinado (fila 4): se anota en el registro de la fila 3
+  hoja.poner(4, 50, 4);
+  ctx.onEdit({ range: hoja.getRange(4, 50), oldValue: undefined, value: '4' });
+  // Fecha de inicio (AA): el valor anterior llega como número de serie
+  hoja.poner(3, 27, new Date(2026, 9, 20));
+  ctx.onEdit({ range: hoja.getRange(3, 27), oldValue: '46305', value: '46315' });
+  const filas = bitacora(ss);
+  assert.equal(filas.length, 4);
+  assert.deepEqual(filas[1].slice(1), ['REGULADA', '3', hoja.valor(3, 73)[1], programa, 'NOMBRE DEL INSTRUCTOR',
+    'ANTERIOR', 'NUEVO INSTRUCTOR', 'Editor de la hoja', 'Hoja']);
+  assert.deepEqual(filas[2].slice(2, 8), ['3', hoja.valor(3, 73)[1], programa, 'Día 11', '', '4']);
+  assert.deepEqual(filas[3].slice(5, 8), ['FECHA DE INICIO', '10/10/2026', '20/10/2026']);
+});
+
+test('no se anotan ediciones de encabezados ni de otras pestañas, y un pegado grande tiene tope', () => {
+  const { ctx, ss } = entorno();
+  const hoja = ss.getSheetByName('REGULADA');
+  ctx.onEdit({ range: hoja.getRange(2, 19), oldValue: 'NOMBRE DEL PROGRAMA', value: 'X' });
+  ctx.onEdit({ range: ss.getSheetByName('TECNOACADEMIA ').getRange(5, 2), oldValue: 'a', value: 'b' });
+  assert.equal(bitacora(ss).length, 0);
+  ctx.onEdit({ range: hoja.getRange(3, 1, 10, 10) });
+  assert.equal(bitacora(ss).length, 1 + 30);
+});
+
+test('el panel recibe los cambios del más nuevo al más viejo y marca «Modificada recientemente»', () => {
+  const { ctx, ss } = entorno();
+  const datos = ctx.obtenerDatos(CLAVE);
+  const r = datos.registros.find((x) => x.hoja === 'CAMPESENA' && x.campos.ficha);
+  ctx.guardar(CLAVE, r.id, r.huella, { observaciones: { anterior: r.campos.observaciones, nuevo: 'Uno' } }, { nombre: 'Ana', origen: 'KondID' });
+  ctx.guardar(CLAVE, r.id, r.huella, { observaciones: { anterior: 'Uno', nuevo: 'Dos' } }, { nombre: 'Luis', origen: 'KondID' });
+  // Un cambio de hace 10 días en otro registro no cuenta como reciente
+  const otro = datos.registros.find((x) => x.hoja === 'PV');
+  const h = ss.getSheetByName('BITACORA_PANEL');
+  h.appendRow([new Date(Date.now() - 10 * 86400000), 'PV', otro.fila, otro.campos.ficha, 'X', 'Observaciones', '', 'viejo', 'Ana', 'Hoja']);
+
+  const nuevos = ctx.obtenerDatos(CLAVE);
+  assert.deepEqual(nuevos.cambios.slice(0, 3).map((c) => c.quien), ['Ana', 'Luis', 'Ana']);
+  assert.equal(nuevos.cambios[1].despues, 'Dos');
+  assert.match(nuevos.cambios[1].fecha, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  const marcado = nuevos.registros.find((x) => x.id === r.id);
+  assert.ok(marcado.alertas.includes('CAMBIO_RECIENTE'));
+  assert.match(marcado.cambiosRecientes[0], /^Observaciones: «Uno» → «Dos» · Luis · /);
+  assert.ok(!nuevos.registros.find((x) => x.id === otro.id).alertas.includes('CAMBIO_RECIENTE'));
 });

@@ -17,7 +17,7 @@ import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiSeguimiento, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
+import { conUsuario, urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
 import type { SeguimientoConfig } from "@/types";
 import toast from "react-hot-toast";
 
@@ -54,8 +54,10 @@ export default function SeguimientoPage() {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [recarga, setRecarga] = useState(0);
-  // Solo se pintan enlaces de Apps Script y Google Sheets (lib/urlsSeguimiento.ts)
-  const panelSeguro = urlPanelSeguimiento(config?.url_panel);
+  const [nombreUsuario, setNombreUsuario] = useState("");
+  // Solo se pintan enlaces de Apps Script y Google Sheets (lib/urlsSeguimiento.ts); el panel recibe quién está
+  // conectado para anotarlo en su historial de cambios
+  const panelSeguro = conUsuario(urlPanelSeguimiento(config?.url_panel), nombreUsuario);
   const hojaSegura = urlHojaSeguimiento(config?.url_hoja);
 
   const [urlPanel, setUrlPanel] = useState("");
@@ -67,6 +69,7 @@ export default function SeguimientoPage() {
       router.push("/");
       return;
     }
+    setNombreUsuario(auth.getUsuario()?.nombre || "");
     cargarConfig();
   }, []);
 

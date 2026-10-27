@@ -36,7 +36,8 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
   - Se pueden filtrar los registros por pestaña, mes, etapa, alerta y estado de la ficha, y buscar por programa, instructor, ficha, empresa o municipio.
   - Desde el panel se editan las columnas de seguimiento (estado de la ficha y de los aprendices, inscritos, matriculados, certificación, observaciones...). Lo guardado queda directo en la hoja.
   - Lo que se escribe a mano en la hoja aparece en el panel en menos de 15 segundos. Si dos personas editan el mismo dato a la vez, el segundo cambio no pisa al primero.
-  - Cada cambio hecho desde el panel queda en la pestaña oculta BITACORA_PANEL.
+  - Tres vistas: **Calendario** (cada día con las formaciones que inician, las que siguen en curso y las que terminan), **Lista** y **Cambios**.
+  - **Cambios**: historial de lo que se modificó, con quién, cuándo, desde dónde (hoja, KondID o panel en la hoja), el campo y el valor anterior y el nuevo. Incluye lo escrito a mano en la hoja. Queda en la pestaña oculta BITACORA_PANEL y los registros cambiados en los últimos 3 días llevan la alerta «Modificada recientemente».
   - Cada registro muestra su etapa según las fechas: inicia hoy, por iniciar (7 días), programada, en ejecución, por finalizar (3 días), finalizada, fechas inválidas o fecha faltante. La lista se ordena con lo más urgente arriba.
   - Muestra alertas de ficha sin crear, sin instructor, cruce de instructor (dos formaciones del mismo instructor con fechas que se solapan) y la misma ficha con datos distintos entre pestañas. Esta lógica estaba en el `Motor.gs` del panel anterior, que ya no hace falta.
   - El enlace lleva una clave (`?k=...`): sin ella el panel no muestra ni edita nada.
@@ -46,6 +47,7 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 ### Cambiado
 
 - **Seguimiento de fichas**: los pasos de «Cómo obtener el enlace» explican cómo instalar el panel nuevo, y el enlace de la hoja se llama «Formaciones complementarias».
+- **Seguimiento de fichas**: KondID le pasa al panel el nombre de quien tiene la sesión abierta (`&u=`), para que el historial de cambios diga quién guardó desde KondID.
 
 ## [2.14.0] - 2026-10-26
 

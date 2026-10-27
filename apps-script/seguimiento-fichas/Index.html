@@ -17,6 +17,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   button, input, select, textarea { font: inherit; color: inherit; }
   .contenedor { padding: 16px; max-width: 1400px; margin: 0 auto; }
@@ -88,6 +89,54 @@
   .mensaje { margin-right: auto; font-size: 12px; color: var(--suave); }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.visible { opacity: 1; }
+  .vistas { display: flex; gap: 4px; border-bottom: 1px solid var(--borde); margin-bottom: 14px; }
+  .vistas button { border: 0; background: none; padding: 9px 14px; font-weight: 600; font-size: 13px; color: var(--suave); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .vistas button.activa { color: var(--acento); border-bottom-color: var(--acento); }
+  .vistas small { background: var(--acento-suave); color: var(--acento); border-radius: 999px; padding: 1px 7px; margin-left: 4px; font-size: 11px; }
+  /* Calendario */
+  .cal { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr); gap: 14px; align-items: start; }
+  .cal-caja { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; box-shadow: var(--sombra); overflow: hidden; }
+  .cal-cabeza { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--borde); }
+  .cal-cabeza h2 { font-size: 15px; margin: 0 auto 0 4px; text-transform: capitalize; }
+  .cal-flecha { border: 1px solid var(--borde); background: var(--tarjeta); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 16px; }
+  .cal-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cal-sem { font-size: 11px; font-weight: 700; color: var(--suave); text-transform: uppercase; padding: 8px; text-align: center; border-bottom: 1px solid var(--borde); }
+  .cal-dia { min-height: 104px; padding: 6px; border-right: 1px solid var(--borde); border-bottom: 1px solid var(--borde); cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .cal-dia:nth-child(7n) { border-right: 0; }
+  .cal-dia:hover { background: var(--acento-suave); }
+  .cal-dia.fuera { opacity: .4; }
+  .cal-dia.elegido { background: var(--acento-suave); box-shadow: inset 0 0 0 2px var(--acento); }
+  .cal-num { font-size: 12px; font-weight: 700; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .cal-dia.hoy .cal-num { background: var(--acento); color: #fff; }
+  .cal-ev { font-size: 11px; font-weight: 600; border-radius: 5px; padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid; background: var(--campo); }
+  .cal-mas, .cal-cuenta { font-size: 10.5px; color: var(--suave); }
+  .cal-cuenta b { color: var(--texto); }
+  .dia-panel { padding: 14px; }
+  .dia-panel h3 { margin: 0 0 2px; font-size: 15px; }
+  .dia-panel h3::first-letter, .dia-titulo::first-letter { text-transform: uppercase; }
+  .ver-mas { border: 0; background: none; color: var(--acento); font-weight: 600; font-size: 12px; cursor: pointer; padding: 4px 0; }
+  .grupo { margin-top: 14px; }
+  .grupo h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
+  .item { padding: 8px 10px; border: 1px solid var(--borde); border-left: 3px solid; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
+  .item:hover { border-color: var(--acento); }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 14px; font-size: 11px; color: var(--suave); border-top: 1px solid var(--borde); }
+  .leyenda span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; background: var(--c); }
+  /* Cambios */
+  .cambios-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .cambios-filtros input, .cambios-filtros select { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 7px 10px; font-size: 13px; }
+  .cambios-filtros input { flex: 1 1 240px; min-width: 0; }
+  .dia-titulo { font-size: 11px; font-weight: 700; letter-spacing: .03em; color: var(--suave); padding: 12px 14px 6px; }
+  .cambio { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 10px 14px; border-top: 1px solid var(--borde); cursor: pointer; }
+  .cambio:hover { background: var(--acento-suave); }
+  .cambio .hora { font-size: 12px; color: var(--suave); font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .cambio .valores { font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
+  .cambio del { color: var(--tenue); }
+  .origen { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--campo); border: 1px solid var(--borde); color: var(--suave); margin-left: 6px; }
+  @media (max-width: 900px) {
+    .cal { grid-template-columns: 1fr; }
+    .cal-dia { min-height: 64px; }
+    .cal-ev { display: none; }
+  }
   @media (max-width: 720px) {
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .kpis .kpi:first-child { grid-column: 1 / -1; }
@@ -123,6 +172,36 @@
   </div>
   <div id="avisos"></div>
 
+  <nav class="vistas" role="tablist">
+    <button data-vista="calendario" class="activa">Calendario</button>
+    <button data-vista="lista">Lista</button>
+    <button data-vista="cambios">Cambios <small id="n-cambios" hidden></small></button>
+  </nav>
+
+  <section id="v-calendario" class="cal">
+    <div class="cal-caja">
+      <div class="cal-cabeza">
+        <button class="cal-flecha" id="cal-ant" aria-label="Mes anterior">‹</button>
+        <button class="cal-flecha" id="cal-sig" aria-label="Mes siguiente">›</button>
+        <h2 id="cal-titulo"></h2>
+        <button class="boton" id="cal-hoy">Hoy</button>
+      </div>
+      <div class="cal-grilla" id="cal-grilla"></div>
+      <div class="leyenda" id="cal-leyenda"></div>
+    </div>
+    <div class="cal-caja dia-panel" id="dia-panel"></div>
+  </section>
+
+  <section id="v-cambios" hidden>
+    <div class="cambios-filtros">
+      <input id="buscar-cambios" type="search" placeholder="Buscar por persona, programa, ficha o campo">
+      <select id="f-origen"><option value="">Desde cualquier lugar</option></select>
+      <select id="f-quien"><option value="">Todas las personas</option></select>
+    </div>
+    <div class="lista" id="cambios-lista"></div>
+  </section>
+
+  <section id="v-lista" hidden>
   <div class="lista">
     <table>
       <thead>
@@ -139,6 +218,7 @@
     </table>
     <div class="vacio" id="vacio" hidden>No hay registros con esos filtros.</div>
   </div>
+  </section>
 </div>
 
 <div class="velo" id="velo"></div>
@@ -168,6 +248,8 @@
 
 <script>
   var CLAVE = <?= clave ?>;
+  var USUARIO = <?= usuario ?>; // nombre que manda KondID (vacío en el panel de la hoja)
+  var ORIGEN = <?= origen ?>;
   var CADA_MS = 15000; // cada cuánto se pregunta si la hoja cambió
   var DETALLES = ['requerimiento', 'codigo', 'oferta', 'instructor', 'empresa', 'municipio', 'radicado', 'area', 'inicio', 'fin', 'horas', 'cupo', 'horario'];
   var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -177,6 +259,13 @@
   var filtro = { hoja: '', texto: '', mes: '', estado: '', etapa: '', alerta: '' };
   var abierto = null; // registro del cajón
   var cargando = false;
+  var vista = 'calendario';
+  var mesCal = null; // { anio, mes } que muestra el calendario
+  var diaSel = null; // 'AAAA-MM-DD' elegido en el calendario
+  var filtroCambios = { texto: '', origen: '', quien: '' };
+  var verTodasEnCurso = false;
+  var COLORES_HOJA = { REGULADA: '#0071E3', PV: '#0D9488', CAMPESENA: '#16A34A', TECNOACADEMIA: '#9333EA' };
+  var DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var resaltar = {};
 
   var $ = function (id) { return document.getElementById(id); };
@@ -241,6 +330,7 @@
       datos = d;
       version = d.version;
       prepararFiltros();
+      prepararFiltrosCambios();
       pintar();
       refrescarCajon();
       ponerEstado('', 'Al día · ' + hora());
@@ -348,11 +438,11 @@
   }
 
   // sinEtapa: ignora los filtros de etapa y alerta (para los contadores de arriba)
-  function cumple(r, sinEtapa) {
+  function cumple(r, sinEtapa, sinMes) {
     var c = r.campos;
     var texto = filtro.texto.trim().toLowerCase();
     if (filtro.hoja && r.hoja !== filtro.hoja) return false;
-    if (filtro.mes && mesDe(r) !== filtro.mes) return false;
+    if (filtro.mes && !sinMes && mesDe(r) !== filtro.mes) return false;
     if (!sinEtapa) {
       if (filtro.etapa && r.etapa !== filtro.etapa) return false;
       if (filtro.alerta === '*' ? !r.alertas.length : filtro.alerta && r.alertas.indexOf(filtro.alerta) < 0) return false;
@@ -422,6 +512,214 @@
       var activo = b.dataset.etapa ? b.dataset.etapa === filtro.etapa : b.dataset.alerta === '*' ? filtro.alerta === '*' : !filtro.etapa && !filtro.alerta;
       b.classList.toggle('activo', activo);
     });
+    pintarCalendario();
+    pintarCambios();
+  }
+
+  // ─── Vistas ───
+
+  function cambiarVista(nueva) {
+    vista = nueva;
+    ['calendario', 'lista', 'cambios'].forEach(function (v) { $('v-' + v).hidden = v !== nueva; });
+    Array.prototype.forEach.call(document.querySelectorAll('.vistas button'), function (b) {
+      b.classList.toggle('activa', b.dataset.vista === nueva);
+    });
+    // El filtro de mes no aplica al calendario: ahí se navega por meses
+    $('f-mes').hidden = nueva === 'calendario';
+  }
+
+  // ─── Calendario ───
+
+  function iso(d) {
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+
+  function deIso(t) {
+    return new Date(Number(t.slice(0, 4)), Number(t.slice(5, 7)) - 1, Number(t.slice(8, 10)));
+  }
+
+  function colorHoja(hoja) {
+    return COLORES_HOJA[hoja] || '#64748B';
+  }
+
+  function delDia(lista, dia) {
+    return {
+      inician: lista.filter(function (r) { return r.inicioIso === dia; }),
+      enCurso: lista.filter(function (r) { return r.inicioIso && r.finIso && r.inicioIso < dia && dia < r.finIso; }),
+      finalizan: lista.filter(function (r) { return r.finIso === dia && r.inicioIso !== dia; }),
+    };
+  }
+
+  function pintarCalendario() {
+    if (!mesCal) {
+      var hoy = deIso(datos.hoy);
+      mesCal = { anio: hoy.getFullYear(), mes: hoy.getMonth() };
+      diaSel = datos.hoy;
+    }
+    var lista = datos.registros.filter(function (r) { return cumple(r, false, true); });
+    var primero = new Date(mesCal.anio, mesCal.mes, 1);
+    $('cal-titulo').textContent = MESES[mesCal.mes] + ' ' + mesCal.anio;
+
+    var grilla = $('cal-grilla');
+    grilla.textContent = '';
+    DIAS_SEMANA.forEach(function (d) { grilla.appendChild(crear('div', 'cal-sem', d)); });
+    // La semana empieza el lunes
+    var inicio = new Date(primero);
+    inicio.setDate(1 - ((primero.getDay() + 6) % 7));
+    var ultimo = new Date(mesCal.anio, mesCal.mes + 1, 0);
+    var celdas = Math.ceil(((primero.getDay() + 6) % 7 + ultimo.getDate()) / 7) * 7;
+    for (var i = 0; i < celdas; i++) {
+      var fecha = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + i);
+      grilla.appendChild(celdaDia(fecha, lista));
+    }
+
+    var leyenda = $('cal-leyenda');
+    leyenda.textContent = '';
+    Object.keys(COLORES_HOJA).forEach(function (h) {
+      var l = crear('span', '', h);
+      l.style.setProperty('--c', COLORES_HOJA[h]);
+      leyenda.appendChild(l);
+    });
+    leyenda.appendChild(crear('span', 'sub', 'En cada día: las fichas que inician y cuántas siguen en curso'));
+    pintarDia(lista);
+  }
+
+  function celdaDia(fecha, lista) {
+    var dia = iso(fecha);
+    var del = delDia(lista, dia);
+    var clase = 'cal-dia' + (fecha.getMonth() !== mesCal.mes ? ' fuera' : '') + (dia === datos.hoy ? ' hoy' : '') + (dia === diaSel ? ' elegido' : '');
+    var celda = crear('div', clase);
+    celda.onclick = function () { diaSel = dia; verTodasEnCurso = false; pintarCalendario(); };
+    celda.appendChild(crear('span', 'cal-num', String(fecha.getDate())));
+    del.inician.slice(0, 3).forEach(function (r) {
+      var ev = crear('div', 'cal-ev', titulo(r));
+      ev.style.borderLeftColor = colorHoja(r.hoja);
+      ev.title = r.hoja + ' · ' + titulo(r) + (r.campos.instructor ? ' · ' + r.campos.instructor : '');
+      celda.appendChild(ev);
+    });
+    if (del.inician.length > 3) celda.appendChild(crear('span', 'cal-mas', '+' + (del.inician.length - 3) + ' más'));
+    var partes = [];
+    if (del.inician.length) partes.push(['▶', del.inician.length, 'inician']);
+    if (del.enCurso.length) partes.push(['', del.enCurso.length, 'en curso']);
+    if (del.finalizan.length) partes.push(['■', del.finalizan.length, 'terminan']);
+    partes.forEach(function (p) {
+      var linea = crear('span', 'cal-cuenta', (p[0] ? p[0] + ' ' : ''));
+      linea.appendChild(crear('b', '', String(p[1])));
+      linea.appendChild(document.createTextNode(' ' + p[2]));
+      celda.appendChild(linea);
+    });
+    return celda;
+  }
+
+  function pintarDia(lista) {
+    var panel = $('dia-panel');
+    panel.textContent = '';
+    var fecha = deIso(diaSel);
+    panel.appendChild(crear('h3', '', fecha.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })));
+    var del = delDia(lista, diaSel);
+    var total = del.inician.length + del.enCurso.length + del.finalizan.length;
+    panel.appendChild(crear('div', 'sub', total ? total + ' formaciones este día' : 'No hay formaciones este día con los filtros actuales'));
+    [['Inician', del.inician], ['Terminan', del.finalizan], ['En curso', del.enCurso]].forEach(function (g) {
+      if (!g[1].length) return;
+      var grupo = crear('div', 'grupo');
+      grupo.appendChild(crear('h4', '', g[0] + ' (' + g[1].length + ')'));
+      // «En curso» puede ser muy larga: se muestran 8 y el resto con «Ver todas»
+      var limite = g[0] === 'En curso' && !verTodasEnCurso ? 8 : Infinity;
+      ordenar(g[1]).slice(0, limite).forEach(function (r) {
+        var item = crear('div', 'item');
+        item.style.borderLeftColor = colorHoja(r.hoja);
+        item.onclick = function () { abrir(r.id); };
+        item.appendChild(crear('div', 'titulo', titulo(r)));
+        item.appendChild(crear('div', 'sub', [r.hoja, r.campos.ficha ? 'Ficha ' + r.campos.ficha : 'Sin ficha', r.campos.instructor].filter(Boolean).join(' · ')));
+        item.appendChild(crear('div', 'sub', fechaCorta(r.inicioIso) + ' → ' + fechaCorta(r.finIso) + ' · ' + r.detalleEtapa));
+        if (r.alertas.length) item.appendChild(chipsAlerta(r));
+        grupo.appendChild(item);
+      });
+      if (g[1].length > limite) {
+        var mas = crear('button', 'ver-mas', 'Ver las ' + g[1].length + ' en curso');
+        mas.onclick = function () { verTodasEnCurso = true; pintarDia(lista); };
+        grupo.appendChild(mas);
+      }
+      panel.appendChild(grupo);
+    });
+  }
+
+  function moverMes(n) {
+    var d = new Date(mesCal.anio, mesCal.mes + n, 1);
+    mesCal = { anio: d.getFullYear(), mes: d.getMonth() };
+    // Al cambiar de mes se elige el primer día (o hoy, si es el mes actual)
+    diaSel = datos.hoy.slice(0, 7) === iso(d).slice(0, 7) ? datos.hoy : iso(d);
+    pintarCalendario();
+  }
+
+  // ─── Cambios ───
+
+  function prepararFiltrosCambios() {
+    var origenes = unicos(datos.cambios.map(function (c) { return c.origen; })).sort();
+    var personas = unicos(datos.cambios.map(function (c) { return c.quien; })).sort();
+    llenarSelect($('f-origen'), origenes, filtroCambios.origen, 'Desde cualquier lugar');
+    llenarSelect($('f-quien'), personas, filtroCambios.quien, 'Todas las personas');
+    var hoy = datos.cambios.filter(function (c) { return c.fecha.slice(0, 10) === datos.hoy; }).length;
+    $('n-cambios').hidden = !hoy;
+    $('n-cambios').textContent = hoy + ' hoy';
+  }
+
+  function pintarCambios() {
+    var caja = $('cambios-lista');
+    caja.textContent = '';
+    var texto = filtroCambios.texto.trim().toLowerCase();
+    var lista = datos.cambios.filter(function (c) {
+      if (filtroCambios.origen && c.origen !== filtroCambios.origen) return false;
+      if (filtroCambios.quien && c.quien !== filtroCambios.quien) return false;
+      return !texto || [c.quien, c.programa, c.ficha, c.campo, c.hoja, c.antes, c.despues].join(' ').toLowerCase().indexOf(texto) >= 0;
+    });
+    if (!lista.length) {
+      caja.appendChild(crear('div', 'vacio', datos.cambios.length ? 'No hay cambios con esos filtros.' :
+        'Todavía no hay cambios registrados. Aparecen aquí apenas alguien edite la hoja o guarde desde el panel.'));
+      return;
+    }
+    var diaActual = null;
+    lista.forEach(function (c) {
+      var dia = c.fecha.slice(0, 10);
+      if (dia !== diaActual) {
+        diaActual = dia;
+        caja.appendChild(crear('div', 'dia-titulo', nombreDia(dia)));
+      }
+      var fila = crear('div', 'cambio');
+      fila.onclick = function () { abrirCambio(c); };
+      fila.appendChild(crear('div', 'hora', c.fecha.slice(11, 16)));
+      var cuerpo = crear('div');
+      var quien = crear('div');
+      var nombre = crear('b', '', c.quien);
+      if (c.quien === 'Editor de la hoja') nombre.title = 'Google no entrega el correo de cuentas que no son de la organización dueña de la hoja';
+      quien.appendChild(nombre);
+      quien.appendChild(crear('span', 'origen', c.origen));
+      cuerpo.appendChild(quien);
+      cuerpo.appendChild(crear('div', 'sub', 'Cambió «' + c.campo + '» en ' + (c.programa || 'un registro') +
+        ' · ' + (c.ficha ? 'Ficha ' + c.ficha + ' · ' : '') + c.hoja + ' fila ' + c.fila));
+      var valores = crear('div', 'valores');
+      if (c.antes) {
+        valores.appendChild(crear('del', '', c.antes));
+        valores.appendChild(document.createTextNode(' → '));
+      }
+      valores.appendChild(crear('b', '', c.despues || '(vacío)'));
+      cuerpo.appendChild(valores);
+      fila.appendChild(cuerpo);
+      caja.appendChild(fila);
+    });
+  }
+
+  function nombreDia(dia) {
+    var ayer = new Date(deIso(datos.hoy).getTime() - 86400000);
+    if (dia === datos.hoy) return 'Hoy';
+    if (dia === iso(ayer)) return 'Ayer';
+    return deIso(dia).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  function abrirCambio(c) {
+    var r = datos.registros.filter(function (x) { return (c.ficha && x.campos.ficha === c.ficha) || x.id === c.id; })[0];
+    if (r) abrir(r.id);
+    else avisar('Ese registro ya no está en la hoja');
   }
 
   // ─── Cajón de edición ───
@@ -466,7 +764,7 @@
     if (r.detalleEtapa !== datos.etapas[r.etapa].etiqueta) linea.appendChild(document.createTextNode(' ' + r.detalleEtapa));
     alertas.appendChild(linea);
     if (r.alertas.length) alertas.appendChild(chipsAlerta(r));
-    [['Se cruza con', r.cruces], ['Distinto en otra pestaña', r.inconsistencias]].forEach(function (par) {
+    [['Se cruza con', r.cruces], ['Distinto en otra pestaña', r.inconsistencias], ['Cambios recientes', r.cambiosRecientes]].forEach(function (par) {
       if (!par[1] || !par[1].length) return;
       alertas.appendChild(crear('p', 'sub', par[0] + ':'));
       var ul = crear('ul', 'nota');
@@ -556,7 +854,7 @@
     });
     $('guardar').disabled = true;
     $('c-mensaje').textContent = 'Guardando…';
-    llamar('guardar', abierto.id, abierto.huella, cambios).then(function (res) {
+    llamar('guardar', abierto.id, abierto.huella, cambios, { nombre: USUARIO, origen: ORIGEN }).then(function (res) {
       if (!res.ok) {
         $('c-mensaje').textContent = 'Alguien cambió estos datos mientras editabas. Revisa y vuelve a guardar.';
         res.conflictos.forEach(function (cf) {
@@ -581,6 +879,7 @@
       pintar();
       pintarCajon(true);
       avisar('Guardado en la hoja');
+      cargar(true); // trae el cambio a «Cambios» y recalcula las alertas
     }).catch(function (e) {
       $('c-mensaje').textContent = (e && e.message) || 'No se pudo guardar';
       actualizarBotones();
@@ -601,16 +900,27 @@
       filtro.alerta = b.dataset.alerta || '';
       $('f-etapa').value = filtro.etapa;
       $('f-alerta').value = filtro.alerta === '*' ? '' : filtro.alerta;
+      cambiarVista('lista');
       pintar();
     };
   });
   $('cerrar').onclick = cerrar;
+  Array.prototype.forEach.call(document.querySelectorAll('.vistas button'), function (b) {
+    b.onclick = function () { cambiarVista(b.dataset.vista); };
+  });
+  $('cal-ant').onclick = function () { moverMes(-1); };
+  $('cal-sig').onclick = function () { moverMes(1); };
+  $('cal-hoy').onclick = function () { mesCal = null; pintarCalendario(); };
+  $('buscar-cambios').oninput = function (e) { filtroCambios.texto = e.target.value; pintarCambios(); };
+  $('f-origen').onchange = function (e) { filtroCambios.origen = e.target.value; pintarCambios(); };
+  $('f-quien').onchange = function (e) { filtroCambios.quien = e.target.value; pintarCambios(); };
   $('velo').onclick = cerrar;
   $('guardar').onclick = guardar;
   $('descartar').onclick = function () { if (abierto) pintarCajon(true); };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && abierto) cerrar(); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) vigilar(); });
 
+  cambiarVista('calendario');
   cargar(false);
   setInterval(vigilar, CADA_MS);
 </script>

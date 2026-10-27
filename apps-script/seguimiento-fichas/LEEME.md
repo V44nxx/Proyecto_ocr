@@ -6,7 +6,7 @@ Es el panel que KondID muestra en **Seguimiento de fichas**. Lee y edita la hoja
 |---|---|
 | `Codigo.gs` | Servidor: lee las pestañas, guarda los cambios y controla el acceso |
 | `Index.html` | El panel: lista, filtros y formulario de seguimiento |
-| `appsscript.json` | Manifiesto (zona horaria de Bogotá y publicación como aplicación web) |
+| `appsscript.json` | Manifiesto opcional (zona horaria de Bogotá y publicación como aplicación web) |
 | `pruebas/` | Pruebas de `Codigo.gs` con la estructura real del libro (datos personales reemplazados) |
 
 ## Qué lee
@@ -72,19 +72,27 @@ Los datos de la programación (empresa, instructor, fechas...) se muestran pero 
 
 ## Instalación
 
-1. **La hoja debe estar en formato Google Sheets.** Si subiste el `.xlsx` a Drive, ábrelo y usa *Archivo → Guardar como hoja de cálculo de Google*. Apps Script no funciona sobre un `.xlsx`.
+1. **La hoja debe estar en formato Google Sheets.** Si subiste el `.xlsx` a Drive, ábrelo y usa *Archivo → Guardar como hoja de cálculo de Google*, o en una hoja nueva usa *Archivo → Importar → Subir → Reemplazar hoja de cálculo*. Apps Script no funciona sobre un `.xlsx` ni en Excel de escritorio.
 2. En esa hoja abre **Extensiones → Apps Script**.
 3. Reemplaza el contenido de `Código.gs` con el de `Codigo.gs`.
-4. Crea un archivo HTML llamado exactamente **`Index`** (*+ → HTML*) y pega el contenido de `Index.html`.
-5. En *Configuración del proyecto*, activa «Mostrar el archivo de manifiesto appsscript.json en el editor» y reemplaza su contenido con el de `appsscript.json`.
-6. Elige la función **`configurar`** y dale *Ejecutar*. Acepta los permisos. En el *Registro de ejecución* aparece la clave: `?k=...`.
-7. **Implementar → Nueva implementación → Aplicación web**:
+4. Crea un archivo HTML llamado exactamente **`Index`** (*+ → HTML*) y pega el contenido de `Index.html`. Guarda (Ctrl + S).
+5. Vuelve a la hoja y **recárgala (F5)**. Junto a «Ayuda» aparece el menú **Seguimiento de fichas**.
+6. Elige **Seguimiento de fichas → Configurar (primera vez)** y acepta los permisos. Si Google dice que la app no está verificada: *Configuración avanzada → Ir a … (no seguro) → Permitir*. Vuelve a elegir la opción si los permisos interrumpieron la primera vez.
+7. Desde ya, **Seguimiento de fichas → Abrir panel** muestra el panel encima de la hoja.
+8. Para KondID hay que publicarlo. En Apps Script: **Implementar → Nueva implementación → Aplicación web**:
    - Ejecutar como: **Yo**
    - Quién tiene acceso: **Cualquier persona**
-8. Copia la URL de la aplicación web (termina en `/exec`) y pégale al final el `?k=...` del paso 6.
-9. En KondID, en **Seguimiento de fichas → Configurar**, pega esa URL completa.
+9. En la hoja, **Seguimiento de fichas → Ver enlace para KondID** muestra el enlace completo con la clave. Si dice que no está publicado, usa la URL de la implementación (termina en `/exec`) seguida del `?k=...` que muestra.
+10. En KondID, en **Seguimiento de fichas → Configurar**, pega ese enlace.
 
-> ⚠️ La clave es lo único que protege el panel, porque se publica para «Cualquier persona» (KondID lo muestra incrustado). No compartas la URL con la clave. Si se filtra, ejecuta **`cambiarClave`** y actualiza el enlace en KondID.
+| Opción del menú | Qué hace |
+|---|---|
+| Abrir panel | Abre el panel en una ventana encima de la hoja |
+| Ver enlace para KondID | Muestra el enlace con la clave para pegar en KondID |
+| Configurar (primera vez) | Crea la clave y la actualización automática |
+| Cambiar la clave del enlace | Crea una clave nueva (pide confirmación); el enlace viejo deja de funcionar |
+
+> ⚠️ La clave es lo único que protege el panel, porque se publica para «Cualquier persona» (KondID lo muestra incrustado). No compartas la URL con la clave. Si se filtra, usa **Cambiar la clave del enlace** y actualiza el enlace en KondID.
 
 ## Actualizar el panel
 

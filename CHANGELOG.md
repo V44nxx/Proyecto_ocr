@@ -40,6 +40,7 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
   - Cada registro muestra su etapa según las fechas: inicia hoy, por iniciar (7 días), programada, en ejecución, por finalizar (3 días), finalizada, fechas inválidas o fecha faltante. La lista se ordena con lo más urgente arriba.
   - Muestra alertas de ficha sin crear, sin instructor, cruce de instructor (dos formaciones del mismo instructor con fechas que se solapan) y la misma ficha con datos distintos entre pestañas. Esta lógica estaba en el `Motor.gs` del panel anterior, que ya no hace falta.
   - El enlace lleva una clave (`?k=...`): sin ella el panel no muestra ni edita nada.
+  - Menú **Seguimiento de fichas** dentro de la hoja de Google: abrir el panel encima de la hoja, ver el enlace con la clave para KondID, configurar y cambiar la clave.
   - Pruebas con la estructura real del libro (datos personales reemplazados) en el job de CI «Panel de Seguimiento (Apps Script)».
 
 ### Cambiado

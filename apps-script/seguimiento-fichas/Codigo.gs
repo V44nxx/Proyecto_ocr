@@ -522,9 +522,55 @@ function anotarBitacora_(nombreHoja, fila, registro, escritos, cambios) {
   });
 }
 
-// ─── Puesta en marcha (se ejecutan a mano desde el editor) ───────────────
+// ─── Menú en la hoja y puesta en marcha ──────────────────────────────────
 
-/** Crea la clave del enlace (si no existe) y los disparadores. Ejecutar una vez antes de publicar. */
+/** Se ejecuta solo al abrir la hoja: agrega el menú «Seguimiento de fichas» junto a «Ayuda». */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Seguimiento de fichas')
+    .addItem('Abrir panel', 'abrirPanel')
+    .addItem('Ver enlace para KondID', 'mostrarEnlace')
+    .addSeparator()
+    .addItem('Configurar (primera vez)', 'configurar')
+    .addItem('Cambiar la clave del enlace', 'cambiarClave')
+    .addToUi();
+}
+
+/** Abre el mismo panel de KondID en una ventana encima de la hoja. */
+function abrirPanel() {
+  var ui = SpreadsheetApp.getUi();
+  var clave = claveGuardada_();
+  if (!clave) {
+    ui.alert('Primero elige «Seguimiento de fichas → Configurar (primera vez)».');
+    return;
+  }
+  var plantilla = HtmlService.createTemplateFromFile('Index');
+  plantilla.clave = clave;
+  ui.showModelessDialog(plantilla.evaluate().setWidth(1200).setHeight(760), 'Seguimiento de fichas');
+}
+
+/** Muestra el enlace con la clave para pegarlo en KondID. */
+function mostrarEnlace() {
+  var ui = SpreadsheetApp.getUi();
+  var clave = claveGuardada_();
+  if (!clave) {
+    ui.alert('Primero elige «Seguimiento de fichas → Configurar (primera vez)».');
+    return;
+  }
+  ui.alert('Enlace para KondID', textoEnlace_(clave), ui.ButtonSet.OK);
+}
+
+function textoEnlace_(clave) {
+  var url = ScriptApp.getService().getUrl();
+  if (!url || !/\/exec$/.test(url)) {
+    return 'El panel todavía no está publicado. En Extensiones → Apps Script: Implementar → Nueva implementación → ' +
+      'Aplicación web (ejecutar como «Yo», acceso «Cualquier persona»). Luego pega en KondID la URL que termina en ' +
+      '/exec seguida de:\n\n?k=' + clave;
+  }
+  return 'Copia este enlace y pégalo en KondID → Seguimiento de fichas → Configurar:\n\n' + url + '?k=' + clave;
+}
+
+/** Crea la clave del enlace (si no existe) y los disparadores. Se hace una vez antes de publicar. */
 function configurar() {
   var propiedades = PropertiesService.getScriptProperties();
   if (!propiedades.getProperty('CLAVE')) {
@@ -532,11 +578,25 @@ function configurar() {
   }
   instalarDisparadores();
   subirVersion_();
-  Logger.log('Listo. Al final de la URL de la aplicación web (…/exec) agrega: ?k=' + claveGuardada_());
+  var mensaje = textoEnlace_(claveGuardada_());
+  Logger.log(mensaje);
+  try {
+    SpreadsheetApp.getUi().alert('Panel configurado', mensaje, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    // Ejecutado desde el editor de Apps Script: el mensaje queda en el registro de ejecución
+  }
 }
 
 /** Cambia la clave: los enlaces viejos dejan de funcionar y hay que actualizar el enlace en KondID. */
 function cambiarClave() {
+  try {
+    var ui = SpreadsheetApp.getUi();
+    var respuesta = ui.alert('¿Cambiar la clave?', 'El enlace actual deja de funcionar y habrá que pegar el nuevo en KondID.',
+      ui.ButtonSet.YES_NO);
+    if (respuesta !== ui.Button.YES) return;
+  } catch (e) {
+    // Ejecutado desde el editor: no hay a quién preguntar
+  }
   PropertiesService.getScriptProperties().deleteProperty('CLAVE');
   configurar();
 }

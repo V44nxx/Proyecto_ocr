@@ -63,13 +63,27 @@ function entorno({ clave = CLAVE } = {}) {
     setProperty: (k, v) => m.set(k, v),
     deleteProperty: (k) => m.delete(k),
   });
-  const salida = (html) => ({ html, setXFrameOptionsMode() { return this; }, setTitle() { return this; }, addMetaTag() { return this; } });
+  const salida = (html) => ({ html, setXFrameOptionsMode() { return this; }, setTitle() { return this; }, addMetaTag() { return this; }, setWidth() { return this; }, setHeight() { return this; } });
+  let urlPublicada = null;
+  const avisos = [];
+  const menus = [];
+  const ui = {
+    ButtonSet: { OK: 'OK', YES_NO: 'YES_NO' },
+    Button: { YES: 'YES', NO: 'NO' },
+    respuesta: 'YES',
+    alert(...a) { avisos.push(a); return ui.respuesta; },
+    showModelessDialog(html, titulo) { avisos.push(['dialogo', titulo, html.html]); },
+    createMenu(nombre) {
+      const menu = { nombre, items: [], addItem(t, f) { menu.items.push([t, f]); return menu; }, addSeparator() { return menu; }, addToUi() { menus.push(menu); } };
+      return menu;
+    },
+  };
   const ss = {
     getSheetByName: (n) => hojas.find((h) => h.nombre === n) || null,
     insertSheet: (n) => { const h = new Hoja({ nombre: n, oculta: false, celdas: {} }); hojas.push(h); return h; },
   };
   const ctx = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, flush: () => {} },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ss, flush: () => {}, getUi: () => ui },
     PropertiesService: { getScriptProperties: () => propiedades(propsScript), getDocumentProperties: () => propiedades(propsDoc) },
     LockService: { getDocumentLock: () => ({ waitLock() {}, releaseLock() {} }) },
     HtmlService: {
@@ -79,11 +93,15 @@ function entorno({ clave = CLAVE } = {}) {
     },
     Utilities: { getUuid: () => '1234-5678' },
     Logger: { log() {} },
-    ScriptApp: { getProjectTriggers: () => [] },
+    ScriptApp: {
+      getProjectTriggers: () => [],
+      newTrigger: () => ({ forSpreadsheet: () => ({ onChange: () => ({ create() {} }) }) }),
+      getService: () => ({ getUrl: () => urlPublicada }),
+    },
   };
   vm.createContext(ctx);
   vm.runInContext(CODIGO, ctx);
-  return { ctx, ss, hojas, propsDoc };
+  return { ctx, ss, hojas, propsDoc, propsScript, ui, avisos, menus, publicar: (u) => { urlPublicada = u; } };
 }
 
 test('lee las 4 pestañas visibles y no la copia oculta', () => {
@@ -270,4 +288,42 @@ test('obtenerDatos entrega etapa y alertas de cada registro del libro', () => {
   const solicitud = datos.registros.find((r) => r.id === 'REGULADA!6');
   assert.equal(solicitud.etapa, 'SIN_FECHAS');
   assert.ok(solicitud.alertas.includes('SIN_FICHA'));
+});
+
+// ─── Menú dentro de la hoja ───
+
+test('al abrir la hoja aparece el menú «Seguimiento de fichas» y cada opción existe', () => {
+  const { ctx, menus } = entorno();
+  ctx.onOpen();
+  assert.equal(menus[0].nombre, 'Seguimiento de fichas');
+  for (const [, funcion] of menus[0].items) assert.equal(typeof ctx[funcion], 'function', funcion);
+});
+
+test('abrir el panel y ver el enlace desde el menú', () => {
+  const { ctx, avisos, publicar } = entorno();
+  ctx.abrirPanel();
+  assert.deepEqual(avisos.pop(), ['dialogo', 'Seguimiento de fichas', 'PANEL:' + CLAVE]);
+
+  ctx.mostrarEnlace();
+  assert.match(avisos.pop()[1], /todavía no está publicado[\s\S]*\?k=clave-de-prueba/);
+  publicar('https://script.google.com/macros/s/ABC/exec');
+  ctx.mostrarEnlace();
+  assert.match(avisos.pop()[1], /https:\/\/script\.google\.com\/macros\/s\/ABC\/exec\?k=clave-de-prueba$/);
+
+  const sinClave = entorno({ clave: null });
+  sinClave.ctx.abrirPanel();
+  assert.match(sinClave.avisos.pop()[0], /Configurar \(primera vez\)/);
+});
+
+test('configurar crea la clave una sola vez y cambiarClave pide confirmación', () => {
+  const { ctx, propsScript, ui } = entorno({ clave: null });
+  ctx.configurar();
+  const clave = propsScript.get('CLAVE');
+  assert.match(clave, /^[0-9a-z]+$/);
+  ctx.configurar();
+  assert.equal(propsScript.get('CLAVE'), clave);
+
+  ui.respuesta = 'NO';
+  ctx.cambiarClave();
+  assert.equal(propsScript.get('CLAVE'), clave);
 });

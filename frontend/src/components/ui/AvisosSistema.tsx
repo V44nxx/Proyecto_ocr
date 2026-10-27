@@ -186,7 +186,7 @@ export default function AvisosSistema() {
   if (avisos.length === 0) return null;
 
   return (
-    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[10000] w-[calc(100%-2rem)] max-w-xl space-y-2 pointer-events-none">
+    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-10000 w-[calc(100%-2rem)] max-w-xl space-y-2 pointer-events-none">
       {avisos.map((aviso) => (
         <div
           key={aviso.id}

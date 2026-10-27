@@ -22,6 +22,52 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.14.0] - 2026-10-27
+
+**Resumen**
+
+- La política de contenido ya no permite scripts en línea sin autorización: cada página lleva un nonce nuevo por petición. Un código inyectado (XSS) ya no se ejecuta.
+- El frontend pasa a Tailwind 4. Se ve igual que antes: se comparó cada pantalla con la versión anterior.
+- Sin internet, el OCR usa RapidOCR sin esperar a Document AI (hecho por Emerson).
+
+### Seguridad
+
+- **CSP con nonce** (`src/proxy.ts`):
+  - En cada petición se genera un nonce aleatorio, y `script-src` queda en `'self' 'nonce-…' 'strict-dynamic'`, sin `'unsafe-inline'`.
+  - Next les pone el nonce a sus scripts, y el layout al script del tema claro u oscuro.
+  - Comprobado en el navegador: un `<img onerror="…">` inyectado se ejecutaba con la política anterior y con la nueva se bloquea.
+  - Los estilos siguen con `'unsafe-inline'`, porque React usa atributos `style`.
+  - Para tener un nonce por petición, las páginas se generan en cada visita en vez de quedar estáticas.
+
+### Cambiado
+
+- **Tailwind CSS 3.4 → 4.3.3**:
+  - `@tailwindcss/postcss`; ya no hace falta `autoprefixer`.
+  - La configuración pasó de `tailwind.config.ts` a `@theme` en `globals.css`, y las clases cambiadas se renombraron con la herramienta oficial.
+- **Ajustes para que se viera igual que antes**. Con capturas y con la posición de cada elemento comparadas pantalla por pantalla, en modo claro y oscuro, quedaron idénticas las 11 pantallas.
+  - Interlineados en rem, como en Tailwind 3. Con los de Tailwind 4, las insignias pequeñas se encogían y las tablas perdían altura.
+  - Se quitó un reseteo `* { margin: 0 }` que la migración dejó en la capa de utilidades y que le quitaba el espaciado a `space-y-*` (por ejemplo, al menú lateral).
+  - Se quitó un bloque del modo claro del login que la migración duplicó con selectores inválidos.
+  - Tres casos puntuales que Tailwind 4 resuelve distinto:
+    - el subtítulo de las tarjetas del Dashboard;
+    - el interlineado del título del login;
+    - el borde de la última fila en Usuarios y Auditoría.
+  - Solo cambian matices de color imperceptibles: la paleta de Tailwind 4 está definida en OKLCH.
+
+### Agregado (hecho por Emerson, commit `9abba09`)
+
+- **OCR sin internet**:
+  - Antes de usar Document AI se revisa la conexión, durante 3 segundos. El resultado se recuerda 60 segundos.
+  - Sin conexión, las páginas van directo a RapidOCR.
+- Cada llamada a Document AI tiene un tiempo máximo (`GOOGLE_DOCUMENT_AI_TIMEOUT`, 60 s); antes no tenía límite.
+- RapidOCR reduce cada página a 1250 px (`RAPID_OCR_LADO_MAXIMO`): 6,5 s por página en vez de 7,4.
+- El reverso de la cédula amarilla se reconoce por sus datos aunque el OCR deforme las etiquetas.
+
+### Pruebas
+
+- CP-UI-09 ahora exige que la CSP de cada pantalla use un nonce, que ese nonce cambie en cada carga y que no tenga `'unsafe-inline'` en los scripts.
+- e2e 30/30 con Tailwind 4 y con la CSP nueva, sin errores de JavaScript ni violaciones de la política.
+
 ## [2.13.0] - 2026-10-26
 
 **Resumen**

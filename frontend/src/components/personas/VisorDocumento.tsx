@@ -243,7 +243,7 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141928]">
         <div className="flex items-center gap-2 min-w-0">
           <FileText className="w-4 h-4 text-[#0071E3] dark:text-indigo-400 shrink-0" />
-          <span className="text-xs font-bold text-slate-900 dark:text-white break-words">
+          <span className="text-xs font-bold text-slate-900 dark:text-white wrap-break-word">
             {incrustado ? "Documento" : `Vista previa: ${formatNombreCompleto(persona)}`} (pág. {pagina})
           </span>
         </div>
@@ -310,7 +310,7 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
           onLostPointerCapture={terminarArrastre}
           onDoubleClick={() => ajustar(true)}
           onKeyDown={alTeclearEscenario}
-          className={`relative flex-1 min-h-0 overflow-hidden bg-slate-900 touch-none select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3] ${
+          className={`relative flex-1 min-h-0 overflow-hidden bg-slate-900 touch-none select-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0071E3] ${
             arrastrando ? "cursor-grabbing" : "cursor-grab"
           }`}
         >
@@ -342,7 +342,7 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
                   setCargando(false);
                   setError(true);
                 }}
-                className="block w-full h-full rounded-sm shadow-2xl"
+                className="block w-full h-full rounded-xs shadow-2xl"
               />
             )}
             {altaResolucion !== "no" && paginaAlta.src && (
@@ -355,7 +355,7 @@ export default function VisorDocumento({ persona, paginaInicial, onCerrar, onSub
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onLoad={() => setAltaResolucion("lista")}
-                className="absolute inset-0 w-full h-full rounded-sm transition-opacity duration-200"
+                className="absolute inset-0 w-full h-full rounded-xs transition-opacity duration-200"
                 style={{ opacity: altaResolucion === "lista" ? 1 : 0 }}
               />
             )}

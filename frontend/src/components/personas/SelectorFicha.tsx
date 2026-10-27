@@ -85,7 +85,7 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
 
   const claseOpcion = (activa: boolean) =>
     `w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-      activa ? "bg-blue-50 dark:bg-[#0071E3]/15" : "hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+      activa ? "bg-blue-50 dark:bg-[#0071E3]/15" : "hover:bg-slate-100 dark:hover:bg-white/6"
     }`;
 
   return (
@@ -102,11 +102,11 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
         aria-controls="lista-fichas"
         onClick={() => setAbierto((v) => !v)}
         disabled={fichas.length === 0}
-        className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/80 dark:bg-white/[0.06] hover:bg-slate-50 dark:hover:bg-white/[0.1] border border-slate-200/80 dark:border-white/[0.08] shadow-sm text-left transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/80 dark:bg-white/6 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-200/80 dark:border-white/8 shadow-xs text-left transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <FolderOpen className="w-5 h-5 text-[#0071E3] dark:text-[#3894FF] shrink-0" />
         <span className="flex-1 min-w-0">
-          <span className="block text-sm font-bold text-slate-900 dark:text-white break-words">
+          <span className="block text-sm font-bold text-slate-900 dark:text-white wrap-break-word">
             {fichas.length === 0 ? "Todavía no hay fichas" : actual ? nombreFicha(actual) : "Todas las fichas"}
           </span>
           <span className="block text-[11px] text-slate-500 dark:text-slate-400">
@@ -119,7 +119,7 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
       {abierto && (
         <div
           id="lista-fichas"
-          className="absolute left-0 right-0 top-full mt-2 z-30 p-2 rounded-2xl bg-white dark:bg-[#121620] border border-slate-200 dark:border-white/[0.1] shadow-xl animate-in fade-in duration-150"
+          className="absolute left-0 right-0 top-full mt-2 z-30 p-2 rounded-2xl bg-white dark:bg-[#121620] border border-slate-200 dark:border-white/10 shadow-xl animate-in fade-in duration-150"
         >
           <label htmlFor="buscar-ficha" className="sr-only">Buscar ficha</label>
           <div className="relative mb-2">
@@ -131,7 +131,7 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar ficha por número o nombre"
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/20"
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/20"
             />
           </div>
           <ul className="max-h-80 overflow-y-auto overscroll-contain space-y-0.5">
@@ -158,7 +158,7 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
                   className={claseOpcion(d.id === valor)}
                 >
                   <span className="flex-1 min-w-0">
-                    <span className="block text-xs font-semibold text-slate-900 dark:text-white break-words">{nombreFicha(d)}</span>
+                    <span className="block text-xs font-semibold text-slate-900 dark:text-white wrap-break-word">{nombreFicha(d)}</span>
                     <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{detalleFicha(d)}</span>
                   </span>
                   {ESTADOS_EN_CURSO[d.estado] && (

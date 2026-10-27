@@ -164,36 +164,36 @@ export default function UsuariosPage() {
 
         {/* Tarjetas de Resumen */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Total de Usuarios</p>
                 <p className="text-2xl font-bold tracking-[-0.04em] text-slate-900 dark:text-white">{usuarios.length}</p>
                 <p className="text-xs text-slate-400 mt-1">Cuentas con acceso al sistema</p>
               </div>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08]">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/8">
                 <Users className="w-4 h-4" />
               </div>
             </div>
           </div>
 
-          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Administradores</p>
                 <p className="text-2xl font-bold tracking-[-0.04em] text-slate-900 dark:text-white">{totalAdmins}</p>
                 <p className="text-xs text-slate-400 mt-1">Control total del sistema</p>
               </div>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08]">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/8">
                 <Shield className="w-4 h-4" />
               </div>
             </div>
           </div>
 
-          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+          <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Operadores / Estándar</p>
@@ -208,8 +208,8 @@ export default function UsuariosPage() {
         </div>
 
         {/* Tabla y Filtros */}
-        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h2 className="text-base font-semibold text-slate-900 dark:text-white">Usuarios del Sistema</h2>
@@ -225,7 +225,7 @@ export default function UsuariosPage() {
                 placeholder="Buscar por correo o nombre..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
+                className="w-full bg-slate-100/80 dark:bg-white/4 border border-slate-200/80 dark:border-white/8 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
               />
             </div>
           </div>
@@ -264,7 +264,7 @@ export default function UsuariosPage() {
                     <th className="text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/4 [&>tr:last-child]:border-b-0">
                   {usuariosFiltrados.map((u) => {
                     const esActual = usuarioActual?.id === u.id;
                     const esAdmin = u.rol === "admin";
@@ -276,11 +276,11 @@ export default function UsuariosPage() {
                       .slice(0, 2);
 
                     return (
-                      <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                      <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-white/2 transition-colors">
                         {/* Avatar y Nombre */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-white/[0.08] text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-semibold shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-white/8 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-semibold shrink-0">
                               {iniciales}
                             </div>
                             <div>
@@ -310,7 +310,7 @@ export default function UsuariosPage() {
                         {/* Rol */}
                         <td className="px-4 py-3">
                           {esAdmin ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08]">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/8">
                               <Shield className="w-3 h-3 text-slate-400" />
                               Administrador
                             </span>
@@ -425,7 +425,7 @@ export default function UsuariosPage() {
 
       {/* Modal Restablecer verificación en dos pasos */}
       {usuarioSinVerificacion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md bg-dark-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4">
               <Smartphone className="w-6 h-6" />
@@ -461,7 +461,7 @@ export default function UsuariosPage() {
 
       {/* Modal Confirmación de Eliminación */}
       {usuarioAEliminar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md bg-dark-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
             <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-6 h-6" />

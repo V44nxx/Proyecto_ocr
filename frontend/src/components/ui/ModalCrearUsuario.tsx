@@ -77,7 +77,7 @@ export default function ModalCrearUsuario({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.08] bg-dark-800/60">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/8 bg-dark-800/60">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary-500/20 border border-primary-500/30 flex items-center justify-center text-primary-400">
               <ShieldCheck className="w-5 h-5" />
@@ -189,7 +189,7 @@ export default function ModalCrearUsuario({
                 className={`p-3.5 rounded-xl border text-left transition-all ${
                   rol === "usuario"
                     ? "bg-primary-500/15 border-primary-500/50 text-white shadow-lg shadow-primary-950/20"
-                    : "bg-dark-800/40 border-white/[0.08] text-slate-400 hover:border-white/20"
+                    : "bg-dark-800/40 border-white/8 text-slate-400 hover:border-white/20"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -210,7 +210,7 @@ export default function ModalCrearUsuario({
                 className={`p-3.5 rounded-xl border text-left transition-all ${
                   rol === "admin"
                     ? "bg-purple-500/15 border-purple-500/50 text-white shadow-lg shadow-purple-950/20"
-                    : "bg-dark-800/40 border-white/[0.08] text-slate-400 hover:border-white/20"
+                    : "bg-dark-800/40 border-white/8 text-slate-400 hover:border-white/20"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -235,7 +235,7 @@ export default function ModalCrearUsuario({
           </div>
 
           {/* Footer botones */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.08]">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/8">
             <button
               type="button"
               onClick={onClose}

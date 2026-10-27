@@ -221,8 +221,8 @@ export default function ExportacionPage() {
             { label: "En Revisión", value: stats.revision, color: "text-amber-600 dark:text-amber-400" },
             { label: "Fichas Completas", value: stats.completas, color: "text-slate-900 dark:text-slate-200" },
           ].map((s) => (
-            <div key={s.label} className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 text-center overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+            <div key={s.label} className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-5 text-center overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
               <p className={`text-2xl font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</p>
               <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1">{s.label}</p>
             </div>
@@ -230,11 +230,11 @@ export default function ExportacionPage() {
         </div>
 
         {/* Panel Superior: Configuración de Exportación (A lo largo de la página - Full Width) */}
-        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 mb-6 overflow-hidden page-enter">
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/25 to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 mb-6 overflow-hidden page-enter">
+          <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-500/25 to-transparent pointer-events-none" />
 
           {/* Header del bloque */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200/80 dark:border-white/[0.06]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200/80 dark:border-white/6">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                 <FileSpreadsheet className="w-5 h-5" />
@@ -249,7 +249,7 @@ export default function ExportacionPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.06] rounded-xl px-3 py-1.5 self-start sm:self-auto">
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/4 border border-slate-200/80 dark:border-white/6 rounded-xl px-3 py-1.5 self-start sm:self-auto">
               <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Seleccionadas:</span>
               <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
                 {seleccionadosVisiblesCount} / {personasFiltradas.length}
@@ -270,7 +270,7 @@ export default function ExportacionPage() {
                   <select
                     value={documentoSeleccionado}
                     onChange={(e) => setDocumentoSeleccionado(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium cursor-pointer"
+                    className="w-full bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/8 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium cursor-pointer"
                   >
                     <option value="todos">
                       Todos los documentos PDF ({personas.length} personas)
@@ -288,7 +288,7 @@ export default function ExportacionPage() {
               </div>
 
               {documentoSeleccionado !== "todos" && docActual ? (
-                <div className="mt-2.5 p-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.06] text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <div className="mt-2.5 p-2 rounded-xl bg-slate-100 dark:bg-white/4 border border-slate-200/80 dark:border-white/6 text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
                   <span className="truncate max-w-[220px] font-mono text-[11px]" title={docActual.nombre_original}>
                     {docActual.nombre_original}
                   </span>
@@ -348,8 +348,8 @@ export default function ExportacionPage() {
                       onClick={() => setFiltroRevision(opt.value as typeof filtroRevision)}
                       className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                         isActive
-                          ? "border-[#0071E3] bg-[#0071E3]/15 text-white shadow-sm ring-1 ring-[#0071E3]/30"
-                          : "border-slate-200/80 dark:border-white/[0.06] hover:bg-slate-100/60 dark:hover:bg-white/[0.03] bg-slate-50/50 dark:bg-white/[0.015] text-slate-700 dark:text-slate-300"
+                          ? "border-[#0071E3] bg-[#0071E3]/15 text-white shadow-xs ring-1 ring-[#0071E3]/30"
+                          : "border-slate-200/80 dark:border-white/6 hover:bg-slate-100/60 dark:hover:bg-white/3 bg-slate-50/50 dark:bg-white/1.5 text-slate-700 dark:text-slate-300"
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -363,7 +363,7 @@ export default function ExportacionPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ml-1.5 font-bold ${
                         isActive
                           ? "bg-[#0071E3] text-white"
-                          : "bg-slate-200 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300"
+                          : "bg-slate-200 dark:bg-white/6 text-slate-700 dark:text-slate-300"
                       }`}>
                         {opt.count}
                       </span>
@@ -377,7 +377,7 @@ export default function ExportacionPage() {
             <div className="lg:col-span-3 flex flex-col justify-between">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
                 <span>Acción de Exportación</span>
-                <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-sm">
                   .XLSX
                 </span>
               </label>
@@ -415,7 +415,7 @@ export default function ExportacionPage() {
               <strong>Alerta de menores (&lt; 14 años):</strong> Cualquier persona menor de 14 años será automáticamente resaltada con fila y celda de edad en el reporte oficial descargado.
             </span>
           </div>
-          <div className="mt-2.5 p-3 rounded-xl bg-[#0071E3]/[0.06] border border-[#0071E3]/20 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2.5">
+          <div className="mt-2.5 p-3 rounded-xl bg-[#0071E3]/6 border border-[#0071E3]/20 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2.5">
             <ShieldAlert className="w-4 h-4 text-[#0071E3] dark:text-[#4C9BFF] shrink-0" />
             <span className="text-[11px] leading-tight">
               <strong>Datos personales:</strong> {AVISO_DATOS_PERSONALES}
@@ -424,17 +424,17 @@ export default function ExportacionPage() {
         </div>
 
         {/* Panel Inferior: Tabla de Vista Previa y Selección (A lo largo de toda la página - Full Width) */}
-        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden page-enter">
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden page-enter">
+          <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
           {/* Header de la Tabla: Título, Filtro de Búsqueda y Botones de Acción */}
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-200/80 dark:border-white/[0.06]">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-200/80 dark:border-white/6">
             <div className="min-w-0">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <span>Vista Previa y Selección</span>
                 </h2>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 font-mono font-medium border border-slate-200/60 dark:border-white/[0.06]">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/6 text-slate-600 dark:text-slate-300 font-mono font-medium border border-slate-200/60 dark:border-white/6">
                   {personasFiltradas.length} {personasFiltradas.length === 1 ? "registro" : "registros"}
                 </span>
               </div>
@@ -453,7 +453,7 @@ export default function ExportacionPage() {
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="Buscar cédula, nombre o PDF..."
-                  className="w-full bg-white dark:bg-[#121620] border border-slate-200/80 dark:border-white/[0.08] rounded-xl pl-8 pr-7 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all h-[36px]"
+                  className="w-full bg-white dark:bg-[#121620] border border-slate-200/80 dark:border-white/8 rounded-xl pl-8 pr-7 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all h-[36px]"
                 />
                 {busqueda && (
                   <button
@@ -469,7 +469,7 @@ export default function ExportacionPage() {
               {/* Botón Seleccionar / Deseleccionar */}
               <button
                 onClick={toggleSeleccionarTodo}
-                className="btn-secondary text-xs px-3 flex items-center gap-1.5 border border-slate-200/80 dark:border-white/[0.08] hover:bg-slate-100 dark:hover:bg-white/[0.05] rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-200 shrink-0 whitespace-nowrap h-[36px]"
+                className="btn-secondary text-xs px-3 flex items-center gap-1.5 border border-slate-200/80 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-200 shrink-0 whitespace-nowrap h-[36px]"
                 title="Alternar selección de visibles"
               >
                 {todosVisiblesSeleccionados ? (
@@ -488,7 +488,7 @@ export default function ExportacionPage() {
               {/* Botón Refrescar */}
               <button
                 onClick={cargarDatos}
-                className="btn-secondary text-xs p-2 flex items-center justify-center border border-slate-200/80 dark:border-white/[0.08] hover:bg-slate-100 dark:hover:bg-white/[0.05] rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-200 shrink-0 w-[36px] h-[36px]"
+                className="btn-secondary text-xs p-2 flex items-center justify-center border border-slate-200/80 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-200 shrink-0 w-[36px] h-[36px]"
                 title="Actualizar datos"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${cargando ? "animate-spin text-emerald-400" : ""}`} />
@@ -500,7 +500,7 @@ export default function ExportacionPage() {
           {cargando ? (
             <div className="space-y-2.5 py-4">
               {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="h-11 rounded-xl bg-slate-100 dark:bg-white/[0.03] animate-pulse" />
+                <div key={i} className="h-11 rounded-xl bg-slate-100 dark:bg-white/3 animate-pulse" />
               ))}
             </div>
           ) : personasFiltradas.length === 0 ? (
@@ -522,14 +522,14 @@ export default function ExportacionPage() {
           ) : (
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto pr-1">
               <table className="table-base text-xs w-full">
-                <thead className="sticky top-0 bg-white/95 dark:bg-[#121620]/95 backdrop-blur z-10 border-b border-slate-200 dark:border-white/[0.08]">
+                <thead className="sticky top-0 bg-white/95 dark:bg-[#121620]/95 backdrop-blur-sm z-10 border-b border-slate-200 dark:border-white/8">
                   <tr>
                     <th className="w-12 text-center py-3">
                       <input
                         type="checkbox"
                         checked={todosVisiblesSeleccionados}
                         onChange={toggleSeleccionarTodo}
-                        className="rounded border-slate-700 bg-slate-800 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
+                        className="rounded-sm border-slate-700 bg-slate-800 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
                       />
                     </th>
                     <th className="py-3">Documento</th>
@@ -555,7 +555,7 @@ export default function ExportacionPage() {
                         onClick={() => togglePersona(p.id)}
                         className={`cursor-pointer transition-colors ${
                           isSelected
-                            ? "bg-[#0071E3]/[0.08] hover:bg-[#0071E3]/[0.12]"
+                            ? "bg-[#0071E3]/8 hover:bg-[#0071E3]/12"
                             : "hover:bg-slate-800/30 opacity-60"
                         }`}
                       >
@@ -564,12 +564,12 @@ export default function ExportacionPage() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => togglePersona(p.id)}
-                            className="rounded border-slate-700 bg-slate-800 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
+                            className="rounded-sm border-slate-700 bg-slate-800 text-[#0071E3] focus:ring-[#0071E3]/40 cursor-pointer"
                           />
                         </td>
                         <td className="whitespace-nowrap py-3">
                           <div className="flex items-center gap-2 flex-nowrap">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] border font-mono tracking-wider shrink-0 ${docInfo.badge}`} title={docInfo.label}>
+                            <span className={`px-1.5 py-0.5 rounded-sm text-[10px] border font-mono tracking-wider shrink-0 ${docInfo.badge}`} title={docInfo.label}>
                               {docInfo.codigo}
                             </span>
                             <span className="font-mono text-emerald-400 font-bold">
@@ -617,7 +617,7 @@ export default function ExportacionPage() {
           )}
 
           {/* Footer resumen de la tabla */}
-          <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-white/6 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
               Mostrando <strong className="text-slate-900 dark:text-white">{personasFiltradas.length}</strong> de <strong className="text-slate-900 dark:text-white">{personas.length}</strong> personas
             </span>

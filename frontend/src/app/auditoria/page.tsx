@@ -45,7 +45,7 @@ const ACCIONES: Record<string, { etiqueta: string; tipo: Tipo }> = {
 const CLASES_TIPO: Record<Tipo, string> = {
   alerta: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
   datos: "bg-[#0071E3]/10 text-[#0071E3] dark:text-blue-400 border-[#0071E3]/20",
-  cuenta: "bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-white/[0.08]",
+  cuenta: "bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-white/8",
   sesion: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
 };
 
@@ -161,8 +161,8 @@ export default function AuditoriaPage() {
           }
         />
 
-        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] p-6 overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
             <div>
@@ -181,7 +181,7 @@ export default function AuditoriaPage() {
                   setDesde(0);
                   setAccion(e.target.value);
                 }}
-                className="bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]"
+                className="bg-slate-100/80 dark:bg-white/4 border border-slate-200/80 dark:border-white/8 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]"
               >
                 <option value="">Todas las acciones</option>
                 {Object.entries(ACCIONES).map(([valor, { etiqueta }]) => (
@@ -199,7 +199,7 @@ export default function AuditoriaPage() {
                   aria-label="Filtrar por correo"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-100/80 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
+                  className="w-full bg-slate-100/80 dark:bg-white/4 border border-slate-200/80 dark:border-white/8 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
                 />
               </form>
             </div>
@@ -231,11 +231,11 @@ export default function AuditoriaPage() {
                       <th>Detalle</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/4 [&>tr:last-child]:border-b-0">
                     {registros.map((r, i) => {
                       const info = ACCIONES[r.accion] ?? { etiqueta: r.accion, tipo: "cuenta" as Tipo };
                       return (
-                        <tr key={`${r.fecha}-${i}`} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                        <tr key={`${r.fecha}-${i}`} className="hover:bg-slate-50/60 dark:hover:bg-white/2 transition-colors">
                           <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {new Date(r.fecha).toLocaleString("es-CO", {
                               year: "numeric",
@@ -253,7 +253,7 @@ export default function AuditoriaPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-xs font-mono text-slate-500 dark:text-slate-400">{r.ip || "—"}</td>
-                          <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 break-words max-w-md">
+                          <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 wrap-break-word max-w-md">
                             {textoDetalle(r.detalle)}
                           </td>
                         </tr>

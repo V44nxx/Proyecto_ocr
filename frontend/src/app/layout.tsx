@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -13,15 +14,19 @@ export const metadata: Metadata = {
   keywords: "KondID, OCR, documentos, cédula, Colombia, extracción, Document AI",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Nonce de la política de contenido (src/proxy.ts). Leer las cabeceras hace que cada página se arme por petición,
+  // que es lo que permite un nonce distinto cada vez
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               try {

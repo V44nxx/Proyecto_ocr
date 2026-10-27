@@ -32,15 +32,15 @@ function StatCard({
   subtitle?: string;
 }) {
   return (
-    <div className="relative rounded-2xl p-5 bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] transition-all duration-200 hover:border-slate-300 dark:hover:border-white/[0.16] hover:shadow-md group active:scale-[0.99] overflow-hidden">
+    <div className="relative rounded-2xl p-5 bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] transition-all duration-200 hover:border-slate-300 dark:hover:border-white/16 hover:shadow-md group active:scale-[0.99] overflow-hidden">
       {/* Reflejo sutil superior (light-catching top edge) */}
-      <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
       <div className="flex items-start justify-between gap-3 mb-3">
         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-tight">
           {title}
         </span>
-        <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/[0.05] border border-slate-200/60 dark:border-white/[0.08] flex items-center justify-center text-slate-600 dark:text-slate-300 transition-transform duration-200 group-hover:scale-105 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/8 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-transform duration-200 group-hover:scale-105 shrink-0">
           {icon}
         </div>
       </div>
@@ -50,7 +50,7 @@ function StatCard({
           {typeof value === "number" ? value.toLocaleString() : value}
         </div>
         {subtitle && (
-          <p className="text-[11px] text-slate-400 dark:text-slate-400/90 font-normal mt-1.5">
+          <p className="text-[11px] text-slate-400 dark:text-slate-400/90 font-normal">
             {subtitle}
           </p>
         )}
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             <>
               <button
                 onClick={cargarDatos}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/[0.08] text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm backdrop-blur-md"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-white/6 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/8 text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-xs backdrop-blur-md"
                 title="Recargar datos"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
@@ -195,7 +195,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => router.push("/documentos")}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-sm shadow-[#0071E3]/20"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer shadow-xs shadow-[#0071E3]/20"
               >
                 <span>Subir Lote</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -208,7 +208,7 @@ export default function DashboardPage() {
         {cargando ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
             {Array(7).fill(0).map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl bg-slate-200/50 dark:bg-white/[0.03] animate-pulse border border-slate-200/40 dark:border-white/[0.05]" />
+              <div key={i} className="h-28 rounded-2xl bg-slate-200/50 dark:bg-white/3 animate-pulse border border-slate-200/40 dark:border-white/5" />
             ))}
           </div>
         ) : stats ? (
@@ -294,14 +294,14 @@ export default function DashboardPage() {
                 <button
                   key={item.href}
                   onClick={() => router.push(item.href)}
-                  className="relative p-5 rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.18] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:shadow-md transition-all duration-200 cursor-pointer text-left group active:scale-[0.98] overflow-hidden"
+                  className="relative p-5 rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 hover:border-slate-300 dark:hover:border-white/18 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] hover:shadow-md transition-all duration-200 cursor-pointer text-left group active:scale-[0.98] overflow-hidden"
                 >
-                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+                  <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
                   <div className="flex items-center justify-between mb-3.5">
-                    <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] flex items-center justify-center transition-transform duration-200 group-hover:scale-105">
+                    <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 flex items-center justify-center transition-transform duration-200 group-hover:scale-105">
                       {item.icon}
                     </div>
-                    <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-white/[0.06]">
+                    <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-white/6">
                       {item.tag}
                     </span>
                   </div>
@@ -321,13 +321,13 @@ export default function DashboardPage() {
             </div>
 
             {/* ── HISTORIAL DE FICHAS / DOCUMENTOS ── */}
-            <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] overflow-hidden mb-8 page-enter">
-              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+            <div className="relative rounded-2xl bg-white/70 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)] overflow-hidden mb-8 page-enter">
+              <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
-              <div className="p-5 border-b border-slate-200/70 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-white/[0.02]">
+              <div className="p-5 border-b border-slate-200/70 dark:border-white/6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-white/2">
                 <div>
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] flex items-center justify-center text-slate-700 dark:text-slate-300">
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 flex items-center justify-center text-slate-700 dark:text-slate-300">
                       <FileText className="w-4 h-4" />
                     </div>
                     <div>
@@ -344,7 +344,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={cargarDatos}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/[0.08] text-xs font-medium transition-all cursor-pointer active:scale-[0.97]"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 dark:bg-white/6 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/8 text-xs font-medium transition-all cursor-pointer active:scale-[0.97]"
                     title="Recargar historial de fichas"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
@@ -352,7 +352,7 @@ export default function DashboardPage() {
                   </button>
                   <button
                     onClick={() => router.push("/documentos")}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all cursor-pointer shadow-sm active:scale-[0.97]"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all cursor-pointer shadow-xs active:scale-[0.97]"
                   >
                     <span>Subir Ficha</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -364,12 +364,12 @@ export default function DashboardPage() {
               {cargandoDocs ? (
                 <div className="p-6 space-y-3">
                   {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className="h-12 bg-slate-100 dark:bg-white/[0.03] animate-pulse rounded-xl" />
+                    <div key={i} className="h-12 bg-slate-100 dark:bg-white/3 animate-pulse rounded-xl" />
                   ))}
                 </div>
               ) : documentosHistorial.length === 0 ? (
                 <div className="text-center py-14 px-4">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.06] flex items-center justify-center mx-auto mb-3 text-slate-400">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/4 border border-slate-200/60 dark:border-white/6 flex items-center justify-center mx-auto mb-3 text-slate-400">
                     <FileText className="w-5 h-5" />
                   </div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No hay fichas registradas</p>
@@ -379,7 +379,7 @@ export default function DashboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200/70 dark:border-white/[0.06] bg-slate-50/40 dark:bg-white/[0.015] text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <tr className="border-b border-slate-200/70 dark:border-white/6 bg-slate-50/40 dark:bg-white/1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                         <th className="py-3 px-4">Ficha / Documento PDF</th>
                         <th className="py-3 px-3 text-center">Fecha de Carga</th>
                         <th className="py-3 px-3 text-center">Personas</th>
@@ -388,17 +388,17 @@ export default function DashboardPage() {
                         <th className="py-3 px-4 text-right">Acción</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04] text-xs">
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/4 text-xs">
                       {documentosHistorial.map((doc) => {
                         return (
                           <tr
                             key={doc.id}
                             onClick={() => abrirPersonasFicha(doc)}
-                            className="transition-colors cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/[0.03] text-slate-800 dark:text-slate-200 group"
+                            className="transition-colors cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/3 text-slate-800 dark:text-slate-200 group"
                           >
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
                                   <FileText className="w-4 h-4" />
                                 </div>
                                 <div className="min-w-0">
@@ -415,7 +415,7 @@ export default function DashboardPage() {
                               {doc.fecha_carga ? new Date(doc.fecha_carga).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                             </td>
                             <td className="py-3 px-3 text-center whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.05] border border-slate-200/60 dark:border-white/[0.08] font-mono text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/8 font-mono text-[11px] font-medium text-slate-700 dark:text-slate-300">
                                 <Users className="w-3 h-3 text-slate-400 shrink-0" />
                                 <span>{doc.total_personas ?? 0}</span>
                               </span>
@@ -445,7 +445,7 @@ export default function DashboardPage() {
                                     e.stopPropagation();
                                     abrirPersonasFicha(doc);
                                   }}
-                                  className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-all cursor-pointer active:scale-[0.95]"
+                                  className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/8 transition-all cursor-pointer active:scale-[0.95]"
                                   title="Visualizar personas de este archivo"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -485,21 +485,21 @@ export default function DashboardPage() {
           onClick={() => setDocSeleccionadoModal(null)}
         >
           <div
-            className="relative bg-white/95 dark:bg-[#121620]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/[0.1] rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            className="relative bg-white/95 dark:bg-[#121620]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/15 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/15 to-transparent pointer-events-none" />
 
             {/* Modal Header */}
-            <div className="p-5 border-b border-slate-200/70 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.02] flex items-start justify-between gap-4">
+            <div className="p-5 border-b border-slate-200/70 dark:border-white/6 bg-slate-50/50 dark:bg-white/2 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
                     <FileText className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-medium tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/[0.05] px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-white/[0.06]">
+                      <span className="text-[10px] uppercase font-medium tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-white/6">
                         Ficha seleccionada
                       </span>
                     </div>
@@ -510,11 +510,11 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap mt-2.5">
-                  <span className="bg-slate-100 dark:bg-white/[0.04] px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/[0.06] font-mono text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+                  <span className="bg-slate-100 dark:bg-white/4 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/6 font-mono text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                     <Zap className="w-3 h-3 text-amber-500 shrink-0" />
                     <span>Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}</span>
                   </span>
-                  <span className="bg-slate-100 dark:bg-white/[0.04] px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/[0.06] font-medium text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
+                  <span className="bg-slate-100 dark:bg-white/4 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/6 font-medium text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                     <Users className="w-3 h-3 text-slate-400 shrink-0" />
                     <span>{personasFicha.length} {personasFicha.length === 1 ? "persona encontrada" : "personas encontradas"}</span>
                   </span>
@@ -529,7 +529,7 @@ export default function DashboardPage() {
                 <button
                   onClick={exportarFichaModal}
                   disabled={exportandoModal || personasFicha.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/[0.08] text-xs font-medium transition-all cursor-pointer active:scale-[0.97] disabled:opacity-40"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-white/6 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/8 text-xs font-medium transition-all cursor-pointer active:scale-[0.97] disabled:opacity-40"
                   title="Exportar la lista de personas de esta ficha a Excel"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -545,7 +545,7 @@ export default function DashboardPage() {
                 </button>
                 <button
                   onClick={() => setDocSeleccionadoModal(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/8 transition-colors cursor-pointer shrink-0"
                   title="Cerrar ventana"
                 >
                   <X className="w-4 h-4" />
@@ -554,7 +554,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Aviso explicativo y buscador local */}
-            <div className="px-5 py-2.5 bg-slate-50/70 dark:bg-white/[0.015] border-b border-slate-200/70 dark:border-white/[0.06] text-xs flex items-center justify-between gap-3 flex-wrap">
+            <div className="px-5 py-2.5 bg-slate-50/70 dark:bg-white/1.5 border-b border-slate-200/70 dark:border-white/6 text-xs flex items-center justify-between gap-3 flex-wrap">
               <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px]">
                 <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 Registros exclusivos extraídos de este archivo en particular.
@@ -566,7 +566,7 @@ export default function DashboardPage() {
                   placeholder="Buscar por cédula o nombre..."
                   value={busquedaModal}
                   onChange={(e) => setBusquedaModal(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.08] rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-white/4 border border-slate-200/80 dark:border-white/8 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all"
                 />
               </div>
             </div>
@@ -576,7 +576,7 @@ export default function DashboardPage() {
               {cargandoPersonasFicha ? (
                 <div className="space-y-3 py-6">
                   {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className="h-12 bg-slate-100 dark:bg-white/[0.03] animate-pulse rounded-xl" />
+                    <div key={i} className="h-12 bg-slate-100 dark:bg-white/3 animate-pulse rounded-xl" />
                   ))}
                 </div>
               ) : personasFicha.filter((p) => {
@@ -587,7 +587,7 @@ export default function DashboardPage() {
                 return cedula.includes(q) || nom.includes(q);
               }).length === 0 ? (
                 <div className="text-center py-16">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.06] flex items-center justify-center mx-auto mb-2 text-slate-400">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/4 border border-slate-200/60 dark:border-white/6 flex items-center justify-center mx-auto mb-2 text-slate-400">
                     <Users className="w-5 h-5" />
                   </div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -598,10 +598,10 @@ export default function DashboardPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-white/[0.08]">
+                <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-white/8">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200/80 dark:border-white/[0.08] bg-slate-50/60 dark:bg-white/[0.02] text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <tr className="border-b border-slate-200/80 dark:border-white/8 bg-slate-50/60 dark:bg-white/2 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                         <th className="py-2.5 px-3 w-10 text-center">#</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">Documento / Cédula</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">Nombre Completo</th>
@@ -611,7 +611,7 @@ export default function DashboardPage() {
                         <th className="py-2.5 px-3 text-right whitespace-nowrap">Detalles</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04] text-xs">
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/4 text-xs">
                       {personasFicha
                         .filter((p) => {
                           if (!busquedaModal) return true;
@@ -635,8 +635,8 @@ export default function DashboardPage() {
                             <Fragment key={p.id}>
                               <tr
                                 onClick={() => setPersonaDetalleId(isExpanded ? null : p.id)}
-                                className={`transition-colors cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/[0.03] ${
-                                  isExpanded ? "bg-slate-100/50 dark:bg-white/[0.04]" : ""
+                                className={`transition-colors cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/3 ${
+                                  isExpanded ? "bg-slate-100/50 dark:bg-white/4" : ""
                                 }`}
                               >
                                 <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]">
@@ -644,7 +644,7 @@ export default function DashboardPage() {
                                 </td>
                                 <td className="py-2.5 px-3 whitespace-nowrap">
                                   <div className="flex items-center gap-1.5 flex-nowrap">
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 font-mono tracking-wider shrink-0">
+                                    <span className="px-1.5 py-0.5 rounded-sm text-[10px] bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 text-slate-600 dark:text-slate-300 font-mono tracking-wider shrink-0">
                                       {tipoInfo.codigo}
                                     </span>
                                     <span className="font-mono text-slate-900 dark:text-white font-semibold text-xs tracking-wide">
@@ -693,7 +693,7 @@ export default function DashboardPage() {
                                       e.stopPropagation();
                                       setPersonaDetalleId(isExpanded ? null : p.id);
                                     }}
-                                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-white/[0.08] transition-all inline-flex items-center gap-1 cursor-pointer active:scale-[0.95]"
+                                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-white/6 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-white/8 transition-all inline-flex items-center gap-1 cursor-pointer active:scale-[0.95]"
                                   >
                                     <span>{isExpanded ? "Ocultar" : "Detalles"}</span>
                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -703,9 +703,9 @@ export default function DashboardPage() {
 
                               {/* Fila desplegable de detalles completos de la persona */}
                               {isExpanded && (
-                                <tr className="bg-slate-50/70 dark:bg-white/[0.02] border-b border-slate-200/60 dark:border-white/[0.06]">
+                                <tr className="bg-slate-50/70 dark:bg-white/2 border-b border-slate-200/60 dark:border-white/6">
                                   <td colSpan={7} className="p-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white dark:bg-[#151922] p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white dark:bg-[#151922] p-4 rounded-xl border border-slate-200/60 dark:border-white/6">
                                       <div>
                                         <p className="text-[10px] uppercase font-medium text-slate-400">Fecha de Nacimiento</p>
                                         <p className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -732,7 +732,7 @@ export default function DashboardPage() {
                                       </div>
 
                                       {/* Nombre desglosado */}
-                                      <div className="sm:col-span-2 lg:col-span-4 pt-2.5 border-t border-slate-100 dark:border-white/[0.06] flex items-center gap-4 flex-wrap text-xs">
+                                      <div className="sm:col-span-2 lg:col-span-4 pt-2.5 border-t border-slate-100 dark:border-white/6 flex items-center gap-4 flex-wrap text-xs">
                                         <span className="text-slate-500 text-[11px]">
                                           <strong className="text-slate-700 dark:text-slate-300 font-medium">Apellidos:</strong> {partesNombre.apellidos || "—"}
                                         </span>
@@ -760,7 +760,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200/70 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between gap-3 flex-wrap">
+            <div className="p-4 border-t border-slate-200/70 dark:border-white/6 bg-slate-50/50 dark:bg-white/2 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-slate-500 dark:text-slate-400">
                 Mostrando <strong className="text-slate-900 dark:text-white font-semibold">
                   {personasFicha.filter((p) => {
@@ -783,14 +783,14 @@ export default function DashboardPage() {
                       router.push(`/personas?documento_id=${docSeleccionadoModal.id}`);
                     }
                   }}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all cursor-pointer shadow-sm flex items-center gap-1.5 active:scale-[0.97]"
+                  className="px-3.5 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium transition-all cursor-pointer shadow-xs flex items-center gap-1.5 active:scale-[0.97]"
                 >
                   <Users className="w-3.5 h-3.5" />
                   <span>Ver en Directorio</span>
                 </button>
                 <button
                   onClick={() => setDocSeleccionadoModal(null)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/[0.08] text-xs font-medium transition-all cursor-pointer active:scale-[0.97]"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/6 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/8 text-xs font-medium transition-all cursor-pointer active:scale-[0.97]"
                 >
                   Cerrar
                 </button>
@@ -803,14 +803,14 @@ export default function DashboardPage() {
       {/* ── MODAL: CONFIRMACIÓN PARA ELIMINAR FICHA DEL HISTORIAL ── */}
       {fichaAEliminar && (
         <div
-          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => !eliminandoFicha && setFichaAEliminar(null)}
         >
           <div
-            className="relative bg-white/95 dark:bg-[#151922]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/[0.1] rounded-3xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.35)] animate-in zoom-in-95 duration-200"
+            className="relative bg-white/95 dark:bg-[#151922]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 rounded-3xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.35)] animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/15 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/15 to-transparent pointer-events-none" />
 
             <div className="flex items-center gap-3.5 mb-4">
               <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center justify-center shrink-0">
@@ -829,7 +829,7 @@ export default function DashboardPage() {
             <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
               Se eliminará del historial el siguiente documento y sus registros:
             </p>
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] text-xs font-mono text-slate-900 dark:text-slate-100 mb-4 break-all">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/3 border border-slate-200/70 dark:border-white/6 text-xs font-mono text-slate-900 dark:text-slate-100 mb-4 break-all">
               <div className="font-semibold flex items-center gap-2">
                 <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">{fichaAEliminar.nombre_original}</span>
@@ -847,14 +847,14 @@ export default function DashboardPage() {
               <button
                 onClick={() => setFichaAEliminar(null)}
                 disabled={eliminandoFicha}
-                className="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] border border-slate-200/60 dark:border-white/[0.08] transition-all cursor-pointer disabled:opacity-40 active:scale-[0.97]"
+                className="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/6 border border-slate-200/60 dark:border-white/8 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.97]"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmarEliminarFicha}
                 disabled={eliminandoFicha}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-[#FF3B30] hover:bg-[#E0342A] transition-all cursor-pointer shadow-sm flex items-center gap-2 disabled:opacity-40 active:scale-[0.97]"
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-[#FF3B30] hover:bg-[#E0342A] transition-all cursor-pointer shadow-xs flex items-center gap-2 disabled:opacity-40 active:scale-[0.97]"
               >
                 {eliminandoFicha ? (
                   <>

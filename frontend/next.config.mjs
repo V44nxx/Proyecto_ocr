@@ -2,26 +2,8 @@ import { readFileSync } from "node:fs";
 
 /** @type {import('next').NextConfig} */
 
-// Política de contenido obligatoria: el navegador bloquea lo que venga de otro origen.
-// Las fuentes vienen de Google Fonts (globals.css) y el panel de Seguimiento se incrusta desde
-// Google Apps Script. 'unsafe-eval' solo en desarrollo: el recargado en caliente de Next lo necesita.
-const desarrollo = process.env.NODE_ENV !== "production";
-const politicaContenido = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${desarrollo ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://api.v44nxx.online",
-  "frame-src https://script.google.com https://*.googleusercontent.com https://accounts.google.com https://docs.google.com",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
+// La política de contenido (CSP) la pone src/proxy.ts en cada página, con un nonce nuevo por petición
 const cabecerasSeguridad = [
-  { key: "Content-Security-Policy", value: politicaContenido },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

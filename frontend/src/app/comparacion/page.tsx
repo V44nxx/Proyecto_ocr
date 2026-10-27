@@ -335,7 +335,7 @@ export default function ComparacionPage() {
                 Cargar Planilla Oficial (Excel)
               </h2>
               <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-start gap-2.5">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" />
+                <CheckCircle className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
                 <span className="leading-relaxed">
                   <strong>Carga automática:</strong> Las planillas subidas al presionar <em>Iniciar OCR</em> en <strong>Documentos</strong> se cotejan aquí automáticamente sin tener que volver a subirlas.
                 </span>
@@ -384,8 +384,8 @@ export default function ComparacionPage() {
                       onClick={() => verDiferencias(c)}
                       className={`w-full text-left p-3 rounded-xl border transition-all duration-200 ${
                         comparacionActiva?.id === c.id
-                          ? "border-primary-500 bg-primary-500/10 shadow-sm"
-                          : "border-slate-300 dark:border-white/[0.06] hover:border-slate-400 dark:hover:border-white/15 bg-white dark:bg-dark-800 shadow-sm"
+                          ? "border-primary-500 bg-primary-500/10 shadow-xs"
+                          : "border-slate-300 dark:border-white/6 hover:border-slate-400 dark:hover:border-white/15 bg-white dark:bg-dark-800 shadow-xs"
                       }`}
                     >
                       <p className="text-sm text-slate-900 dark:text-white font-medium truncate">{c.nombre_original}</p>
@@ -442,7 +442,7 @@ export default function ComparacionPage() {
                       { label: "Faltantes en BD", value: comparacionActiva.total_faltantes_bd, color: "text-rose-600 dark:text-red-400" },
                       { label: "Sobrantes en BD", value: comparacionActiva.total_nuevos_bd, color: "text-purple-600 dark:text-purple-400" },
                     ].map((s) => (
-                      <div key={s.label} className="bg-slate-50 dark:bg-dark-800 rounded-xl p-2.5 text-center border border-slate-300 dark:border-white/[0.05] shadow-sm">
+                      <div key={s.label} className="bg-slate-50 dark:bg-dark-800 rounded-xl p-2.5 text-center border border-slate-300 dark:border-white/5 shadow-xs">
                         <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
                         <p className="text-slate-600 dark:text-slate-400 text-[11px] font-medium mt-0.5 leading-tight">{s.label}</p>
                       </div>
@@ -522,7 +522,7 @@ export default function ComparacionPage() {
                             const etiquetaCampo = limpiarEtiquetaCampo(d.campo, d.tipo_diferencia);
 
                             return (
-                              <tr key={d.id} className="hover:bg-white/[0.02] transition-colors">
+                              <tr key={d.id} className="hover:bg-white/2 transition-colors">
                                 <td className="font-mono text-primary-400 font-medium text-xs">{d.numero_identificacion}</td>
                                 <td>
                                   {esFaltante ? (
@@ -537,7 +537,7 @@ export default function ComparacionPage() {
                                   {esFaltante ? (
                                     <span className="text-slate-500 italic text-[11px]">No detectada en PDF</span>
                                   ) : valBdLimpio ? (
-                                    <span className={esDiferente ? "text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
+                                    <span className={esDiferente ? "text-yellow-300 bg-yellow-500/10 px-2 py-0.5 rounded-sm border border-yellow-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
                                       {valBdLimpio}
                                     </span>
                                   ) : (
@@ -548,7 +548,7 @@ export default function ComparacionPage() {
                                   {esSobrante ? (
                                     <span className="text-slate-500 italic text-[11px]">No figura en archivo Excel</span>
                                   ) : valExLimpio ? (
-                                    <span className={esDiferente ? "text-green-300 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
+                                    <span className={esDiferente ? "text-green-300 bg-green-500/10 px-2 py-0.5 rounded-sm border border-green-500/20 inline-block font-mono text-[11px]" : "text-slate-200 font-medium text-xs"}>
                                       {valExLimpio}
                                     </span>
                                   ) : (
@@ -630,7 +630,7 @@ export default function ComparacionPage() {
                 <p className="text-slate-300 text-sm max-w-md mb-2 font-medium">
                   Cotejando registros con la planilla oficial:
                 </p>
-                <div className="px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-800 border border-slate-300 dark:border-white/10 text-primary-600 dark:text-primary-300 font-mono text-xs mb-5 max-w-sm truncate shadow-sm">
+                <div className="px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-800 border border-slate-300 dark:border-white/10 text-primary-600 dark:text-primary-300 font-mono text-xs mb-5 max-w-sm truncate shadow-xs">
                   📄 {comparacionActiva.nombre_original}
                 </div>
                 <p className="text-slate-400 text-xs max-w-md mb-6 leading-relaxed">

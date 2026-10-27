@@ -19,11 +19,11 @@ interface VerificacionDosPasosProps {
 type Etapa = "configurar" | "codigo" | "respaldo";
 
 const claseCampo =
-  "w-full bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/90 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-center text-base sm:text-lg tracking-[0.35em] font-mono text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 transition-all";
+  "w-full bg-slate-50/80 dark:bg-white/4 border border-slate-200/90 dark:border-white/8 rounded-xl px-3 py-2.5 text-center text-base sm:text-lg tracking-[0.35em] font-mono text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-hidden focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 transition-all";
 const claseBoton =
-  "w-full bg-[#0071E3] hover:bg-[#0077ED] active:scale-[0.98] text-white font-medium py-2.5 px-4 rounded-xl text-xs sm:text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer";
+  "w-full bg-[#0071E3] hover:bg-[#0077ED] active:scale-[0.98] text-white font-medium py-2.5 px-4 rounded-xl text-xs sm:text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer";
 const clasePaso =
-  "shrink-0 w-5 h-5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.1] text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center";
+  "shrink-0 w-5 h-5 rounded-full bg-slate-100 dark:bg-white/6 border border-slate-200/80 dark:border-white/10 text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center";
 const claseEnlace =
   "text-[11px] font-medium text-[#0071E3] hover:text-[#0077ED] dark:text-[#4C9BFF] hover:underline cursor-pointer";
 
@@ -145,10 +145,10 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
   const encabezado = (icono: React.ReactNode, etiqueta: string, titulo: string, texto: string) => (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-xl bg-[#0071E3]/10 dark:bg-[#0071E3]/20 border border-[#0071E3]/15 flex items-center justify-center text-[#0071E3] dark:text-[#4C9BFF] shadow-sm">
+        <div className="w-9 h-9 rounded-xl bg-[#0071E3]/10 dark:bg-[#0071E3]/20 border border-[#0071E3]/15 flex items-center justify-center text-[#0071E3] dark:text-[#4C9BFF] shadow-xs">
           {icono}
         </div>
-        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.05] border border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400">
+        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/8 text-slate-500 dark:text-slate-400">
           {etiqueta}
         </span>
       </div>
@@ -190,7 +190,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
           "Guarda tus códigos de respaldo",
           "Si pierdes el celular, entra con uno de estos códigos en lugar del de la app. Cada uno sirve una sola vez y no se vuelven a mostrar."
         )}
-        <ol className="grid grid-cols-2 gap-1.5 p-3 rounded-xl bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.07]">
+        <ol className="grid grid-cols-2 gap-1.5 p-3 rounded-xl bg-slate-50/80 dark:bg-white/3 border border-slate-200/80 dark:border-white/[0.07]">
           {codigos.map((c) => (
             <li key={c} className="font-mono text-[13px] tracking-wider text-slate-900 dark:text-slate-100 text-center py-0.5">
               {c}
@@ -201,14 +201,14 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
           <button
             type="button"
             onClick={() => copiarTexto(codigos.join("\n"), "Códigos copiados")}
-            className="inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border border-slate-200/90 dark:border-white/[0.1] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border border-slate-200/90 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
             <Copy className="w-3.5 h-3.5" /> Copiar
           </button>
           <button
             type="button"
             onClick={descargarCodigos}
-            className="inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border border-slate-200/90 dark:border-white/[0.1] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border border-slate-200/90 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" /> Descargar .txt
           </button>
@@ -224,7 +224,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
         </label>
         <button type="button" disabled={!guardados} onClick={() => sesion && onListo(sesion)} className={`${claseBoton} mt-3`}>
           <span>Entrar al panel</span>
-          <ArrowRight className="w-4 h-4 stroke-[2]" />
+          <ArrowRight className="w-4 h-4 stroke-2" />
         </button>
       </div>
     );
@@ -251,7 +251,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
             <div className="flex-1 min-w-0">
               <p className="leading-relaxed">Abre la app, agrega una cuenta y escanea este código.</p>
               <div className="mt-2 flex items-center gap-3">
-                <div className="shrink-0 w-[132px] h-[132px] rounded-xl bg-white border border-slate-200 dark:border-white/[0.1] flex items-center justify-center overflow-hidden">
+                <div className="shrink-0 w-[132px] h-[132px] rounded-xl bg-white border border-slate-200 dark:border-white/10 flex items-center justify-center overflow-hidden">
                   {datosQr ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={datosQr.qr} alt="Código QR para vincular la app de autenticación" className="w-full h-full" />
@@ -291,7 +291,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
         </ol>
         <button type="submit" disabled={cargando || !datosQr} className={`${claseBoton} mt-4`}>
           <span>{cargando ? "Verificando…" : "Activar y entrar"}</span>
-          {!cargando && <ArrowRight className="w-4 h-4 stroke-[2]" />}
+          {!cargando && <ArrowRight className="w-4 h-4 stroke-2" />}
         </button>
         <button type="button" onClick={() => onVolver()} className={`${claseEnlace} mt-3 inline-flex items-center gap-1`}>
           <ArrowLeft className="w-3 h-3" /> Volver
@@ -314,7 +314,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
       {ayudaCodigo}
       <button type="submit" disabled={cargando} className={`${claseBoton} mt-3`}>
         <span>{cargando ? "Verificando…" : "Verificar"}</span>
-        {!cargando && <ArrowRight className="w-4 h-4 stroke-[2]" />}
+        {!cargando && <ArrowRight className="w-4 h-4 stroke-2" />}
       </button>
       <div className="flex items-center justify-between mt-3">
         <button type="button" onClick={() => onVolver()} className={`${claseEnlace} inline-flex items-center gap-1`}>

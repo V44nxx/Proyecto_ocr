@@ -30,7 +30,7 @@ interface Props {
 
 export default function EncabezadoPagina({ icono, seccion, titulo, descripcion, acciones, children }: Props) {
   return (
-    <header className="encabezado-pagina relative z-10 rounded-2xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-[#0e131c] mb-8">
+    <header className="encabezado-pagina relative z-10 rounded-2xl border border-slate-200/90 dark:border-white/8 bg-white dark:bg-[#0e131c] mb-8">
       {/* Decoración en su propia capa recortada: el contenido (p. ej. el selector de fichas) puede desplegarse por fuera */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl" aria-hidden="true">
         <span className="encabezado-filete absolute inset-y-0 left-0 w-[3px]" />
@@ -53,7 +53,7 @@ export default function EncabezadoPagina({ icono, seccion, titulo, descripcion, 
             {seccion}
           </p>
           <h1
-            className="encabezado-entra mt-2 text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-[#0f172a] dark:text-white"
+            className="encabezado-entra mt-2 text-2xl sm:text-3xl font-semibold tracking-[-0.02em] text-dark-900 dark:text-white"
             style={{ animationDelay: "60ms" }}
           >
             {titulo}

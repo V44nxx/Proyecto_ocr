@@ -156,15 +156,19 @@ with sync_playwright() as p:
 
     # ── Recorrido por las pantallas (errores JS y política de contenido) ───
     api_put_json("/api/seguimiento/config", token_ana, {"url_panel": "https://script.google.com/macros/s/abc123/exec"})
-    politicas = set()
+    politicas, nonces = set(), set()
     for ruta in ("/dashboard", "/documentos", "/personas", "/exportacion", "/comparacion", "/seguimiento"):
         respuesta = page.goto(FRONT + ruta)
-        politicas.add("content-security-policy" in respuesta.headers)
+        csp = respuesta.headers.get("content-security-policy", "")
+        scripts = next((d for d in csp.split(";") if d.strip().startswith("script-src")), "")
+        politicas.add(bool(csp) and "'unsafe-inline'" not in scripts and "'nonce-" in scripts)
+        nonces.add(re.search(r"'nonce-([^']+)'", scripts).group(1) if "'nonce-" in scripts else "")
         page.wait_for_timeout(2500)
     page.screenshot(path=str(CAPTURAS / "03_seguimiento.png"))
     caso("CP-UI-08", "Recorrido por las 6 pantallas del usuario sin errores de JavaScript", not errores_js, errores_js[:2])
-    caso("CP-UI-09", "Las pantallas llevan la política de contenido obligatoria y ninguna la viola",
-         politicas == {True} and not avisos_csp, avisos_csp[:2] or "CSP en las 6 pantallas, sin avisos")
+    caso("CP-UI-09", "Política de contenido en las 6 pantallas: scripts solo con un nonce nuevo en cada carga, sin violaciones",
+         politicas == {True} and len(nonces) == 6 and not avisos_csp,
+         avisos_csp[:2] or f"CSP con nonce en las 6 pantallas ({len(nonces)} nonces distintos), sin avisos")
 
     # ── Exportación ─────────────────────────────────────────────────
     page.goto(FRONT + "/exportacion")

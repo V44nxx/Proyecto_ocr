@@ -62,19 +62,19 @@ export default function BannerProcesoActivo() {
   const nombresArchivos = nombresRaw.length > 60 ? nombresRaw.slice(0, 60) + "..." : nombresRaw;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-2rem)] max-w-2xl">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-9999 w-[calc(100%-2rem)] max-w-2xl">
       <div className="relative flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl
-        bg-gradient-to-r from-blue-600/95 to-indigo-700/95 border-blue-400/40 backdrop-blur-md text-white">
-        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+        bg-linear-to-r from-blue-600/95 to-indigo-700/95 border-blue-400/40 backdrop-blur-md text-white">
+        <div className="shrink-0 w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
           <Cpu className="w-5 h-5 text-white animate-pulse" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-200 flex-shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-200 shrink-0" />
             <p className="text-sm font-semibold text-white truncate">
               OCR en proceso — {docs.length} {docs.length === 1 ? "archivo" : "archivos"}
             </p>
-            <span className="ml-auto flex-shrink-0 text-xs font-bold text-blue-100 bg-white/15 px-2 py-0.5 rounded-full">
+            <span className="ml-auto shrink-0 text-xs font-bold text-blue-100 bg-white/15 px-2 py-0.5 rounded-full">
               {progresoPromedio}%
             </span>
           </div>
@@ -85,7 +85,7 @@ export default function BannerProcesoActivo() {
           </div>
         </div>
         <button onClick={() => router.push("/documentos")}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 transition-colors border border-white/20">
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 transition-colors border border-white/20">
           Ver progreso
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
@@ -109,14 +109,14 @@ export default function BannerProcesoActivo() {
               toast.error("No se pudo cancelar el proceso.");
             }
           }}
-          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/30 hover:bg-rose-500/40 text-rose-100 transition-colors border border-rose-400/40"
+          className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/30 hover:bg-rose-500/40 text-rose-100 transition-colors border border-rose-400/40"
           title="Cancelar proceso y remover archivos"
         >
           <XCircle className="w-3.5 h-3.5 text-rose-300" />
           <span>Cancelar</span>
         </button>
         <button onClick={() => setDescartado(true)}
-          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+          className="shrink-0 p-1.5 rounded-lg hover:bg-white/20 transition-colors"
           title="Ocultar (el proceso continua en segundo plano)">
           <X className="w-4 h-4 text-white/70" />
         </button>

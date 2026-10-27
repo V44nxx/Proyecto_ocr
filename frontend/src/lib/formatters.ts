@@ -242,16 +242,16 @@ export function getTipoDocInfo(tipo?: string | null): TipoDocInfo {
     return {
       codigo: "?",
       label: "Por verificar",
-      badge: "bg-gray-100 dark:bg-gray-800/80 border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold shadow-sm",
-      pill: "bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-200 border border-gray-400 dark:border-gray-600 font-semibold shadow-sm",
+      badge: "bg-gray-100 dark:bg-gray-800/80 border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold shadow-xs",
+      pill: "bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-200 border border-gray-400 dark:border-gray-600 font-semibold shadow-xs",
     };
   }
   if (t.includes("ANTECEDENTE") || t === "ANT" || t === "CERTIFICADO_ANTECEDENTES") {
     return {
       codigo: "ANT",
       label: "Certificado de Antecedentes",
-      badge: "bg-indigo-100 dark:bg-indigo-950/70 border border-indigo-400 dark:border-indigo-500/60 text-indigo-900 dark:text-indigo-200 font-bold shadow-sm",
-      pill: "bg-indigo-100 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-200 border border-indigo-400 dark:border-indigo-500/60 font-semibold shadow-sm",
+      badge: "bg-indigo-100 dark:bg-indigo-950/70 border border-indigo-400 dark:border-indigo-500/60 text-indigo-900 dark:text-indigo-200 font-bold shadow-xs",
+      pill: "bg-indigo-100 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-200 border border-indigo-400 dark:border-indigo-500/60 font-semibold shadow-xs",
     };
   }
   // Datos tomados de una carta o certificado (no es documento de identidad): siempre van a revisión
@@ -259,63 +259,63 @@ export function getTipoDocInfo(tipo?: string | null): TipoDocInfo {
     return {
       codigo: "CB",
       label: "Certificado bancario",
-      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-sm",
-      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-sm",
+      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-xs",
+      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-xs",
     };
   }
   if (t === "DOCUMENTO_SOPORTE" || t === "DOC") {
     return {
       codigo: "DOC",
       label: "Carta o certificado",
-      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-sm",
-      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-sm",
+      badge: "bg-orange-100 dark:bg-orange-950/70 border border-orange-400 dark:border-orange-500/60 text-orange-900 dark:text-orange-200 font-bold shadow-xs",
+      pill: "bg-orange-100 dark:bg-orange-950/70 text-orange-900 dark:text-orange-200 border border-orange-400 dark:border-orange-500/60 font-semibold shadow-xs",
     };
   }
   if (t.includes("PPT") || t.includes("TEMPORAL") || t.includes("PROTECCION") || t.includes("PROTECCIÓN")) {
     return {
       codigo: "PPT",
       label: "Permiso Protección Temporal",
-      badge: "bg-cyan-100 dark:bg-cyan-950/70 border border-cyan-400 dark:border-cyan-500/60 text-cyan-900 dark:text-cyan-200 font-bold shadow-sm",
-      pill: "bg-cyan-100 dark:bg-cyan-950/70 text-cyan-900 dark:text-cyan-200 border border-cyan-400 dark:border-cyan-500/60 font-semibold shadow-sm",
+      badge: "bg-cyan-100 dark:bg-cyan-950/70 border border-cyan-400 dark:border-cyan-500/60 text-cyan-900 dark:text-cyan-200 font-bold shadow-xs",
+      pill: "bg-cyan-100 dark:bg-cyan-950/70 text-cyan-900 dark:text-cyan-200 border border-cyan-400 dark:border-cyan-500/60 font-semibold shadow-xs",
     };
   }
   if (t.includes("CONTRA") || t.includes("COMPROBANTE") || t === "CT") {
     return {
       codigo: "CT",
       label: "Contraseña",
-      badge: "bg-teal-100 dark:bg-teal-950/70 border border-teal-400 dark:border-teal-500/60 text-teal-900 dark:text-teal-200 font-bold shadow-sm",
-      pill: "bg-teal-100 dark:bg-teal-950/70 text-teal-900 dark:text-teal-200 border border-teal-400 dark:border-teal-500/60 font-semibold shadow-sm",
+      badge: "bg-teal-100 dark:bg-teal-950/70 border border-teal-400 dark:border-teal-500/60 text-teal-900 dark:text-teal-200 font-bold shadow-xs",
+      pill: "bg-teal-100 dark:bg-teal-950/70 text-teal-900 dark:text-teal-200 border border-teal-400 dark:border-teal-500/60 font-semibold shadow-xs",
     };
   }
   if (t.includes("TARJETA") || t === "TI") {
     return {
       codigo: "TI",
       label: "Tarjeta de Identidad",
-      badge: "bg-purple-100 dark:bg-purple-950/70 border border-purple-400 dark:border-purple-500/60 text-purple-900 dark:text-purple-200 font-bold shadow-sm",
-      pill: "bg-purple-100 dark:bg-purple-950/70 text-purple-900 dark:text-purple-200 border border-purple-400 dark:border-purple-500/60 font-semibold shadow-sm",
+      badge: "bg-purple-100 dark:bg-purple-950/70 border border-purple-400 dark:border-purple-500/60 text-purple-900 dark:text-purple-200 font-bold shadow-xs",
+      pill: "bg-purple-100 dark:bg-purple-950/70 text-purple-900 dark:text-purple-200 border border-purple-400 dark:border-purple-500/60 font-semibold shadow-xs",
     };
   }
   if (t.includes("EXTRANJERIA") || t === "CE" || t.includes("RESIDENTE")) {
     return {
       codigo: "CE",
       label: "Cédula Extranjería",
-      badge: "bg-amber-100 dark:bg-amber-950/70 border border-amber-400 dark:border-amber-500/60 text-amber-900 dark:text-amber-200 font-bold shadow-sm",
-      pill: "bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-400 dark:border-amber-500/60 font-semibold shadow-sm",
+      badge: "bg-amber-100 dark:bg-amber-950/70 border border-amber-400 dark:border-amber-500/60 text-amber-900 dark:text-amber-200 font-bold shadow-xs",
+      pill: "bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-400 dark:border-amber-500/60 font-semibold shadow-xs",
     };
   }
   if (t.includes("PASAPORTE") || t === "PAS" || t.includes("PASSPORT")) {
     return {
       codigo: "PAS",
       label: "Pasaporte",
-      badge: "bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-400 dark:border-emerald-500/60 text-emerald-900 dark:text-emerald-200 font-bold shadow-sm",
-      pill: "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-400 dark:border-emerald-500/60 font-semibold shadow-sm",
+      badge: "bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-400 dark:border-emerald-500/60 text-emerald-900 dark:text-emerald-200 font-bold shadow-xs",
+      pill: "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-400 dark:border-emerald-500/60 font-semibold shadow-xs",
     };
   }
   return {
     codigo: "CC",
     label: "Cédula de Ciudadanía",
-    badge: "bg-blue-100 dark:bg-blue-950/80 border border-blue-400 dark:border-sky-500/60 text-blue-900 dark:text-sky-200 font-bold shadow-sm",
-    pill: "bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-sky-200 border border-blue-400 dark:border-sky-500/60 font-semibold shadow-sm",
+    badge: "bg-blue-100 dark:bg-blue-950/80 border border-blue-400 dark:border-sky-500/60 text-blue-900 dark:text-sky-200 font-bold shadow-xs",
+    pill: "bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-sky-200 border border-blue-400 dark:border-sky-500/60 font-semibold shadow-xs",
   };
 }
 

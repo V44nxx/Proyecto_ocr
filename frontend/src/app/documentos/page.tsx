@@ -729,17 +729,17 @@ export default function DocumentosPage() {
           <div
             ref={panelProgresoRef}
             id="panel-progreso-ocr"
-            className="mb-8 p-6 sm:p-7 rounded-2xl bg-white/70 dark:bg-[#121620]/60 border border-slate-200/80 dark:border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.03)] relative overflow-hidden backdrop-blur-xl animate-in fade-in duration-300 scroll-mt-6"
+            className="mb-8 p-6 sm:p-7 rounded-2xl bg-white/70 dark:bg-[#121620]/60 border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] relative overflow-hidden backdrop-blur-xl animate-in fade-in duration-300 scroll-mt-6"
           >
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/10 to-transparent pointer-events-none" />
 
             {/* Cabecera del Progreso */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/[0.06] relative z-10">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/6 relative z-10">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                   procesoFinalizado
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                    : "bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08]"
+                    : "bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/8"
                 }`}>
                   {procesoFinalizado ? (
                     <CheckCircle2 className="w-5 h-5" />
@@ -785,7 +785,7 @@ export default function DocumentosPage() {
               {/* Indicadores de Cronómetro, Tiempo Estimado y Botones de Control */}
               <div className="flex items-center flex-wrap gap-2 sm:gap-2.5 shrink-0 self-start lg:self-center">
                 {/* Tiempo Transcurrido */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-dark-800/90 border border-slate-300 dark:border-white/10 text-xs font-mono text-slate-700 dark:text-slate-300 shadow-sm whitespace-nowrap shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-dark-800/90 border border-slate-300 dark:border-white/10 text-xs font-mono text-slate-700 dark:text-slate-300 shadow-xs whitespace-nowrap shrink-0">
                   <Timer className="w-3.5 h-3.5 text-primary-500 shrink-0" />
                   <span>
                     {procesoFinalizado ? "Tiempo total:" : "Transcurrido:"}{" "}
@@ -797,7 +797,7 @@ export default function DocumentosPage() {
 
                 {/* Tiempo Estimado */}
                 {!procesoFinalizado && (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-500/10 border border-primary-500/25 text-xs font-mono text-primary-600 dark:text-primary-300 shadow-sm whitespace-nowrap shrink-0">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-500/10 border border-primary-500/25 text-xs font-mono text-primary-600 dark:text-primary-300 shadow-xs whitespace-nowrap shrink-0">
                     <Hourglass className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0 animate-pulse" />
                     <span>
                       Estimado: <strong className="text-slate-900 dark:text-white font-bold">{calcularTiempoEstimado()}</strong>
@@ -811,7 +811,7 @@ export default function DocumentosPage() {
                     type="button"
                     onClick={cancelarSubidaOProceso}
                     disabled={cancelando}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/30 text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-100 border border-rose-500/30 hover:border-rose-500/50 text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/30 text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-100 border border-rose-500/30 hover:border-rose-500/50 text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                     title="Cancelar subida y remover archivos del sistema"
                   >
                     {cancelando ? (
@@ -842,14 +842,14 @@ export default function DocumentosPage() {
             {/* Banner de Comparación Automática en Progreso */}
             {comparacionEnProgreso && !procesoFinalizado && (
               <div className="mt-4 p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-3 text-sm text-blue-200 relative z-10 animate-in fade-in duration-300">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center shrink-0">
                   <FileSpreadsheet className="w-4 h-4 text-blue-400" />
                 </div>
                 <div>
                   <p className="font-semibold text-blue-100 text-xs">Planilla cargada para Comparación automática</p>
                   <p className="text-xs text-blue-300 mt-0.5">Al terminar el OCR, la planilla se cotejará automáticamente en el módulo de Comparación.</p>
                 </div>
-                <div className="ml-auto flex-shrink-0">
+                <div className="ml-auto shrink-0">
                   <div className="flex gap-1">
                     {[0,1,2].map(i => (
                       <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{animationDelay: `${i * 0.15}s`}} />
@@ -864,11 +864,11 @@ export default function DocumentosPage() {
               <div className="mt-4 p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-emerald-200 relative z-10 animate-in fade-in duration-300">
                 <div className="flex items-center gap-3">
                   {cuentaAtrasRedireccion !== null ? (
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs flex-shrink-0 animate-pulse">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 font-mono text-xs shrink-0 animate-pulse">
                       {cuentaAtrasRedireccion}
                     </div>
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 shrink-0">
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                   )}
@@ -888,7 +888,7 @@ export default function DocumentosPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
                   {cuentaAtrasRedireccion !== null && (
                     <button
                       onClick={() => {
@@ -944,14 +944,14 @@ export default function DocumentosPage() {
                 </span>
               </div>
 
-              <div className="w-full h-3.5 bg-slate-200 dark:bg-dark-800 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-white/[0.08] relative shadow-inner">
+              <div className="w-full h-3.5 bg-slate-200 dark:bg-dark-800 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-white/8 relative shadow-inner">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ease-out relative ${
                     procesoFinalizado
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30"
+                      ? "bg-linear-to-r from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30"
                       : faseActual === "subiendo"
-                      ? "bg-gradient-to-r from-blue-600 to-cyan-400 shadow-lg shadow-blue-500/30"
-                      : "bg-gradient-to-r from-primary-600 via-blue-500 to-primary-400 shadow-lg shadow-primary-500/30"
+                      ? "bg-linear-to-r from-blue-600 to-cyan-400 shadow-lg shadow-blue-500/30"
+                      : "bg-linear-to-r from-primary-600 via-blue-500 to-primary-400 shadow-lg shadow-primary-500/30"
                   }`}
                   style={{
                     width: `${Math.min(
@@ -961,7 +961,7 @@ export default function DocumentosPage() {
                   }}
                 >
                   {!procesoFinalizado && (
-                    <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite] bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]" />
+                    <div className="absolute inset-0 bg-white/20 animate-shimmer bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]" />
                   )}
                 </div>
               </div>
@@ -974,7 +974,7 @@ export default function DocumentosPage() {
                   ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300"
                   : faseActual === "subiendo"
                   ? "bg-blue-50 dark:bg-blue-500/10 border-blue-300 dark:border-blue-500/30 text-blue-950 dark:text-blue-300 animate-pulse"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/4 text-slate-800 dark:text-slate-400"
               }`}>
                 <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
                   <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">1</span>
@@ -988,7 +988,7 @@ export default function DocumentosPage() {
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 40
                   ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/4 text-slate-800 dark:text-slate-400"
               }`}>
                 <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
                   <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">2</span>
@@ -1000,7 +1000,7 @@ export default function DocumentosPage() {
               <div className={`p-3 rounded-xl border transition-all ${
                 progresoGlobal >= 75
                   ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/4 text-slate-800 dark:text-slate-400"
               }`}>
                 <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
                   <span className="w-4 h-4 rounded-full bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400 flex items-center justify-center text-[10px] font-bold">3</span>
@@ -1014,7 +1014,7 @@ export default function DocumentosPage() {
                   ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-300"
                   : progresoGlobal >= 85
                   ? "bg-primary-50 dark:bg-primary-500/10 border-primary-300 dark:border-primary-500/30 text-primary-950 dark:text-primary-300"
-                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/[0.04] text-slate-800 dark:text-slate-400"
+                  : "bg-slate-100 dark:bg-dark-800/40 border-slate-300 dark:border-white/4 text-slate-800 dark:text-slate-400"
               }`}>
                 <div className="flex items-center gap-2 font-bold text-xs mb-1 text-slate-900 dark:text-white">
                   <span className={`w-4 h-4 rounded-full ${progresoGlobal >= 100 ? "bg-emerald-600 dark:bg-emerald-500/20 text-white dark:text-emerald-400" : "bg-primary-600 dark:bg-primary-500/20 text-white dark:text-primary-400"} flex items-center justify-center text-[10px] font-bold`}>4</span>
@@ -1029,23 +1029,23 @@ export default function DocumentosPage() {
               {docsEnProceso.map((doc) => (
                 <div
                   key={doc.id}
-                  className="p-3.5 bg-slate-50 dark:bg-dark-800/70 border border-slate-300 dark:border-white/[0.06] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                  className="p-3.5 bg-slate-50 dark:bg-dark-800/70 border border-slate-300 dark:border-white/6 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-5 h-5 text-primary-500 dark:text-primary-400 flex-shrink-0" />
+                    <FileText className="w-5 h-5 text-primary-500 dark:text-primary-400 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-sm sm:max-w-md">
                         {doc.nombre}
                       </p>
                       <p className="text-xs text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1.5 mt-0.5">
                         {doc.estado === "procesando" && (
-                          <RefreshCw className="w-3 h-3 text-yellow-600 dark:text-yellow-400 animate-spin flex-shrink-0" />
+                          <RefreshCw className="w-3 h-3 text-yellow-600 dark:text-yellow-400 animate-spin shrink-0" />
                         )}
                         {doc.estado === "completado" && (
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         )}
                         {doc.estado === "error" && (
-                          <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0" />
+                          <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-400 shrink-0" />
                         )}
                         <span className="font-semibold text-slate-800 dark:text-slate-200">{doc.paso}</span>
                         {doc.total_paginas > 0 && (
@@ -1062,7 +1062,7 @@ export default function DocumentosPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 self-end sm:self-center flex-shrink-0">
+                  <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
                     {doc.personas_count > 0 && (
                       <span className="badge badge-info text-xs flex items-center gap-1 font-bold">
                         <Users className="w-3 h-3" />
@@ -1103,7 +1103,7 @@ export default function DocumentosPage() {
 
             {/* Resumen Final y Botones de Acción */}
             {procesoFinalizado && (
-              <div className="mt-6 pt-5 border-t border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 animate-in fade-in duration-300">
+              <div className="mt-6 pt-5 border-t border-white/8 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 animate-in fade-in duration-300">
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
                   <div className="flex items-center gap-1.5 bg-primary-500/10 px-2.5 py-1 rounded-lg border border-primary-500/20">
                     <Timer className="w-4 h-4 text-primary-400" />
@@ -1183,8 +1183,8 @@ export default function DocumentosPage() {
           {/* ── PLANILLA EXCEL OFICIAL (OPCIONAL) ────────────────── */}
           <div className={`mb-6 p-4 rounded-2xl border transition-all ${
             excelSeleccionado
-              ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-              : "border-slate-200 dark:border-white/[0.08] bg-slate-50/50 dark:bg-white/[0.01]"
+              ? "border-emerald-500/30 bg-emerald-500/4"
+              : "border-slate-200 dark:border-white/8 bg-slate-50/50 dark:bg-white/1"
           }`}>
             <div className="flex items-center gap-2 mb-1.5">
               <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -1196,9 +1196,9 @@ export default function DocumentosPage() {
             </p>
 
             {excelSeleccionado ? (
-              <div className="ml-7 flex items-center justify-between p-3 bg-white dark:bg-white/[0.04] border border-emerald-500/30 rounded-xl shadow-sm">
+              <div className="ml-7 flex items-center justify-between p-3 bg-white dark:bg-white/4 border border-emerald-500/30 rounded-xl shadow-xs">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="min-w-0">
@@ -1209,14 +1209,14 @@ export default function DocumentosPage() {
                 <button
                   onClick={() => setExcelSeleccionado(null)}
                   disabled={subiendo}
-                  className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-500/10 flex-shrink-0 cursor-pointer active:scale-[0.95]"
+                  className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-500/10 shrink-0 cursor-pointer active:scale-[0.95]"
                   title="Cambiar Excel"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <label className="ml-7 flex items-center gap-3 p-3 bg-white dark:bg-white/[0.02] border border-dashed border-slate-300 dark:border-white/[0.12] rounded-xl cursor-pointer hover:border-[#0071E3] hover:bg-slate-50/80 dark:hover:bg-white/[0.04] transition-all group">
+              <label className="ml-7 flex items-center gap-3 p-3 bg-white dark:bg-white/2 border border-dashed border-slate-300 dark:border-white/12 rounded-xl cursor-pointer hover:border-[#0071E3] hover:bg-slate-50/80 dark:hover:bg-white/4 transition-all group">
                 <input
                   type="file"
                   accept=".xlsx,.xls"
@@ -1234,7 +1234,7 @@ export default function DocumentosPage() {
                     toast.success(`Planilla oficial cargada: ${f.name}`);
                   }}
                 />
-                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/6 border border-slate-200/80 dark:border-white/8 flex items-center justify-center shrink-0">
                   <PlusCircle className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <div>
@@ -1249,7 +1249,7 @@ export default function DocumentosPage() {
 
           {/* ── PASO 2: PDF(s) ───────────────────────────────────────── */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-900">
               2
             </div>
             <Upload className="w-4 h-4 text-slate-700 dark:text-slate-300" />
@@ -1261,7 +1261,7 @@ export default function DocumentosPage() {
             className={`dropzone ${isDragActive ? "active" : ""}`}
           >
             <input {...getInputProps()} />
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.08] flex items-center justify-center transition-transform group-hover:scale-105">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/6 border border-slate-200/80 dark:border-white/8 flex items-center justify-center transition-transform group-hover:scale-105">
               <Upload className="w-6 h-6 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
@@ -1278,7 +1278,7 @@ export default function DocumentosPage() {
               SECCIÓN DE ARCHIVOS SELECCIONADOS Y BOTÓN DE INICIO REDISEÑADO
              ───────────────────────────────────────────────────────────── */}
           {archivosSeleccionados.length > 0 && (
-            <div className="mt-6 pt-5 border-t border-white/[0.08]">
+            <div className="mt-6 pt-5 border-t border-white/8">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <FileCheck2 className="w-4 h-4 text-primary-400" />
@@ -1304,10 +1304,10 @@ export default function DocumentosPage() {
                 {archivosSeleccionados.map((f, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-3.5 bg-dark-800/80 hover:bg-dark-800 rounded-xl border border-white/[0.06] transition-all"
+                    className="flex items-center justify-between p-3.5 bg-dark-800/80 hover:bg-dark-800 rounded-xl border border-white/6 transition-all"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-center shrink-0">
                         <FileText className="w-4 h-4 text-primary-400" />
                       </div>
                       <div className="min-w-0">
@@ -1324,7 +1324,7 @@ export default function DocumentosPage() {
                         setArchivosSeleccionados((prev) => prev.filter((_, j) => j !== i))
                       }
                       disabled={subiendo}
-                      className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 flex-shrink-0"
+                      className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-dark-700 shrink-0"
                       title="Eliminar archivo"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1336,9 +1336,9 @@ export default function DocumentosPage() {
               {/* ── Sección Excel adjunto opcional ── ELIMINADA: ahora Excel es Paso 1 ── */}
 
               {/* Barra de Acciones del Botón OCR */}
-              <div className="mt-6 pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="mt-6 pt-5 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-400 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary-400 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-primary-400 shrink-0" />
                   <span>
                     {excelSeleccionado
                       ? "Planilla lista: los nombres oficiales se integran al OCR y se carga automáticamente en Comparación."
@@ -1352,7 +1352,7 @@ export default function DocumentosPage() {
                   className={`w-full sm:w-auto py-3.5 px-8 text-base font-semibold rounded-xl flex items-center justify-center gap-3 shadow-lg transition-all transform cursor-pointer ${
                     !subiendo && archivosSeleccionados.length > 0
                       ? "btn-primary hover:shadow-primary-500/40 hover:-translate-y-0.5 shadow-primary-500/25"
-                      : "bg-dark-700 text-slate-500 border border-white/[0.06] cursor-not-allowed"
+                      : "bg-dark-700 text-slate-500 border border-white/6 cursor-not-allowed"
                   }`}
                 >
                   {subiendo ? (
@@ -1432,7 +1432,7 @@ export default function DocumentosPage() {
                       <tr key={doc.id}>
                         <td>
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-primary-500/10 flex items-center justify-center flex-shrink-0">
+                            <div className="w-7 h-7 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
                               <FileText className="w-4 h-4 text-primary-400" />
                             </div>
                             <span className="font-medium text-white truncate max-w-[220px]">
@@ -1447,7 +1447,7 @@ export default function DocumentosPage() {
                               {cfg.label}
                             </span>
                             {doc.mensaje_error && (
-                              <p className="text-[11px] text-red-400 bg-red-500/10 p-1.5 rounded border border-red-500/20 max-w-xs font-mono whitespace-pre-wrap">
+                              <p className="text-[11px] text-red-400 bg-red-500/10 p-1.5 rounded-sm border border-red-500/20 max-w-xs font-mono whitespace-pre-wrap">
                                 ⚠️ {doc.mensaje_error}
                               </p>
                             )}
@@ -1485,7 +1485,7 @@ export default function DocumentosPage() {
                           {doc.estado === "procesando" || doc.estado === "pendiente" ? (
                             <button
                               onClick={() => cancelarDocumentoIndividual(doc.id, doc.nombre_original)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-medium transition-all shadow-sm"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-medium transition-all shadow-xs"
                               title="Cancelar procesamiento y remover archivo por completo"
                             >
                               <XCircle className="w-3.5 h-3.5 text-rose-400" />
@@ -1532,7 +1532,7 @@ export default function DocumentosPage() {
 
               <div className="mt-5 space-y-4">
                 {conflictosFicha.map((c, i) => (
-                  <div key={c.archivo} className="rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.03] p-4">
+                  <div key={c.archivo} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50/70 dark:bg-white/3 p-4">
                     <p className="text-sm font-semibold text-slate-900 dark:text-white truncate" title={c.archivo}>{c.archivo}</p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                       Ficha {c.numero} · ya subida como «{c.existente.nombre_original}»
@@ -1551,7 +1551,7 @@ export default function DocumentosPage() {
                           className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
                             c.accion === op.valor
                               ? "border-[#0071E3] bg-blue-50/80 dark:bg-[#0071E3]/15 ring-1 ring-[#0071E3]/40"
-                              : "border-slate-200 dark:border-white/[0.08] hover:bg-slate-100/70 dark:hover:bg-white/[0.05]"
+                              : "border-slate-200 dark:border-white/8 hover:bg-slate-100/70 dark:hover:bg-white/5"
                           }`}
                         >
                           <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">

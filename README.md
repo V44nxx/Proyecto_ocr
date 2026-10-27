@@ -330,7 +330,8 @@ proyecto_ocr/
 │   │   ├── lib/                             # Cliente HTTP y utilidades API
 │   │   └── types/                           # Definiciones de tipos TypeScript
 │   ├── package.json                         # Dependencias Node.js
-│   ├── tailwind.config.ts                   # Configuración de estilos Tailwind
+│   ├── src/proxy.ts                         # Política de contenido (CSP) con un nonce por petición
+│   ├── src/app/globals.css                  # Tailwind 4: tema (@theme) y estilos globales
 │   └── Dockerfile                           # Contenedor del frontend
 ├── credentials/                             # Carpeta para Service Account de Google Cloud
 ├── database/

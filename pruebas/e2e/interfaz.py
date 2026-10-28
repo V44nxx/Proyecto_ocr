@@ -411,6 +411,27 @@ with sync_playwright() as p:
     page.screenshot(path=str(CAPTURAS / "15_modal_crear_usuario.png"))
     page.keyboard.press("Escape")
     page.get_by_role("button", name="Cancelar").click() if page.get_by_role("button", name="Cancelar").count() else None
+
+    # En modo claro, el rol elegido se lee: antes quedaba en blanco sobre celeste
+    page.evaluate("localStorage.setItem('ocr_theme', 'light')")
+    page.reload()
+    page.get_by_role("button", name="+ Nuevo Usuario").click()
+    rol_elegido = page.get_by_role("button", name=re.compile("^Operador"))
+    expect(rol_elegido).to_be_visible(timeout=5000)
+    page.wait_for_timeout(400)
+    # Tailwind 4 entrega los colores en oklch(): se pasan a RGB dibujándolos en un canvas
+    luz_texto = page.evaluate("""(boton) => {
+        const lienzo = document.createElement('canvas').getContext('2d');
+        lienzo.fillStyle = getComputedStyle(boton).color;
+        lienzo.fillRect(0, 0, 1, 1);
+        const [r, g, b] = lienzo.getImageData(0, 0, 1, 1).data;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    }""", rol_elegido.element_handle())
+    caso("CP-UI-37", "Crear usuario en modo claro: el rol elegido se lee (texto oscuro, no blanco)",
+         luz_texto < 0.4, f"luminancia del texto: {luz_texto:.2f}")
+    page.keyboard.press("Escape")
+    page.evaluate("localStorage.setItem('ocr_theme', 'dark')")
+    page.reload()
     caso("CP-UI-32", "Usuarios: se crea desde el módulo; el menú lateral ya no tiene «Agregar Usuario»",
          sin_boton_menu, f"botón en el menú: {not sin_boton_menu}")
 

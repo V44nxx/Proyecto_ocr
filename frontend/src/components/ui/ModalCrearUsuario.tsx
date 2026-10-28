@@ -187,7 +187,9 @@ export default function ModalCrearUsuario({
                 onClick={() => setRol("usuario")}
                 className={`p-3.5 rounded-xl border text-left transition-all ${
                   rol === "usuario"
-                    ? "bg-primary-500/15 border-primary-500/50 text-white shadow-lg shadow-primary-950/20"
+                    // Color explícito en cada modo: el ajuste global de text-white para el modo claro deja fuera a
+                    // los fondos bg-primary, y el rol elegido quedaba en blanco sobre celeste
+                    ? "bg-primary-500/15 border-primary-500/50 text-slate-900 dark:text-white shadow-lg shadow-primary-950/20"
                     : "bg-dark-800/40 border-white/8 text-slate-400 hover:border-white/20"
                 }`}
               >
@@ -208,7 +210,7 @@ export default function ModalCrearUsuario({
                 onClick={() => setRol("admin")}
                 className={`p-3.5 rounded-xl border text-left transition-all ${
                   rol === "admin"
-                    ? "bg-purple-500/15 border-purple-500/50 text-white shadow-lg shadow-purple-950/20"
+                    ? "bg-purple-500/15 border-purple-500/50 text-slate-900 dark:text-white shadow-lg shadow-purple-950/20"
                     : "bg-dark-800/40 border-white/8 text-slate-400 hover:border-white/20"
                 }`}
               >

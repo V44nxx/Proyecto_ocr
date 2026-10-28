@@ -117,7 +117,7 @@ export default function Sidebar() {
         {/* ── Logo & Toggle ─────────────────────────────────────── */}
         {!collapsed ? (
           <div className="px-4 py-4 border-b border-slate-200/70 dark:border-white/6 flex items-center justify-between min-w-0">
-            <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0071E3]" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
+            <Link href="/dashboard" prefetch className="min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0071E3]" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
               <LogoKondID className="h-8" />
               <span className="mt-1 text-[8px] text-slate-400 dark:text-slate-400 font-medium block truncate uppercase tracking-[0.22em]">
                 OCR · Documentos · Identidad
@@ -134,7 +134,7 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="py-4 border-b border-slate-200/70 dark:border-white/6 flex flex-col items-center gap-2.5">
-            <Link href="/dashboard" className="shrink-0 rounded-lg" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
+            <Link href="/dashboard" prefetch className="shrink-0 rounded-lg" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
               <HuellaKondID className="w-8 h-8" />
             </Link>
             <button
@@ -156,11 +156,13 @@ export default function Sidebar() {
             </p>
             {itemsVisibles.map((item) => {
               const isActive = pathname === item.href;
-              // Link (no router.push): Next precarga la pantalla y el clic no espera un viaje al servidor
+              // Link con prefetch completo: desde 2.14.0 todas las pantallas se arman por petición (nonce de la CSP) y
+              // Next solo precarga las dinámicas si se le pide; sin esto cada clic esperaba un viaje al servidor
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
                   aria-current={isActive ? "page" : undefined}
                   className={`sidebar-item ${isActive ? "active" : ""}`}
                   title={item.label}
@@ -192,6 +194,7 @@ export default function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
                   aria-current={isActive ? "page" : undefined}
                   className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-[0.95] ${
                     isActive

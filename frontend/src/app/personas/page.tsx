@@ -28,6 +28,7 @@ import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEda
 import type { Persona, PersonaUpdate, Documento } from "@/types";
 import IconoTema from "@/components/ui/IconoTema";
 import { confirmar } from "@/lib/confirmar";
+import { datosRecientes } from "@/lib/datosRecientes";
 
 // ─── Helpers de Clasificación ──────────────────────────────────────────────
 const personaFaltaEnPdf = (p: Persona): boolean => {
@@ -247,6 +248,35 @@ const getEstadoConfig = (p: Persona) => {
   };
 };
 
+// Lo último que se vio en Personas (lib/datosRecientes.ts): las fichas, la ficha elegida y la lista de cada ficha
+type EstadisticasPersonas = {
+  total: number;
+  validas: number;
+  revision: number;
+  discrepancia: number;
+  faltaPdf: number;
+  faltaExcel: number;
+  menores: number;
+};
+type FichasRecientes = { documentos: Documento[]; totalGlobal: number | null };
+type ListaReciente = { personas: Persona[]; stats: EstadisticasPersonas };
+const CLAVE_FICHAS = "personas:fichas";
+const CLAVE_FICHA = "personas:ficha";
+const claveLista = (filtro: string) => `personas:lista:${filtro}`;
+
+/** La última vista de Personas, si sirve para la visita que empieza: no sirve con una subida recién enviada
+ *  (que elige su propia ficha) ni con un enlace a otra ficha. Al recargar la página la memoria está vacía */
+function vistaReciente(docParam: string | null) {
+  if (typeof window === "undefined") return null;
+  const fichas = datosRecientes.leer<FichasRecientes>(CLAVE_FICHAS);
+  const ficha = datosRecientes.leer<string>(CLAVE_FICHA);
+  const lista = ficha ? datosRecientes.leer<ListaReciente>(claveLista(ficha)) : undefined;
+  if (!fichas || !ficha || !lista) return null;
+  if (localStorage.getItem("nuevo_archivo_enviado") === "true") return null;
+  if (docParam && docParam !== ficha) return null;
+  return { ...fichas, ficha, ...lista };
+}
+
 function PersonasContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -254,14 +284,17 @@ function PersonasContent() {
   const { collapsed } = useSidebar();
   const docParam = searchParams.get("documento_id");
 
-  const [personas, setPersonas] = useState<Persona[]>([]);
-  const [documentos, setDocumentos] = useState<Documento[]>([]);
-  const [totalPersonasGlobal, setTotalPersonasGlobal] = useState<number | null>(null);
-  const [filtroDocumento, setFiltroDocumento] = useState<string>(docParam || "todos");
-  const [documentosCargados, setDocumentosCargados] = useState(false);
+  // Al volver a Personas se ve al instante la última vista; fichas y lista se actualizan a la vez, sin esperar
+  // una a la otra
+  const [vista] = useState(() => vistaReciente(docParam));
+  const [personas, setPersonas] = useState<Persona[]>(vista?.personas ?? []);
+  const [documentos, setDocumentos] = useState<Documento[]>(vista?.documentos ?? []);
+  const [totalPersonasGlobal, setTotalPersonasGlobal] = useState<number | null>(vista?.totalGlobal ?? null);
+  const [filtroDocumento, setFiltroDocumento] = useState<string>(vista?.ficha ?? (docParam || "todos"));
+  const [documentosCargados, setDocumentosCargados] = useState(Boolean(vista));
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [exportando, setExportando] = useState(false);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(!vista);
   const [buscar, setBuscar] = useState("");
   
   type FiltroEstado = "todos" | "validas" | "revision" | "falta_excel" | "falta_pdf" | "discrepancia" | "menores";
@@ -280,7 +313,7 @@ function PersonasContent() {
   const [tipoOriginal, setTipoOriginal] = useState("");
 
   // Estadísticas
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<EstadisticasPersonas>(vista?.stats ?? {
     total: 0,
     validas: 0,
     revision: 0,
@@ -312,8 +345,18 @@ function PersonasContent() {
 
   useEffect(() => {
     if (!auth.isAuthenticated() || !documentosCargados) return;
-    cargarPersonas(true);
-    const interval = setInterval(() => cargarPersonas(false), 4000);
+    // Si esta ficha ya se vio en la sesión, su lista aparece ya y la actual llega sin indicador de carga
+    const reciente = datosRecientes.leer<ListaReciente>(claveLista(filtroDocumento));
+    if (reciente) {
+      setPersonas(reciente.personas);
+      setStats(reciente.stats);
+      setCargando(false);
+    }
+    cargarPersonas(!reciente);
+    // Con la pestaña oculta no se pide nada: al volver, el siguiente ciclo trae lo actual
+    const interval = setInterval(() => {
+      if (!document.hidden) cargarPersonas(false);
+    }, 4000);
     return () => clearInterval(interval);
   }, [pathname, filtroDocumento, documentosCargados]);
 
@@ -344,6 +387,10 @@ function PersonasContent() {
       if (resStatsGlobal?.data?.total_personas != null) {
         setTotalPersonasGlobal(resStatsGlobal.data.total_personas);
       }
+      datosRecientes.guardar<FichasRecientes>(CLAVE_FICHAS, {
+        documentos: docs,
+        totalGlobal: resStatsGlobal?.data?.total_personas ?? null,
+      });
 
       const docQuery = searchParams.get("documento_id");
       if (docQuery && docs.some((d) => d.id === docQuery)) {
@@ -416,7 +463,8 @@ function PersonasContent() {
       ]);
 
       const items: Persona[] = Array.isArray(resPersonas.data) ? resPersonas.data : (((resPersonas.data as any)?.items) || []);
-      setPersonas(ordenarPorNombre(items));
+      const ordenadas = ordenarPorNombre(items);
+      setPersonas(ordenadas);
 
       const tot = docIdFiltro ? (resStats?.data?.total_personas ?? items.length) : (resStats?.data?.total_personas || items.length);
       const validasCount = items.filter(esPersonaValidada).length;
@@ -429,7 +477,7 @@ function PersonasContent() {
         return ed !== null && ed < 14;
       }).length;
 
-      setStats({
+      const nuevasStats: EstadisticasPersonas = {
         total: tot,
         revision: revCount,
         validas: validasCount,
@@ -437,7 +485,13 @@ function PersonasContent() {
         faltaPdf: faltaPdfCount,
         faltaExcel: faltaExcelCount,
         menores: menoresCount,
-      });
+      };
+      setStats(nuevasStats);
+      // Una búsqueda no se guarda como la lista de la ficha
+      if (!buscar) {
+        datosRecientes.guardar<ListaReciente>(claveLista(filtroDocumento), { personas: ordenadas, stats: nuevasStats });
+        datosRecientes.guardar(CLAVE_FICHA, filtroDocumento);
+      }
 
       if (!docIdFiltro && tot > 0) {
         setTotalPersonasGlobal(tot);

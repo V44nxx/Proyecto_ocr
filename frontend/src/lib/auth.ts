@@ -48,6 +48,8 @@ export const auth = {
       localStorage.removeItem("ocr_docs_en_proceso");
       localStorage.removeItem("ocr_fase_actual");
       sessionStorage.clear();
+      // Lo que quedó en memoria de la cuenta anterior (vistas previas, datos recientes) se suelta
+      window.dispatchEvent(new Event("kondid:sesion-cerrada"));
 
       localStorage.removeItem(TOKEN_KEY_ANTERIOR);
       localStorage.setItem(USER_KEY, JSON.stringify(data.usuario));

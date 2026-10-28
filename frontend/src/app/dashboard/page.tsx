@@ -15,6 +15,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, apiPersonas, apiExportacion, getErrorMessage } from "@/lib/api";
 import { avisarDescargaDatosPersonales } from "@/lib/avisos";
 import { auth } from "@/lib/auth";
+import { datosRecientes } from "@/lib/datosRecientes";
 import { formatNombreCompleto, calcularEdad, getTipoDocInfo } from "@/lib/formatters";
 import { dividirNombreCompleto } from "@/lib/nombres";
 import type { DashboardStats, Documento, Persona } from "@/types";
@@ -63,12 +64,13 @@ function StatCard({
 export default function DashboardPage() {
   const router = useRouter();
   const { collapsed } = useSidebar();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [cargando, setCargando] = useState(true);
+  // Al volver al Dashboard se ve al instante lo de la última visita mientras llega lo actual (lib/datosRecientes.ts)
+  const [stats, setStats] = useState<DashboardStats | null>(() => datosRecientes.leer<DashboardStats>("dashboard:estadisticas") ?? null);
+  const [cargando, setCargando] = useState(() => !datosRecientes.leer("dashboard:estadisticas"));
 
   // Historial de Fichas
-  const [documentosHistorial, setDocumentosHistorial] = useState<Documento[]>([]);
-  const [cargandoDocs, setCargandoDocs] = useState(true);
+  const [documentosHistorial, setDocumentosHistorial] = useState<Documento[]>(() => datosRecientes.leer<Documento[]>("dashboard:fichas") ?? []);
+  const [cargandoDocs, setCargandoDocs] = useState(() => !datosRecientes.leer("dashboard:fichas"));
 
   // Modal de Personas de Ficha (Tabla Separada / Independiente)
   const [docSeleccionadoModal, setDocSeleccionadoModal] = useState<Documento | null>(null);
@@ -136,8 +138,8 @@ export default function DashboardPage() {
         setDocSeleccionadoModal(null);
       }
       setFichaAEliminar(null);
-      const resStats = await apiDocumentos.estadisticas().catch(() => null);
-      if (resStats?.data) setStats(resStats.data);
+      // Trae cifras e historial de nuevo: así lo guardado para la próxima visita tampoco tiene la ficha borrada
+      await cargarDatos();
     } catch (err) {
       console.error("Error al eliminar ficha del historial:", err);
       toast.error("Error al eliminar la ficha del historial", { id: toastId });
@@ -153,7 +155,10 @@ export default function DashboardPage() {
     }
     cargarDatos();
 
-    const intervalo = setInterval(cargarDatos, 15000);
+    // Con la pestaña oculta no se pide nada: al volver, el siguiente ciclo trae lo actual
+    const intervalo = setInterval(() => {
+      if (!document.hidden) cargarDatos();
+    }, 15000);
     return () => clearInterval(intervalo);
   }, []);
 
@@ -163,9 +168,13 @@ export default function DashboardPage() {
         apiDocumentos.estadisticas().catch(() => null),
         apiDocumentos.listar({ limit: 30 }).catch(() => null),
       ]);
-      if (resStats?.data) setStats(resStats.data);
+      if (resStats?.data) {
+        setStats(resStats.data);
+        datosRecientes.guardar("dashboard:estadisticas", resStats.data);
+      }
       const docs = Array.isArray(resDocs?.data) ? resDocs.data : [];
       setDocumentosHistorial(docs);
+      if (resDocs) datosRecientes.guardar("dashboard:fichas", docs);
     } catch (err) {
       console.error("Error cargando datos del dashboard:", err);
     } finally {

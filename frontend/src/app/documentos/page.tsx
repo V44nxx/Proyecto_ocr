@@ -17,6 +17,7 @@ import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiDocumentos, getErrorMessage, MENSAJE_SIN_INTERNET } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { datosRecientes } from "@/lib/datosRecientes";
 import { conexion } from "@/lib/estadoConexion";
 import { useRouter } from "next/navigation";
 import type { AccionFicha, Documento, DocumentoEstadoResponse, FichaExistenteInfo } from "@/types";
@@ -58,7 +59,8 @@ interface ConflictoFicha {
 export default function DocumentosPage() {
   const router = useRouter();
   const { collapsed } = useSidebar();
-  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  // Al volver a la pantalla se ve al instante la lista de la última visita mientras llega la actual
+  const [documentos, setDocumentos] = useState<Documento[]>(() => datosRecientes.leer<Documento[]>("documentos:subida") ?? []);
   const [subiendo, setSubiendo] = useState(false);
   // Mientras los archivos viajan al servidor, cerrar o recargar la pestaña cancela la subida: el navegador lo advierte
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function DocumentosPage() {
   const [excelSeleccionado, setExcelSeleccionado] = useState<File | null>(null);
   const [comparacionId, setComparacionId] = useState<string | null>(null);
   const [comparacionEnProgreso, setComparacionEnProgreso] = useState(false);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(() => !datosRecientes.leer("documentos:subida"));
   // Archivos de fichas que ya existen (mismo número): el usuario elige reemplazar o agregar como otra parte
   const [conflictosFicha, setConflictosFicha] = useState<ConflictoFicha[] | null>(null);
   const [verificandoFichas, setVerificandoFichas] = useState(false);
@@ -161,13 +163,21 @@ export default function DocumentosPage() {
     }
   };
 
+  // Lo guardado para la próxima visita sigue a la lista, también cuando se quita una ficha aquí mismo
+  useEffect(() => {
+    if (!cargando) datosRecientes.guardar("documentos:subida", documentos);
+  }, [documentos, cargando]);
+
   useEffect(() => {
     if (!auth.isAuthenticated()) {
       router.push("/");
       return;
     }
     cargarDocumentos();
-    const interval = setInterval(cargarDocumentos, 6000);
+    // Con la pestaña oculta no se pide nada: al volver, el siguiente ciclo trae lo actual
+    const interval = setInterval(() => {
+      if (!document.hidden) cargarDocumentos();
+    }, 6000);
     return () => clearInterval(interval);
   }, [router]);
 

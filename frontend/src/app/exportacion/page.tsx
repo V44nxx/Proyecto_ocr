@@ -15,6 +15,7 @@ import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiExportacion, apiPersonas, apiDocumentos } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { datosRecientes } from "@/lib/datosRecientes";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo } from "@/lib/formatters";
 import type { Persona, Documento } from "@/types";
 
@@ -32,22 +33,26 @@ const esPersonaEnRevision = (p: Persona) => {
 export default function ExportacionPage() {
   const router = useRouter();
   const { collapsed } = useSidebar();
-  const [personas, setPersonas] = useState<Persona[]>([]);
-  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  // Al volver a la pantalla se ve al instante lo de la última visita (lib/datosRecientes.ts). Descargar espera a
+  // los datos actuales: no se exporta una lista vieja
+  const [reciente] = useState(() => datosRecientes.leer<{ personas: Persona[]; documentos: Documento[] }>("exportacion"));
+  const [personas, setPersonas] = useState<Persona[]>(reciente?.personas ?? []);
+  const [documentos, setDocumentos] = useState<Documento[]>(reciente?.documentos ?? []);
   const [documentoSeleccionado, setDocumentoSeleccionado] = useState<string>("todos");
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(!reciente);
+  const [alDia, setAlDia] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [filtroRevision, setFiltroRevision] = useState<"todos" | "revision" | "ok" | "menores">("todos");
   const [busqueda, setBusqueda] = useState<string>("");
-  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(() => new Set(reciente?.personas.map((p) => p.id)));
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
-    cargarDatos();
+    cargarDatos(!reciente);
   }, []);
 
-  const cargarDatos = async () => {
-    setCargando(true);
+  const cargarDatos = async (mostrarEsqueleto = true) => {
+    if (mostrarEsqueleto) setCargando(true);
     try {
       const [resPersonas, resDocs] = await Promise.all([
         apiPersonas.listar({ limit: 500 }),
@@ -64,6 +69,8 @@ export default function ExportacionPage() {
 
       // Por defecto, seleccionar todas las personas cargadas
       setSeleccionados(new Set(personasItems.map((p: Persona) => p.id)));
+      datosRecientes.guardar("exportacion", { personas: personasItems, documentos: docsItems });
+      setAlDia(true);
     } catch {
       toast.error("Error cargando datos para exportación");
     } finally {
@@ -382,7 +389,7 @@ export default function ExportacionPage() {
               </label>
               <button
                 onClick={exportarXlsx}
-                disabled={exportando || seleccionadosVisiblesCount === 0}
+                disabled={exportando || !alDia || seleccionadosVisiblesCount === 0}
                 className="w-full py-2.5 px-4 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer h-[42px]"
               >
                 {exportando ? (
@@ -486,7 +493,7 @@ export default function ExportacionPage() {
 
               {/* Botón Refrescar */}
               <button
-                onClick={cargarDatos}
+                onClick={() => cargarDatos()}
                 className="btn-secondary text-xs p-2 flex items-center justify-center border border-slate-200/80 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-200 shrink-0 w-[36px] h-[36px]"
                 title="Actualizar datos"
               >

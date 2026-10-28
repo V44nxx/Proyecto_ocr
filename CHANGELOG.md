@@ -22,6 +22,43 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.16.0] - 2026-10-28
+
+**Resumen**
+
+Cambiar de módulo vuelve a ser rápido, y al volver a una pantalla los datos aparecen al instante. Medido con la latencia real hasta el servidor (210 ms por viaje):
+
+| | 2.15.0 | 2.16.0 |
+| --- | --- | --- |
+| Cambio de módulo, primera vez | 0,82 s | 0,43 s |
+| Cambio de módulo, al volver | 0,61 s | 0,34 s |
+| Ver el contenido al volver a un módulo | 0,5 a 0,8 s | 0,03 s |
+
+### Cambiado
+
+- **Precarga completa del menú**:
+  - Desde 2.14.0 cada pantalla se arma en el servidor en cada petición, porque así lo exige el nonce de la política de contenido.
+  - Next.js no precarga esas pantallas a menos que se le pida, así que cada clic del menú esperaba un viaje al servidor: el cambio de módulo había pasado de 0,39 s (2.10.1) a 0,82 s.
+  - Los enlaces del menú y del logo ahora la piden (`prefetch`). La pantalla queda lista unos 5 minutos.
+- **Datos recientes en memoria** (`lib/datosRecientes.ts`):
+  - Dashboard, Personas, Documentos, Exportación y Comparación arrancan con lo que trajeron en la última visita y lo reemplazan cuando llega lo actual.
+  - Al volver a Personas, las fichas y la lista se actualizan a la vez y no una después de la otra. Tener todo al día pasa de 0,54 s a 0,30 s.
+  - Exportación muestra la lista enseguida, pero el botón de descargar espera a los datos actuales, para no exportar una lista vieja.
+  - En Comparación solo se guardan las diferencias junto con la comparación a la que pertenecen.
+- **Refresco automático**: Personas (cada 4 s), Documentos (6 s) y Dashboard (15 s) no piden nada mientras la pestaña está oculta.
+
+### Seguridad
+
+- Los datos recientes viven solo en la memoria de la pestaña, nunca en `localStorage` ni en el disco. Se pierden al recargar.
+- Se vacían al cerrar sesión y también al entrar con otra cuenta. Al entrar se sueltan además las vistas previas de documentos de la sesión anterior.
+
+### Pruebas
+
+- e2e de 34 a 36 casos:
+  - CP-UI-35: con la red a 1,5 s por viaje, la lista de Personas aparece antes de 0,7 s al volver.
+  - CP-UI-36: después de cerrar sesión, volver atrás a Personas no deja ver la lista ni un instante.
+- Se comprobó que CP-UI-36 falla con una compilación que no vacía la memoria (la lista aparecía una vez).
+
 ## [2.15.0] - 2026-10-28
 
 **Resumen**

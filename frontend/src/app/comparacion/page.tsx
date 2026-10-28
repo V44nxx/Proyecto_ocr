@@ -16,6 +16,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import { apiComparacion, getErrorMessage } from "@/lib/api";
 import { avisarDescargaDatosPersonales } from "@/lib/avisos";
 import { auth } from "@/lib/auth";
+import { datosRecientes } from "@/lib/datosRecientes";
 import type { Comparacion, Diferencia } from "@/types";
 
 const TIPO_CONFIG = {
@@ -67,27 +68,50 @@ function limpiarEtiquetaCampo(campo: string | null | undefined, tipo: string): s
   return campo.replace(/_/g, " ");
 }
 
+// Lo último que se vio en Comparación (lib/datosRecientes.ts): la lista, la comparación abierta y sus diferencias
+type ComparacionReciente = { comparaciones: Comparacion[]; activa: Comparacion; diferencias: Diferencia[] };
+const CLAVE_RECIENTE = "comparacion";
+
+/** La última vista, si es la misma comparación que pide el enlace (?id=) o el enlace no pide ninguna */
+function vistaReciente() {
+  if (typeof window === "undefined") return null;
+  const reciente = datosRecientes.leer<ComparacionReciente>(CLAVE_RECIENTE);
+  const id = new URLSearchParams(window.location.search).get("id");
+  return reciente && (!id || id === reciente.activa.id) ? reciente : null;
+}
+
 export default function ComparacionPage() {
   const router = useRouter();
   const { collapsed } = useSidebar();
-  const [comparaciones, setComparaciones] = useState<Comparacion[]>([]);
-  const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(null);
+  // Al volver a la pantalla se ve al instante la última vista mientras llega la actual
+  const [reciente] = useState(vistaReciente);
+  const [comparaciones, setComparaciones] = useState<Comparacion[]>(reciente?.comparaciones ?? []);
+  const [comparacionActiva, setComparacionActiva] = useState<Comparacion | null>(reciente?.activa ?? null);
   const [reintentando, setReintentando] = useState(false);
-  const [diferencias, setDiferencias] = useState<Diferencia[]>([]);
+  const [diferencias, setDiferencias] = useState<Diferencia[]>(reciente?.diferencias ?? []);
   const [filtroDif, setFiltroDif] = useState<string>("todos");
   const [busqueda, setBusqueda] = useState<string>("");
   const [subiendo, setSubiendo] = useState(false);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(!reciente);
   const [descargando, setDescargando] = useState(false);
   const [corrigiendoId, setCorrigiendoId] = useState<string | null>(null);
   const [agregandoId, setAgregandoId] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  // De qué comparación son las diferencias en pantalla: al cambiar de comparación hay un momento en que todavía
+  // se ven las de la anterior, y eso no se guarda como la última vista
+  const diferenciasDe = useRef<string | null>(reciente?.activa.id ?? null);
 
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!cargando && comparacionActiva && diferenciasDe.current === comparacionActiva.id) {
+      datosRecientes.guardar<ComparacionReciente>(CLAVE_RECIENTE, { comparaciones, activa: comparacionActiva, diferencias });
+    }
+  }, [cargando, comparaciones, comparacionActiva, diferencias]);
 
   useEffect(() => {
     if (!auth.isAuthenticated()) { router.push("/"); return; }
@@ -115,6 +139,7 @@ export default function ComparacionPage() {
             try {
               const { data: difs } = await apiComparacion.diferencias(updated.id);
               setDiferencias(difs);
+              diferenciasDe.current = updated.id;
             } catch {
               toast.error("Error cargando diferencias");
             }
@@ -135,11 +160,13 @@ export default function ComparacionPage() {
       try {
         const { data } = await apiComparacion.diferencias(comp.id);
         setDiferencias(data);
+        diferenciasDe.current = comp.id;
       } catch {
         toast.error("Error cargando diferencias");
       }
     } else if (comp.estado === "procesando" || comp.estado === "pendiente") {
       setDiferencias([]);
+      diferenciasDe.current = null;
       iniciarPolling(comp);
     }
   };
@@ -152,6 +179,7 @@ export default function ComparacionPage() {
       const enProceso: Comparacion = { ...comp, estado: "procesando", mensaje_error: null };
       setComparacionActiva(enProceso);
       setDiferencias([]);
+      diferenciasDe.current = null;
       iniciarPolling(enProceso);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, "No se pudo reintentar la comparación"));

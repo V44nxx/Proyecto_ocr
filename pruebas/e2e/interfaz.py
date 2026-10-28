@@ -26,7 +26,7 @@ import urllib.request
 from email import policy
 from pathlib import Path
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, expect, sync_playwright
 
 SALIDA = Path(sys.argv[1])
 CAPTURAS = SALIDA / "capturas"
@@ -200,6 +200,51 @@ with sync_playwright() as p:
          textos_tema == ["Modo Claro activado"], textos_tema)
     interruptor.click()
     expect(avisos_tema).to_have_count(0, timeout=6000)
+
+    # ── Datos recientes en memoria ──────────────────────────────────
+    # Con la red a 1,5 s por viaje, la lista de Personas tiene que verse antes de que pueda llegar del servidor
+    lateral = page.locator("aside")
+    lateral.get_by_text("Personas", exact=True).first.click()
+    expect(page.locator("tbody tr").first).to_contain_text("ADRIANA", timeout=15000)
+    lateral.get_by_text("Dashboard", exact=True).first.click()
+    page.wait_for_url("**/dashboard", timeout=10000)
+    page.wait_for_timeout(1000)
+    red = ctx.new_cdp_session(page)
+    red.send("Network.enable")
+    red.send("Network.emulateNetworkConditions",
+             {"offline": False, "latency": 1500, "downloadThroughput": -1, "uploadThroughput": -1})
+    lateral.get_by_text("Personas", exact=True).first.click()
+    page.wait_for_url("**/personas*", timeout=15000)
+    try:
+        page.wait_for_function("""() => {
+            const fila = document.querySelector('tbody tr');
+            return fila && fila.innerText.includes('ADRIANA') && !document.querySelector('main .animate-pulse');
+        }""", timeout=700)
+        al_instante = True
+    except PlaywrightTimeoutError:
+        al_instante = False
+    red.send("Network.emulateNetworkConditions",
+             {"offline": False, "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1})
+    caso("CP-UI-35", "Al volver a Personas, la lista de la visita anterior se ve al instante mientras llega la actual",
+         al_instante, "lista visible antes de 0,7 s con la red a 1,5 s por viaje")
+
+    # Al cerrar sesión la memoria se vacía: volver atrás a Personas no muestra la lista ni un instante
+    page.wait_for_timeout(2000)
+    lateral.get_by_role("button", name="Cerrar Sesión").first.click()
+    page.wait_for_url(FRONT + "/", timeout=10000)
+    page.evaluate("""() => {
+        window.__filasVistas = 0;
+        new MutationObserver(() => {
+            if ([...document.querySelectorAll('tbody tr')].some((f) => f.innerText.includes('ADRIANA'))) window.__filasVistas++;
+        }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }""")
+    page.go_back()
+    page.wait_for_url(FRONT + "/", timeout=15000)
+    page.wait_for_timeout(1500)
+    filas_vistas = page.evaluate("window.__filasVistas")
+    caso("CP-UI-36", "Tras cerrar sesión, volver atrás a Personas no deja ver la lista guardada en memoria",
+         filas_vistas == 0, f"veces que apareció la lista: {filas_vistas}")
+    login(page, "ana@example.com", CLAVE)
 
     # ── Exportación ─────────────────────────────────────────────────
     page.goto(FRONT + "/exportacion")

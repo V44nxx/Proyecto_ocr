@@ -447,8 +447,8 @@ def _enriquecer_persona_response(p: Persona, ids_en_excel: Set[str], hay_excel: 
 
 @router.get("", response_model=List[PersonaResponse], summary="Listar personas")
 def listar_personas(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000, description="Por página; la pantalla pide todas las páginas"),
     requiere_revision: Optional[bool] = Query(None),
     buscar: Optional[str] = Query(None, description="Buscar por nombre, apellido o cédula"),
     documento_id: Optional[str] = Query(None, description="Filtrar por ID de documento PDF"),
@@ -487,7 +487,9 @@ def listar_personas(
             Persona.apellidos.ilike(buscar_upper)
         )
 
-    personas = query.order_by(Persona.fecha_registro.desc()).offset(skip).limit(limit).all()
+    # El id desempata a las personas registradas en el mismo instante: sin él, al recorrer las páginas
+    # algunas se repetían y otras no aparecían
+    personas = query.order_by(Persona.fecha_registro.desc(), Persona.id).offset(skip).limit(limit).all()
 
     ids_en_excel, hay_excel = _obtener_ids_en_excel(db, usuario.id)
 

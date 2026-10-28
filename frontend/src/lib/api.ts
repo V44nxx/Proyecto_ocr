@@ -168,6 +168,24 @@ apiClient.interceptors.response.use(
   }
 );
 
+// Las listas largas se piden por páginas (el servidor entrega hasta 1000 por vez) y aquí se juntan todas.
+// Antes cada pantalla pedía una sola página y lo que pasaba de 300 personas o 100 diferencias no se veía
+const TAMANO_PAGINA = 500;
+const MAXIMO_PAGINAS = 100;
+
+async function todasLasPaginas<T>(
+  pedir: (skip: number, limit: number) => Promise<{ data: T[] | PaginatedResponse<T> }>
+): Promise<{ data: T[] }> {
+  const todos: T[] = [];
+  for (let n = 0; n < MAXIMO_PAGINAS; n++) {
+    const { data } = await pedir(n * TAMANO_PAGINA, TAMANO_PAGINA);
+    const pagina = Array.isArray(data) ? data : data?.items ?? [];
+    todos.push(...pagina);
+    if (pagina.length < TAMANO_PAGINA) break;
+  }
+  return { data: todos };
+}
+
 // ──────────────────────────────────────────
 // AUTH
 // ──────────────────────────────────────────
@@ -286,6 +304,11 @@ export const apiDocumentos = {
   listar: (params?: { skip?: number; limit?: number; estado?: string; solo_subida?: boolean }) =>
     apiClient.get<Documento[]>("/api/documentos", { params }),
 
+  /** Todas las fichas, página por página */
+  listarTodos: (params?: { estado?: string; solo_subida?: boolean }) =>
+    todasLasPaginas<Documento>((skip, limit) =>
+      apiClient.get<Documento[]>("/api/documentos", { params: { ...params, skip, limit } })),
+
   detalle: (id: string) =>
     apiClient.get<Documento>(`/api/documentos/${id}`),
 
@@ -328,6 +351,11 @@ export const apiPersonas = {
     buscar?: string;
     documento_id?: string;
   }) => apiClient.get<Persona[] | PaginatedResponse<Persona>>("/api/personas", { params }),
+
+  /** Todas las personas que cumplen el filtro, página por página */
+  listarTodas: (params?: { requiere_revision?: boolean; buscar?: string; documento_id?: string }) =>
+    todasLasPaginas<Persona>((skip, limit) =>
+      apiClient.get<Persona[] | PaginatedResponse<Persona>>("/api/personas", { params: { ...params, skip, limit } })),
 
   detalle: (id: string) =>
     apiClient.get<Persona>(`/api/personas/${id}`),
@@ -442,16 +470,20 @@ export const apiComparacion = {
   ejecutar: (id: string) =>
     apiClient.post(`/api/comparacion/${id}/ejecutar`),
 
+  /** Todo el historial, página por página */
   listar: () =>
-    apiClient.get<Comparacion[]>("/api/comparacion"),
+    todasLasPaginas<Comparacion>((skip, limit) =>
+      apiClient.get<Comparacion[]>("/api/comparacion", { params: { skip, limit } })),
 
   detalle: (id: string) =>
     apiClient.get<Comparacion>(`/api/comparacion/${id}`),
 
+  /** Todas las diferencias, página por página */
   diferencias: (id: string, tipo?: string) =>
-    apiClient.get<Diferencia[]>(`/api/comparacion/${id}/diferencias`, {
-      params: tipo ? { tipo } : {},
-    }),
+    todasLasPaginas<Diferencia>((skip, limit) =>
+      apiClient.get<Diferencia[]>(`/api/comparacion/${id}/diferencias`, {
+        params: { ...(tipo ? { tipo } : {}), skip, limit },
+      })),
 
   descargarReporte: async (id: string, nombre: string) => {
     const response = await apiClient.get(`/api/comparacion/${id}/reporte`, {

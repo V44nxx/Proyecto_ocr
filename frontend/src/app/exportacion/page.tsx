@@ -55,8 +55,8 @@ export default function ExportacionPage() {
     if (mostrarEsqueleto) setCargando(true);
     try {
       const [resPersonas, resDocs] = await Promise.all([
-        apiPersonas.listar({ limit: 500 }),
-        apiDocumentos.listar({ limit: 100 }).catch(() => ({ data: [] })),
+        apiPersonas.listarTodas(),
+        apiDocumentos.listarTodos().catch(() => ({ data: [] })),
       ]);
 
       const personasItems = Array.isArray(resPersonas.data)

@@ -858,8 +858,8 @@ def upload_pdf(
 
 @router.get("", response_model=List[DocumentoResponse], summary="Listar documentos")
 def listar_documentos(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000, description="Por página; las pantallas piden todas las páginas"),
     estado: str = None,
     solo_subida: bool = False,
     db: Session = Depends(get_db),
@@ -874,7 +874,8 @@ def listar_documentos(
     if estado:
         query = query.filter(Documento.estado == estado)
 
-    documentos = query.order_by(Documento.fecha_carga.desc()).offset(skip).limit(limit).all()
+    # El id desempata las fichas subidas en el mismo instante, para que las páginas no se crucen
+    documentos = query.order_by(Documento.fecha_carga.desc(), Documento.id).offset(skip).limit(limit).all()
     return [DocumentoResponse.model_validate(d) for d in documentos]
 
 

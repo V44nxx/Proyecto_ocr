@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -131,8 +131,8 @@ def ejecutar_comparacion(
 
 @router.get("", response_model=List[ComparacionResponse], summary="Listar comparaciones")
 def listar_comparaciones(
-    skip: int = 0,
-    limit: int = 20,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=1000, description="Por página; la pantalla pide todas las páginas"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):
@@ -140,7 +140,7 @@ def listar_comparaciones(
     query = db.query(Comparacion).filter(Comparacion.usuario_id == usuario.id)
     comparaciones = (
         query
-        .order_by(Comparacion.fecha_carga.desc())
+        .order_by(Comparacion.fecha_carga.desc(), Comparacion.id)
         .offset(skip)
         .limit(limit)
         .all()
@@ -168,8 +168,8 @@ def obtener_comparacion(
 def obtener_diferencias(
     comparacion_id: str,
     tipo: str = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000, description="Por página; la pantalla pide todas las páginas"),
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_actual),
 ):

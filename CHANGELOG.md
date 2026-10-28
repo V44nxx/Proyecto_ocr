@@ -22,12 +22,39 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.17.2] - 2026-10-28
+
+**Resumen**
+
+- Las listas ya no se cortan. Antes, en una ficha grande no se veía nada después de las primeras 300 personas, 100 diferencias, 500 personas al exportar, 100 fichas o 20 comparaciones.
+- `SECURITY.md`: cómo reportar una falla de seguridad en privado.
+- Las pruebas usan datos inventados en lugar de datos de personas reales.
+
+### Corregido
+
+- **Listas cortadas**:
+  - Las pantallas pedían una sola página: Personas, 300 personas; Exportación, 500; el selector de fichas, 100; Comparación, 100 diferencias y 20 comparaciones en el historial.
+  - Ahora piden todas las páginas, de a 500 (`todasLasPaginas` en `lib/api.ts`).
+  - El Dashboard y la lista de subidas siguen mostrando solo las más recientes, a propósito.
+- **Personas repetidas o faltantes al paginar**: con muchas personas registradas en el mismo instante, algunas aparecían en dos páginas y otras en ninguna. Las listas de personas, fichas y comparaciones ahora desempatan por id.
+- **Tope por página**: la API aceptaba pedir cualquier cantidad de registros de una vez. Ahora el máximo es 1000 por página; si se pide más, responde 422.
+
+### Agregado
+
+- **`SECURITY.md`**: cómo reportar una falla en privado (sin issue público), qué no hacer (nada contra producción, nada con datos de otros) y qué pasa después.
+
 ### Seguridad
 
 - **Datos personales en las pruebas**:
   - Siete archivos de pruebas usaban como ejemplo datos de personas reales: nombres, cédulas, fechas de nacimiento, un teléfono y números de ficha. También estaba un número de ficha real en un comentario de `app/utils/archivos.py`.
   - Se cambiaron por datos inventados con el mismo formato, así que las pruebas comprueban lo mismo (579 pasan).
   - Las pruebas nuevas deben usar siempre datos inventados.
+
+### Pruebas
+
+- `test_paginacion_listas.py`: recorrer las páginas trae a todos una sola vez, aunque tengan la misma hora, y una página no acepta más de 1000. Backend de 579 a 584 pruebas.
+- La semilla de pruebas suma una cuenta inventada con 650 personas, 105 fichas y 150 diferencias.
+- CP-UI-38: con esa cuenta, Personas muestra las 650, la ventana de fichas tiene las 105, Exportación ofrece las 650 y Comparación las 150. e2e de 37 a 38 casos.
 
 ## [2.17.1] - 2026-10-28
 

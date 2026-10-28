@@ -94,7 +94,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error al cargar personas de la ficha:", err);
       try {
-        const res2 = await apiPersonas.listar({ documento_id: doc.id, limit: 200 });
+        const res2 = await apiPersonas.listarTodas({ documento_id: doc.id });
         const items2 = Array.isArray(res2.data) ? res2.data : (res2.data as any).items || [];
         setPersonasFicha(items2);
       } catch {

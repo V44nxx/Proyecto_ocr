@@ -91,8 +91,29 @@ db.add(Diferencia(comparacion_id=comp_ana.id, numero_identificacion="1000000402"
                   valor_bd="ÁNGELA", valor_excel="ANGELA MARIA", tipo_diferencia="diferente"))
 db.commit()
 
+# Cuenta con listas más largas que una página: 650 personas en una ficha, 105 fichas y 150 diferencias
+# (antes las pantallas mostraban como máximo 300 personas, 100 fichas y 100 diferencias)
+lote = usuario("lote@example.com", "Lote Pruebas")
+fichas_lote = [Documento(usuario_id=lote.id, nombre_archivo=f"31{i:05d}.pdf", nombre_original=f"31{i:05d}.pdf",
+                         total_paginas=2, estado="completado") for i in range(105)]
+db.add_all(fichas_lote)
+db.commit()
+db.add_all([Persona(usuario_id=lote.id, documento_id=fichas_lote[0].id, numero_identificacion=f"1100{i:06d}",
+                    nombres="PRUEBA", apellidos=f"LOTE {i:03d}", nombre_completo=f"PRUEBA LOTE {i:03d}",
+                    tipo_documento="CEDULA_CIUDADANIA", motor_ocr="google_document_ai", estado_registro="VALID",
+                    requiere_revision=False, confianza_extraccion=95, grupo_documento_id=f"L-{i}",
+                    pagina_frente=1, pagina_reverso=2) for i in range(650)])
+comp_lote = Comparacion(usuario_id=lote.id, nombre_archivo="planilla_lote.xlsx", nombre_original="planilla_lote.xlsx",
+                        estado="completado", total_registros_excel=650, total_registros_bd=650, total_diferentes=150)
+db.add(comp_lote)
+db.commit()
+db.add_all([Diferencia(comparacion_id=comp_lote.id, numero_identificacion=f"1100{i:06d}", campo="nombres",
+                       valor_bd="PRUEBA", valor_excel="PRUEBA DOS", tipo_diferencia="diferente") for i in range(150)])
+db.commit()
+
 ids = {
     "clave": CLAVE,
+    "ficha_lote": str(fichas_lote[0].id), "comparacion_lote": str(comp_lote.id),
     "ficha_ana": str(ficha_ana.id), "ficha_beto": str(ficha_beto.id),
     "persona_ana": str(personas_ana[0].id), "persona_beto": str(p_beto.id),
     "comparacion_ana": str(comp_ana.id),

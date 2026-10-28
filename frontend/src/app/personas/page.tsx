@@ -374,7 +374,7 @@ function PersonasContent() {
   const cargarDocumentos = async () => {
     try {
       const [resDocs, resStatsGlobal] = await Promise.all([
-        apiDocumentos.listar({ limit: 100 }),
+        apiDocumentos.listarTodos(),
         apiDocumentos.estadisticas().catch(() => null),
       ]);
       // Una ficha reemplazada por una versión nueva o subida como otra parte no se lista aparte:
@@ -454,8 +454,7 @@ function PersonasContent() {
     try {
       const docIdFiltro = filtroDocumento !== "todos" ? filtroDocumento : undefined;
       const [resPersonas, resStats] = await Promise.all([
-        apiPersonas.listar({
-          limit: 300,
+        apiPersonas.listarTodas({
           buscar: buscar || undefined,
           documento_id: docIdFiltro,
         }),

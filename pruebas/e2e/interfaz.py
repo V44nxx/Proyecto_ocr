@@ -455,6 +455,24 @@ with sync_playwright() as p:
     filtradas = set(page.locator("tbody tr td:nth-child(3)").all_inner_texts())
     caso("CP-UI-14", "Auditoría: el filtro por acción muestra solo esa acción", filtradas == {"Inicio de sesión fallido"}, filtradas)
 
+    # ── Listas largas: no se cortan (cuenta con 650 personas, 105 fichas y 150 diferencias) ──
+    login(page, "lote@example.com", CLAVE)
+    page.goto(f"{FRONT}/personas?documento_id={IDS['ficha_lote']}")
+    # Esperar que se vean confirma cada lista completa (si se cortara, el número sería otro)
+    expect(page.locator("text=/Mostrando\\s*650\\s*de\\s*650/").last).to_be_visible(timeout=30000)
+    page.locator("button[aria-labelledby='etiqueta-ficha']").click()
+    ventana_fichas = page.get_by_role("dialog", name="Elegir ficha")
+    expect(ventana_fichas).to_be_visible(timeout=5000)
+    opciones_fichas = ventana_fichas.get_by_role("option").count()
+    page.keyboard.press("Escape")
+    page.goto(f"{FRONT}/exportacion")
+    boton_excel = page.get_by_role("button", name="Descargar Excel (650)")
+    expect(boton_excel).to_be_enabled(timeout=30000)
+    page.goto(f"{FRONT}/comparacion?id={IDS['comparacion_lote']}")
+    expect(page.get_by_role("button", name=re.compile(r"^Todos\s*150$"))).to_be_visible(timeout=30000)
+    caso("CP-UI-38", "Listas largas completas: 650 personas, 105 fichas en la ventana, 650 al exportar y 150 diferencias",
+         opciones_fichas == 106, f"opciones en la ventana de fichas: {opciones_fichas} (105 + Todas)")
+
     # ── Recuperar la contraseña por correo (escenario BDD de la guía) ──
     # Por nombre y fecha: el SMTP de captura reinicia su contador y puede reutilizar nombres
     antes = {(f.name, f.stat().st_mtime_ns) for f in CORREOS.glob("*.eml")}

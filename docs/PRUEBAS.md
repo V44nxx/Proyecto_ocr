@@ -64,7 +64,7 @@ KONDID_IDS=/tmp/kondid_e2e/semilla_ids.json KONDID_CORREOS=/tmp/kondid_correos \
 python pruebas/e2e/interfaz.py /tmp/kondid_resultados
 ```
 
-Usa el Chrome instalado (`channel="chrome"`). Son 36 casos (`CP-UI-01` a `CP-UI-36`):
+Usa el Chrome instalado (`channel="chrome"`). Son 38 casos (`CP-UI-01` a `CP-UI-38`):
 
 - **Recorrido:** el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la verificación en dos pasos, la auditoría y el cierre de sesión.
 - **Sesión:** que viaje en una cookie `HttpOnly` y `SameSite=Strict`, y que tras cerrar sesión el servidor la rechace.

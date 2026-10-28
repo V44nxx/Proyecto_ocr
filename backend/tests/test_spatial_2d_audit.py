@@ -4,7 +4,7 @@ Verifica:
   1. No contaminación por marcas de agua (REPUBLICA DE COLOMBIA no se extrae como nombre).
   2. Exclusión mutua de tokens (un apellido no es robado como primer nombre).
   3. Comportamiento en Cédulas Amarillas reales de 2 caras en 1 página.
-  4. Generación de artefactos de debug visual 2D en PNG.
+  4. Que extraer no escriba nada en el disco (antes dejaba una imagen de depuración vacía por página).
 """
 import unittest
 import os
@@ -58,8 +58,9 @@ class TestSpatial2DAudit(unittest.TestCase):
         # Nombres DEBE ser LEONEL (no None ni POR REVISAR)
         self.assertEqual(res["nombres"]["value"], "LEONEL")
 
-    def test_3_generacion_debug_visual_png(self):
-        """Verifica que el artefacto PNG de debug visual 2D se genere en disco."""
+    def test_3_extraer_no_escribe_en_disco(self):
+        """Extraer los campos de una página no deja archivos (antes, una imagen de depuración vacía por página)."""
+        import tempfile
         lines = [
             OCRLineMock("NUMERO 16.221.480", x=0.10, y=0.10),
             OCRLineMock("VALENCIA VILLEGAS", x=0.10, y=0.15),
@@ -67,9 +68,15 @@ class TestSpatial2DAudit(unittest.TestCase):
             OCRLineMock("ANTONIO", x=0.10, y=0.22),
             OCRLineMock("NOMBRES", x=0.10, y=0.25),
         ]
-        spatial_field_extractor.extraer_todos_los_campos(lines, page_num=99)
-        path_debug = "exports/debug_visual/page_99_debug_2d.png"
-        self.assertTrue(os.path.exists(path_debug))
+        anterior = os.getcwd()
+        with tempfile.TemporaryDirectory() as carpeta:
+            os.chdir(carpeta)
+            try:
+                spatial_field_extractor.extraer_todos_los_campos(lines, page_num=99)
+                creados = [os.path.join(raiz, f) for raiz, _, archivos in os.walk(carpeta) for f in archivos]
+            finally:
+                os.chdir(anterior)
+        self.assertEqual(creados, [])
 
 
 if __name__ == "__main__":

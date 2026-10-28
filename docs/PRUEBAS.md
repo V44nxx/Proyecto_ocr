@@ -64,7 +64,21 @@ KONDID_IDS=/tmp/kondid_e2e/semilla_ids.json KONDID_CORREOS=/tmp/kondid_correos \
 python pruebas/e2e/interfaz.py /tmp/kondid_resultados
 ```
 
-Usa el Chrome instalado (`channel="chrome"`). Recorre el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la auditoría y el cierre de sesión. Comprueba que la sesión viaje en una cookie `HttpOnly` y `SameSite=Strict`, y que tras cerrar sesión el servidor la rechace. También revisa que no haya errores de JavaScript, que las pantallas lleven la política de contenido (CSP) y que ninguna la viole. Deja `e2e.json` y capturas en la carpeta de resultados.
+Usa el Chrome instalado (`channel="chrome"`). Son 36 casos (`CP-UI-01` a `CP-UI-36`):
+
+- **Recorrido:** el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la verificación en dos pasos, la auditoría y el cierre de sesión.
+- **Sesión:** que viaje en una cookie `HttpOnly` y `SameSite=Strict`, y que tras cerrar sesión el servidor la rechace.
+- **Interfaz:**
+  - el logo lleva al Dashboard;
+  - los selectores en ventana y el diálogo de confirmación propio;
+  - un solo aviso al cambiar el tema varias veces;
+  - los avisos de conexión, servidor, versión y sesión.
+- **Datos recientes:**
+  - con la red a 1,5 s por viaje, la lista de Personas aparece al instante al volver;
+  - después de cerrar sesión, volver atrás no la deja ver.
+- **Sin errores:** ningún error de JavaScript, las pantallas llevan la política de contenido (CSP) y ninguna la viola.
+
+Deja `e2e.json` y capturas en la carpeta de resultados.
 
 ## 4. Seguridad
 
@@ -95,13 +109,33 @@ jmeter -n -t pruebas/carga/kondid_api.jmx -Jhost=127.0.0.1 -Jport=8000 -Jusuario
 - `-Jlimite_ms` (por defecto 2000) es el tiempo máximo aceptado por respuesta.
 - El reporte HTML queda en `reporte_html/index.html`.
 
-## 6. Regresión automática (GitHub Actions)
+## 6. Rendimiento y OCR
+
+**Navegación.** Mide cuánto tarda en verse el contenido al cambiar de módulo, con la latencia de producción simulada (210 ms por viaje). Usa el entorno de la sección 2:
+
+```bash
+python pruebas/rendimiento/medir_navegacion.py /tmp/kondid_e2e/semilla_ids.json /tmp/kondid_rendimiento etiqueta
+```
+
+**OCR.** `pruebas/ocr/ficha_sintetica.py` dibuja una ficha escaneada inventada: cada persona es una cédula de frente y reverso, con números y nombres al azar. `medir_ocr.py` la procesa y cuenta cuántos campos salen bien. Necesita la base de la sección 2:
+
+```bash
+cd backend
+DATABASE_URL=postgresql://postgres@127.0.0.1:5544/e2e GOOGLE_DOCUMENT_AI_ENABLED=false PYTHONPATH=.   python ../pruebas/ocr/medir_ocr.py rapid 10 /tmp/kondid_ocr 2     # RapidOCR de verdad
+DATABASE_URL=postgresql://postgres@127.0.0.1:5544/e2e GOOGLE_DOCUMENT_AI_ENABLED=false PYTHONPATH=.   python ../pruebas/ocr/medir_ocr.py docai 10 /tmp/kondid_ocr 2     # Document AI simulado, 1,5 s por página
+```
+
+- El último número fija los núcleos, para imitar el VPS de producción (2).
+- El modo `docai` mide cuántas páginas se leen a la vez, no la calidad de Google.
+- Repite las dos mediciones antes y después de cambiar el OCR. Valores de la 2.17.0 con 10 personas: RapidOCR 96 % de los campos a 2,2 s por página; Document AI simulado, 9,7 s en total.
+
+## 7. Regresión automática (GitHub Actions)
 
 `.github/workflows/pruebas.yml` corre en cada push y pull request:
 
-- **Backend**: toda la suite con un PostgreSQL de servicio (unitarias, integración y BDD).
+- **Backend**: toda la suite con un PostgreSQL de servicio (unitarias, integración y BDD). Falla si la cobertura baja del 80 %.
 - **Frontend**: revisión de tipos y compilación de producción.
-- **Seguridad**: pip-audit, Bandit y npm audit (este último solo informa hasta pasar a Next 16).
+- **Seguridad**: pip-audit, Bandit y npm audit de las dependencias de producción.
 
 El workflow no despliega nada: Dokploy sigue desplegando desde `main`.
 
@@ -109,7 +143,8 @@ El workflow no despliega nada: Dokploy sigue desplegando desde `main`.
 
 - **Entrada:** el cambio tiene pruebas nuevas que fallan con el código anterior.
 - **Salida:**
-  - la suite completa pasa con PostgreSQL;
+  - la suite completa pasa con PostgreSQL, con cobertura de 80 % o más, también en una copia limpia del repositorio (`git archive`). Una prueba puede pasar solo porque encuentra un archivo que quedó de una corrida anterior;
+  - la batería de seguridad (`dast_api.py`) pasa;
   - el frontend compila;
   - la prueba de punta a punta pasa;
   - el CHANGELOG y la versión están al día;

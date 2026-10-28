@@ -55,11 +55,11 @@ Cuenta con arquitectura **Smart Dual OCR** (Google Cloud Document AI + RapidOCR 
 
 ## ✨ Características Principales
 
-- **Smart Dual OCR Inteligente**:
-  - **Google Cloud Document AI**: Reconocimiento de alta precisión con jerarquía de bloques, párrafos, líneas y coordenadas 2D.
-  - **RapidOCR ONNX Runtime**: Motor neural local y rápido que rescata líneas o caracteres no capturados por Document AI sin requerir GPU pesada.
-  - **Tesseract OCR (pytesseract)**: Motor de contingencia offline.
-  - **PyMuPDF Direct**: Bypass de lectura vectorial para PDFs digitales sin pérdida de tiempo ni costo de OCR.
+- **OCR en cascada**, página por página:
+  - **Google Cloud Document AI** (principal): texto, líneas y coordenadas 2D. Se leen 4 páginas a la vez, porque casi todo el tiempo se va en esperar a Google. Si Google responde que se pasó el límite de solicitudes, se espera 1, 2 y 4 s y se reintenta.
+  - **RapidOCR ONNX Runtime** (local, sin GPU): cuando Document AI no está configurado, no hay conexión, falla o devuelve muy poco texto. Lee solo la zona impresa de la hoja y separa los nombres que lee pegados («SEBASTIANMANUEL» queda «SEBASTIAN MANUEL»).
+  - **Tesseract OCR (pytesseract)**: último recurso, si los dos anteriores fallan.
+  - **PyMuPDF**: las páginas de un PDF digital, que ya traen texto, se leen directo y no pasan por OCR.
 - **Emparejamiento Inteligente Frente y Reverso**: Asocia automáticamente las caras de una misma cédula aunque se encuentren en páginas separadas o consecutivas.
 - **Cruce con Planilla Oficial de Excel (.xlsx / .xls)**:
   - Garantiza nombres y apellidos oficiales exactos cotejados por número de cédula.
@@ -69,6 +69,11 @@ Cuenta con arquitectura **Smart Dual OCR** (Google Cloud Document AI + RapidOCR 
 - **Gestión y Cancelación en Vivo**: Capacidad de abortar un lote en procesamiento y purgar de inmediato registros y archivos temporales.
 - **Módulo de Comparación y Conciliación**: Compara datos extraídos contra el Excel, resalta diferencias y permite correcciones inmediatas con un clic.
 - **Exportación Profesional a Excel**: Generación de reportes XLSX estilizados con Pandas y OpenPyXL.
+- **Navegación rápida**:
+  - El menú deja lista cada pantalla antes del clic.
+  - Al volver a una pantalla se ve al instante lo de la última visita, que se actualiza en segundo plano. Esa memoria vive solo en la pestaña y se borra al cerrar sesión.
+  - El refresco automático se pausa con la pestaña oculta.
+- **Avisos del sistema**: sin internet, conexión lenta, servidor caído, versión nueva, sesión cerrada y descargas con datos personales.
 
 ---
 
@@ -183,28 +188,30 @@ npm run dev
                                        ↓
          [ Carga y normalización de la planilla oficial Excel (.xlsx) ]
                                        ↓
-                 [ PyMuPDF: Detección de texto vectorial nativo ]
-                   ├─ ¿Texto nativo limpio? ─→ Extracción directa
-                   └─ ¿Documento escaneado? ─→ Renderizado a 200 DPI
+      [ Páginas en paralelo: 4 con Document AI; con RapidOCR, una por núcleo (2 a 4) ]
                                        ↓
-            [ Concurrencia: ThreadPoolExecutor (hasta 6 workers) ]
+                 [ PyMuPDF: ¿la página ya trae texto? ]
+                   ├─ Sí (PDF digital) ─→ se usa ese texto, sin OCR
+                   └─ No (escaneada) ─→ imagen a 300 DPI
+                                       ↓
+                      [ OCR en cascada, página por página ]
+                ① Google Document AI: texto, líneas y coordenadas 2D
+                   (límite de solicitudes: espera 1, 2 y 4 s y reintenta)
+                ② RapidOCR, si Document AI no está, no responde, falla o lee poco:
+                   solo la zona impresa de la hoja; separa nombres pegados
+                ③ Tesseract, si los dos fallan
                                        ↓
                 [ Clasificador de Caras (Side Classifier) ]
                    ├─ Frente (Nombres, Apellidos, Cédula)
                    └─ Reverso (Fecha de Nacimiento, Expedición, Lugar, Sexo)
                                        ↓
-             [ SMART DUAL OCR: Google Document AI + RapidOCR ]
-                ① Google Cloud Document AI: Bloques y líneas espaciales 2D
-                ② Si requiere rescate: RapidOCR ONNX complementa líneas
-                ③ Fallback: Tesseract OCR (en caso de error de red/servicios)
+            [ Emparejamiento de Documentos (Pairing Service) ]
+                • Unión de páginas Frente + Reverso de la misma persona
                                        ↓
               [ Extractor Espacial 2D con Cajas Delimitadoras ]
                 • Proximidad de campos (NÚMERO, FECHA, LUGAR, etc.)
                 • Corrección de caracteres contextuales
                 • Validación DANE de municipios y departamentos
-                                       ↓
-            [ Emparejamiento de Documentos (Pairing Service) ]
-                • Unión de páginas Frente + Reverso de la misma persona
                                        ↓
             [ Cruce Determinístico con la Planilla Oficial Excel ]
                 • Nombres y apellidos cotejados por cédula (100% consistencia)
@@ -347,12 +354,14 @@ proyecto_ocr/
 
 | Criterio | Google Document AI | RapidOCR ONNX | Tesseract OCR |
 |:---------|:------------------:|:-------------:|:-------------:|
-| **Rol en el Sistema** | **Principal (Nube)** | **Rescate Neural (Local)** | **Fallback de Emergencia** |
-| **Precisión en Cédulas** | ⭐⭐⭐⭐⭐ (98%+) | ⭐⭐⭐⭐ (90-95%) | ⭐⭐⭐ (75-85%) |
+| **Rol en el Sistema** | **Principal (Nube)** | **Respaldo local** | **Último recurso** |
+| **Cuándo se usa** | Siempre que esté configurado y en línea | Sin Document AI, sin conexión, con error o con muy poco texto | Si los dos anteriores fallan |
 | **Coordenadas y Layout 2D** | ✅ Bloques, párrafos y palabras | ✅ Cajas delimitadoras | ⚠️ Básico (HOCR) |
-| **Velocidad de Inferencia** | Rápida (Cloud API) | Ultra-rápida (CPU local ONNX) | Media |
+| **Tiempo por página** | ~1,5 s de espera a Google; 4 páginas a la vez | ~6,5 s en el VPS de 2 núcleos (1250 px de lado) | Medio |
 | **Requerimientos** | Conexión GCP e ID de Procesador | Ninguno (corre en CPU local) | Binario Tesseract instalado |
-| **Capacidad de Fusión** | Base principal de texto | Completa líneas omitidas | Usado si ambos fallan |
+| **Si lee mal** | — | Recorta la zona impresa y separa nombres pegados | — |
+
+En una ficha escaneada inventada de 10 personas (20 páginas), RapidOCR acierta el 96 % de los campos desde la versión 2.17.0 (antes, 12 %). Ver el [CHANGELOG](CHANGELOG.md).
 
 ---
 

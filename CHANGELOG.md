@@ -22,6 +22,25 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+### Pruebas
+
+- **CI en rojo tras la 2.17.0**:
+  - `test_spatial_2d_audit.py` esperaba la imagen de depuración vacía que la 2.17.0 dejó de crear.
+  - En local pasaba solo porque había quedado un archivo de una corrida anterior.
+  - Ahora comprueba lo contrario: que extraer los campos no deja archivos en el disco.
+  - La suite se corrió además en una copia limpia del repositorio: 579 pasan.
+- **Herramientas de medición**: en `pruebas/ocr/` (ficha escaneada inventada y medición del OCR) y en `pruebas/rendimiento/` (tiempo hasta ver el contenido al cambiar de módulo).
+- **npm audit**: el paso del CI ahora falla si hay avisos en las dependencias de producción del frontend (hoy hay 0). Antes solo informaba, hasta pasar a Next 16.
+
+### Documentación
+
+- **README y `docs/DOCUMENTACION_DEL_SISTEMA.md`**:
+  - Al día con la 2.17.0.
+  - OCR en cascada y no «dual»: el texto de los motores no se mezcla. 300 DPI, páginas a la vez y reintento ante el 429.
+  - Variables de entorno reales: se quitaron `OCR_ENGINE`, `OCR_CONCURRENCY_WORKERS` y `OCR_DPI`, que no existían.
+  - Sesión en cookie, verificación en dos pasos, Seguimiento, Usuarios, Auditoría y avisos del sistema.
+- **`docs/PRUEBAS.md`**: los 36 casos de interfaz, la medición del rendimiento y del OCR, y los criterios de salida (cobertura, DAST, copia limpia).
+
 ## [2.17.0] - 2026-10-28
 
 **Resumen**

@@ -1,4 +1,4 @@
-# 📑 DOCUMENTACIÓN INTEGRAL DEL SISTEMA KONDID OCR v2.0
+# 📑 DOCUMENTACIÓN INTEGRAL DEL SISTEMA KONDID OCR
 > **Plataforma Empresarial de Extracción, Clasificación y Conciliación Inteligente de Documentos de Identidad Colombianos**
 
 ---
@@ -17,7 +17,7 @@
 | Parámetro | Detalle Técnico |
 | :--- | :--- |
 | **Nombre del Producto** | KondID - Motor OCR Inteligente |
-| **Versión Actual** | 2.0.0 (Release Estable - Smart Dual OCR) |
+| **Versión Actual** | 2.17.0 (los cambios de cada versión están en el [CHANGELOG](../CHANGELOG.md)) |
 | **Tipo de Aplicación** | Sistema Web Empresarial Distribuido (SaaS / On-Premise) |
 | **Arquitectura de Software** | Cliente-Servidor desacoplado (SPA Next.js + REST API FastAPI) |
 | **Modelo de Licenciamiento** | Propietario / Privado Empresarial |
@@ -55,14 +55,14 @@ El sistema se compone de tres capas principales orquestadas mediante contenedore
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        CAPA DE PRESENTACIÓN                            │
-│                 Next.js 16.4 (App Router) + TypeScript 5               │
-│             TailwindCSS 3.4 (Apple Design System: Frosted Glass)       │
+│              Next.js 16.4 (App Router) + React 19 + TypeScript 5       │
+│        Tailwind CSS 4.3 · Política de contenido (CSP) con nonce        │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTP / REST / Bearer JWT
+                                    │ HTTP / REST / sesión en cookie HttpOnly
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                    CAPA LÓGICA / BACKEND (FastAPI)                     │
 │  • Enrutadores REST Asíncronos       • Middlewares CORS & Auth JWT     │
-│  • ThreadPoolExecutor Multi-hilo     • Orquestador Smart Dual OCR      │
+│  • Páginas en paralelo (hilos)       • OCR en cascada (3 motores)      │
 │  • Extractor Espacial 2D             • Servicio de Emparejamiento      │
 │  • Conciliador de Planillas Excel    • Generador de Reportes XLSX      │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -77,15 +77,15 @@ El sistema se compone de tres capas principales orquestadas mediante contenedore
 
 ### 2.2. Pipeline de Procesamiento OCR (9 Fases)
 1. **Recepción e Ingesta:** Carga asíncrona del lote de PDFs junto con la planilla oficial de cotejo (.xlsx). Se valida tipo MIME, cabeceras mágicas y límite de tamaño.
-2. **Evaluación de Vectorialidad:** PyMuPDF analiza si el documento contiene texto vectorial nativo embebido. De ser así, se extrae en modo *ultra-rápido bypass*; de lo contrario, se rasteriza a 200 DPI optimizados.
-3. **Clasificación de Caras (Side Classifier):** Clasifica cada página como cara *Frente* (contiene nombres, apellidos, cédula) o *Reverso* (contiene fecha de nacimiento, expedición, lugar, sexo).
-4. **Smart Dual OCR:**
-   - *Motor Principal:* **Google Cloud Document AI** (extracción neural con jerarquía de bloques y coordenadas cartesianas normalizadas).
-   - *Rescate Neural Local:* **RapidOCR ONNX Runtime** en CPU para capturar líneas o caracteres desvanecidos sin costo de GPU.
-   - *Fallback de Contingencia:* **Tesseract OCR** en caso de pérdida de conexión externa.
-5. **Extracción Espacial 2D con Cajas Delimitadoras:** Análisis de proximidad geométrica respecto a los rótulos ancla colombianos (`"NOMBRES"`, `"APELLIDOS"`, `"NUMERO"`, `"FECHA DE NACIMIENTO"`).
-6. **Validación Geográfica y Fonética:** Cotejo con la base de datos de municipios DANE y diccionario de nombres colombianos comunes para resolver ambigüedades.
-7. **Emparejamiento Frente-Reverso:** Asocia correlativamente frentes y reversos según posición de páginas o consistencia de número de cédula.
+2. **Evaluación de Vectorialidad:** PyMuPDF revisa si cada página ya trae texto (PDF digital). Si lo trae, se usa ese texto sin OCR; si es escaneada, se convierte en imagen a 300 DPI. Las páginas se leen en paralelo: 4 a la vez con Document AI (casi todo el tiempo es esperar a Google); con RapidOCR, una por núcleo (entre 2 y 4).
+3. **OCR en cascada**, página por página (el texto de un motor no se mezcla con el de otro):
+   - *Motor Principal:* **Google Cloud Document AI** (texto, líneas y coordenadas normalizadas). Si Google responde que se pasó el límite de solicitudes, se espera 1, 2 y 4 s y se reintenta.
+   - *Respaldo local:* **RapidOCR ONNX Runtime** en CPU, cuando Document AI no está configurado, no hay conexión, falla o devuelve muy poco texto. Lee solo la zona impresa de la hoja (achicada a 1250 px de lado) y separa los nombres que lee pegados.
+   - *Último recurso:* **Tesseract OCR**, si los dos anteriores fallan.
+4. **Clasificación de Caras (Side Classifier):** Clasifica cada página como cara *Frente* (contiene nombres, apellidos, cédula) o *Reverso* (contiene fecha de nacimiento, expedición, lugar, sexo), o como certificado o documento de soporte.
+5. **Emparejamiento Frente-Reverso:** Asocia correlativamente frentes y reversos según posición de páginas o consistencia de número de cédula.
+6. **Extracción Espacial 2D con Cajas Delimitadoras:** Análisis de proximidad geométrica respecto a los rótulos ancla colombianos (`"NOMBRES"`, `"APELLIDOS"`, `"NUMERO"`, `"FECHA DE NACIMIENTO"`).
+7. **Validación Geográfica y Fonética:** Cotejo con la base de datos de municipios DANE y diccionario de nombres colombianos comunes para resolver ambigüedades.
 8. **Cruce Determinístico con Planilla Excel:** Los nombres y apellidos extraídos son cotejados con la planilla oficial. Si hay discrepancia, se prioriza el dato oficial y se registra la alerta para revisión asistida.
 9. **Persistencia Transaccional y Respaldo:** Inserción en PostgreSQL, almacenamiento de copia binaria de la ficha para auto-restauración y generación automática de métricas de consistencia.
 
@@ -184,9 +184,14 @@ proyecto_ocr/
 │   │   │   ├── documentos/          # Carga de lotes y visor PDF
 │   │   │   ├── personas/            # Tabla de registros y acordeón
 │   │   │   ├── comparacion/         # Discrepancias
-│   │   │   └── exportacion/         # Descarga XLSX
-│   │   ├── components/ui/           # Sidebar, botones, modales
-│   │   └── lib/api.ts               # Cliente Axios configurado con interceptores
+│   │   │   ├── exportacion/         # Descarga XLSX
+│   │   │   ├── seguimiento/         # Panel de seguimiento de fichas (Google Apps Script)
+│   │   │   ├── usuarios/            # Gestión de usuarios (administrador)
+│   │   │   └── auditoria/           # Registro de auditoría (administrador)
+│   │   ├── components/ui/           # Sidebar, modales, selectores en ventana, íconos propios
+│   │   ├── lib/api.ts               # Cliente Axios configurado con interceptores
+│   │   ├── lib/datosRecientes.ts    # Datos de la última visita a cada pantalla (solo en memoria)
+│   │   └── proxy.ts                 # Política de contenido (CSP) con un nonce por petición
 │   ├── package.json
 │   └── Dockerfile                   # Imagen frontend (Node.js 24-alpine)
 ├── database/init.sql                # Script DDL inicial
@@ -228,17 +233,24 @@ GOOGLE_DOCUMENT_AI_PROCESSOR_ID=tu_processor_id
 GOOGLE_DOCUMENT_AI_ENABLED=true
 GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-document-ai.json
 
-# Parámetros del Motor OCR
-OCR_ENGINE=smart_dual
-OCR_CONCURRENCY_WORKERS=6
-OCR_DPI=200
+# Motores OCR
+GOOGLE_DOCUMENT_AI_TIMEOUT=60      # segundos por página antes de pasar a RapidOCR
+RAPID_OCR_ENABLED=true
+RAPID_OCR_LADO_MAXIMO=1250         # lado mayor (px) de la zona impresa que lee RapidOCR
+
+# Sesión y correo
+# COOKIE_SECURE=                   # por defecto Secure en production
+SMTP_HOST=smtp.gmail.com           # sin SMTP_HOST no hay recuperación de contraseña
+FRONTEND_URL=http://localhost:3000 # para el enlace del correo; obligatoria en producción
 ```
+
+La lista completa, con una explicación de cada variable, está en `.env.example`. Cuántas páginas se leen a la vez no se configura: depende del motor y de los núcleos del servidor.
 
 ### 4.4. Rutas Críticas de la API REST
 
-* **`POST /api/auth/login`**: Autenticación con email y contraseña, retorna Bearer Token JWT.
+* **`POST /api/auth/login`**: Autenticación con email y contraseña. Pone la cookie de sesión (`HttpOnly`, `SameSite=Strict`); a un administrador le devuelve primero el desafío de la verificación en dos pasos (`/api/auth/login/2fa`).
 * **`POST /api/documentos/upload`**: Carga multipart de lote de archivos PDF (`archivos`) junto con la planilla obligatoria (`archivo_excel`).
-* **`GET /api/documentos/{id}/pagina/{numero}`**: Retorna la imagen JPEG de una página específica del PDF. La sesión va en la cabecera `Authorization` (nunca en la dirección) y la respuesta no se guarda en caché.
+* **`GET /api/documentos/{id}/pagina/{numero}`**: Retorna la imagen JPEG de una página específica del PDF. La sesión va en la cookie (nunca en la dirección) y la respuesta no se guarda en caché.
 * **`GET /api/personas`**: Listado paginado de personas con filtros avanzados (`buscar`, `filtro_estado`, `documento_id`).
 * **`PUT /api/personas/{id}`**: Modificación directa de campos corregidos manualmente.
 * **`GET /api/exportacion/xlsx`**: Generación y descarga al vuelo del archivo Excel oficial con formatos, colores y metadatos.
@@ -252,6 +264,8 @@ OCR_DPI=200
 2. Ingrese a la URL asignada del sistema (ej: `http://localhost:3000` o su dominio público).
 3. Ingrese su correo electrónico y contraseña registrados.
 4. Presione **Iniciar Sesión**.
+5. **Administradores:** después de la contraseña se pide el código de 6 dígitos de la app de autenticación (Google Authenticator, Microsoft Authenticator u otra). La primera vez se vincula la app con un código QR y se entregan 10 códigos de respaldo de un solo uso.
+6. Si olvidó la contraseña, use **¿Olvidaste tu contraseña?**: llega un enlace al correo para crear una nueva.
 
 ### 5.2. Módulo de Dashboard
 * **Tarjetas de Estadísticas:** Muestra en tiempo real el total de documentos procesados, personas extraídas, registros validados y registros pendientes de revisión.
@@ -295,7 +309,18 @@ OCR_DPI=200
    - O exportar únicamente las personas previamente seleccionadas con las casillas de verificación.
 3. Presione **Descargar Excel (.xlsx)**. El sistema generará una hoja de cálculo profesional con columnas ordenadas, tipos de datos validados y códigos de color según el estado.
 
-### 5.7. Menú Lateral y Configuración
+### 5.7. Seguimiento de Fichas
+* Muestra dentro de KondID el panel de seguimiento publicado con Google Apps Script. Cada usuario guarda el enlace de su panel con **Configurar** y puede quitarlo cuando quiera.
+
+### 5.8. Usuarios y Auditoría (solo administradores)
+* **Usuarios:** crear usuarios, eliminarlos, restablecer su contraseña y restablecer la verificación en dos pasos de un administrador que perdió el celular y los códigos de respaldo.
+* **Auditoría:** quién inició sesión, exportó, editó o eliminó datos, y desde qué IP. Se filtra por acción en una ventana con las acciones agrupadas. No guarda contraseñas ni datos de las personas.
+
+### 5.9. Menú Lateral, Avisos y Configuración
+* **Logo:** lleva al Dashboard desde cualquier pantalla.
 * **Colapso del Menú:** Haga clic en el ícono superior del sidebar para ocultar o expandir el menú lateral.
-* **Selector de Tema:** Interruptor para alternar instantáneamente entre **Modo Oscuro** (Dark Mode con diseño Apple) y **Modo Claro** (Light Mode).
-* **Cerrar Sesión:** Ubicado en la parte inferior para finalizar la sesión de trabajo de forma segura.
+* **Selector de Tema:** Interruptor para alternar entre **Modo Oscuro** y **Modo Claro**. Con cambios seguidos solo queda el aviso del último.
+* **Listas de opciones:** fichas, tipo de documento y filtros se eligen en una ventana con buscador; las confirmaciones (eliminar, cancelar) usan un diálogo propio con el foco en «Cancelar».
+* **Avisos del sistema:** sin internet, conexión lenta, servidor que no responde, versión nueva, sesión cerrada desde otro lado y descargas con datos personales.
+* **Cambiar contraseña** y **Cerrar Sesión:** en la parte inferior del menú. Cerrar sesión invalida la sesión en el servidor y borra de la pestaña los datos que se habían mostrado.
+

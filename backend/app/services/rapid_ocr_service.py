@@ -3,8 +3,10 @@ Servicio RapidOCR (ONNX Runtime)
 Motor OCR local de alto rendimiento basado en redes neuronales profundas (DBNet + SVTR).
 Ideal para ejecución en servidores VPS y contingencia offline sin dependencias externas del sistema.
 """
+import os
+import threading
 import time
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 
 from app.utils.logger import app_logger as logger
@@ -12,6 +14,7 @@ from app.config import settings
 from app.services.google_document_ai_service import (
     OCRToken, OCRLine, OCRPageData, StructuredDocumentAIResult
 )
+from app.utils.name_cleaner import separar_nombres_pegados_en_linea
 
 
 class RapidOCRService:
@@ -20,9 +23,45 @@ class RapidOCRService:
     Proporciona extracción de texto plano y generación de layout espacial estructurado (bounding boxes 2D).
     """
 
+    # Solo se lee la parte de la hoja que tiene algo impreso. Con la hoja entera achicada a RAPID_OCR_LADO_MAXIMO,
+    # una cédula que ocupa parte de la hoja quedaba tan pequeña que las palabras en negrita se pegaban
+    # («SANTIAGOMANUEL»); recortada, esos mismos píxeles son para la cédula y no se busca texto en el blanco
+    UMBRAL_TINTA = 210        # gris por debajo del cual un punto cuenta como impreso
+    FRACCION_MINIMA = 0.005   # una fila o columna con menos de esto impreso es blanco o polvo
+    MARGEN = 0.03             # margen alrededor de lo impreso, en fracción de la hoja
+    AREA_MAXIMA = 0.85        # si lo impreso ocupa casi toda la hoja, no vale la pena recortar
+
+    @classmethod
+    def zona_con_contenido(cls, img_np: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
+        """(x0, y0, x1, y1) de lo impreso en la hoja, o None si no hay nada que recortar."""
+        import cv2
+
+        alto, ancho = img_np.shape[:2]
+        gris = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY) if img_np.ndim == 3 else img_np
+        paso = 4
+        chica = cv2.resize(gris, (max(1, ancho // paso), max(1, alto // paso)), interpolation=cv2.INTER_AREA)
+        tinta = chica < cls.UMBRAL_TINTA
+        filas = np.flatnonzero(tinta.mean(axis=1) > cls.FRACCION_MINIMA)
+        columnas = np.flatnonzero(tinta.mean(axis=0) > cls.FRACCION_MINIMA)
+        if not len(filas) or not len(columnas):
+            return None
+        margen_x, margen_y = int(ancho * cls.MARGEN), int(alto * cls.MARGEN)
+        x0 = max(0, int(columnas[0]) * paso - margen_x)
+        x1 = min(ancho, (int(columnas[-1]) + 1) * paso + margen_x)
+        y0 = max(0, int(filas[0]) * paso - margen_y)
+        y1 = min(alto, (int(filas[-1]) + 1) * paso + margen_y)
+        if (x1 - x0) * (y1 - y0) > cls.AREA_MAXIMA * ancho * alto:
+            return None
+        return x0, y0, x1, y1
+
+    # Lecturas a la vez: RapidOCR usa la CPU, así que más hilos que núcleos solo se estorban. Importa cuando el OCR
+    # lee varias páginas en paralelo pensando en Document AI y este se cae a mitad de la ficha
+    LECTURAS_A_LA_VEZ = max(1, min(os.cpu_count() or 1, 4))
+
     def __init__(self):
         self._engine = None
         self._disponible = False
+        self._turnos = threading.BoundedSemaphore(self.LECTURAS_A_LA_VEZ)
         self._inicializar()
 
     def _inicializar(self):
@@ -64,21 +103,28 @@ class RapidOCRService:
 
             height, width = img_np.shape[:2]
 
-            # 1. Optimización de resolución: si supera el lado máximo, escalar proporcionalmente
+            # 1. Solo la zona impresa de la hoja (ver zona_con_contenido)
+            zona = self.zona_con_contenido(img_np)
+            x_ini, y_ini = (zona[0], zona[1]) if zona else (0, 0)
+            img_zona = img_np[zona[1]:zona[3], zona[0]:zona[2]] if zona else img_np
+            alto_zona, ancho_zona = img_zona.shape[:2]
+
+            # 2. Optimización de resolución: si supera el lado máximo, escalar proporcionalmente
             # (menos píxeles para la detección; ver RAPID_OCR_LADO_MAXIMO en config.py)
             lado_maximo = int(getattr(settings, "RAPID_OCR_LADO_MAXIMO", 1250))
-            max_side = max(height, width)
+            max_side = max(alto_zona, ancho_zona)
             if max_side > lado_maximo:
                 scale = float(lado_maximo) / float(max_side)
-                new_w, new_h = max(1, int(round(width * scale))), max(1, int(round(height * scale)))
-                img_proc = cv2.resize(img_np, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                eval_h, eval_w = new_h, new_w
+                new_w, new_h = max(1, int(round(ancho_zona * scale))), max(1, int(round(alto_zona * scale)))
+                img_proc = cv2.resize(img_zona, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                escala_x, escala_y = new_w / ancho_zona, new_h / alto_zona
             else:
-                img_proc = img_np.copy()
-                eval_h, eval_w = height, width
+                img_proc = np.ascontiguousarray(img_zona)
+                escala_x = escala_y = 1.0
 
             # RapidOCR procesa imágenes en formato BGR/RGB numpy array
-            results, elapse_list = self._engine(img_proc)
+            with self._turnos:
+                results, elapse_list = self._engine(img_proc)
             tiempo_ms = (time.time() - inicio) * 1000
 
             if not results:
@@ -94,7 +140,8 @@ class RapidOCRService:
                 # Cada item es: [box_points, text, confidence]
                 # box_points: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
                 box_pts, text, conf = item
-                text_clean = str(text).strip()
+                # RapidOCR suele pegar las palabras en negrita: «SEBASTIANMANUEL» sale como «SEBASTIAN MANUEL»
+                text_clean = separar_nombres_pegados_en_linea(str(text).strip())
                 if not text_clean:
                     continue
 
@@ -102,16 +149,16 @@ class RapidOCRService:
                 conf_val = float(conf)
                 confianzas.append(conf_val)
 
-                # Calcular bounding box normalizado (0.0 a 1.0) sobre las dimensiones evaluadas
-                xs = [pt[0] for pt in box_pts]
-                ys = [pt[1] for pt in box_pts]
-                min_x, max_x = max(0, min(xs)), min(eval_w, max(xs))
-                min_y, max_y = max(0, min(ys)), min(eval_h, max(ys))
+                # Bounding box normalizado (0.0 a 1.0) sobre la hoja completa, no sobre el recorte achicado
+                xs = [x_ini + pt[0] / escala_x for pt in box_pts]
+                ys = [y_ini + pt[1] / escala_y for pt in box_pts]
+                min_x, max_x = max(0, min(xs)), min(width, max(xs))
+                min_y, max_y = max(0, min(ys)), min(height, max(ys))
 
-                norm_x = min_x / eval_w if eval_w > 0 else 0.0
-                norm_y = min_y / eval_h if eval_h > 0 else 0.0
-                norm_w = (max_x - min_x) / eval_w if eval_w > 0 else 1.0
-                norm_h = (max_y - min_y) / eval_h if eval_h > 0 else 1.0
+                norm_x = min_x / width if width > 0 else 0.0
+                norm_y = min_y / height if height > 0 else 0.0
+                norm_w = (max_x - min_x) / width if width > 0 else 1.0
+                norm_h = (max_y - min_y) / height if height > 0 else 1.0
 
                 # Crear tokens para cada palabra en la línea
                 palabras = text_clean.split()

@@ -294,6 +294,17 @@ class GoogleDocumentAIService:
         self._sin_conexion_hasta = time.time() + self.SEGUNDOS_ESTADO_CONEXION
         self._con_conexion_hasta = 0.0
 
+    # Esperas antes de cada reintento cuando Google responde «límite de solicitudes» (429)
+    ESPERAS_LIMITE_SOLICITUDES = (1.0, 2.0, 4.0)
+
+    @staticmethod
+    def es_limite_de_solicitudes(error: Exception) -> bool:
+        try:
+            from google.api_core import exceptions as gexc
+            return isinstance(error, (gexc.ResourceExhausted, gexc.TooManyRequests))
+        except ImportError:
+            return False
+
     @staticmethod
     def es_error_de_conexion(error: Exception) -> bool:
         """Errores de red o de tiempo (no de datos): indican que Document AI no responde"""
@@ -408,7 +419,17 @@ class GoogleDocumentAIService:
             raw_document=documento_raw,
         )
 
-        result = self._client.process_document(request=request, timeout=settings.GOOGLE_DOCUMENT_AI_TIMEOUT)
+        # Si Google responde que se pasó el límite de solicitudes (429), se espera y se reintenta: rendirse de una
+        # vez mandaba la página a RapidOCR, que lee peor. Cualquier otro error sigue como antes
+        for espera in (*self.ESPERAS_LIMITE_SOLICITUDES, None):
+            try:
+                result = self._client.process_document(request=request, timeout=settings.GOOGLE_DOCUMENT_AI_TIMEOUT)
+                break
+            except Exception as e:
+                if espera is None or not self.es_limite_de_solicitudes(e):
+                    raise
+                logger.warning(f"[DocAI] Google pidió bajar el ritmo (límite de solicitudes): se reintenta en {espera:.0f} s")
+                time.sleep(espera)
         doc = result.document
         full_text_raw = doc.text if doc.text else ""
         full_text = self.normalizar_texto_docai(full_text_raw)

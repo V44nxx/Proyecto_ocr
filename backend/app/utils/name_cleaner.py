@@ -469,6 +469,22 @@ def limpiar_alucinaciones_ocr_nombre(texto: str) -> str:
     return " ".join(res)
 
 
+def separar_nombres_pegados_en_linea(linea: str) -> str:
+    """
+    Separa solo los nombres y apellidos conocidos que el OCR pegó ('SEBASTIANMANUEL' -> 'SEBASTIAN MANUEL') y deja
+    lo demás como llegó: rótulos, lugares, palabras desconocidas y líneas con números (cédula, código de barras).
+    Es para el texto de RapidOCR antes de la extracción, que necesita las palabras separadas para saber qué va
+    en nombres y qué en apellidos; separar_nombres_pegados, más amplia, limpia el resultado al final.
+    """
+    if not linea or re.search(r"\d", linea):
+        return linea
+    palabras = []
+    for token in linea.split():
+        partido = _descomponer_token_pegado(token)
+        palabras.append(partido if " " in partido else token)
+    return " ".join(palabras)
+
+
 def separar_nombres_pegados(texto: str) -> str:
     """
     Separa nombres y apellidos que fueron fusionados sin espacios por el OCR:

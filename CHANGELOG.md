@@ -22,6 +22,58 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.17.0] - 2026-10-28
+
+**Resumen**
+
+- Con Document AI, el OCR lee las fichas casi el doble de rápido.
+- RapidOCR (el motor local, que se usa sin internet o cuando Google falla) lee mucho mejor, en el mismo tiempo.
+
+Medido con una ficha escaneada inventada de 10 personas (20 páginas, números y nombres al azar):
+
+| | 2.16.0 | 2.17.0 |
+| --- | --- | --- |
+| Document AI (simulado a 1,5 s por página, 2 núcleos como el VPS) | 18,2 s | 9,7 s |
+| RapidOCR: campos correctos | 12 % | 96 % |
+| RapidOCR: tiempo por página | 2,15 s | 2,16 s |
+
+### Cambiado
+
+- **Más páginas a la vez con Document AI**:
+  - Casi todo el tiempo de una página se va en esperar la respuesta de Google, así que ahora se leen 4 páginas a la vez en lugar de 2 en el VPS de 2 núcleos (`OCRService._paginas_en_paralelo`).
+  - Sin Document AI no cambia nada.
+  - RapidOCR nunca lee en más hilos que núcleos, aunque Document AI se caiga a mitad de una ficha.
+- **Límite de solicitudes de Google (429)**: se espera 1, 2 y 4 s y se reintenta. Antes la página pasaba de una vez a RapidOCR, que lee peor. Los demás errores siguen igual.
+- **RapidOCR lee solo la zona impresa de la hoja**:
+  - Antes se achicaba la hoja entera a 1250 px, y la cédula, que ocupa una parte, quedaba tan pequeña que las palabras en negrita se pegaban («SANTIAGOMANUEL», «NUMERO1.008.773.710»).
+  - Ahora se recorta lo impreso, con margen, y esos mismos píxeles quedan para la cédula.
+  - Si lo impreso ocupa casi toda la hoja, no se recorta.
+  - Las coordenadas vuelven a ser las de la hoja completa.
+- **Nombres pegados por RapidOCR**:
+  - Antes de la extracción se separan los nombres y apellidos conocidos que vienen juntos («SEBASTIANMANUEL» queda «SEBASTIAN MANUEL»).
+  - Rótulos, lugares, palabras desconocidas y líneas con números no se tocan.
+- **Diccionarios de nombres** (`app/data/dictionaries`):
+  - Se agregaron 199 nombres y 163 apellidos frecuentes en Colombia que faltaban (FERNANDA, MATEO, JULIANA, MARIANA, KAREN, OSPINA, GIRALDO…).
+  - Sin ellos, «SOFIAFERNANDA» no se separaba, y FERNANDA solo se reconocía por parecido con FERNANDO.
+  - Solo se agregaron palabras de 4 letras o más, para no partir mal palabras largas.
+  - SARAH, JOHANN, ALBAN y FLORALBA se agregaron para que no se recorten ni se partan.
+- El extractor espacial ya no crea, en cada página, una imagen de depuración vacía en `exports/debug_visual`.
+
+### Corregido
+
+- **Número de cédula cortado**: cuando el OCR pegaba el rótulo al número («NUMERO1.008.773.710»), no se reconocía la palabra clave y se guardaba «773710». El código de barras del reverso, que sí trae letras y números juntos, se sigue leyendo igual.
+- **Reparación de nombres recortados** (2.3.0):
+  - La lista de nombres masculinos que revisa se calculaba con el diccionario actual, así que cambiaba cada vez que se agregaba un nombre: con JULIANA y ANGELA en el diccionario, dejaban de revisarse JULIAN y ANGEL.
+  - Quedó fija con la lista de entonces.
+
+### Pruebas
+
+- Backend de 550 a 579 pruebas:
+  - `test_ocr_lectura_pegada.py`: número pegado, nombres pegados, nombres que no se deben partir y FERNANDA;
+  - `test_rapid_ocr_recorte.py`: zona impresa, coordenadas y separación de nombres;
+  - `test_ocr_rendimiento.py`: páginas a la vez, reintento ante el 429 y lecturas de RapidOCR a la vez.
+- Cobertura 80,4 %; e2e 36/36; DAST 35/35.
+
 ## [2.16.0] - 2026-10-28
 
 **Resumen**

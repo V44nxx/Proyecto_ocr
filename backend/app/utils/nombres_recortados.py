@@ -18,14 +18,12 @@ from app.utils.name_cleaner import NOMBRES_COLOMBIANOS_COMUNES, PALABRAS_ENCABEZ
 MARCA_REVISADO = "revision_nombre_recortado"
 CAMPO_SOSPECHA = "posible_nombre_recortado"
 
-_MASCULINOS = (
-    "ANGEL", "MANUEL", "JULIAN", "RAFAEL", "MIGUEL", "MARTIN", "GABRIEL", "SAMUEL", "EMANUEL", "JOAQUIN",
-    "AGUSTIN", "VALENTIN", "FABIAN", "DAMIAN", "SEBASTIAN", "ADRIAN", "CRISTIAN", "FERMIN", "DANIEL",
-)
-# Solo los que el limpiador anterior recortaba: el masculino está en la lista y el femenino no
-MASCULINOS_RECORTABLES = {
-    m for m in _MASCULINOS if m in NOMBRES_COLOMBIANOS_COMUNES and f"{m}A" not in NOMBRES_COLOMBIANOS_COMUNES
-}
+# Solo los que el limpiador anterior recortaba: el masculino estaba en su lista de nombres y el femenino no.
+# Fija: era la lista de ese momento. Calcularla con la actual la cambiaba cada vez que se agregaban nombres
+# (con JULIANA y ANGELA en el diccionario dejaban de revisarse JULIAN y ANGEL)
+MASCULINOS_RECORTABLES = frozenset({
+    "ANGEL", "CRISTIAN", "FABIAN", "JULIAN", "MANUEL", "MARTIN", "MIGUEL", "RAFAEL", "SEBASTIAN",
+})
 
 
 def _norm(texto: str) -> str:

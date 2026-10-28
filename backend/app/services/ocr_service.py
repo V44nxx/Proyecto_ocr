@@ -189,9 +189,7 @@ class OCRService:
                     "subtipo": clasif.get("subtipo"),
                 }
 
-            # Concurrencia adaptativa para llamadas I/O a Google Document AI
-            cpu_cores = os.cpu_count() or 1
-            max_workers = min(max(2, cpu_cores), 4) if total_paginas > 0 else 1
+            max_workers = self._paginas_en_paralelo(total_paginas)
 
             resultados_desordenados = []
             paginas_procesadas = 0
@@ -367,6 +365,22 @@ class OCRService:
                 db.close()
 
         return resultado
+
+    # Con Document AI casi todo el tiempo de una página es esperar la respuesta de Google (alrededor de 1,5 s), así
+    # que conviene tener más páginas en camino que núcleos. Medido con 20 páginas y 1,5 s por página en 2 núcleos:
+    # de 18,2 s con 2 a la vez a 9,5 s con 4. Más no conviene en 2 núcleos: convertir cada página en imagen también
+    # usa CPU, y más solicitudes simultáneas acercan el límite de Google
+    PAGINAS_EN_PARALELO_DOCAI = 4
+
+    def _paginas_en_paralelo(self, total_paginas: int) -> int:
+        """Cuántas páginas se leen a la vez"""
+        if total_paginas <= 1:
+            return 1
+        nucleos = os.cpu_count() or 1
+        if google_document_ai_service.disponible and google_document_ai_service.en_linea():
+            return min(total_paginas, max(self.PAGINAS_EN_PARALELO_DOCAI, nucleos))
+        # RapidOCR usa la CPU: tantas como núcleos, entre 2 y 4 (como hasta ahora)
+        return min(total_paginas, max(2, min(nucleos, 4)))
 
     # ──────────────────────────────────────────
     # DETECCIÓN DE PDF ESCANEADO

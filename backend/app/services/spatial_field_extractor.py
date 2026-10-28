@@ -9,7 +9,6 @@ from typing import Dict, Any, List, Optional, Tuple, Set
 from app.utils.logger import app_logger as logger
 from app.utils.validators import validador
 from app.services.document_layout_classifier import document_layout_classifier
-from app.utils.spatial_visual_debugger import spatial_visual_debugger
 from app.services.colombia_geo_service import colombia_geo
 
 
@@ -1397,14 +1396,6 @@ class SpatialFieldExtractor:
                     resultados[campo] = res
                     if res.get("line_index") is not None:
                         usados_indices.add(res["line_index"])
-
-        # Generar artefacto de depuración visual 2D en PNG
-        try:
-            spatial_visual_debugger.generar_imagen_debug_2d(
-                page_num, lines, {}, {}, {}
-            )
-        except Exception as e:
-            logger.debug(f"[SpatialDebugger] Error al generar depuración visual: {e}")
 
         return resultados
 

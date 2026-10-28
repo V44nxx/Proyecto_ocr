@@ -1574,6 +1574,12 @@ class ExtractorService:
                     logger.debug(f"Cédula por código de barras reverso: {num_bar}")
                     return num_bar
 
+        # RapidOCR a veces pega el rótulo al número («NUMERO1.008.773.710»): sin separarlos no se reconoce la
+        # palabra clave y del número solo queda «773.710». El código de barras de arriba sí necesita lo pegado
+        separar = re.compile(r"(?<=[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=[1-9](?:\d{0,2}[\.,]\d{3}|\d{5}))")
+        lineas = [separar.sub(" ", l) for l in lineas]
+        texto = separar.sub(" ", texto)
+
         # Estrategia 1: Por keyword (en misma línea o líneas adyacentes)
         # Regex ampliado: captura formatos con espacios entre grupos: 1. 125. 182. 543
         patron_num = re.compile(r"\b([1-9]\d{0,2}(?:\s*[\.,]\s*\d{3}){1,3}|[1-9]\d{5,9})\b")

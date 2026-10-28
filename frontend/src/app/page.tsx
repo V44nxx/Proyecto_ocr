@@ -11,8 +11,6 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  Cpu,
-  Sparkles,
   ArrowRight,
   Sun,
   Moon,
@@ -26,6 +24,8 @@ import { useTheme } from "@/context/ThemeContext";
 import LogoKondID from "@/components/ui/LogoKondID";
 import VerificacionDosPasos from "@/components/ui/VerificacionDosPasos";
 import type { LoginResponse, Usuario } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
+import FondoLogin from "@/components/ui/FondoLogin";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -98,7 +98,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className={`h-screen max-h-screen min-h-screen login-bg text-slate-900 dark:text-slate-100 flex flex-col justify-between overflow-y-auto ${segundoPaso ? "" : "lg:overflow-hidden"} selection:bg-[#0071E3]/20 selection:text-white`}>
+    <div className={`h-screen max-h-screen min-h-screen login-bg isolate text-slate-900 dark:text-slate-100 flex flex-col justify-between overflow-y-auto ${segundoPaso ? "" : "lg:overflow-hidden"} selection:bg-[#0071E3]/20 selection:text-white`}>
+      <FondoLogin />
+
       {/* ── BARRA SUPERIOR (Chrome translúcido compacto estilo Apple) ── */}
       <header className="w-full shrink-0 border-b border-black/4 dark:border-white/6 backdrop-blur-md bg-white/40 dark:bg-[#070A0F]/50 sticky top-0 z-30 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
@@ -145,7 +147,7 @@ export default function LoginPage() {
             {/* Tagline y Títulos en SF Pro Typography */}
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/8 text-slate-600 dark:text-slate-300 w-fit">
-                <Sparkles className="w-3 h-3 text-[#0071E3]" />
+                <IconoTema tema="reconocimiento" sinMarco className="w-3.5 h-3.5 text-[#0071E3]" />
                 <span>Reconocimiento Óptico Especializado</span>
               </div>
               <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-semibold tracking-[-0.03em] leading-tight sm:leading-9 text-slate-950 dark:text-white">
@@ -264,7 +266,7 @@ export default function LoginPage() {
 
               <div className="p-2.5 rounded-xl bg-slate-100/40 dark:bg-white/2 border border-slate-200/60 dark:border-white/5">
                 <div className="flex items-center gap-1.5 mb-0.5">
-                  <Cpu className="w-3.5 h-3.5 text-[#0071E3]" />
+                  <IconoTema tema="vision" sinMarco className="w-4 h-4 text-[#0071E3]" />
                   <span className="text-[11px] font-medium text-slate-900 dark:text-slate-200">
                     Visión Inteligente
                   </span>

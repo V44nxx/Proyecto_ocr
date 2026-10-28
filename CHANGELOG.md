@@ -22,6 +22,67 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.15.0] - 2026-10-28
+
+**Resumen**
+
+- Las líneas de seguridad del banner de cada pantalla fluyen sin parar.
+- El logo del menú lleva al Dashboard.
+- Las listas desplegables pasan a ventanas con buscador y opciones agrupadas, o a botones cuando son pocas opciones.
+- Íconos propios de KondID en todos los modales y confirmaciones, en lugar de íconos genéricos o de «IA».
+- «Agregar Usuario» sale del menú lateral: se crea desde el módulo Usuarios.
+- Fondo nuevo en el inicio de sesión: una roseta de guilloche con microimpresión, como la lámina de seguridad de la cédula.
+- Cambiar el tema varias veces seguidas deja un solo aviso.
+- Las tarjetas de vidrio vuelven a desenfocar lo que tienen detrás (se había perdido con Tailwind 4).
+
+### Cambiado
+
+- **Banner de las pantallas** (`EncabezadoPagina`):
+  - Las ondas del guilloche se dibujan al abrir la pantalla y después fluyen en dos capas que van en sentidos opuestos (48 s y 32 s por vuelta) y se cruzan como en un billete.
+  - Las curvas se repiten cada 640 unidades, así que el movimiento empalma sin saltos.
+  - Con «reducir movimiento» activado en el sistema, quedan quietas.
+- **Listas desplegables** (`SelectorModal`, `VentanaSelector`, `OpcionesSegmentadas`):
+  - El filtro de Auditoría agrupa las acciones en sesiones, alertas de seguridad, cuentas y datos personales.
+  - Los selectores de ficha de Exportación y de Personas, y el tipo de documento al editar, se eligen en una ventana con buscador. Se maneja con flechas, Enter y Esc.
+  - El sexo se elige con botones segmentados.
+  - La ventana se dibuja en el `<body>`: dentro de una tarjeta con desenfoque quedaba recortada.
+- **Íconos propios** (`IconoTema`): 21 dibujos de línea con la tarjeta de identidad, la huella del logo y las líneas de seguridad. Cada uno lleva una insignia con la acción (+, −, ✕, ✓, girar). Están en:
+  - crear, eliminar y restablecer usuarios;
+  - cambiar contraseña;
+  - las tres pantallas de la verificación en dos pasos;
+  - eliminar ficha y ficha existente;
+  - vaciar o eliminar personas;
+  - el aviso del OCR en proceso.
+  - Además reemplazan los destellos, el chip y el rayo (íconos típicos de «IA») del inicio de sesión, Documentos y Dashboard.
+- **Confirmaciones** (`lib/confirmar.ts` y `DialogoConfirmacion`):
+  - Las seis cajas grises del navegador (`window.confirm`) pasan a un diálogo propio con ícono: cancelar subidas o procesos, quitar una ficha de la lista, eliminar una persona y quitar el enlace de Seguimiento.
+  - El foco empieza en «Cancelar» y Esc cancela.
+- **Menú lateral**: el logo (y la huella con el menú colapsado) lleva al Dashboard. «Agregar Usuario» sale del menú; ya estaba en el módulo Usuarios.
+- **Fondo del inicio de sesión** (`FondoLogin`):
+  - Detrás de la tarjeta de acceso hay una roseta de guilloche calculada en código. Tiene dos capas que giran muy despacio en sentidos opuestos (240 s y 180 s por vuelta).
+  - La rodea un anillo de microimpresión: «REPÚBLICA DE COLOMBIA · DOCUMENTO DE IDENTIDAD · KONDID».
+  - Cada 16 s la recorre un haz de escáner que deja la trama iluminada a su paso.
+  - En escritorio se desvanece hacia la izquierda para no cruzarse con la presentación. En el celular no hay haz.
+  - Con «reducir movimiento» queda quieta.
+  - Solo se animan `transform` y `opacity`: el navegador dibuja cada capa una vez y después solo la rota.
+- **Aviso al cambiar el tema**: con clics seguidos, el aviso anterior se quita al instante y solo aparece el del último cambio. Antes se apilaban.
+
+### Corregido
+
+- **Vidrio sin desenfoque desde 2.14.0**:
+  - Las tarjetas y el menú con efecto de vidrio (`card-glass`, `apple-card`, `apple-card-subtle` y el menú lateral) no desenfocaban lo que tenían detrás en Chrome ni en Firefox.
+  - Causa: Lightning CSS, el compilador de Tailwind 4, conservaba solo la última de `backdrop-filter` y `-webkit-backdrop-filter`, y la última era la prefijada, que solo entiende Safari.
+  - Arreglo: la prefijada va primero.
+
+### Pruebas
+
+- e2e de 30 a 34 casos:
+  - el logo lleva al Dashboard (CP-UI-31);
+  - el menú ya no tiene «Agregar Usuario» (CP-UI-32);
+  - eliminar una persona pide confirmación en el diálogo propio, con el foco en «Cancelar» (CP-UI-33).
+- CP-UI-14 elige el filtro de Auditoría en la ventana nueva.
+- CP-UI-34: cambiar el tema tres veces seguidas deja un solo aviso, el del último cambio.
+
 ## [2.14.0] - 2026-10-27
 
 **Resumen**

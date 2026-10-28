@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { ArrowLeft, ArrowRight, Copy, Download, KeyRound, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Download, Smartphone } from "lucide-react";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import type { ConfigurarDobleFactor, LoginResponse } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
 
 interface VerificacionDosPasosProps {
   desafio: string;
@@ -145,9 +146,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
   const encabezado = (icono: React.ReactNode, etiqueta: string, titulo: string, texto: string) => (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="w-9 h-9 rounded-xl bg-[#0071E3]/10 dark:bg-[#0071E3]/20 border border-[#0071E3]/15 flex items-center justify-center text-[#0071E3] dark:text-[#4C9BFF] shadow-xs">
-          {icono}
-        </div>
+        {icono}
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/8 text-slate-500 dark:text-slate-400">
           {etiqueta}
         </span>
@@ -185,7 +184,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
     return (
       <div>
         {encabezado(
-          <KeyRound className="w-4 h-4" />,
+          <IconoTema tema="codigos-respaldo" tamano="sm" />,
           "Último paso",
           "Guarda tus códigos de respaldo",
           "Si pierdes el celular, entra con uno de estos códigos en lugar del de la app. Cada uno sirve una sola vez y no se vuelven a mostrar."
@@ -234,7 +233,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
     return (
       <form onSubmit={enviarFormulario}>
         {encabezado(
-          <ShieldCheck className="w-4 h-4" />,
+          <IconoTema tema="configurar-verificacion" tamano="sm" />,
           "Configuración única",
           "Protege tu cuenta de administrador",
           "Las cuentas de administrador entran con la contraseña y un código que cambia cada 30 segundos en tu celular."
@@ -303,7 +302,7 @@ export default function VerificacionDosPasos({ desafio, configurar, onListo, onV
   return (
     <form onSubmit={enviarFormulario}>
       {encabezado(
-        <Smartphone className="w-4 h-4" />,
+        <IconoTema tema="verificacion" tamano="sm" />,
         "Paso 2 de 2",
         "Verificación en dos pasos",
         usarRespaldo

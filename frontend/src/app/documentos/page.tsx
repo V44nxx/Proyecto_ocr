@@ -6,9 +6,9 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import {
   Upload, FileText, CheckCircle, AlertTriangle,
-  Clock, Trash2, RefreshCw, Eye, Sparkles,
+  Clock, Trash2, RefreshCw, Eye,
   ArrowRight, Users, CheckCircle2, ChevronRight,
-  Layers, Timer, X, AlertCircle, Cpu, FileCheck2,
+  Layers, Timer, X, AlertCircle, FileCheck2,
   Hourglass, ArrowUpCircle, Check, FileSpreadsheet,
   BarChart2, PlusCircle, XCircle
 } from "lucide-react";
@@ -20,6 +20,8 @@ import { auth } from "@/lib/auth";
 import { conexion } from "@/lib/estadoConexion";
 import { useRouter } from "next/navigation";
 import type { AccionFicha, Documento, DocumentoEstadoResponse, FichaExistenteInfo } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
+import { confirmar } from "@/lib/confirmar";
 
 // Con la conexión lenta, desde este tamaño total se avisa que la subida va a tardar
 const MEGAS_SUBIDA_PESADA = 10;
@@ -551,11 +553,12 @@ export default function DocumentosPage() {
 
   const cancelarSubidaOProceso = async () => {
     const esSubiendo = faseActual === "subiendo";
-    const mensajeConfirm = esSubiendo
-      ? "¿Deseas cancelar la subida de los archivos?\n\nLa transferencia se detendrá inmediatamente y no se procesará ningún documento."
-      : "¿Deseas cancelar el procesamiento de los documentos?\n\nLos archivos y sus datos serán removidos por completo del sistema y no quedarán en proceso.";
-
-    if (!window.confirm(mensajeConfirm)) return;
+    const seguir = await confirmar(esSubiendo
+      ? { titulo: "¿Cancelar la subida?", mensaje: "La transferencia se detiene ya y no se procesa ningún documento.",
+          confirmar: "Sí, cancelar la subida", cancelar: "Seguir subiendo", tema: "cancelar-proceso", tono: "peligro" }
+      : { titulo: "¿Cancelar el procesamiento?", mensaje: "Los archivos y sus datos se quitan por completo del sistema.",
+          confirmar: "Sí, cancelar", cancelar: "Seguir procesando", tema: "cancelar-proceso", tono: "peligro" });
+    if (!seguir) return;
 
     setCancelando(true);
     try {
@@ -608,7 +611,8 @@ export default function DocumentosPage() {
   };
 
   const cancelarDocumentoIndividual = async (id: string, nombre: string) => {
-    if (!window.confirm(`¿Cancelar el proceso de "${nombre}" y removerlo por completo del sistema?`)) return;
+    if (!(await confirmar({ titulo: "¿Cancelar este proceso?", mensaje: `«${nombre}» se quita por completo del sistema.`,
+      confirmar: "Sí, cancelar", cancelar: "No", tema: "cancelar-proceso", tono: "peligro" }))) return;
     try {
       await apiDocumentos.cancelar({ documento_ids: [id] });
       toast.success(`Proceso cancelado. "${nombre}" fue removido.`);
@@ -634,7 +638,8 @@ export default function DocumentosPage() {
   };
 
   const eliminarDocumento = async (id: string, nombre: string) => {
-    if (!confirm(`¿Quitar "${nombre}" del apartado de subida?\n\nNota: Su historial de ficha y personas asociadas seguirán disponibles en el Dashboard.`)) return;
+    if (!(await confirmar({ titulo: "¿Quitar de esta lista?", mensaje: `«${nombre}» deja de verse aquí. La ficha y sus personas siguen en el Dashboard.`,
+      confirmar: "Quitar de la lista", tema: "retirar-ficha" }))) return;
     try {
       await apiDocumentos.eliminar(id);
       toast.success("Documento quitado del apartado de subida. Su historial y personas siguen disponibles en el Dashboard.");
@@ -746,7 +751,7 @@ export default function DocumentosPage() {
                   ) : faseActual === "subiendo" ? (
                     <ArrowUpCircle className="w-5 h-5 text-[#0071E3]" />
                   ) : (
-                    <Cpu className="w-5 h-5 text-[#0071E3]" />
+                    <IconoTema tema="proceso-ocr" sinMarco className="w-5 h-5 text-[#0071E3]" />
                   )}
                 </div>
                 <div className="min-w-0">
@@ -1338,7 +1343,7 @@ export default function DocumentosPage() {
               {/* Barra de Acciones del Botón OCR */}
               <div className="mt-6 pt-5 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-400 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary-400 shrink-0" />
+                  <IconoTema tema="reconocimiento" sinMarco className="w-4 h-4 text-primary-400 shrink-0" />
                   <span>
                     {excelSeleccionado
                       ? "Planilla lista: los nombres oficiales se integran al OCR y se carga automáticamente en Comparación."
@@ -1366,7 +1371,7 @@ export default function DocumentosPage() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5 text-blue-200" />
+                      <IconoTema tema="proceso-ocr" sinMarco className="w-5 h-5 text-blue-100" />
                       <span>{excelSeleccionado ? "Iniciar OCR + Comparación" : "Iniciar Procesamiento OCR"}</span>
                       <ChevronRight className="w-4 h-4 opacity-70" />
                     </>
@@ -1520,9 +1525,7 @@ export default function DocumentosPage() {
               className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 flex items-center justify-center text-amber-500 dark:text-amber-400 mx-auto mb-4">
-                <Layers className="w-7 h-7" />
-              </div>
+              <div className="flex justify-center mb-4"><IconoTema tema="ficha-existente" tono="aviso" tamano="lg" /></div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">
                 {conflictosFicha.length === 1 ? "Esta ficha ya fue subida" : "Estas fichas ya fueron subidas"}
               </h3>

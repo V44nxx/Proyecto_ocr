@@ -9,6 +9,7 @@ import {
   Search, X, ShieldAlert
 } from "lucide-react";
 import { AVISO_DATOS_PERSONALES, avisarDescargaDatosPersonales } from "@/lib/avisos";
+import SelectorModal from "@/components/ui/SelectorModal";
 import Sidebar from "@/components/ui/Sidebar";
 import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
@@ -266,25 +267,23 @@ export default function ExportacionPage() {
                   <FileText className="w-3.5 h-3.5 text-emerald-500" />
                   Documento PDF de Origen
                 </label>
-                <div className="relative">
-                  <select
-                    value={documentoSeleccionado}
-                    onChange={(e) => setDocumentoSeleccionado(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121620] [&>option]:bg-white dark:[&>option]:bg-[#121620] [&>option]:text-slate-900 dark:[&>option]:text-slate-100 border border-slate-200/80 dark:border-white/8 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] transition-all font-medium cursor-pointer"
-                  >
-                    <option value="todos">
-                      Todos los documentos PDF ({personas.length} personas)
-                    </option>
-                    {documentos.map((doc) => {
-                      const count = personasPorDoc[doc.id] || 0;
-                      return (
-                        <option key={doc.id} value={doc.id}>
-                          {doc.nombre_original} ({count} personas)
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
+                <SelectorModal
+                  id="selector-ficha-exportacion"
+                  titulo="Ficha de origen"
+                  descripcion="Exporta las personas de una ficha o de todas."
+                  tema="ficha"
+                  valor={documentoSeleccionado}
+                  opciones={[
+                    { valor: "todos", etiqueta: "Todas las fichas", insignia: `${personas.length} personas` },
+                    ...documentos.map((doc) => ({
+                      valor: doc.id,
+                      etiqueta: doc.nombre_original,
+                      insignia: `${personasPorDoc[doc.id] || 0} personas`,
+                    })),
+                  ]}
+                  onCambiar={setDocumentoSeleccionado}
+                  className="w-full px-3.5 py-2.5"
+                />
               </div>
 
               {documentoSeleccionado !== "todos" && docActual ? (

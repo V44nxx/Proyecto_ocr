@@ -2,20 +2,27 @@ import type { ReactNode } from "react";
 
 /**
  * Encabezado de cada pantalla, pensado como el borde de un documento de identidad: un filete del azul
- * de la marca y, de fondo, un guilloche (las líneas finas de seguridad de la cédula) que se dibuja una
- * sola vez al abrir la pantalla. El texto entra con un desplazamiento corto. Con "reducir movimiento"
+ * de la marca y, de fondo, un guilloche (las líneas finas de seguridad de la cédula) que se dibuja al
+ * abrir la pantalla y después fluye sin parar: dos capas de ondas se desplazan en sentidos opuestos y se
+ * cruzan como las de un billete. El texto entra con un desplazamiento corto. Con "reducir movimiento"
  * activado no se anima nada (ver .encabezado-pagina en globals.css).
  */
 
-// Guilloche: ondas entrelazadas calculadas una vez (viewBox 640 x 160)
-const LINEAS_GUILLOCHE = Array.from({ length: 14 }, (_, i) => {
-  const puntos: string[] = [];
-  for (let x = 0; x <= 640; x += 8) {
-    const y = 80 + 46 * Math.sin(x * 0.021 + i * 0.42) * Math.cos(x * 0.0065 + i * 0.18);
-    puntos.push(`${x},${y.toFixed(1)}`);
-  }
-  return `M${puntos.join(" L")}`;
-});
+// Guilloche: ondas que se repiten cada 640 unidades (frecuencias de 2 y 1 vueltas por periodo), dibujadas
+// dos periodos seguidos para que el desplazamiento de un periodo empalme sin salto. viewBox 640 x 160.
+const PERIODO = 640;
+const ondas = (cantidad: number, fase: number, amplitud: number) =>
+  Array.from({ length: cantidad }, (_, i) => {
+    const puntos: string[] = [];
+    for (let x = 0; x <= PERIODO * 2; x += 8) {
+      const t = (x / PERIODO) * 2 * Math.PI;
+      const y = 80 + amplitud * Math.sin(2 * t + i * 0.42 + fase) * Math.cos(t + i * 0.18);
+      puntos.push(`${x},${y.toFixed(1)}`);
+    }
+    return `M${puntos.join(" L")}`;
+  });
+const CAPA_LENTA = ondas(8, 0, 46);
+const CAPA_RAPIDA = ondas(6, 1.7, 38);
 
 interface Props {
   icono?: ReactNode;
@@ -40,9 +47,16 @@ export default function EncabezadoPagina({ icono, seccion, titulo, descripcion, 
           preserveAspectRatio="xMaxYMid slice"
           focusable="false"
         >
-          {LINEAS_GUILLOCHE.map((d, i) => (
-            <path key={i} d={d} pathLength={1} className="encabezado-linea" style={{ animationDelay: `${i * 45}ms` }} />
-          ))}
+          <g className="encabezado-flujo encabezado-flujo-lento">
+            {CAPA_LENTA.map((d, i) => (
+              <path key={i} d={d} pathLength={1} className="encabezado-linea" style={{ animationDelay: `${i * 45}ms` }} />
+            ))}
+          </g>
+          <g className="encabezado-flujo encabezado-flujo-rapido">
+            {CAPA_RAPIDA.map((d, i) => (
+              <path key={i} d={d} pathLength={1} className="encabezado-linea" style={{ animationDelay: `${(i + 8) * 45}ms` }} />
+            ))}
+          </g>
         </svg>
       </div>
 

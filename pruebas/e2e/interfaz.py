@@ -154,6 +154,19 @@ with sync_playwright() as p:
     expect(visor.locator("img").first).to_be_visible(timeout=10000)
     caso("CP-UI-07", "Visor: cambia al reverso", True, "pág. 2 visible")
 
+    # Confirmación propia (no la caja del navegador): eliminar y arrepentirse no borra nada
+    page.get_by_title("Eliminar persona").click()
+    dialogo = page.get_by_role("alertdialog", name="¿Eliminar a esta persona?")
+    expect(dialogo).to_be_visible(timeout=5000)
+    page.wait_for_timeout(500)
+    page.screenshot(path=str(CAPTURAS / "16_confirmacion_propia.png"))
+    enfocado_cancelar = page.evaluate("document.activeElement && document.activeElement.innerText") == "Cancelar"
+    page.keyboard.press("Escape")
+    expect(dialogo).to_be_hidden(timeout=5000)
+    caso("CP-UI-33", "Eliminar una persona pide confirmación en el diálogo propio; Cancelar queda enfocado y Esc no borra",
+         enfocado_cancelar and page.locator("tbody tr", has_text="BEATRIZ LOPEZ").count() == 1,
+         f"foco en Cancelar: {enfocado_cancelar}")
+
     # ── Recorrido por las pantallas (errores JS y política de contenido) ───
     api_put_json("/api/seguimiento/config", token_ana, {"url_panel": "https://script.google.com/macros/s/abc123/exec"})
     politicas, nonces = set(), set()
@@ -169,6 +182,24 @@ with sync_playwright() as p:
     caso("CP-UI-09", "Política de contenido en las 6 pantallas: scripts solo con un nonce nuevo en cada carga, sin violaciones",
          politicas == {True} and len(nonces) == 6 and not avisos_csp,
          avisos_csp[:2] or f"CSP con nonce en las 6 pantallas ({len(nonces)} nonces distintos), sin avisos")
+
+    # El logo del menú lleva al Dashboard (estamos en Seguimiento)
+    page.locator("aside").get_by_role("link", name="KondID: ir al Dashboard").click()
+    page.wait_for_url("**/dashboard", timeout=10000)
+    caso("CP-UI-31", "El logo del menú lleva al Dashboard", "/dashboard" in page.url, page.url)
+
+    # Cambiar el tema varias veces seguidas deja un solo aviso, el del último cambio (oscuro → claro → oscuro → claro)
+    interruptor = page.locator("aside").get_by_role("button", name=re.compile(r"Cambiar a Modo (Claro|Oscuro)"))
+    for _ in range(3):
+        interruptor.click()
+        page.wait_for_timeout(150)
+    page.wait_for_timeout(1300)
+    avisos_tema = page.get_by_text(re.compile(r"^Modo (Claro|Oscuro) activado$"))
+    textos_tema = [avisos_tema.nth(i).inner_text() for i in range(avisos_tema.count()) if avisos_tema.nth(i).is_visible()]
+    caso("CP-UI-34", "Cambiar el tema seguido deja un solo aviso, el del último cambio",
+         textos_tema == ["Modo Claro activado"], textos_tema)
+    interruptor.click()
+    expect(avisos_tema).to_have_count(0, timeout=6000)
 
     # ── Exportación ─────────────────────────────────────────────────
     page.goto(FRONT + "/exportacion")
@@ -329,6 +360,14 @@ with sync_playwright() as p:
     expect(fila_admin).to_contain_text("Activa", timeout=10000)
     caso("CP-UI-23", "Usuarios: muestra la verificación en dos pasos del administrador como activa",
          "Activa" in fila_admin.inner_text(), fila_admin.inner_text().replace(chr(10), " | ")[:90])
+    sin_boton_menu = page.locator("aside").get_by_text("Agregar Usuario").count() == 0
+    page.get_by_role("button", name="+ Nuevo Usuario").click()
+    expect(page.get_by_text("Crear Nuevo Usuario")).to_be_visible(timeout=5000)
+    page.screenshot(path=str(CAPTURAS / "15_modal_crear_usuario.png"))
+    page.keyboard.press("Escape")
+    page.get_by_role("button", name="Cancelar").click() if page.get_by_role("button", name="Cancelar").count() else None
+    caso("CP-UI-32", "Usuarios: se crea desde el módulo; el menú lateral ya no tiene «Agregar Usuario»",
+         sin_boton_menu, f"botón en el menú: {not sin_boton_menu}")
 
     page.locator("aside").get_by_text("Auditoría").click()
     page.wait_for_url("**/auditoria", timeout=10000)
@@ -338,7 +377,14 @@ with sync_playwright() as p:
     caso("CP-UI-13", "El administrador ve la Auditoría con los intentos fallidos, exportaciones y la verificación",
          {"Inicio de sesión fallido", "Inicio de sesión", "Exportación de personas", "Verificación en dos pasos activada",
           "Código de verificación equivocado"} <= set(acciones), sorted(set(acciones)))
-    page.select_option("#filtro-accion", "login_fallido")
+    # El filtro se elige en una ventana (no en una lista desplegable): se abre, se busca y se toca la opción
+    page.click("#filtro-accion")
+    ventana = page.get_by_role("dialog", name="Filtrar por acción")
+    expect(ventana).to_be_visible(timeout=5000)
+    ventana.get_by_role("textbox").fill("fallido")
+    page.screenshot(path=str(CAPTURAS / "14_selector_en_ventana.png"))
+    ventana.get_by_role("option", name="Inicio de sesión fallido").click()
+    expect(ventana).to_be_hidden(timeout=5000)
     page.wait_for_timeout(1500)
     filtradas = set(page.locator("tbody tr td:nth-child(3)").all_inner_texts())
     caso("CP-UI-14", "Auditoría: el filtro por acción muestra solo esa acción", filtradas == {"Inicio de sesión fallido"}, filtradas)

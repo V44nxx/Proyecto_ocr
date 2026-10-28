@@ -8,6 +8,7 @@ import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import SelectorModal, { type OpcionSelector } from "@/components/ui/SelectorModal";
 import type { RegistroAuditoria } from "@/types";
 import toast from "react-hot-toast";
 
@@ -48,6 +49,23 @@ const CLASES_TIPO: Record<Tipo, string> = {
   cuenta: "bg-slate-100 dark:bg-white/6 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-white/8",
   sesion: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
 };
+
+// Filtro por acción: agrupadas por tipo, con el color de su etiqueta en la tabla
+const GRUPOS_TIPO: Record<Tipo, { nombre: string; color: string }> = {
+  sesion: { nombre: "Sesiones", color: "bg-emerald-500" },
+  alerta: { nombre: "Alertas de seguridad", color: "bg-amber-500" },
+  cuenta: { nombre: "Cuentas y contraseñas", color: "bg-slate-400" },
+  datos: { nombre: "Datos personales", color: "bg-[#0071E3]" },
+};
+const ORDEN_TIPOS: Tipo[] = ["sesion", "alerta", "cuenta", "datos"];
+const OPCIONES_ACCION: OpcionSelector[] = [
+  { valor: "", etiqueta: "Todas las acciones", descripcion: "Sin filtrar" },
+  ...ORDEN_TIPOS.flatMap((tipo) =>
+    Object.entries(ACCIONES)
+      .filter(([, a]) => a.tipo === tipo)
+      .map(([valor, a]) => ({ valor, etiqueta: a.etiqueta, grupo: GRUPOS_TIPO[tipo].nombre, color: GRUPOS_TIPO[tipo].color }))
+  ),
+];
 
 const NOMBRES_DETALLE: Record<string, string> = {
   campos: "Campos",
@@ -173,23 +191,19 @@ export default function AuditoriaPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <label className="sr-only" htmlFor="filtro-accion">Acción</label>
-              <select
+              <SelectorModal
                 id="filtro-accion"
-                value={accion}
-                onChange={(e) => {
+                titulo="Filtrar por acción"
+                descripcion="Muestra solo un tipo de registro de la auditoría."
+                tema="reconocimiento"
+                valor={accion}
+                opciones={OPCIONES_ACCION}
+                onCambiar={(valor) => {
                   setDesde(0);
-                  setAccion(e.target.value);
+                  setAccion(valor);
                 }}
-                className="bg-slate-100/80 dark:bg-white/4 border border-slate-200/80 dark:border-white/8 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]"
-              >
-                <option value="">Todas las acciones</option>
-                {Object.entries(ACCIONES).map(([valor, { etiqueta }]) => (
-                  <option key={valor} value={valor}>
-                    {etiqueta}
-                  </option>
-                ))}
-              </select>
+                className="w-full sm:w-64"
+              />
 
               <form onSubmit={filtrarPorCorreo} className="relative w-full sm:w-72">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />

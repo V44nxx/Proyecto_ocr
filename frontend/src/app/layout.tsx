@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { SidebarProvider } from "@/context/SidebarContext";
 import BannerProcesoActivo from "@/components/ui/BannerProcesoActivo";
 import AvisosSistema from "@/components/ui/AvisosSistema";
+import DialogoConfirmacion from "@/components/ui/DialogoConfirmacion";
 
 export const metadata: Metadata = {
   title: "KondID | Sistema OCR Documentos Colombianos",
@@ -51,6 +52,7 @@ export default async function RootLayout({
             {children}
             <BannerProcesoActivo />
             <AvisosSistema />
+            <DialogoConfirmacion />
             <Toaster
               position="top-right"
               toastOptions={{

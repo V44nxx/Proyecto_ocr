@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -12,7 +12,6 @@ import {
   LogOut,
   KeyRound,
   ShieldCheck,
-  UserPlus,
   Sun,
   Moon,
   PanelLeftClose,
@@ -23,7 +22,6 @@ import {
 import { auth } from "@/lib/auth";
 import { apiAuth } from "@/lib/api";
 import toast from "react-hot-toast";
-import ModalCrearUsuario from "@/components/ui/ModalCrearUsuario";
 import LogoKondID, { HuellaKondID } from "@/components/ui/LogoKondID";
 import ModalCambiarPassword from "@/components/ui/ModalCambiarPassword";
 import { useTheme } from "@/context/ThemeContext";
@@ -53,7 +51,6 @@ export default function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const { collapsed, toggleSidebar } = useSidebar();
   const [usuario, setUsuario] = useState<{ nombre: string; email: string; rol: string } | null>(null);
-  const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
   const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false);
 
   useEffect(() => {
@@ -69,11 +66,19 @@ export default function Sidebar() {
     router.push("/");
   };
 
+  // Un solo aviso del tema: con id fijo, el nuevo reemplaza al anterior en su sitio; y si se cambia rápido
+  // varias veces, se cancela el aviso pendiente y solo se muestra el del tema final
+  const avisoTemaPendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleThemeWithToast = (e: React.MouseEvent) => {
     const targetTheme = theme === "dark" ? "light" : "dark";
     toggleTheme(e);
-    setTimeout(() => {
+    // Un solo aviso: el anterior se quita al instante y el nuevo sale al terminar la transición del tema (480 ms).
+    // Con clics seguidos solo aparece el del último cambio
+    if (avisoTemaPendiente.current) clearTimeout(avisoTemaPendiente.current);
+    toast.remove("cambio-tema");
+    avisoTemaPendiente.current = setTimeout(() => {
       toast(targetTheme === "light" ? "Modo Claro activado" : "Modo Oscuro activado", {
+        id: "cambio-tema",
         duration: 2000,
         icon: targetTheme === "light" ? (
           <Sun className="w-4 h-4 text-amber-500 shrink-0" />
@@ -112,12 +117,12 @@ export default function Sidebar() {
         {/* ── Logo & Toggle ─────────────────────────────────────── */}
         {!collapsed ? (
           <div className="px-4 py-4 border-b border-slate-200/70 dark:border-white/6 flex items-center justify-between min-w-0">
-            <div className="min-w-0">
+            <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0071E3]" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
               <LogoKondID className="h-8" />
               <span className="mt-1 text-[8px] text-slate-400 dark:text-slate-400 font-medium block truncate uppercase tracking-[0.22em]">
                 OCR · Documentos · Identidad
               </span>
-            </div>
+            </Link>
             <button
               onClick={toggleSidebar}
               title="Ocultar menú lateral"
@@ -129,9 +134,9 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="py-4 border-b border-slate-200/70 dark:border-white/6 flex flex-col items-center gap-2.5">
-            <div className="shrink-0" title="KondID - Motor OCR">
+            <Link href="/dashboard" className="shrink-0 rounded-lg" title="Ir al Dashboard" aria-label="KondID: ir al Dashboard">
               <HuellaKondID className="w-8 h-8" />
-            </div>
+            </Link>
             <button
               onClick={toggleSidebar}
               title="Expandir menú lateral"
@@ -178,20 +183,6 @@ export default function Sidebar() {
                 </Link>
               );
             })}
-
-            {/* Botón rápido para agregar usuario si es admin */}
-            {usuario?.rol === "admin" && (
-              <div className="pt-3">
-                <button
-                  onClick={() => setModalUsuarioAbierto(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-slate-100/80 hover:bg-slate-200/80 dark:bg-white/5 dark:hover:bg-white/9 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/6 transition-all active:scale-[0.98] cursor-pointer"
-                  title="Agregar nuevo usuario al sistema"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
-                  <span className="truncate">Agregar Usuario</span>
-                </button>
-              </div>
-            )}
           </nav>
         ) : (
           <nav className="flex-1 py-4 px-2 space-y-1.5 overflow-y-auto overflow-x-hidden flex flex-col items-center">
@@ -220,20 +211,6 @@ export default function Sidebar() {
                 </Link>
               );
             })}
-
-            {/* Botón rápido para agregar usuario (colapsado) */}
-            {usuario?.rol === "admin" && (
-              <div className="pt-2">
-                <button
-                  onClick={() => setModalUsuarioAbierto(true)}
-                  className="w-10 h-10 mx-auto flex items-center justify-center rounded-xl bg-slate-100/80 hover:bg-slate-200/80 dark:bg-white/5 dark:hover:bg-white/9 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/6 transition-all active:scale-[0.95] cursor-pointer"
-                  title="Agregar nuevo usuario"
-                  aria-label="Agregar nuevo usuario"
-                >
-                  <UserPlus className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                </button>
-              </div>
-            )}
           </nav>
         )}
 
@@ -360,17 +337,6 @@ export default function Sidebar() {
       </aside>
 
       <ModalCambiarPassword isOpen={modalPasswordAbierto} onClose={() => setModalPasswordAbierto(false)} />
-
-      {/* Modal para crear nuevo usuario */}
-      <ModalCrearUsuario
-        isOpen={modalUsuarioAbierto}
-        onClose={() => setModalUsuarioAbierto(false)}
-        onUsuarioCreado={() => {
-          if (pathname === "/usuarios") {
-            window.location.reload();
-          }
-        }}
-      />
     </>
   );
 }

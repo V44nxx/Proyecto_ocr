@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Loader2, ArrowRight, X, Cpu, XCircle } from "lucide-react";
+import { Loader2, ArrowRight, X, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { apiDocumentos } from "@/lib/api";
+import IconoTema from "@/components/ui/IconoTema";
+import { confirmar } from "@/lib/confirmar";
 
 interface DocTracking {
   id: string;
@@ -66,7 +68,7 @@ export default function BannerProcesoActivo() {
       <div className="relative flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl
         bg-linear-to-r from-blue-600/95 to-indigo-700/95 border-blue-400/40 backdrop-blur-md text-white">
         <div className="shrink-0 w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-          <Cpu className="w-5 h-5 text-white animate-pulse" />
+          <IconoTema tema="proceso-ocr" sinMarco className="w-5 h-5 text-white animate-pulse" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -91,7 +93,8 @@ export default function BannerProcesoActivo() {
         </button>
         <button
           onClick={async () => {
-            if (!window.confirm("¿Deseas cancelar la subida y procesamiento de los documentos?\n\nLos archivos serán removidos por completo del sistema.")) return;
+            if (!(await confirmar({ titulo: "¿Cancelar la subida y el procesamiento?", mensaje: "Los archivos se quitan por completo del sistema.",
+              confirmar: "Sí, cancelar", cancelar: "Seguir", tema: "cancelar-proceso", tono: "peligro" }))) return;
             try {
               const ids = docs.map((d) => d.id).filter((id) => !id.startsWith("prep-") && !id.startsWith("doc-"));
               if (ids.length > 0) {

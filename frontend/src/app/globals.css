@@ -135,10 +135,12 @@ layer(base);
   }
 }
 
+/* -webkit-backdrop-filter va antes que backdrop-filter en todo el archivo: Lightning CSS (Tailwind 4) deja solo
+   la última de las dos, y Chrome y Firefox no entienden la prefijada: sin el orden, el vidrio no se desenfoca */
 @utility card-glass {
   background: rgba(18, 22, 32, 0.65);
-  backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   @apply border border-slate-200/80 dark:border-white/8 rounded-2xl;
 }
 
@@ -336,8 +338,8 @@ layer(base);
 
 @utility apple-card {
   background: rgba(18, 22, 32, 0.75);
-  backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-top: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
@@ -346,8 +348,8 @@ layer(base);
 
   html.light & {
     background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(28px) saturate(180%);
     -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
     border: 1px solid rgba(0, 0, 0, 0.07);
     border-top: 1px solid rgba(255, 255, 255, 0.95);
     box-shadow:
@@ -358,15 +360,15 @@ layer(base);
 
 @utility apple-card-subtle {
   background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: 1px solid rgba(255, 255, 255, 0.14);
 
   html.light & {
     background: rgba(0, 0, 0, 0.02);
-    backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-top: 1px solid rgba(255, 255, 255, 0.8);
   }
@@ -387,8 +389,8 @@ layer(base);
   width: 16rem;
   background: rgba(18, 22, 32, 0.82);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
   &.collapsed {
@@ -590,7 +592,7 @@ layer(base);
 /* ────────────────────────────────────────────
    Encabezado de pantalla (components/ui/EncabezadoPagina.tsx)
    Concepto: el borde de un documento de identidad. Filete del azul del logo y un guilloche
-   (líneas de seguridad de la cédula) que se dibuja una sola vez; nada se repite ni parpadea.
+   (líneas de seguridad de la cédula) que se dibuja al abrir y después fluye despacio, sin parpadear.
 ──────────────────────────────────────────── */
 .encabezado-filete {
   background: #0336ff;
@@ -618,6 +620,33 @@ html.dark .encabezado-linea {
 .encabezado-entra {
   animation: encabezado-entrar 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
+/* Flujo continuo: cada capa recorre un periodo (640 unidades del viewBox) y vuelve a empezar sin salto.
+   La lenta va a la izquierda y la rápida a la derecha: las ondas se cruzan como en un billete */
+.encabezado-flujo {
+  will-change: transform;
+}
+.encabezado-flujo-lento {
+  animation: encabezado-flujo-izquierda 48s linear infinite;
+}
+.encabezado-flujo-rapido {
+  animation: encabezado-flujo-derecha 32s linear infinite;
+}
+@keyframes encabezado-flujo-izquierda {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-640px);
+  }
+}
+@keyframes encabezado-flujo-derecha {
+  from {
+    transform: translateX(-640px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
 @keyframes encabezado-trazo {
   to {
     stroke-dashoffset: 0;
@@ -633,10 +662,158 @@ html.dark .encabezado-linea {
     transform: none;
   }
 }
+/* Fondo del inicio de sesión (FondoLogin.tsx): roseta de guilloche con microimpresión y un haz de escáner.
+   Va detrás de la tarjeta de acceso; el contenedor del login lleva "isolate" para que z-index -1 quede sobre
+   su fondo y bajo el contenido. Solo se animan transform y opacity: nada se vuelve a pintar en cada cuadro */
+.fondo-login {
+  --fl-tam: min(1040px, 150vmin);
+  --fl-trazo: rgba(138, 162, 255, 0.13);
+  --fl-texto: rgba(138, 162, 255, 0.3);
+  --fl-revelado: rgba(125, 211, 252, 0.6);
+  --fl-haz: rgba(125, 211, 252, 0.9);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  animation: fondo-login-aparece 1.8s ease-out both;
+}
+html.light .fondo-login {
+  --fl-trazo: rgba(3, 51, 255, 0.1);
+  --fl-texto: rgba(3, 51, 255, 0.24);
+  --fl-revelado: rgba(3, 51, 255, 0.42);
+  --fl-haz: rgba(3, 51, 255, 0.55);
+}
+.fondo-login-roseta {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--fl-tam);
+  height: var(--fl-tam);
+  translate: -50% -50%;
+}
+/* En escritorio, centrada en la tarjeta de acceso (columna derecha, 5 de 12, del contenedor max-w-7xl), y se
+   desvanece hacia la izquierda para no cruzarse con la presentación */
+@media (min-width: 1024px) {
+  .fondo-login-roseta {
+    left: calc(50% + min(29.17vw - 7px, 366px));
+    top: calc(50% + 4px);
+    -webkit-mask-image: linear-gradient(to right, transparent 10%, #000 38%);
+    mask-image: linear-gradient(to right, transparent 10%, #000 38%);
+  }
+}
+.fondo-login-capa {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: var(--fl-trazo);
+  stroke-width: 0.7;
+  will-change: transform;
+}
+.fondo-login-giro {
+  animation: fondo-login-giro 240s linear infinite;
+}
+.fondo-login-giro-inverso {
+  animation: fondo-login-giro 180s linear infinite reverse;
+}
+.fondo-login-punteado {
+  stroke-dasharray: 1 3;
+}
+.fondo-login-microtexto {
+  fill: var(--fl-texto);
+  stroke: none;
+  font: 600 9px/1 ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 1.5px;
+}
+/* El haz: una ventana del 18 % de la roseta que baja, con una copia intensa de la trama que sube lo mismo
+   (mismas paradas y curva), así la copia calza siempre con la original. La luz queda detrás del haz */
+.fondo-login-escaner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--fl-tam) * 0.18);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 85%);
+  mask-image: linear-gradient(to bottom, transparent, #000 85%);
+  animation: fondo-login-barrido 16s cubic-bezier(0.45, 0, 0.55, 1) 1.2s infinite both;
+  will-change: transform;
+}
+.fondo-login-escaner-trama {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--fl-tam);
+  animation: fondo-login-contrabarrido 16s cubic-bezier(0.45, 0, 0.55, 1) 1.2s infinite both;
+  will-change: transform;
+}
+.fondo-login-escaner-trama .fondo-login-capa {
+  stroke: var(--fl-revelado);
+  stroke-width: 0.8;
+}
+.fondo-login-haz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: radial-gradient(closest-side, var(--fl-haz), transparent);
+}
+@keyframes fondo-login-aparece {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fondo-login-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* La ventana parte justo encima de la roseta (-100 % de su alto) y termina justo debajo (100/18 = 555,6 %);
+   la copia hace lo contrario en unidades de la roseta. Del 45 % al 100 % del ciclo el haz descansa */
+@keyframes fondo-login-barrido {
+  0% {
+    transform: translateY(-100%);
+  }
+  45%,
+  100% {
+    transform: translateY(555.6%);
+  }
+}
+@keyframes fondo-login-contrabarrido {
+  0% {
+    transform: translateY(18%);
+  }
+  45%,
+  100% {
+    transform: translateY(-100%);
+  }
+}
+/* En el celular el haz no aporta y cuesta: solo queda la roseta girando */
+@media (max-width: 639px) {
+  .fondo-login-escaner {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .fondo-login,
+  .fondo-login-capa {
+    animation: none;
+  }
+  .fondo-login-escaner {
+    display: none;
+  }
   .encabezado-linea {
     animation: none;
     stroke-dashoffset: 0;
+  }
+  .encabezado-flujo {
+    animation: none;
   }
   .encabezado-entra {
     animation: none;

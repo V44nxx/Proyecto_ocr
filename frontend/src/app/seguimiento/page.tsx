@@ -20,6 +20,7 @@ import { auth } from "@/lib/auth";
 import { urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
 import type { SeguimientoConfig } from "@/types";
 import toast from "react-hot-toast";
+import { confirmar } from "@/lib/confirmar";
 
 const TARJETA =
   "rounded-2xl bg-white/80 dark:bg-[#121620]/60 backdrop-blur-xl border border-slate-200/80 dark:border-white/8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.25)]";
@@ -102,7 +103,8 @@ export default function SeguimientoPage() {
   };
 
   const quitar = async () => {
-    if (!window.confirm("¿Quitar el enlace del panel de seguimiento de tu cuenta?")) return;
+    if (!(await confirmar({ titulo: "¿Quitar el enlace del panel?", mensaje: "El panel de seguimiento deja de verse en tu cuenta. Puedes volver a agregarlo cuando quieras.",
+      confirmar: "Quitar enlace", tema: "quitar-enlace", tono: "aviso" }))) return;
     try {
       await apiSeguimiento.eliminarConfig();
       setConfig(null);

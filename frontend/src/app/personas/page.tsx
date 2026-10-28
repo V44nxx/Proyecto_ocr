@@ -6,9 +6,9 @@ import toast from "react-hot-toast";
 import {
   Users, Search, AlertTriangle, AlertCircle, CheckCircle,
   Edit3, Save, X, RefreshCw, Trash2, Calendar, MapPin,
-  UserCheck, FileText, Eye, Hash, Clock, Cpu,
+  UserCheck, FileText, Eye, Hash, Clock,
   Download, CheckSquare, Square, UploadCloud, FileSpreadsheet, Check,
-  ChevronDown, ChevronRight, Copy, ExternalLink, ShieldCheck, FileCheck2,
+  ChevronDown, ChevronRight, Copy, ExternalLink, FileCheck2,
   ArrowDownAZ, ArrowUpZA, ArrowDown01, ArrowUp10
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
@@ -20,10 +20,14 @@ import { useBloquearScroll } from "@/hooks/useBloquearScroll";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { apiPersonas, apiDocumentos, apiExportacion, getErrorMessage } from "@/lib/api";
 import { avisarDescargaDatosPersonales } from "@/lib/avisos";
+import SelectorModal from "@/components/ui/SelectorModal";
+import OpcionesSegmentadas from "@/components/ui/OpcionesSegmentadas";
 import { auth } from "@/lib/auth";
 import { precargarPaginaPdf } from "@/lib/paginasPdf";
 import { formatNombreCompleto, calcularEdad, verificarInconsistenciaDocumentoEdad, getTipoDocInfo, OPCIONES_TIPO_DOCUMENTO, normalizarTipoDoc, validarCambioTipoDocumento } from "@/lib/formatters";
 import type { Persona, PersonaUpdate, Documento } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
+import { confirmar } from "@/lib/confirmar";
 
 // ─── Helpers de Clasificación ──────────────────────────────────────────────
 const personaFaltaEnPdf = (p: Persona): boolean => {
@@ -601,7 +605,8 @@ function PersonasContent() {
   };
 
   const eliminar = async (id: string, cedula: string) => {
-    if (!confirm(`¿Desea eliminar el registro de la persona con cédula ${cedula}?`)) return;
+    if (!(await confirmar({ titulo: "¿Eliminar a esta persona?", mensaje: `Se borra el registro con cédula ${cedula}. No se puede deshacer.`,
+      confirmar: "Sí, eliminar", tema: "eliminar-persona", tono: "peligro" }))) return;
     try {
       await apiPersonas.eliminar(id);
       toast.success("Registro eliminado", { id: "eliminar-persona" });
@@ -1467,18 +1472,20 @@ function PersonasContent() {
                         <label htmlFor="editar-tipo-documento" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
                           Tipo de Documento
                         </label>
-                        <select
+                        <SelectorModal
                           id="editar-tipo-documento"
-                          value={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, tipo_documento: e.target.value }))}
-                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium"
-                        >
-                          {OPCIONES_TIPO_DOCUMENTO.map((opc) => (
-                            <option key={opc.valor} value={opc.valor}>
-                              {opc.label}
-                            </option>
-                          ))}
-                        </select>
+                          titulo="Tipo de documento"
+                          descripcion="La Tarjeta de Identidad es para menores de 18 años y la Cédula para mayores."
+                          tema="reconocimiento"
+                          valor={editForm.tipo_documento || "CEDULA_CIUDADANIA"}
+                          opciones={OPCIONES_TIPO_DOCUMENTO.map((opc) => ({
+                            valor: opc.valor,
+                            etiqueta: opc.label.replace(/\s*\([^)]*\)\s*$/, ""),
+                            insignia: opc.codigo,
+                          }))}
+                          onCambiar={(valor) => setEditForm(prev => ({ ...prev, tipo_documento: valor }))}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-[#181d2e]"
+                        />
                       </div>
                       <div>
                         <label htmlFor="editar-numero-documento" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
@@ -1555,16 +1562,17 @@ function PersonasContent() {
                       </div>
                       <div>
                         <label htmlFor="editar-sexo" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Sexo</label>
-                        <select
+                        <OpcionesSegmentadas
                           id="editar-sexo"
-                          value={editForm.sexo || ""}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, sexo: e.target.value }))}
-                          className="w-full bg-white dark:bg-[#181d2e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white"
-                        >
-                          <option value="">Sin dato</option>
-                          <option value="F">Femenino</option>
-                          <option value="M">Masculino</option>
-                        </select>
+                          etiqueta="Sexo"
+                          valor={editForm.sexo || ""}
+                          opciones={[
+                            { valor: "", etiqueta: "Sin dato" },
+                            { valor: "F", etiqueta: "Femenino" },
+                            { valor: "M", etiqueta: "Masculino" },
+                          ]}
+                          onCambiar={(valor) => setEditForm(prev => ({ ...prev, sexo: valor }))}
+                        />
                       </div>
                       <div>
                         <label htmlFor="editar-fecha-expedicion" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fecha de Expedición (AAAA-MM-DD)</label>
@@ -1829,9 +1837,7 @@ function PersonasContent() {
               className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 mx-auto mb-4">
-                <Trash2 className="w-7 h-7" />
-              </div>
+              <div className="flex justify-center mb-4"><IconoTema tema="vaciar-personas" tono="peligro" tamano="lg" /></div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">¿Vaciar tabla de personas?</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2 leading-relaxed">
                 Estás a punto de eliminar permanentemente todos los registros (<span className="text-rose-600 dark:text-rose-400 font-bold">{stats.total} personas</span>).
@@ -1868,9 +1874,7 @@ function PersonasContent() {
               className="bg-white dark:bg-[#111624] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 mx-auto mb-4">
-                <Trash2 className="w-7 h-7" />
-              </div>
+              <div className="flex justify-center mb-4"><IconoTema tema="eliminar-personas" tono="peligro" tamano="lg" /></div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center">¿Eliminar seleccionados?</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2 leading-relaxed">
                 Vas a eliminar <strong className="text-rose-600 dark:text-rose-400 font-bold">{seleccionados.size} personas</strong> definitivamente.

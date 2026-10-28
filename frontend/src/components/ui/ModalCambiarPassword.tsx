@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, X } from "lucide-react";
+import { X } from "lucide-react";
 import toast from "react-hot-toast";
 import CampoPassword from "@/components/ui/CampoPassword";
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { validarPasswordNueva } from "@/lib/password";
 import type { Usuario } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
 
 interface ModalCambiarPasswordProps {
   isOpen: boolean;
@@ -81,9 +82,7 @@ export default function ModalCambiarPassword({ isOpen, onClose, usuarioObjetivo 
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#0071E3]/15 border border-[#0071E3]/30 flex items-center justify-center text-[#0071E3]">
-              <KeyRound className="w-4 h-4" />
-            </div>
+            <IconoTema tema={esAdmin ? "restablecer-clave" : "clave"} tamano="sm" />
             <div>
               <h2 id="titulo-cambiar-password" className="text-base font-bold text-white">
                 {esAdmin ? "Restablecer contraseña" : "Cambiar contraseña"}

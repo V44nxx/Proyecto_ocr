@@ -5,6 +5,7 @@ import { X, Mail, Lock, User, Eye, EyeOff, ShieldCheck, UserCheck, AlertCircle, 
 import { apiAuth, getErrorMessage } from "@/lib/api";
 import type { Usuario } from "@/types";
 import toast from "react-hot-toast";
+import IconoTema from "@/components/ui/IconoTema";
 
 interface ModalCrearUsuarioProps {
   isOpen: boolean;
@@ -79,9 +80,7 @@ export default function ModalCrearUsuario({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/8 bg-dark-800/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary-500/20 border border-primary-500/30 flex items-center justify-center text-primary-400">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
+            <IconoTema tema="crear-usuario" tamano="sm" />
             <div>
               <h2 className="text-lg font-bold text-white">Crear Nuevo Usuario</h2>
               <p className="text-xs text-slate-400">

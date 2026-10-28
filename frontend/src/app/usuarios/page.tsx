@@ -14,7 +14,6 @@ import {
   Calendar,
   Shield,
   UserCheck,
-  AlertTriangle,
   Smartphone,
 } from "lucide-react";
 import Sidebar from "@/components/ui/Sidebar";
@@ -26,6 +25,7 @@ import { apiAuth, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import type { Usuario } from "@/types";
 import toast from "react-hot-toast";
+import IconoTema from "@/components/ui/IconoTema";
 
 export default function UsuariosPage() {
   const router = useRouter();
@@ -427,9 +427,7 @@ export default function UsuariosPage() {
       {usuarioSinVerificacion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md bg-dark-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4">
-              <Smartphone className="w-6 h-6" />
-            </div>
+            <div className="flex justify-center mb-4"><IconoTema tema="restablecer-verificacion" tono="aviso" /></div>
             <h3 className="text-lg font-bold text-white text-center mb-2">¿Restablecer la verificación?</h3>
             <p className="text-sm text-slate-400 text-center mb-6">
               Se desvincula la app de autenticación de{" "}
@@ -463,9 +461,7 @@ export default function UsuariosPage() {
       {usuarioAEliminar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md bg-dark-900 border border-white/10 rounded-2xl p-6 shadow-2xl">
-            <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
+            <div className="flex justify-center mb-4"><IconoTema tema="eliminar-usuario" tono="peligro" /></div>
             <h3 className="text-lg font-bold text-white text-center mb-2">
               ¿Eliminar usuario?
             </h3>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, FolderOpen, Search } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ChevronsUpDown, FolderOpen } from "lucide-react";
+import { VentanaSelector, type OpcionSelector } from "@/components/ui/SelectorModal";
 import type { Documento } from "@/types";
 
 export const TODAS_LAS_FICHAS = "todos";
@@ -39,10 +40,7 @@ interface SelectorFichaProps {
 
 export default function SelectorFicha({ documentos, valor, onCambiar }: SelectorFichaProps) {
   const [abierto, setAbierto] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
-  const contenedorRef = useRef<HTMLDivElement>(null);
   const botonRef = useRef<HTMLButtonElement>(null);
-  const busquedaRef = useRef<HTMLInputElement>(null);
 
   const fichas = useMemo(
     () => [...documentos].sort((a, b) => (b.fecha_carga || "").localeCompare(a.fecha_carga || "")),
@@ -51,45 +49,23 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
   const actual = fichas.find((d) => d.id === valor);
   const resumenTodas = `${fichas.length} ${fichas.length === 1 ? "ficha" : "fichas"}`;
 
-  const q = busqueda.trim().toLowerCase();
-  const visibles = q
-    ? fichas.filter((d) => nombreFicha(d).toLowerCase().includes(q) || (d.nombre_original || "").toLowerCase().includes(q))
-    : fichas;
-
-  useEffect(() => {
-    if (!abierto) return;
-    busquedaRef.current?.focus();
-    const alClicFuera = (e: MouseEvent) => {
-      if (contenedorRef.current && !contenedorRef.current.contains(e.target as Node)) setAbierto(false);
-    };
-    const alTeclear = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setAbierto(false);
-        botonRef.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", alClicFuera);
-    document.addEventListener("keydown", alTeclear);
-    return () => {
-      document.removeEventListener("mousedown", alClicFuera);
-      document.removeEventListener("keydown", alTeclear);
-    };
-  }, [abierto]);
-
-  const elegir = (id: string) => {
-    setAbierto(false);
-    setBusqueda("");
-    botonRef.current?.focus();
-    if (id !== valor) onCambiar(id);
-  };
-
-  const claseOpcion = (activa: boolean) =>
-    `w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-      activa ? "bg-blue-50 dark:bg-[#0071E3]/15" : "hover:bg-slate-100 dark:hover:bg-white/6"
-    }`;
+  // Las fichas se eligen en una ventana con buscador (components/ui/SelectorModal.tsx), no en una lista desplegable
+  const opciones: OpcionSelector[] = useMemo(
+    () => [
+      { valor: TODAS_LAS_FICHAS, etiqueta: "Todas las fichas", descripcion: resumenTodas },
+      ...fichas.map((d) => ({
+        valor: d.id,
+        etiqueta: nombreFicha(d),
+        descripcion: detalleFicha(d),
+        insignia: ESTADOS_EN_CURSO[d.estado],
+        color: ESTADOS_EN_CURSO[d.estado] ? "bg-amber-500" : undefined,
+      })),
+    ],
+    [fichas, resumenTodas]
+  );
 
   return (
-    <div ref={contenedorRef} className="relative w-full sm:w-[420px]">
+    <div className="relative w-full sm:w-[420px]">
       <span id="etiqueta-ficha" className="block text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase mb-1.5">
         Ficha
       </span>
@@ -97,10 +73,9 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
         ref={botonRef}
         type="button"
         aria-labelledby="etiqueta-ficha"
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-expanded={abierto}
-        aria-controls="lista-fichas"
-        onClick={() => setAbierto((v) => !v)}
+        onClick={() => setAbierto(true)}
         disabled={fichas.length === 0}
         className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-white/80 dark:bg-white/6 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-200/80 dark:border-white/8 shadow-xs text-left transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -113,71 +88,21 @@ export default function SelectorFicha({ documentos, valor, onCambiar }: Selector
             {actual ? detalleFicha(actual) : resumenTodas}
           </span>
         </span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${abierto ? "rotate-180" : ""}`} />
+        <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
       </button>
 
-      {abierto && (
-        <div
-          id="lista-fichas"
-          className="absolute left-0 right-0 top-full mt-2 z-30 p-2 rounded-2xl bg-white dark:bg-[#121620] border border-slate-200 dark:border-white/10 shadow-xl animate-in fade-in duration-150"
-        >
-          <label htmlFor="buscar-ficha" className="sr-only">Buscar ficha</label>
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              id="buscar-ficha"
-              ref={busquedaRef}
-              type="text"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar ficha por número o nombre"
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-[#0071E3] focus:ring-1 focus:ring-[#0071E3]/20"
-            />
-          </div>
-          <ul className="max-h-80 overflow-y-auto overscroll-contain space-y-0.5">
-            <li>
-              <button
-                type="button"
-                onClick={() => elegir(TODAS_LAS_FICHAS)}
-                aria-current={valor === TODAS_LAS_FICHAS ? "true" : undefined}
-                className={claseOpcion(valor === TODAS_LAS_FICHAS)}
-              >
-                <span className="flex-1 min-w-0">
-                  <span className="block text-xs font-semibold text-slate-900 dark:text-white">Todas las fichas</span>
-                  <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{resumenTodas}</span>
-                </span>
-                {valor === TODAS_LAS_FICHAS && <Check className="w-4 h-4 text-[#0071E3] dark:text-[#3894FF] shrink-0 mt-0.5" />}
-              </button>
-            </li>
-            {visibles.map((d) => (
-              <li key={d.id}>
-                <button
-                  type="button"
-                  onClick={() => elegir(d.id)}
-                  aria-current={d.id === valor ? "true" : undefined}
-                  className={claseOpcion(d.id === valor)}
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-xs font-semibold text-slate-900 dark:text-white wrap-break-word">{nombreFicha(d)}</span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{detalleFicha(d)}</span>
-                  </span>
-                  {ESTADOS_EN_CURSO[d.estado] && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 shrink-0">
-                      {ESTADOS_EN_CURSO[d.estado]}
-                    </span>
-                  )}
-                  {d.id === valor && <Check className="w-4 h-4 text-[#0071E3] dark:text-[#3894FF] shrink-0 mt-0.5" />}
-                </button>
-              </li>
-            ))}
-            {visibles.length === 0 && (
-              <li className="px-3 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                Ninguna ficha coincide con &quot;{busqueda}&quot;.
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
+      <VentanaSelector
+        id="selector-ficha"
+        abierto={abierto}
+        onCerrar={() => { setAbierto(false); botonRef.current?.focus(); }}
+        titulo="Elegir ficha"
+        descripcion="Cada PDF subido es una ficha. Ve las personas de una o de todas."
+        tema="ficha"
+        valor={actual ? actual.id : TODAS_LAS_FICHAS}
+        opciones={opciones}
+        onElegir={(id) => { if (id !== valor) onCambiar(id); }}
+        textoBusqueda="Buscar ficha por número o nombre"
+      />
     </div>
   );
 }

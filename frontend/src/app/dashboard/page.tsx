@@ -6,7 +6,7 @@ import {
   FileText, Users, GitCompare, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Activity,
   RefreshCw, ChevronRight, ExternalLink, ArrowUpRight,
-  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2, Zap, LayoutDashboard
+  X, Search, Eye, ChevronUp, ChevronDown, Download, Trash2, LayoutDashboard
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Sidebar from "@/components/ui/Sidebar";
@@ -18,6 +18,7 @@ import { auth } from "@/lib/auth";
 import { formatNombreCompleto, calcularEdad, getTipoDocInfo } from "@/lib/formatters";
 import { dividirNombreCompleto } from "@/lib/nombres";
 import type { DashboardStats, Documento, Persona } from "@/types";
+import IconoTema from "@/components/ui/IconoTema";
 
 function StatCard({
   title,
@@ -494,9 +495,7 @@ export default function DashboardPage() {
             <div className="p-5 border-b border-slate-200/70 dark:border-white/6 bg-slate-50/50 dark:bg-white/2 flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/6 border border-slate-200/60 dark:border-white/8 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </div>
+                  <IconoTema tema="ficha" tamano="sm" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] uppercase font-medium tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-white/6">
@@ -511,7 +510,7 @@ export default function DashboardPage() {
 
                 <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400 flex-wrap mt-2.5">
                   <span className="bg-slate-100 dark:bg-white/4 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/6 font-mono text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
-                    <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                    <IconoTema tema="confianza" sinMarco className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     <span>Confianza: {docSeleccionadoModal.confianza_ocr != null ? `${Math.round(docSeleccionadoModal.confianza_ocr)}%` : "—"}</span>
                   </span>
                   <span className="bg-slate-100 dark:bg-white/4 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-white/6 font-medium text-[11px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
@@ -813,9 +812,7 @@ export default function DashboardPage() {
             <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300/40 dark:via-white/15 to-transparent pointer-events-none" />
 
             <div className="flex items-center gap-3.5 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
+              <IconoTema tema="eliminar-ficha" tono="peligro" tamano="sm" />
               <div>
                 <h3 className="text-base font-semibold text-slate-900 dark:text-white tracking-tight">
                   ¿Eliminar ficha del historial?

@@ -25,8 +25,8 @@ FEQAYLUEAADE EXPEDICION
 FRENTE = """REPUBLICA DE COLOMBIA
 IDENTIFICACION PERSONAL
 CEDULA DE CIUDADANIA
-17.600.010
-BORRAES ALARCON
+17.300.020
+GARCIA TORRES
 LUIS FERNANDO"""
 
 
@@ -50,7 +50,7 @@ def test_el_reverso_se_une_a_su_frente():
         c = document_side_classifier.clasificar_cara(texto)
         paginas.append({"pagina_numero": n, "texto": texto, "layout": None, "motor": "rapid_ocr",
                         "cara": c["cara"], "tipo_documento": c["tipo_documento"], "confianza": c["confianza"],
-                        "numero_identificacion": "17600010" if n == 1 else None})
+                        "numero_identificacion": "17300020" if n == 1 else None})
     grupos = document_pairing_service.agrupar_paginas(paginas)
     assert len(grupos) == 1
     assert sorted(grupos[0].pages) == [1, 2]

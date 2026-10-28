@@ -22,6 +22,13 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+### Seguridad
+
+- **Datos personales en las pruebas**:
+  - Siete archivos de pruebas usaban como ejemplo datos de personas reales: nombres, cédulas, fechas de nacimiento, un teléfono y números de ficha. También estaba un número de ficha real en un comentario de `app/utils/archivos.py`.
+  - Se cambiaron por datos inventados con el mismo formato, así que las pruebas comprueban lo mismo (579 pasan).
+  - Las pruebas nuevas deben usar siempre datos inventados.
+
 ## [2.17.1] - 2026-10-28
 
 **Resumen**

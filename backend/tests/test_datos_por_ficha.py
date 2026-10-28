@@ -192,13 +192,13 @@ def test_persona_que_pasa_a_otro_pdf_toma_las_paginas_del_pdf_nuevo(bd):
     """
     db = bd.SessionLocal()
     ana = crear_usuario(db, "ana@example.com")
-    con_carta = crear_ficha(db, ana, "3492408 con carta.pdf", paginas=20)
-    sin_carta = crear_ficha(db, ana, "3492408.pdf", paginas=19)
-    crear_persona(db, ana, con_carta, "1006459309", "ADRIANA ALEJANDRA", "ZAPATA CUELLAR",
+    con_carta = crear_ficha(db, ana, "3100001 con carta.pdf", paginas=20)
+    sin_carta = crear_ficha(db, ana, "3100001.pdf", paginas=19)
+    crear_persona(db, ana, con_carta, "1003218765", "DIANA MARCELA", "SUAREZ MEDINA",
                   pagina_frente=2, pagina_reverso=None, detalles_campos={"paginas": [2]})
 
-    _guardar(db, sin_carta, "1006459309", "ADRIANA ALEJANDRA", "ZAPATA CUELLAR")
-    p = db.query(Persona).filter(Persona.numero_identificacion == "1006459309").one()
+    _guardar(db, sin_carta, "1003218765", "DIANA MARCELA", "SUAREZ MEDINA")
+    p = db.query(Persona).filter(Persona.numero_identificacion == "1003218765").one()
     datos = (p.documento_id, p.pagina_frente, (p.detalles_campos or {}).get("paginas"))
     id_sin_carta = sin_carta.id
     db.close()
@@ -215,17 +215,17 @@ def test_resubir_con_planilla_corrige_el_registro_danado(bd, tmp_path):
     """Si el Excel confirma la nueva lectura, se corrige el registro guardado en vez de separarlo."""
     db = bd.SessionLocal()
     ana = crear_usuario(db, "ana@example.com")
-    vieja = crear_ficha(db, ana, "3492408 con carta.pdf")
-    nueva = crear_ficha(db, ana, "3492408.pdf")
-    crear_persona(db, ana, vieja, "1077847851", "LUIS ANGEL", "LOZADA OLAYA")
-    _comparacion(db, ana, _planilla(tmp_path / "p.xlsx", [("1077847851", "MAYRA YERITZA TOQUICA CASALLAS")]), [nueva])
+    vieja = crear_ficha(db, ana, "3100001 con carta.pdf")
+    nueva = crear_ficha(db, ana, "3100001.pdf")
+    crear_persona(db, ana, vieja, "1077300214", "LUIS ANGEL", "MESA ROA")
+    _comparacion(db, ana, _planilla(tmp_path / "p.xlsx", [("1077300214", "SANDRA PATRICIA LEON MORA")]), [nueva])
 
-    _guardar(db, nueva, "1077847851", "MAYRA YERITZA", "TOQUICA CASALLAS")
+    _guardar(db, nueva, "1077300214", "SANDRA PATRICIA", "LEON MORA")
     personas = [(p.numero_identificacion, p.nombre_completo, p.documento_id) for p in db.query(Persona).all()]
     id_nueva = nueva.id
     db.close()
 
-    assert personas == [("1077847851", "MAYRA YERITZA TOQUICA CASALLAS", id_nueva)]
+    assert personas == [("1077300214", "SANDRA PATRICIA LEON MORA", id_nueva)]
 
 
 @requiere_postgres
@@ -233,16 +233,16 @@ def test_resubir_sin_planilla_no_decide_cual_nombre_es_el_correcto(bd):
     """Sin Excel no se sabe cuál lectura es la buena: se conservan las dos y la nueva queda para revisión."""
     db = bd.SessionLocal()
     ana = crear_usuario(db, "ana@example.com")
-    vieja = crear_ficha(db, ana, "3492408 con carta.pdf")
-    nueva = crear_ficha(db, ana, "3492408.pdf")
-    crear_persona(db, ana, vieja, "1077847851", "LUIS ANGEL", "LOZADA OLAYA")
+    vieja = crear_ficha(db, ana, "3100001 con carta.pdf")
+    nueva = crear_ficha(db, ana, "3100001.pdf")
+    crear_persona(db, ana, vieja, "1077300214", "LUIS ANGEL", "MESA ROA")
 
-    _guardar(db, nueva, "1077847851", "MAYRA YERITZA", "TOQUICA CASALLAS")
+    _guardar(db, nueva, "1077300214", "SANDRA PATRICIA", "LEON MORA")
     personas = {p.nombre_completo: (p.numero_identificacion, p.requiere_revision) for p in db.query(Persona).all()}
     db.close()
 
-    assert personas["LUIS ANGEL LOZADA OLAYA"][0] == "1077847851"
-    assert personas["MAYRA YERITZA TOQUICA CASALLAS"] == ("", True)
+    assert personas["LUIS ANGEL MESA ROA"][0] == "1077300214"
+    assert personas["SANDRA PATRICIA LEON MORA"] == ("", True)
 
 
 # ── Volver a subir: reescribe sin duplicar ──────────────────────────
@@ -259,14 +259,14 @@ def test_volver_a_subir_reescribe_los_datos_y_conserva_lo_corregido_a_mano(bd):
     from datetime import date
     db = bd.SessionLocal()
     ana = crear_usuario(db, "ana@example.com")
-    vieja = crear_ficha(db, ana, "3492408.pdf")
-    nueva = crear_ficha(db, ana, "3492408 (2).pdf")
-    crear_persona(db, ana, vieja, "1006459309", "ADRIANA", "ZAPATA", nombre_completo="ADRIANA ZAPATA C",
+    vieja = crear_ficha(db, ana, "3100001.pdf")
+    nueva = crear_ficha(db, ana, "3100001 (2).pdf")
+    crear_persona(db, ana, vieja, "1003218765", "DIANA", "SUAREZ", nombre_completo="DIANA SUAREZ C",
                   fecha_nacimiento=date(1999, 1, 1), lugar_expedicion="BOGOTA",
                   sexo="F", campos_revisados=["sexo"])
 
-    _guardar_datos(db, nueva, identificacion="1006459309", nombres="ADRIANA ALEJANDRA", apellidos="ZAPATA CUELLAR",
-                   nombre_completo="ADRIANA ALEJANDRA ZAPATA CUELLAR", fecha_nacimiento="2001-02-22",
+    _guardar_datos(db, nueva, identificacion="1003218765", nombres="DIANA MARCELA", apellidos="SUAREZ MEDINA",
+                   nombre_completo="DIANA MARCELA SUAREZ MEDINA", fecha_nacimiento="2001-03-14",
                    lugar_expedicion="EL DONCELLO", sexo="M", pagina_frente=3)
     personas = db.query(Persona).all()
     p = personas[0]
@@ -274,15 +274,15 @@ def test_volver_a_subir_reescribe_los_datos_y_conserva_lo_corregido_a_mano(bd):
     id_nueva = nueva.id
     db.close()
 
-    assert datos == (1, id_nueva, "ADRIANA ALEJANDRA ZAPATA CUELLAR", date(2001, 2, 22), "EL DONCELLO", "F", 3)
+    assert datos == (1, id_nueva, "DIANA MARCELA SUAREZ MEDINA", date(2001, 3, 14), "EL DONCELLO", "F", 3)
 
 
 @requiere_postgres
 def test_volver_a_subir_no_duplica_a_las_personas_sin_cedula(bd):
     db = bd.SessionLocal()
     ana = crear_usuario(db, "ana@example.com")
-    vieja = crear_ficha(db, ana, "3492408.pdf")
-    nueva = crear_ficha(db, ana, "3492408 (2).pdf")
+    vieja = crear_ficha(db, ana, "3100001.pdf")
+    nueva = crear_ficha(db, ana, "3100001 (2).pdf")
     for ficha in (vieja, nueva):
         _guardar_datos(db, ficha, identificacion=None, nombres="LUISA FERNANDA", apellidos="MORA DIAZ",
                        nombre_completo="LUISA FERNANDA MORA DIAZ")

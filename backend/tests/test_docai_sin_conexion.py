@@ -74,7 +74,7 @@ def test_ocr_sin_conexion_va_directo_a_rapidocr(servicio):
          patch("app.services.ocr_service.rapid_ocr_service") as rapid, \
          patch("socket.create_connection", side_effect=OSError("sin red")):
         rapid.disponible = True
-        rapid.procesar_imagen.return_value = ("REPUBLICA DE COLOMBIA CEDULA DE CIUDADANIA NUMERO 1006459309", 0.95, None)
+        rapid.procesar_imagen.return_value = ("REPUBLICA DE COLOMBIA CEDULA DE CIUDADANIA NUMERO 1003218765", 0.95, None)
         texto, motor, _ = ocr_service._ocr_imagen(img, pagina_num=1)
         ocr_service._ocr_imagen(img, pagina_num=2)
 

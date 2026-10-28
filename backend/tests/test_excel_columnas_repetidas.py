@@ -8,9 +8,9 @@ from app.services.comparacion_service import comparacion_service
 from app.services.excel_lookup_service import excel_lookup_service
 
 FILAS = [
-    ("CC - 1006549210", "ALEJANDRO BERMUDEZ MORA", "Seleccionado", "OK", "SI"),
-    ("CC - 1119580110", "JOSE RUBIEL LOAIZA ICO", "No Seleccionado", "NO", "NO"),
-    ("CC - 1010091411", "VITOR ALFONSO CABRERA VARGAS", "Seleccionado", "OK", "SI"),
+    ("CC - 1006000111", "ALEJANDRO VEGA MORA", "Seleccionado", "OK", "SI"),
+    ("CC - 1119000222", "JOSE DAVID LOPEZ RUIZ", "No Seleccionado", "NO", "NO"),
+    ("CC - 1010000333", "CAMILO ALFONSO SOTO VARGAS", "Seleccionado", "OK", "SI"),
 ]
 
 
@@ -18,7 +18,7 @@ def _reporte(ruta):
     wb = Workbook()
     ws = wb.active
     ws.title = "Inscritos Primera Opción"
-    ws["A3"], ws["B3"] = "Ficha", "3640522"
+    ws["A3"], ws["B3"] = "Ficha", "3100003"
     ws["A4"], ws["B4"] = "Programa de Formación", "ESTRUCTURAS EN CONCRETO"
     for j, titulo in enumerate(("Identificación", "Nombre", "Estado", "DOCUMENTO", "FIRMO")):
         ws.cell(row=6, column=1 + j, value=titulo)
@@ -32,10 +32,10 @@ def _reporte(ruta):
 
 def test_lookup_toma_todas_las_personas(tmp_path):
     lookup = excel_lookup_service.cargar_lookup(_reporte(tmp_path / "reporte.xlsx"))
-    assert set(lookup) == {"1006549210", "1119580110", "1010091411"}
-    assert lookup["1119580110"]["nombre_completo"] == "JOSE RUBIEL LOAIZA ICO"
+    assert set(lookup) == {"1006000111", "1119000222", "1010000333"}
+    assert lookup["1119000222"]["nombre_completo"] == "JOSE DAVID LOPEZ RUIZ"
 
 
 def test_comparacion_toma_todas_las_personas(tmp_path):
     df = comparacion_service.cargar_excel(_reporte(tmp_path / "reporte.xlsx"))
-    assert sorted(df["numero_identificacion"]) == ["1006549210", "1010091411", "1119580110"]
+    assert sorted(df["numero_identificacion"]) == ["1006000111", "1010000333", "1119000222"]

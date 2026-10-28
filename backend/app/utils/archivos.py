@@ -56,7 +56,7 @@ def borrar_archivo_subido(ruta: str | None) -> bool:
 
 def numero_ficha_de(nombre: str | None) -> str | None:
     """
-    Número de ficha (7 dígitos) en el nombre del archivo: "DOCUMENTOS FICHA 3492408.pdf" -> "3492408".
+    Número de ficha (7 dígitos) en el nombre del archivo: "DOCUMENTOS FICHA 3100001.pdf" -> "3100001".
     None si no trae ninguno o trae varios distintos (no se puede saber a qué ficha corresponde).
     """
     numeros = set(re.findall(r"(?<!\d)(\d{7})(?!\d)", nombre or ""))

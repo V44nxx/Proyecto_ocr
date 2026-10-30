@@ -64,7 +64,7 @@ KONDID_IDS=/tmp/kondid_e2e/semilla_ids.json KONDID_CORREOS=/tmp/kondid_correos \
 python pruebas/e2e/interfaz.py /tmp/kondid_resultados
 ```
 
-Usa el Chrome instalado (`channel="chrome"`). Son 38 casos (`CP-UI-01` a `CP-UI-38`):
+Usa el Chrome instalado (`channel="chrome"`). Son 39 casos (`CP-UI-01` a `CP-UI-39`):
 
 - **Recorrido:** el inicio de sesión, Personas y el visor de documentos, la exportación, el cambio y la recuperación de contraseña, la verificación en dos pasos, la auditoría y el cierre de sesión.
 - **Sesión:** que viaje en una cookie `HttpOnly` y `SameSite=Strict`, y que tras cerrar sesión el servidor la rechace.
@@ -73,6 +73,7 @@ Usa el Chrome instalado (`channel="chrome"`). Son 38 casos (`CP-UI-01` a `CP-UI-
   - los selectores en ventana y el diálogo de confirmación propio;
   - un solo aviso al cambiar el tema varias veces;
   - los avisos de conexión, servidor, versión y sesión.
+  - el panel de Seguimiento incrustado conserva su clave y recibe el nombre del usuario conectado.
 - **Datos recientes:**
   - con la red a 1,5 s por viaje, la lista de Personas aparece al instante al volver;
   - después de cerrar sesión, volver atrás no la deja ver.
@@ -135,6 +136,7 @@ DATABASE_URL=postgresql://postgres@127.0.0.1:5544/e2e GOOGLE_DOCUMENT_AI_ENABLED
 
 - **Backend**: toda la suite con un PostgreSQL de servicio (unitarias, integración y BDD). Falla si la cobertura baja del 80 %.
 - **Frontend**: revisión de tipos y compilación de producción.
+- **Panel de Seguimiento (Apps Script)**: `node --test apps-script/seguimiento-fichas/pruebas/*.test.js`. Carga `Codigo.gs` con imitaciones de Google Sheets sobre la estructura real del libro, con los datos personales reemplazados. Se corre igual en local, con Node 24 o más reciente.
 - **Seguridad**: pip-audit, Bandit y npm audit de las dependencias de producción.
 
 El workflow no despliega nada: Dokploy sigue desplegando desde `main`.

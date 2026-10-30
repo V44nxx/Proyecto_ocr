@@ -311,6 +311,8 @@ La lista completa, con una explicación de cada variable, está en `.env.example
 
 ### 5.7. Seguimiento de Fichas
 * Muestra dentro de KondID el panel de seguimiento publicado con Google Apps Script. Cada usuario guarda el enlace de su panel con **Configurar** y puede quitarlo cuando quiera.
+* El código del panel está en `apps-script/seguimiento-fichas/`, junto con su `LEEME.md`, que explica la instalación, las etapas, las alertas y el historial de cambios. El panel lee y edita la hoja «FORMACIONES COMPLEMENTARIAS GRUPOS» y tiene tres vistas: calendario, lista y cambios.
+* El enlace lleva una clave (`?k=...`); sin ella el panel no muestra nada. KondID agrega el nombre de quien tiene la sesión abierta (`&u=...`) para que el historial diga quién guardó cada cambio.
 
 ### 5.8. Usuarios y Auditoría (solo administradores)
 * **Usuarios:** crear usuarios, eliminarlos, restablecer su contraseña y restablecer la verificación en dos pasos de un administrador que perdió el celular y los códigos de respaldo.

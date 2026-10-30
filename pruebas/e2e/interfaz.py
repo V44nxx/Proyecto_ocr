@@ -22,6 +22,7 @@ import struct
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from email import policy
 from pathlib import Path
@@ -168,7 +169,7 @@ with sync_playwright() as p:
          f"foco en Cancelar: {enfocado_cancelar}")
 
     # ── Recorrido por las pantallas (errores JS y política de contenido) ───
-    api_put_json("/api/seguimiento/config", token_ana, {"url_panel": "https://script.google.com/macros/s/abc123/exec"})
+    api_put_json("/api/seguimiento/config", token_ana, {"url_panel": "https://script.google.com/macros/s/abc123/exec?k=clave0123"})
     politicas, nonces = set(), set()
     for ruta in ("/dashboard", "/documentos", "/personas", "/exportacion", "/comparacion", "/seguimiento"):
         respuesta = page.goto(FRONT + ruta)
@@ -178,6 +179,12 @@ with sync_playwright() as p:
         nonces.add(re.search(r"'nonce-([^']+)'", scripts).group(1) if "'nonce-" in scripts else "")
         page.wait_for_timeout(2500)
     page.screenshot(path=str(CAPTURAS / "03_seguimiento.png"))
+    # El panel de Apps Script recibe su clave y el nombre de quien tiene la sesión abierta, para su historial de cambios
+    enlace_panel = urllib.parse.urlsplit(page.locator("iframe").first.get_attribute("src") or "")
+    datos_enlace = urllib.parse.parse_qs(enlace_panel.query)
+    caso("CP-UI-39", "Seguimiento: el panel incrustado conserva su clave y recibe el nombre del usuario conectado",
+         enlace_panel.netloc == "script.google.com" and datos_enlace == {"k": ["clave0123"], "u": ["Ana Pruebas"]},
+         f"{enlace_panel.netloc} {datos_enlace}")
     caso("CP-UI-08", "Recorrido por las 6 pantallas del usuario sin errores de JavaScript", not errores_js, errores_js[:2])
     caso("CP-UI-09", "Política de contenido en las 6 pantallas: scripts solo con un nonce nuevo en cada carga, sin violaciones",
          politicas == {True} and len(nonces) == 6 and not avisos_csp,

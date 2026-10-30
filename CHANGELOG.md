@@ -22,6 +22,52 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.18.0] - 2026-10-29
+
+**Resumen**
+
+- Seguimiento de fichas tiene un panel nuevo para el libro «FORMACIONES COMPLEMENTARIAS GRUPOS» (pestañas REGULADA, PV, CAMPESENA y TECNOACADEMIA). Hecho por Emerson (rama `claude/serene-pascal-a6uhdz`) e integrado en esta versión.
+- El panel permite ver y filtrar los registros, editar el seguimiento directo en la hoja, ver el calendario y ver el historial de cambios con quién los hizo. Se actualiza solo.
+- Dos refuerzos de seguridad del panel antes de publicarlo.
+
+### Agregado
+
+- **Panel de Seguimiento de fichas** (`apps-script/seguimiento-fichas/`, con instrucciones de instalación en su `LEEME.md`):
+  - Lee las 4 pestañas y busca las columnas por su título, así que se pueden mover columnas sin tocar el script. En REGULADA, cada registro ocupa 3 filas combinadas.
+  - Filtra por pestaña, mes, etapa, alerta y estado de la ficha. Busca por programa, instructor, ficha, empresa o municipio.
+  - Edita las columnas de seguimiento (estado de la ficha y de los aprendices, inscritos, matriculados, certificación, observaciones…) directo en la hoja.
+    - Lo escrito a mano en la hoja aparece en menos de 15 segundos.
+    - Si dos personas editan el mismo dato a la vez, el segundo cambio no pisa al primero.
+  - Tres vistas: **Calendario**, **Lista** y **Cambios**.
+    - Cambios es el historial: quién, cuándo, desde dónde, el campo, y el valor anterior y el nuevo.
+    - Queda en la pestaña oculta BITACORA_PANEL.
+  - Etapas según las fechas: inicia hoy, por iniciar, programada, en ejecución, por finalizar, finalizada, fechas inválidas, fecha faltante.
+  - Alertas: ficha sin crear, sin instructor, cruce de instructor, datos distintos entre pestañas, modificada recientemente. Reemplaza al antiguo `Motor.gs`.
+  - El enlace lleva una clave (`?k=...`): sin ella el panel no muestra ni edita nada.
+  - Menú **Seguimiento de fichas** dentro de la hoja: abrir el panel, ver el enlace para KondID, configurar y cambiar la clave.
+- **`CLAUDE.md`**: reglas del repositorio para Claude Code.
+  - Quién numera las versiones; en una rama los cambios van a [Sin publicar], sin número.
+  - Qué pruebas deben pasar y qué nunca se hace (producción, datos reales, secretos).
+
+### Cambiado
+
+- **Seguimiento de fichas**:
+  - Los pasos de «Cómo obtener el enlace» explican cómo instalar el panel nuevo.
+  - El enlace de la hoja se llama «Formaciones complementarias».
+  - KondID le pasa al panel el nombre de quien tiene la sesión abierta (`&u=`), para que el historial diga quién guardó desde KondID.
+
+### Seguridad
+
+- Lo que se escribe desde el panel se guarda siempre como texto, en la hoja y en la bitácora.
+- **Cambiar la clave del enlace** solo funciona desde el menú de la hoja.
+- El panel se instala a mano en Google: para que estos refuerzos apliquen, hay que actualizarlo como dice «Actualizar el panel» en su `LEEME.md`.
+
+### Pruebas
+
+- Nuevo trabajo de CI «Panel de Seguimiento (Apps Script)»: 22 pruebas de `Codigo.gs` con la estructura real del libro (datos personales reemplazados). Cuatro son nuevas y cubren los refuerzos de seguridad.
+- `test_seguimiento_config.py` acepta el enlace del panel con su clave.
+- CP-UI-39: el panel incrustado conserva su clave y recibe el nombre del usuario conectado. e2e de 38 a 39 casos.
+
 ## [2.17.2] - 2026-10-28
 
 **Resumen**

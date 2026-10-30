@@ -22,6 +22,35 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+**Resumen**
+
+- El panel de Seguimiento de fichas se ve con el mismo tema de KondID (claro u oscuro) y, abierto en su propia pestaña, tiene un botón para cambiarlo.
+- En modo oscuro, la barra de desplazamiento y las listas desplegables del panel ya no salen blancas.
+
+### Agregado
+
+- **Panel de Seguimiento**: botón «Modo claro / Modo oscuro» cuando el panel se abre directo o desde el menú de la hoja. La elección se recuerda en ese navegador. Sin elección, usa el tema del sistema.
+
+### Cambiado
+
+- **Seguimiento de fichas**: KondID le pasa su tema al panel incrustado (`&tema=claro|oscuro`). Al cambiar el tema de KondID, el panel se vuelve a cargar con el nuevo. Dentro de KondID el panel no muestra su propio botón.
+- **Panel de Seguimiento, calendario**: las formaciones del día van en una columna del alto de la pantalla, junto al calendario, con su propio scroll.
+  - Antes la columna crecía con las tres listas seguidas (56 en curso en un día normal) y dejaba el calendario arriba con un gran espacio vacío al lado.
+  - Pestañas **Inician · Terminan · En curso** con su cantidad; se abre la primera que tenga formaciones.
+  - Tarjetas más compactas: el título en 2 líneas como máximo y la etapa («Inicia hoy», «Finaliza mañana») a la derecha.
+
+### Corregido
+
+- **Panel de Seguimiento**:
+  - Con KondID en claro y Windows en oscuro, el panel salía oscuro: tomaba el tema solo de la configuración del sistema.
+  - En modo oscuro, la barra de desplazamiento, las listas desplegables y el fondo del panel mientras carga salían blancos (faltaba `color-scheme`).
+  - Las etiquetas de etapa y de alertas mantenían su fondo pastel de modo claro en modo oscuro.
+
+### Pruebas
+
+- Panel de Seguimiento de 22 a 29 pruebas: el tema que llega en el enlace, `color-scheme`, el botón, la columna del día con su propio scroll y que no haya dos funciones con el mismo nombre en `Index.html`.
+- e2e CP-UI-39 también comprueba que el panel incrustado recibe el tema de KondID.
+
 ## [2.18.0] - 2026-10-29
 
 **Resumen**

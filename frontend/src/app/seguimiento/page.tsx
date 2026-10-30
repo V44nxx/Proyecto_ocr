@@ -17,7 +17,8 @@ import EncabezadoPagina from "@/components/ui/EncabezadoPagina";
 import { useSidebar } from "@/context/SidebarContext";
 import { apiSeguimiento, getErrorMessage } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { conUsuario, urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
+import { useTheme } from "@/context/ThemeContext";
+import { conTema, conUsuario, urlHojaSeguimiento, urlPanelSeguimiento } from "@/lib/urlsSeguimiento";
 import type { SeguimientoConfig } from "@/types";
 import toast from "react-hot-toast";
 import { confirmar } from "@/lib/confirmar";
@@ -59,6 +60,9 @@ export default function SeguimientoPage() {
   // Solo se pintan enlaces de Apps Script y Google Sheets (lib/urlsSeguimiento.ts); el panel recibe quién está
   // conectado para anotarlo en su historial de cambios
   const panelSeguro = conUsuario(urlPanelSeguimiento(config?.url_panel), nombreUsuario);
+  // El panel incrustado se pinta con el tema de KondID (al cambiarlo, el panel se vuelve a cargar)
+  const { theme } = useTheme();
+  const panelIncrustado = conTema(panelSeguro, theme);
   const hojaSegura = urlHojaSeguimiento(config?.url_hoja);
 
   const [urlPanel, setUrlPanel] = useState("");
@@ -332,9 +336,9 @@ export default function SeguimientoPage() {
             <div className={`${TARJETA} flex-1 min-h-[70vh] overflow-hidden`}>
               <iframe
                 key={recarga}
-                src={panelSeguro}
+                src={panelIncrustado}
                 title="Seguimiento de fichas"
-                className="w-full h-full min-h-[70vh] border-0 bg-white"
+                className="w-full h-full min-h-[70vh] border-0 bg-[#f5f6f8] dark:bg-[#0b0e14]"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-top-navigation-by-user-activation"
               />
             </div>

@@ -3,22 +3,46 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<script>
+  // El tema se decide antes de pintar: el que manda KondID en el enlace (&tema=), si no el que eligió la persona
+  // con el botón, y si no el del sistema
+  (function () {
+    var desdeEnlace = <?= tema ?>;
+    var elegido = '';
+    try { elegido = localStorage.getItem('seguimiento_tema') || ''; } catch (e) { /* almacenamiento bloqueado */ }
+    var sistema = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro';
+    var tema = desdeEnlace || (elegido === 'claro' || elegido === 'oscuro' ? elegido : sistema);
+    document.documentElement.setAttribute('data-tema', tema);
+    document.documentElement.setAttribute('data-tema-kondid', desdeEnlace ? 'si' : 'no');
+  })();
+</script>
 <style>
   :root {
+    color-scheme: light;
     --fondo: #f5f6f8; --tarjeta: #ffffff; --borde: #e2e8f0; --texto: #0f172a; --suave: #64748b; --tenue: #94a3b8;
     --acento: #0071e3; --acento-suave: rgba(0, 113, 227, .1); --ok: #059669; --alerta: #d97706; --error: #dc2626;
-    --campo: #f8fafc; --sombra: 0 2px 12px rgba(0, 0, 0, .04);
+    --campo: #f8fafc; --sombra: 0 2px 12px rgba(0, 0, 0, .04); --barra: #cbd5e1;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --fondo: #0b0e14; --tarjeta: #121620; --borde: rgba(255, 255, 255, .08); --texto: #f1f5f9; --suave: #94a3b8;
-      --tenue: #64748b; --acento-suave: rgba(0, 113, 227, .18); --campo: rgba(255, 255, 255, .04);
-      --sombra: 0 4px 24px rgba(0, 0, 0, .25);
-    }
+  /* color-scheme hace que la barra de desplazamiento, las listas desplegables y los calendarios sigan el tema */
+  :root[data-tema="oscuro"] {
+    color-scheme: dark;
+    --fondo: #0b0e14; --tarjeta: #121620; --borde: rgba(255, 255, 255, .08); --texto: #f1f5f9; --suave: #94a3b8;
+    --tenue: #64748b; --acento-suave: rgba(0, 113, 227, .18); --campo: rgba(255, 255, 255, .04);
+    --sombra: 0 4px 24px rgba(0, 0, 0, .25); --barra: #334155;
   }
-  * { box-sizing: border-box; }
+  html { scrollbar-color: var(--barra) var(--fondo); }
+  * { box-sizing: border-box; scrollbar-color: var(--barra) transparent; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  option { background: var(--tarjeta); color: var(--texto); }
+  /* Etiquetas de etapa y alertas: cada una trae su color (--c) y su fondo claro (--f) */
+  .con-color { color: var(--c); background: var(--f); border-color: transparent; }
+  :root[data-tema="oscuro"] .con-color {
+    color: color-mix(in srgb, var(--c) 45%, #ffffff); background: color-mix(in srgb, var(--c) 22%, transparent);
+  }
+  .boton-tema { display: inline-flex; align-items: center; gap: 6px; }
+  .boton-tema svg { width: 14px; height: 14px; }
+  :root[data-tema-kondid="si"] .boton-tema { display: none; }
   button, input, select, textarea { font: inherit; color: inherit; }
   .contenedor { padding: 16px; max-width: 1400px; margin: 0 auto; }
   .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -89,6 +113,7 @@
   .mensaje { margin-right: auto; font-size: 12px; color: var(--suave); }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.visible { opacity: 1; }
+  :root[data-tema="oscuro"] .toast { background: #1e293b; box-shadow: 0 0 0 1px rgba(255, 255, 255, .1); }
   .vistas { display: flex; gap: 4px; border-bottom: 1px solid var(--borde); margin-bottom: 14px; }
   .vistas button { border: 0; background: none; padding: 9px 14px; font-weight: 600; font-size: 13px; color: var(--suave); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .vistas button.activa { color: var(--acento); border-bottom-color: var(--acento); }
@@ -111,14 +136,25 @@
   .cal-ev { font-size: 11px; font-weight: 600; border-radius: 5px; padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid; background: var(--campo); }
   .cal-mas, .cal-cuenta { font-size: 10.5px; color: var(--suave); }
   .cal-cuenta b { color: var(--texto); }
-  .dia-panel { padding: 14px; }
+  /* Formaciones del día: columna del alto de la pantalla que acompaña al calendario; la lista tiene su propio scroll */
+  .dia-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); display: flex; flex-direction: column; }
+  .dia-cabeza { padding: 14px 14px 0; border-bottom: 1px solid var(--borde); }
   .dia-panel h3 { margin: 0 0 2px; font-size: 15px; }
   .dia-panel h3::first-letter, .dia-titulo::first-letter { text-transform: uppercase; }
-  .ver-mas { border: 0; background: none; color: var(--acento); font-weight: 600; font-size: 12px; cursor: pointer; padding: 4px 0; }
-  .grupo { margin-top: 14px; }
-  .grupo h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
-  .item { padding: 8px 10px; border: 1px solid var(--borde); border-left: 3px solid; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
-  .item:hover { border-color: var(--acento); }
+  .dia-pestanas { display: flex; gap: 4px; margin-top: 12px; }
+  .dia-pestana { flex: 1; border: 0; background: none; padding: 8px 4px; font-size: 12px; font-weight: 600; color: var(--suave); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .dia-pestana b { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--campo); border: 1px solid var(--borde); font-size: 11px; }
+  .dia-pestana.activa { color: var(--acento); border-bottom-color: var(--acento); }
+  .dia-pestana.activa b { background: var(--acento-suave); border-color: transparent; color: var(--acento); }
+  .dia-pestana:disabled { opacity: .45; cursor: default; }
+  .dia-lista { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .dia-vacio { padding: 28px 8px; text-align: center; color: var(--suave); font-size: 13px; }
+  .item { padding: 9px 11px; border: 1px solid var(--borde); border-left: 3px solid; border-radius: 10px; cursor: pointer; background: var(--tarjeta); }
+  .item:hover { border-color: var(--acento); background: var(--acento-suave); }
+  .item .titulo { font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item .sub { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .cuando { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; }
+  .item .cuando b { color: var(--texto); font-weight: 600; white-space: nowrap; }
   .leyenda { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 14px; font-size: 11px; color: var(--suave); border-top: 1px solid var(--borde); }
   .leyenda span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; background: var(--c); }
   /* Cambios */
@@ -134,6 +170,7 @@
   .origen { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--campo); border: 1px solid var(--borde); color: var(--suave); margin-left: 6px; }
   @media (max-width: 900px) {
     .cal { grid-template-columns: 1fr; }
+    .dia-panel { position: static; max-height: 70vh; }
     .cal-dia { min-height: 64px; }
     .cal-ev { display: none; }
   }
@@ -151,6 +188,8 @@
   <div class="barra">
     <h1>Formaciones complementarias</h1>
     <div class="sincro"><span class="punto cargando" id="punto"></span><span id="estado">Cargando…</span></div>
+    <!-- Dentro de KondID no se muestra: el panel sigue el tema de KondID -->
+    <button class="boton boton-tema" id="tema" type="button"></button>
     <button class="boton" id="recargar" title="Leer la hoja de nuevo">Recargar</button>
   </div>
 
@@ -263,7 +302,7 @@
   var mesCal = null; // { anio, mes } que muestra el calendario
   var diaSel = null; // 'AAAA-MM-DD' elegido en el calendario
   var filtroCambios = { texto: '', origen: '', quien: '' };
-  var verTodasEnCurso = false;
+  var grupoDia = 'inician'; // pestaña de la columna del día: inician, finalizan o enCurso
   var COLORES_HOJA = { REGULADA: '#0071E3', PV: '#0D9488', CAMPESENA: '#16A34A', TECNOACADEMIA: '#9333EA' };
   var DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   var resaltar = {};
@@ -412,12 +451,16 @@
     });
   }
 
+  // El color va en variables: en modo oscuro el CSS lo aclara y le pone un fondo translúcido (.con-color)
+  function colorearEtiqueta(chip, def) {
+    chip.style.setProperty('--c', def.color);
+    chip.style.setProperty('--f', def.fondo);
+  }
+
   function chipEtapa(r) {
     var e = datos.etapas[r.etapa];
-    var chip = crear('span', 'etiqueta', e.etiqueta);
-    chip.style.color = e.color;
-    chip.style.background = e.fondo;
-    chip.style.borderColor = 'transparent';
+    var chip = crear('span', 'etiqueta con-color', e.etiqueta);
+    colorearEtiqueta(chip, e);
     return chip;
   }
 
@@ -425,9 +468,8 @@
     var caja = crear('div', 'chips-alerta');
     r.alertas.forEach(function (k) {
       var a = datos.alertas[k];
-      var chip = crear('span', 'alerta', a.etiqueta);
-      chip.style.color = a.color;
-      chip.style.background = a.fondo;
+      var chip = crear('span', 'alerta con-color', a.etiqueta);
+      colorearEtiqueta(chip, a);
       caja.appendChild(chip);
     });
     return caja;
@@ -589,7 +631,7 @@
     var del = delDia(lista, dia);
     var clase = 'cal-dia' + (fecha.getMonth() !== mesCal.mes ? ' fuera' : '') + (dia === datos.hoy ? ' hoy' : '') + (dia === diaSel ? ' elegido' : '');
     var celda = crear('div', clase);
-    celda.onclick = function () { diaSel = dia; verTodasEnCurso = false; pintarCalendario(); };
+    celda.onclick = function () { diaSel = dia; pintarCalendario(); };
     celda.appendChild(crear('span', 'cal-num', String(fecha.getDate())));
     del.inician.slice(0, 3).forEach(function (r) {
       var ev = crear('div', 'cal-ev', titulo(r));
@@ -614,34 +656,44 @@
   function pintarDia(lista) {
     var panel = $('dia-panel');
     panel.textContent = '';
-    var fecha = deIso(diaSel);
-    panel.appendChild(crear('h3', '', fecha.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })));
     var del = delDia(lista, diaSel);
     var total = del.inician.length + del.enCurso.length + del.finalizan.length;
-    panel.appendChild(crear('div', 'sub', total ? total + ' formaciones este día' : 'No hay formaciones este día con los filtros actuales'));
-    [['Inician', del.inician], ['Terminan', del.finalizan], ['En curso', del.enCurso]].forEach(function (g) {
-      if (!g[1].length) return;
-      var grupo = crear('div', 'grupo');
-      grupo.appendChild(crear('h4', '', g[0] + ' (' + g[1].length + ')'));
-      // «En curso» puede ser muy larga: se muestran 8 y el resto con «Ver todas»
-      var limite = g[0] === 'En curso' && !verTodasEnCurso ? 8 : Infinity;
-      ordenar(g[1]).slice(0, limite).forEach(function (r) {
-        var item = crear('div', 'item');
-        item.style.borderLeftColor = colorHoja(r.hoja);
-        item.onclick = function () { abrir(r.id); };
-        item.appendChild(crear('div', 'titulo', titulo(r)));
-        item.appendChild(crear('div', 'sub', [r.hoja, r.campos.ficha ? 'Ficha ' + r.campos.ficha : 'Sin ficha', r.campos.instructor].filter(Boolean).join(' · ')));
-        item.appendChild(crear('div', 'sub', fechaCorta(r.inicioIso) + ' → ' + fechaCorta(r.finIso) + ' · ' + r.detalleEtapa));
-        if (r.alertas.length) item.appendChild(chipsAlerta(r));
-        grupo.appendChild(item);
-      });
-      if (g[1].length > limite) {
-        var mas = crear('button', 'ver-mas', 'Ver las ' + g[1].length + ' en curso');
-        mas.onclick = function () { verTodasEnCurso = true; pintarDia(lista); };
-        grupo.appendChild(mas);
-      }
-      panel.appendChild(grupo);
+    var grupos = [['inician', 'Inician', del.inician], ['finalizan', 'Terminan', del.finalizan], ['enCurso', 'En curso', del.enCurso]];
+    // Se queda en la pestaña elegida mientras tenga formaciones; si no, abre la primera que tenga
+    var actual = grupos.filter(function (g) { return g[0] === grupoDia && g[2].length; })[0] ||
+      grupos.filter(function (g) { return g[2].length; })[0] || grupos[0];
+
+    var cabeza = crear('div', 'dia-cabeza');
+    cabeza.appendChild(crear('h3', '', deIso(diaSel).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })));
+    cabeza.appendChild(crear('div', 'sub', total ? total + ' formaciones este día' : 'No hay formaciones este día con los filtros actuales'));
+    var pestanas = crear('div', 'dia-pestanas');
+    grupos.forEach(function (g) {
+      var b = crear('button', 'dia-pestana' + (g === actual && g[2].length ? ' activa' : ''), g[1]);
+      b.type = 'button';
+      b.appendChild(crear('b', '', String(g[2].length)));
+      b.disabled = !g[2].length;
+      b.onclick = function () { grupoDia = g[0]; pintarDia(lista); };
+      pestanas.appendChild(b);
     });
+    cabeza.appendChild(pestanas);
+    panel.appendChild(cabeza);
+
+    var cuerpo = crear('div', 'dia-lista');
+    if (!actual[2].length) cuerpo.appendChild(crear('div', 'dia-vacio', 'Elige otro día en el calendario.'));
+    ordenar(actual[2]).forEach(function (r) {
+      var item = crear('div', 'item');
+      item.style.borderLeftColor = colorHoja(r.hoja);
+      item.onclick = function () { abrir(r.id); };
+      item.title = titulo(r);
+      item.appendChild(crear('div', 'titulo', titulo(r)));
+      item.appendChild(crear('div', 'sub', [r.hoja, r.campos.ficha ? 'Ficha ' + r.campos.ficha : 'Sin ficha', r.campos.instructor].filter(Boolean).join(' · ')));
+      var cuando = crear('div', 'sub cuando', fechaCorta(r.inicioIso) + ' → ' + fechaCorta(r.finIso));
+      cuando.appendChild(crear('b', '', r.detalleEtapa));
+      item.appendChild(cuando);
+      if (r.alertas.length) item.appendChild(chipsAlerta(r));
+      cuerpo.appendChild(item);
+    });
+    panel.appendChild(cuerpo);
   }
 
   function moverMes(n) {
@@ -889,6 +941,29 @@
   // ─── Eventos ───
 
   $('recargar').onclick = function () { cargar(false); };
+
+  // ─── Tema claro / oscuro (panel abierto directo o desde la hoja) ───
+  var ICONO_SOL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var ICONO_LUNA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+  function temaActual() {
+    return document.documentElement.getAttribute('data-tema');
+  }
+
+  function pintarBotonTema() {
+    var aOscuro = temaActual() !== 'oscuro';
+    $('tema').innerHTML = (aOscuro ? ICONO_LUNA : ICONO_SOL) + '<span></span>';
+    $('tema').lastChild.textContent = aOscuro ? 'Modo oscuro' : 'Modo claro';
+    $('tema').title = aOscuro ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
+  }
+
+  $('tema').onclick = function () {
+    var nuevo = temaActual() === 'oscuro' ? 'claro' : 'oscuro';
+    document.documentElement.setAttribute('data-tema', nuevo);
+    try { localStorage.setItem('seguimiento_tema', nuevo); } catch (e) { /* almacenamiento bloqueado: vale por esta vez */ }
+    pintarBotonTema();
+  };
+  pintarBotonTema();
   $('buscar').oninput = function (e) { filtro.texto = e.target.value; pintar(); };
   $('f-mes').onchange = function (e) { filtro.mes = e.target.value; pintar(); };
   $('f-estado').onchange = function (e) { filtro.estado = e.target.value; pintar(); };

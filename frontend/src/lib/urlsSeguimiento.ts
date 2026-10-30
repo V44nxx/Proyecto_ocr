@@ -31,3 +31,14 @@ export function conUsuario(url: string | undefined, nombre?: string | null): str
   conNombre.searchParams.set("u", nombre);
   return conNombre.href;
 }
+
+/**
+ * Agrega el tema de KondID (&tema=claro|oscuro) para que el panel incrustado se vea igual. Solo para el iframe: el
+ * panel abierto en otra pestaña usa el tema que la persona elija con su propio botón.
+ */
+export function conTema(url: string | undefined, tema: "dark" | "light"): string | undefined {
+  if (!url) return url;
+  const conTemaUrl = new URL(url);
+  conTemaUrl.searchParams.set("tema", tema === "dark" ? "oscuro" : "claro");
+  return conTemaUrl.href;
+}

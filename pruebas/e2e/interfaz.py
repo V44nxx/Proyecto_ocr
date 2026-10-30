@@ -182,8 +182,11 @@ with sync_playwright() as p:
     # El panel de Apps Script recibe su clave y el nombre de quien tiene la sesión abierta, para su historial de cambios
     enlace_panel = urllib.parse.urlsplit(page.locator("iframe").first.get_attribute("src") or "")
     datos_enlace = urllib.parse.parse_qs(enlace_panel.query)
-    caso("CP-UI-39", "Seguimiento: el panel incrustado conserva su clave y recibe el nombre del usuario conectado",
-         enlace_panel.netloc == "script.google.com" and datos_enlace == {"k": ["clave0123"], "u": ["Ana Pruebas"]},
+    # y el tema de KondID, para verse igual (claro u oscuro)
+    tema_kondid = "oscuro" if page.evaluate("document.documentElement.classList.contains('dark')") else "claro"
+    caso("CP-UI-39", "Seguimiento: el panel incrustado conserva su clave y recibe el nombre del usuario conectado y el tema",
+         enlace_panel.netloc == "script.google.com"
+         and datos_enlace == {"k": ["clave0123"], "u": ["Ana Pruebas"], "tema": [tema_kondid]},
          f"{enlace_panel.netloc} {datos_enlace}")
     caso("CP-UI-08", "Recorrido por las 6 pantallas del usuario sin errores de JavaScript", not errores_js, errores_js[:2])
     caso("CP-UI-09", "Política de contenido en las 6 pantallas: scripts solo con un nonce nuevo en cada carga, sin violaciones",

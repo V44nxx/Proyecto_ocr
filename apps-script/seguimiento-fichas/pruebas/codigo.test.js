@@ -483,3 +483,22 @@ test('sin la clave, ninguna función que la aplicación web deja llamar entrega 
     assert.equal(propsScript.get('CLAVE'), CLAVE, `${nombre} cambió la clave`);
   }
 });
+
+// ─── Tema claro / oscuro ───
+
+test('el panel recibe el tema de KondID por el enlace y solo acepta claro u oscuro', () => {
+  const { ctx } = entorno();
+  const plantillas = [];
+  ctx.HtmlService.createTemplateFromFile = () => {
+    const p = { evaluate() { return { setTitle() { return this; }, addMetaTag() { return this; }, setXFrameOptionsMode() { return this; }, setWidth() { return this; }, setHeight() { return this; } }; } };
+    plantillas.push(p);
+    return p;
+  };
+  ctx.doGet({ parameter: { k: CLAVE, tema: 'oscuro' } });
+  ctx.doGet({ parameter: { k: CLAVE, tema: 'claro' } });
+  ctx.doGet({ parameter: { k: CLAVE, tema: '"><script>' } });
+  ctx.doGet({ parameter: { k: CLAVE } });
+  ctx.abrirPanel();
+  // Sin tema en el enlace (panel abierto directo o desde la hoja) el panel usa lo que eligió la persona o el sistema
+  assert.deepEqual(plantillas.map((p) => p.tema), ['oscuro', 'claro', '', '', '']);
+});

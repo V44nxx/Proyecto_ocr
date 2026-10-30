@@ -68,6 +68,8 @@ var OPCIONES = {
   certificacion: ['SI', 'NO', 'EN PROCESO'],
 };
 
+var TEMAS = ['claro', 'oscuro'];
+
 // ─── Aplicación web ──────────────────────────────────────────────────────
 
 function doGet(e) {
@@ -83,6 +85,8 @@ function doGet(e) {
   // KondID agrega &u=<nombre del usuario> para que la bitácora diga quién editó desde KondID
   plantilla.usuario = String(e.parameter.u || '').slice(0, 80);
   plantilla.origen = 'KondID';
+  // KondID agrega &tema=claro|oscuro para que el panel incrustado se vea con su mismo tema
+  plantilla.tema = TEMAS.indexOf(e.parameter.tema) >= 0 ? e.parameter.tema : '';
   return plantilla.evaluate()
     .setTitle('Seguimiento de fichas')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -729,6 +733,7 @@ function abrirPanel() {
   plantilla.clave = clave;
   plantilla.usuario = '';
   plantilla.origen = 'Panel en la hoja';
+  plantilla.tema = '';
   ui.showModelessDialog(plantilla.evaluate().setWidth(1200).setHeight(760), 'Seguimiento de fichas');
 }
 

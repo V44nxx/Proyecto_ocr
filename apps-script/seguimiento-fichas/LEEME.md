@@ -19,11 +19,13 @@ Las pestañas **REGULADA**, **PV**, **CAMPESENA** y **TECNOACADEMIA**. La copia 
 
 ## Vistas del panel
 
-- **Calendario** (la que abre primero): cada día muestra las formaciones que **inician** ese día, con el color de su pestaña, y cuántas siguen **en curso** y cuántas **terminan**. Al hacer clic en un día, a la derecha salen las tres listas; al hacer clic en una formación, se abre su detalle. Con ‹ › se cambia de mes y «Hoy» vuelve al día actual.
+- **Calendario** (la que abre primero): cada día muestra las formaciones que **inician** ese día, con el color de su pestaña, y cuántas siguen **en curso** y cuántas **terminan**. Al hacer clic en un día, la columna de la derecha muestra sus formaciones en tres pestañas (Inician, Terminan, En curso), con su propio scroll; al hacer clic en una formación, se abre su detalle. Con ‹ › se cambia de mes y «Hoy» vuelve al día actual.
 - **Lista**: todas las formaciones ordenadas por urgencia, con sus alertas.
 - **Cambios**: el historial de lo que se modificó, del más nuevo al más viejo: quién, cuándo, desde dónde (Hoja, KondID o Panel en la hoja), qué campo, el valor anterior tachado y el nuevo. Se puede buscar y filtrar por persona o por origen.
 
 Los filtros de arriba (pestaña, buscador, etapa, alerta, estado de ficha) aplican al calendario y a la lista.
+
+**Tema claro u oscuro**: dentro de KondID el panel usa el mismo tema que KondID (KondID lo agrega al enlace con `&tema=`). Abierto en su propia pestaña o desde el menú de la hoja, tiene un botón «Modo claro / Modo oscuro» y recuerda la elección en ese navegador; sin elección, usa el tema del sistema.
 
 ## Quién hizo cada cambio
 

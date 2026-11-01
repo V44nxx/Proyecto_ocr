@@ -17,14 +17,14 @@
 | Parámetro | Detalle Técnico |
 | :--- | :--- |
 | **Nombre del Producto** | KondID - Motor OCR Inteligente |
-| **Versión Actual** | 2.17.0 (los cambios de cada versión están en el [CHANGELOG](../CHANGELOG.md)) |
+| **Versión Actual** | 2.19.0 (los cambios de cada versión están en el [CHANGELOG](../CHANGELOG.md)) |
 | **Tipo de Aplicación** | Sistema Web Empresarial Distribuido (SaaS / On-Premise) |
 | **Arquitectura de Software** | Cliente-Servidor desacoplado (SPA Next.js + REST API FastAPI) |
 | **Modelo de Licenciamiento** | Propietario / Privado Empresarial |
 | **Área de Aplicación** | Digitalización masiva, auditoría documental, verificación de identidad y conciliación de censos/planillas |
 | **Tipos de Documento Soportados** | Cédula de Ciudadanía Colombiana (Amarilla con hologramas, Cédula Digital preprensa/policarbonato), Tarjeta de Identidad, Cédula de Extranjería, PPT y Contraseñas |
 | **Formatos de Entrada Soportados** | Documentos PDF (multipágina, escaneados, monocromáticos o a color), Planillas Excel (.xlsx, .xls) |
-| **Formatos de Salida / Reportes** | XLSX formateado con estilos corporativos, JSON estructurado vía API REST, renderizado de imágenes PNG para auditoría |
+| **Formatos de Salida / Reportes** | XLSX formateado con estilos corporativos, JSON estructurado vía API REST, renderizado de imágenes JPEG para auditoría |
 
 ### Requerimientos de Hardware y Software
 
@@ -57,20 +57,24 @@ El sistema se compone de tres capas principales orquestadas mediante contenedore
 │                        CAPA DE PRESENTACIÓN                            │
 │              Next.js 16.4 (App Router) + React 19 + TypeScript 5       │
 │        Tailwind CSS 4.3 · Política de contenido (CSP) con nonce        │
+│   Seguimiento: panel de Google Apps Script en un iframe con sandbox    │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ HTTP / REST / sesión en cookie HttpOnly
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                    CAPA LÓGICA / BACKEND (FastAPI)                     │
-│  • Enrutadores REST Asíncronos       • Middlewares CORS & Auth JWT     │
+│  • Enrutadores REST                  • Middlewares CORS & Auth JWT     │
 │  • Páginas en paralelo (hilos)       • OCR en cascada (3 motores)      │
 │  • Extractor Espacial 2D             • Servicio de Emparejamiento      │
 │  • Conciliador de Planillas Excel    • Generador de Reportes XLSX      │
+│  • Auditoría y límite de intentos    • Enlace del panel de Seguimiento │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ SQLAlchemy 2.0 / asyncpg
+                                    │ SQLAlchemy 2.0 / psycopg2
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                       CAPA DE DATOS (PostgreSQL 16)                    │
 │   • Extensiones: uuid-ossp, pg_trgm (búsqueda difusa de nombres)       │
-│   • Tablas: usuarios, documentos, personas, comparaciones, diferencias │
+│   • 9 tablas: usuarios, documentos, personas, comparaciones,           │
+│     diferencias, auditoria, seguimiento_config, intentos_limitados     │
+│     y sesiones_revocadas                                               │
 │   • Almacenamiento binario persistente de PDFs para auto-restauración  │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -166,15 +170,17 @@ proyecto_ocr/
 │   │   ├── main.py                  # Servidor FastAPI y registro de routers
 │   │   ├── config.py                # Pydantic Settings (.env)
 │   │   ├── database.py              # Sesión SQLAlchemy y engine PostgreSQL
-│   │   ├── models/                  # Entidades: Usuario, Documento, Persona, etc.
+│   │   ├── models/                  # Las 9 tablas: Usuario, Documento, Persona, Comparacion, etc.
 │   │   ├── schemas/                 # Esquemas Pydantic de validación
-│   │   ├── routers/                 # Endpoints REST (auth, documentos, personas...)
+│   │   ├── routers/                 # Endpoints REST (auth, documentos, personas, comparacion, exportacion, seguimiento)
+│   │   ├── utils/                   # Logger (enmascarar_*), sesión, doble factor, límite de intentos
 │   │   └── services/
 │   │       ├── ocr_service.py       # Pipeline maestro
 │   │       ├── google_document_ai_service.py # Conector GCP Document AI
 │   │       ├── rapid_ocr_service.py # Conector ONNX Runtime
 │   │       ├── spatial_field_extractor.py # Geometría 2D
 │   │       └── comparacion_service.py     # Conciliación con Excel
+│   ├── tests/                       # Pruebas pytest (unitarias, integración, seguridad, BDD)
 │   ├── requirements.txt             # Dependencias Python
 │   └── Dockerfile                   # Imagen backend (Python 3.12-slim)
 ├── frontend/
@@ -187,13 +193,18 @@ proyecto_ocr/
 │   │   │   ├── exportacion/         # Descarga XLSX
 │   │   │   ├── seguimiento/         # Panel de seguimiento de fichas (Google Apps Script)
 │   │   │   ├── usuarios/            # Gestión de usuarios (administrador)
-│   │   │   └── auditoria/           # Registro de auditoría (administrador)
+│   │   │   ├── auditoria/           # Registro de auditoría (administrador)
+│   │   │   ├── olvide-contrasena/   # Pedir el enlace para restablecer la contraseña
+│   │   │   └── restablecer-contrasena/ # Elegir la contraseña nueva
 │   │   ├── components/ui/           # Sidebar, modales, selectores en ventana, íconos propios
-│   │   ├── lib/api.ts               # Cliente Axios configurado con interceptores
+│   │   ├── lib/api.ts               # Cliente Axios (sesión en la cookie, withCredentials) con interceptores
 │   │   ├── lib/datosRecientes.ts    # Datos de la última visita a cada pantalla (solo en memoria)
+│   │   ├── lib/urlsSeguimiento.ts   # Enlace del panel con el nombre del usuario y el tema
 │   │   └── proxy.ts                 # Política de contenido (CSP) con un nonce por petición
 │   ├── package.json
 │   └── Dockerfile                   # Imagen frontend (Node.js 24-alpine)
+├── apps-script/seguimiento-fichas/  # Panel de Seguimiento (Google Apps Script) y sus pruebas
+├── pruebas/                         # e2e, seguridad, carga, OCR y rendimiento (ver docs/PRUEBAS.md)
 ├── database/init.sql                # Script DDL inicial
 ├── credentials/                     # Credenciales JSON de Google Cloud
 └── docker-compose.yml               # Orquestador multi-contenedor
@@ -214,7 +225,7 @@ proyecto_ocr/
    ```bash
    docker-compose ps
    ```
-   Deben estar activos los servicios: `ocr_postgres` (5432), `ocr_backend` (8000) y `ocr_frontend` (3000).
+   Deben estar activos los servicios: `ocr_postgres` (5432), `ocr_backend` (8000), `ocr_frontend` (3000) y `ocr_pgadmin` (5050).
 
 ### 4.3. Variables de Entorno Fundamentales (.env)
 ```ini
@@ -251,7 +262,8 @@ La lista completa, con una explicación de cada variable, está en `.env.example
 * **`POST /api/auth/login`**: Autenticación con email y contraseña. Pone la cookie de sesión (`HttpOnly`, `SameSite=Strict`); a un administrador le devuelve primero el desafío de la verificación en dos pasos (`/api/auth/login/2fa`).
 * **`POST /api/documentos/upload`**: Carga multipart de lote de archivos PDF (`archivos`) junto con la planilla obligatoria (`archivo_excel`).
 * **`GET /api/documentos/{id}/pagina/{numero}`**: Retorna la imagen JPEG de una página específica del PDF. La sesión va en la cookie (nunca en la dirección) y la respuesta no se guarda en caché.
-* **`GET /api/personas`**: Listado paginado de personas con filtros avanzados (`buscar`, `filtro_estado`, `documento_id`).
+* **`GET /api/personas`**: Listado paginado de personas con filtros (`buscar`, `requiere_revision`, `documento_id`).
+* **`GET`, `PUT` y `DELETE /api/seguimiento/config`**: Leer, guardar o quitar el enlace del panel de Seguimiento. Solo acepta direcciones de `script.google.com` (panel) y `docs.google.com` (hoja).
 * **`PUT /api/personas/{id}`**: Modificación directa de campos corregidos manualmente.
 * **`GET /api/exportacion/xlsx`**: Generación y descarga al vuelo del archivo Excel oficial con formatos, colores y metadatos.
 
@@ -312,7 +324,12 @@ La lista completa, con una explicación de cada variable, está en `.env.example
 ### 5.7. Seguimiento de Fichas
 * Muestra dentro de KondID el panel de seguimiento publicado con Google Apps Script. Cada usuario guarda el enlace de su panel con **Configurar** y puede quitarlo cuando quiera.
 * El código del panel está en `apps-script/seguimiento-fichas/`, junto con su `LEEME.md`, que explica la instalación, las etapas, las alertas y el historial de cambios. El panel lee y edita la hoja «FORMACIONES COMPLEMENTARIAS GRUPOS» y tiene tres vistas: calendario, lista y cambios.
-* El enlace lleva una clave (`?k=...`); sin ella el panel no muestra nada. KondID agrega el nombre de quien tiene la sesión abierta (`&u=...`) para que el historial diga quién guardó cada cambio.
+* El enlace lleva una clave (`?k=...`); sin ella el panel no muestra nada. KondID agrega el nombre de quien tiene la sesión abierta (`&u=...`) para que el historial diga quién guardó cada cambio, y su tema (`&tema=claro|oscuro`) para que el panel se vea igual que KondID.
+* **Calendario:** cada día muestra las formaciones que inician, con el color de su pestaña. Al hacer clic en un día, la columna de la derecha las muestra en tres pestañas (**Inician**, **Terminan** y **En curso**), con su propio scroll.
+* **Lista:** las formaciones ordenadas por urgencia, con sus etapas (inicia hoy, por iniciar, programada, en ejecución, por finalizar, finalizada) y sus alertas: ficha sin crear, sin instructor, instructor con dos formaciones a la vez, datos distintos entre pestañas y cambios recientes.
+* **Cambios:** el historial de quién cambió qué, cuándo y desde dónde (panel, KondID o la hoja a mano). Se guarda en la pestaña oculta `BITACORA_PANEL`.
+* **Actualización:** lo que se guarda en el panel queda en la hoja al instante. El panel pregunta cada 15 segundos, mientras la pestaña está visible, si la hoja cambió, y solo entonces vuelve a leerla. Si dos personas editan el mismo campo a la vez, la segunda ve lo que dice ahora la hoja y debe confirmar: ningún cambio pisa a otro.
+* El servidor de KondID nunca lee ni escribe la hoja: el navegador habla directo con Google. Los cambios del panel no se publican con Dokploy; se pegan en Apps Script como explica su `LEEME.md`.
 
 ### 5.8. Usuarios y Auditoría (solo administradores)
 * **Usuarios:** crear usuarios, eliminarlos, restablecer su contraseña y restablecer la verificación en dos pasos de un administrador que perdió el celular y los códigos de respaldo.

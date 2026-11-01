@@ -17,15 +17,19 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 1. Anota cada cambio en **[Sin publicar]**, en la categoría que corresponda, en el mismo commit que lo introduce.
 2. Cada push a `main` se despliega en producción, así que cada push con cambios en la app se publica como versión: PATCH si solo trae correcciones y MINOR si trae funcionalidades nuevas.
-3. Al publicar, cambia ese título por el número de versión y la fecha, deja un [Sin publicar] vacío arriba y crea la etiqueta (`git tag vX.Y.Z`).
-4. Mantén `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json` y `package-lock.json`) con el mismo número.
+3. Las versiones las numera y publica solo Manuel (Manuel151025). En una rama, o trabajando para otra persona, no cambies el número: deja los cambios en [Sin publicar] y quien integre la rama le asigna el número. Los pasos completos están en [CLAUDE.md](CLAUDE.md).
+4. Al publicar, cambia ese título por el número de versión y la fecha, deja un [Sin publicar] vacío arriba y crea la etiqueta anotada (`git tag -a vX.Y.Z`).
+5. Mantén `APP_VERSION` (`backend/app/config.py`) y `version` (`frontend/package.json` y las dos líneas raíz de `package-lock.json`) con el mismo número.
 
 ## [Sin publicar]
+
+## [2.19.0] - 2026-11-01
 
 **Resumen**
 
 - El panel de Seguimiento de fichas se ve con el mismo tema de KondID (claro u oscuro) y, abierto en su propia pestaña, tiene un botón para cambiarlo.
 - En modo oscuro, la barra de desplazamiento y las listas desplegables del panel ya no salen blancas.
+- La documentación (README, documentación del sistema y diagramas) queda al día con el Seguimiento de fichas, las 9 tablas y las 48 rutas de la API.
 
 ### Agregado
 
@@ -50,6 +54,17 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 - Panel de Seguimiento de 22 a 29 pruebas: el tema que llega en el enlace, `color-scheme`, el botón, la columna del día con su propio scroll y que no haya dos funciones con el mismo nombre en `Index.html`.
 - e2e CP-UI-39 también comprueba que el panel incrustado recibe el tema de KondID.
+
+### Documentación
+
+- **README**:
+  - incluye el Seguimiento de fichas: características, un diagrama de cómo se conecta con Google, sus rutas y su carpeta;
+  - **mapa interactivo del código** (Mermaid): en GitHub, cada cuadro abre su archivo o carpeta, y enlaza a la vista de GitDiagram;
+  - el diagrama de arquitectura muestra las 9 tablas y el orden real del OCR (primero se lee la página y después se clasifica la cara);
+  - el catálogo de la API tiene las 48 rutas: se agregaron las de contraseñas, auditoría, fichas existentes y Seguimiento, y se quitó una que ya no existe;
+  - se corrigieron los filtros de Personas, la resolución (300 DPI), las páginas en paralelo, el formato de la imagen (JPEG), cómo viaja la sesión en el visor y los pasos para clonar el repositorio.
+- **Documentación del sistema**: diagrama con las 9 tablas y psycopg2, estructura de carpetas al día, rutas de Seguimiento y un manual de usuario del panel (calendario, lista, cambios, alertas y cada cuánto se actualiza).
+- **PRUEBAS.md**, **LEEME.md** del panel y **CHANGELOG**: las pruebas de `Index.html`, el tema en CP-UI-39 y quién numera las versiones.
 
 ## [2.18.0] - 2026-10-29
 

@@ -5,9 +5,9 @@ Es el panel que KondID muestra en **Seguimiento de fichas**. Lee y edita la hoja
 | Archivo | Qué es |
 |---|---|
 | `Codigo.gs` | Servidor: lee las pestañas, guarda los cambios y controla el acceso |
-| `Index.html` | El panel: lista, filtros y formulario de seguimiento |
+| `Index.html` | El panel: calendario, lista, cambios, filtros y formulario de seguimiento |
 | `appsscript.json` | Manifiesto opcional (zona horaria de Bogotá y publicación como aplicación web) |
-| `pruebas/` | Pruebas de `Codigo.gs` con la estructura real del libro (datos personales reemplazados) |
+| `pruebas/` | Pruebas de `Codigo.gs` con la estructura real del libro (datos personales reemplazados) y de `Index.html` |
 
 ## Qué lee
 

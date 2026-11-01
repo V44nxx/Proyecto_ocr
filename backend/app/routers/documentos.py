@@ -1163,7 +1163,7 @@ def preview_pagina_pdf(
     y la devuelve como imagen JPEG optimizada con caché en disco de alta velocidad.
     Permite al frontend mostrar la vista previa al instante (< 10ms en caché).
     Solo acepta las resoluciones que usa el frontend: cada dpi distinto renderiza y guarda otra imagen.
-    La sesión va en la cabecera Authorization (el frontend pide la imagen con fetch): nunca en la dirección,
+    La sesión va en la cookie HttpOnly (el frontend pide la imagen con axios, withCredentials): nunca en la dirección,
     que queda en historiales y registros. La imagen es una cédula: el navegador no la guarda en disco.
     """
     if dpi not in DPI_PERMITIDOS:

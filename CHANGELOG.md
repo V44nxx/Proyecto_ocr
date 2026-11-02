@@ -23,6 +23,17 @@ El repositorio no tenía etiquetas de versión, así que las versiones 1.0.0 a 2
 
 ## [Sin publicar]
 
+## [2.19.1] - 2026-11-01
+
+**Resumen**
+
+- Corrige un aviso de seguridad de severidad alta en una dependencia del frontend, publicado después de la 2.19.0.
+- No cambia nada visible en la aplicación.
+
+### Seguridad
+
+- **Frontend**: `follow-redirects` (dependencia de `axios`) pasa de 1.16.1 a 1.16.2. `npm audit --omit=dev` vuelve a 0 avisos y el job de seguridad del CI vuelve a verde.
+
 ## [2.19.0] - 2026-11-01
 
 **Resumen**

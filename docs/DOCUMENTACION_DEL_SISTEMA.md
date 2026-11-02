@@ -17,7 +17,7 @@
 | Parámetro | Detalle Técnico |
 | :--- | :--- |
 | **Nombre del Producto** | KondID - Motor OCR Inteligente |
-| **Versión Actual** | 2.19.0 (los cambios de cada versión están en el [CHANGELOG](../CHANGELOG.md)) |
+| **Versión Actual** | 2.19.1 (los cambios de cada versión están en el [CHANGELOG](../CHANGELOG.md)) |
 | **Tipo de Aplicación** | Sistema Web Empresarial Distribuido (SaaS / On-Premise) |
 | **Arquitectura de Software** | Cliente-Servidor desacoplado (SPA Next.js + REST API FastAPI) |
 | **Modelo de Licenciamiento** | Propietario / Privado Empresarial |
